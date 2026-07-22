@@ -34,6 +34,21 @@ try {
   await desktop.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   assert((await desktop.title()) === 'Atlas de Asedio', 'Document title missing.');
   assert((await desktop.locator('#sr-board [role="gridcell"]').count()) === 91, 'Accessible board must expose 91 cells.');
+  const healthBars = await desktop.locator('.hp i').all();
+  assert(healthBars.length === 4, 'Fortress score must expose four health bars.');
+  for (const bar of healthBars) {
+    const box = await bar.boundingBox();
+    assert(box && box.width > 0 && box.height > 0, 'Fortress health bar is visually empty.');
+  }
+  if (process.env.UI_SCREENSHOT) await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-main.png` });
+
+  await desktop.locator('#settings-button').click();
+  assert((await desktop.locator('[data-volume]').count()) === 3, 'Options must expose three volume sliders.');
+  assert((await desktop.locator('.accessibility-settings .toggle-row').count()) === 2, 'Accessibility options missing.');
+  if (process.env.UI_SCREENSHOT) await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-options.png` });
+  await desktop.locator('[data-volume="masterVolume"]').fill('42');
+  assert((await desktop.locator('[data-volume="masterVolume"] + output').textContent()) === '42%', 'Volume output is not synchronized.');
+  await desktop.locator('[data-dialog-close]').click();
 
   await clickHex(desktop, 0, -3);
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
@@ -59,6 +74,11 @@ try {
   assert(await mobile.locator('#mobile-new-game-button').isVisible(), 'Mobile new-game control is hidden.');
 
   await mobile.locator('#game-canvas').focus();
+  await mobile.keyboard.press('e');
+  assert((await selectedHex(mobile)) === '0,0', 'E must not move keyboard focus.');
+  await mobile.keyboard.press('s');
+  assert((await selectedHex(mobile)) === '0,1', 'S must move keyboard focus south.');
+  await mobile.keyboard.press('w');
   await mobile.keyboard.press('w');
   await mobile.keyboard.press('w');
   await mobile.keyboard.press('w');
@@ -81,6 +101,10 @@ async function clickHex(page, q, r) {
   const worldX = 45 * q;
   const worldY = Math.sqrt(3) * 30 * (r + q / 2);
   await page.mouse.click(box.x + box.width / 2 + worldX * fitScale, box.y + box.height / 2 + worldY * fitScale);
+}
+
+async function selectedHex(page) {
+  return page.locator('#sr-board [aria-selected="true"]').getAttribute('data-hex');
 }
 
 function watchErrors(page, errors) {

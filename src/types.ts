@@ -111,6 +111,9 @@ export interface PlayerInfo {
 
 export interface GamePreferences {
   sound: boolean;
+  masterVolume: number;
+  musicVolume: number;
+  effectsVolume: number;
   reducedMotion: boolean;
   highContrast: boolean;
 }

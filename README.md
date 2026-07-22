@@ -30,8 +30,7 @@ pnpm test:ui
 - Ratón o táctil: seleccionar unidad, elegir marcador y confirmar orden.
 - Arrastrar: desplazar cámara.
 - Rueda o pinza: zoom.
-- `W E D X Z A`: navegar N, NE, SE, S, SO y NO.
-- `8 9 3 2 1 7`: alternativa con teclado numérico.
+- `W A S D`: navegar por el tablero.
 - `Enter`: seleccionar casilla enfocada.
 - `Esc`: cancelar orden o selección.
 

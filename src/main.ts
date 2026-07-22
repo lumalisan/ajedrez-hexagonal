@@ -48,7 +48,7 @@ interface PointerState {
 const canvas = requireElement<HTMLCanvasElement>('game-canvas');
 const renderer = new BoardRenderer(canvas);
 let preferences = loadPreferences();
-const audio = new AudioDirector(preferences.sound);
+const audio = new AudioDirector(preferences);
 audio.setEnabled(preferences.sound);
 
 let state = createInitialState();
@@ -96,6 +96,7 @@ function bindControls(): void {
   requireElement<HTMLButtonElement>('new-game-button').addEventListener('click', showNewGameDialog);
   mobileNewGameButton.addEventListener('click', showNewGameDialog);
   requireElement<HTMLButtonElement>('help-button').addEventListener('click', showHelpDialog);
+  requireElement<HTMLButtonElement>('settings-button').addEventListener('click', showSettingsDialog);
   blockadeButton.addEventListener('click', showBlockadeDialog);
 
   soundButton.addEventListener('click', () => {
@@ -103,6 +104,10 @@ function bindControls(): void {
     savePreferences();
     renderSoundButton();
   });
+
+  const activateAudio = (): void => audio.startMusic();
+  window.addEventListener('pointerdown', activateAudio, { once: true, capture: true });
+  window.addEventListener('keydown', activateAudio, { once: true, capture: true });
 
   logToggle.addEventListener('click', () => {
     logOpen = !logOpen;
@@ -225,17 +230,9 @@ function updatePinchBaseline(): void {
 function onCanvasKeyDown(event: KeyboardEvent): void {
   const keyDirections: Record<string, Direction> = {
     w: 0,
-    '8': 0,
-    e: 1,
-    '9': 1,
     d: 2,
-    '3': 2,
-    x: 3,
-    '2': 3,
-    z: 4,
-    '1': 4,
+    s: 3,
     a: 5,
-    '7': 5,
   };
   const direction = keyDirections[event.key.toLowerCase()];
   if (direction !== undefined) {
@@ -244,6 +241,7 @@ function onCanvasKeyDown(event: KeyboardEvent): void {
     if (isOnBoard(next)) {
       focusedHex = next;
       announceCell(next);
+      renderScreenReaderBoard();
       syncCanvas();
     }
     return;
@@ -478,7 +476,7 @@ function renderPieceCard(piece?: Piece): void {
       <div class="empty-radar" aria-hidden="true"><i></i><i></i><i></i></div>
       <h2>Esperando selección</h2>
       <p>Toca una unidad. Destinos legales aparecerán directamente sobre el tablero.</p>
-      <span class="key-map">Teclado: W E D X Z A · Enter</span>`;
+      <span class="key-map">Teclado: W A S D · Enter</span>`;
     selectionSummary.textContent = state.outcome
       ? outcomeText(state.outcome)
       : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
@@ -725,7 +723,8 @@ function renderBattleLog(): void {
 function renderSoundButton(): void {
   soundButton.classList.toggle('muted', !preferences.sound);
   soundButton.setAttribute('aria-label', preferences.sound ? 'Silenciar sonido' : 'Activar sonido');
-  soundButton.innerHTML = `<span aria-hidden="true">${preferences.sound ? '◖))' : '◖×'}</span>`;
+  soundButton.setAttribute('aria-pressed', String(!preferences.sound));
+  soundButton.title = preferences.sound ? 'Silenciar sonido' : 'Activar sonido';
 }
 
 function renderScreenReaderBoard(): void {
@@ -799,13 +798,39 @@ function showHelpDialog(): void {
       <p>Drones vuelan hasta tres casillas y pueden apilarse sobre una unidad terrestre. Portamisiles protege su hexágono y seis vecinos: intercepta Drones y bloquea disparos enemigos. Solo Soldado, Tanque rápido o Capturador neutralizan un Portamisiles.</p>
       <p>Tanques pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
     </details>
-    <div class="settings-row">
-      <label><input type="checkbox" data-pref="contrast" ${preferences.highContrast ? 'checked' : ''}/> Alto contraste</label>
-      <label><input type="checkbox" data-pref="motion" ${preferences.reducedMotion ? 'checked' : ''}/> Reducir movimiento</label>
-    </div>
-    <div class="keyboard-card"><strong>Teclado hexagonal</strong><span>W/E/D/X/Z/A o 8/9/3/2/1/7 · Enter selecciona · Esc cancela</span></div>
+    <div class="keyboard-card"><strong>Teclado</strong><span>W/A/S/D mueve el foco · Enter selecciona · Esc cancela</span></div>
     <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Entendido</button></div>`,
   );
+}
+
+function showSettingsDialog(): void {
+  openDialog(`
+    <span class="eyebrow">OPCIONES</span>
+    <h2>Audio y accesibilidad</h2>
+    <p>Ajusta cada canal por separado. Los cambios se guardan automáticamente.</p>
+    <div class="volume-settings" aria-label="Controles de volumen">
+      ${volumeControlMarkup('masterVolume', 'Volumen maestro', 'Controla toda la mezcla', preferences.masterVolume)}
+      ${volumeControlMarkup('musicVolume', 'Música', 'Tema ambiental en bucle', preferences.musicVolume)}
+      ${volumeControlMarkup('effectsVolume', 'Efectos especiales', 'Movimientos, ataques y avisos', preferences.effectsVolume)}
+    </div>
+    <div class="accessibility-settings">
+      <div><span class="eyebrow">ACCESIBILIDAD</span><p>Adapta la presentación visual a tus necesidades.</p></div>
+      <label class="toggle-row"><span><strong>Alto contraste</strong><small>Refuerza bordes y colores del tablero</small></span><input type="checkbox" data-pref="contrast" ${preferences.highContrast ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span><strong>Reducir movimiento</strong><small>Limita animaciones y transiciones</small></span><input type="checkbox" data-pref="motion" ${preferences.reducedMotion ? 'checked' : ''}/></label>
+    </div>
+    <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Listo</button></div>`,
+  );
+
+  dialog.querySelectorAll<HTMLInputElement>('[data-volume]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const key = input.dataset.volume as 'masterVolume' | 'musicVolume' | 'effectsVolume';
+      preferences[key] = Number(input.value) / 100;
+      input.closest('.volume-control')?.querySelector<HTMLOutputElement>('output')?.replaceChildren(`${input.value}%`);
+      audio.setVolumes(preferences.masterVolume, preferences.musicVolume, preferences.effectsVolume);
+      audio.startMusic();
+      savePreferences();
+    });
+  });
   dialog.querySelector<HTMLInputElement>('[data-pref="contrast"]')?.addEventListener('change', (event) => {
     preferences.highContrast = (event.currentTarget as HTMLInputElement).checked;
     savePreferences();
@@ -818,6 +843,20 @@ function showHelpDialog(): void {
     applyPreferences();
     render();
   });
+}
+
+function volumeControlMarkup(
+  key: 'masterVolume' | 'musicVolume' | 'effectsVolume',
+  label: string,
+  description: string,
+  value: number,
+): string {
+  const percentage = Math.round(value * 100);
+  return `<label class="volume-control">
+    <span><strong>${label}</strong><small>${description}</small></span>
+    <input type="range" min="0" max="100" step="1" value="${percentage}" data-volume="${key}" aria-label="${label}"/>
+    <output>${percentage}%</output>
+  </label>`;
 }
 
 function showBlockadeDialog(): void {
@@ -948,15 +987,26 @@ function applyPreferences(): void {
 function loadPreferences(): GamePreferences {
   const fallback: GamePreferences = {
     sound: true,
+    masterVolume: 0.8,
+    musicVolume: 0.55,
+    effectsVolume: 0.8,
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     highContrast: false,
   };
   try {
     const stored = localStorage.getItem('atlas-preferences-v1');
-    return stored ? { ...fallback, ...(JSON.parse(stored) as Partial<GamePreferences>) } : fallback;
+    const loaded = stored ? { ...fallback, ...(JSON.parse(stored) as Partial<GamePreferences>) } : fallback;
+    loaded.masterVolume = clampPreference(loaded.masterVolume, fallback.masterVolume);
+    loaded.musicVolume = clampPreference(loaded.musicVolume, fallback.musicVolume);
+    loaded.effectsVolume = clampPreference(loaded.effectsVolume, fallback.effectsVolume);
+    return loaded;
   } catch {
     return fallback;
   }
+}
+
+function clampPreference(value: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 }
 
 function savePreferences(): void {

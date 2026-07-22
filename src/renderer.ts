@@ -419,15 +419,59 @@ export class BoardRenderer {
     );
     const ground = model.state.pieces.filter((piece) => piece.type !== 'drone');
     const air = model.state.pieces.filter((piece) => piece.type === 'drone');
+    const stackedHexes = air
+      .filter((drone) => ground.some((piece) => equalHex(piece.position, drone.position)))
+      .map((drone) => drone.position);
+
+    for (const hex of stackedHexes) this.drawStackBase(ctx, hex, model.highContrast);
     for (const piece of [...ground, ...air]) {
       if (movingIds.has(piece.id)) continue;
       const point = hexToWorld(piece.position);
-      this.drawPiece(ctx, piece, point.x, point.y, {
+      const isStacked = stackedHexes.some((hex) => equalHex(hex, piece.position));
+      const stackX = isStacked ? (piece.type === 'drone' ? 5 : -5) : 0;
+      const stackY = isStacked ? (piece.type === 'drone' ? -7 : 6) : 0;
+      this.drawPiece(ctx, piece, point.x + stackX, point.y + stackY, {
         selected: piece.id === model.selectedId,
         highContrast: model.highContrast,
         alpha: 1,
+        isStacked,
       });
     }
+    for (const hex of stackedHexes) this.drawStackBadge(ctx, hex, model.highContrast);
+  }
+
+  private drawStackBase(ctx: CanvasRenderingContext2D, hex: Hex, highContrast: boolean): void {
+    const point = hexToWorld(hex);
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    ctx.fillStyle = 'rgba(5, 15, 20, 0.82)';
+    ctx.strokeStyle = highContrast ? COLORS.text : COLORS.move;
+    ctx.lineWidth = highContrast ? 2 : 1.25;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 25, 20, -0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawStackBadge(ctx: CanvasRenderingContext2D, hex: Hex, highContrast: boolean): void {
+    const point = hexToWorld(hex);
+    ctx.save();
+    ctx.translate(point.x + 20, point.y - 19);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 5;
+    ctx.fillStyle = highContrast ? COLORS.text : COLORS.move;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = COLORS.background;
+    ctx.font = '700 10px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('2', 0, 0.5);
+    ctx.restore();
   }
 
   private drawPiece(
@@ -435,21 +479,21 @@ export class BoardRenderer {
     piece: Piece,
     x: number,
     y: number,
-    options: { selected: boolean; highContrast: boolean; alpha: number },
+    options: { selected: boolean; highContrast: boolean; alpha: number; isStacked?: boolean },
   ): void {
     const color = piece.owner === 0 ? COLORS.blue : COLORS.amber;
-    const stacked = piece.type === 'drone';
+    const airborne = piece.type === 'drone';
     ctx.save();
-    ctx.translate(x, y - (stacked ? 3.5 : 0));
+    ctx.translate(x, y - (airborne ? 3.5 : 0));
     ctx.globalAlpha = options.alpha;
     ctx.shadowColor = 'rgba(0,0,0,0.65)';
     ctx.shadowBlur = 7;
     ctx.shadowOffsetY = 2;
 
-    if (stacked) {
+    if (airborne) {
       ctx.strokeStyle = color;
-      ctx.lineWidth = options.selected ? 3 : 2;
-      ctx.globalAlpha = options.alpha * 0.8;
+      ctx.lineWidth = options.selected ? 3 : options.isStacked ? 2.6 : 1.7;
+      ctx.globalAlpha = options.alpha * (options.isStacked ? 1 : 0.68);
       ctx.beginPath();
       ctx.ellipse(0, 5.5, 17, 7, 0, 0, Math.PI * 2);
       ctx.stroke();

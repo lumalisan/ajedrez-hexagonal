@@ -192,6 +192,7 @@ button:disabled {
 }
 
 .hp i {
+  display: block;
   width: 13px;
   height: 4px;
   border: 1px solid currentColor;
@@ -277,6 +278,41 @@ button:disabled {
 .icon-button.muted {
   color: var(--muted);
   opacity: 0.64;
+}
+
+.sound-icon,
+.settings-icon {
+  width: 21px;
+  height: 21px;
+  overflow: visible;
+}
+
+.sound-icon path:first-child {
+  fill: currentColor;
+  stroke: none;
+}
+
+.sound-icon .sound-wave,
+.sound-icon .sound-muted-mark,
+.settings-icon path,
+.settings-icon circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.sound-muted-mark {
+  display: none;
+}
+
+.icon-button.muted .sound-wave {
+  display: none;
+}
+
+.icon-button.muted .sound-muted-mark {
+  display: block;
 }
 
 .menu-button {
@@ -601,11 +637,14 @@ button:disabled {
 
 .empty-radar::before {
   position: absolute;
+  top: 0;
+  left: 50%;
   width: 1px;
   height: 50%;
   background: linear-gradient(var(--move), transparent);
   content: "";
-  transform-origin: bottom;
+  transform: translateX(-50%) rotate(0deg);
+  transform-origin: 50% 100%;
   animation: radar-scan 3.2s linear infinite;
 }
 
@@ -1123,6 +1162,88 @@ button:disabled {
   accent-color: var(--move);
 }
 
+.volume-settings {
+  display: grid;
+  gap: 6px;
+  margin: 20px 0 24px;
+}
+
+.volume-control {
+  display: grid;
+  grid-template-columns: minmax(145px, 1fr) minmax(150px, 1.35fr) 42px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.volume-control > span,
+.toggle-row > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.volume-control strong,
+.toggle-row strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.volume-control small,
+.toggle-row small,
+.accessibility-settings p {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.volume-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--move);
+  cursor: pointer;
+}
+
+.volume-control output {
+  color: var(--move);
+  font-family: "Bahnschrift", sans-serif;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.accessibility-settings {
+  display: grid;
+  gap: 7px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.accessibility-settings p {
+  margin: 3px 0 5px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.toggle-row input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  accent-color: var(--move);
+}
+
 .keyboard-card {
   display: flex;
   flex-direction: column;
@@ -1276,8 +1397,8 @@ button:disabled {
 }
 
 @keyframes radar-scan {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from { transform: translateX(-50%) rotate(0deg); }
+  to { transform: translateX(-50%) rotate(360deg); }
 }
 
 @keyframes status-pulse {
@@ -1412,7 +1533,7 @@ button:disabled {
 
 @media (max-width: 560px) {
   .topbar {
-    grid-template-columns: 33px minmax(0, 1fr) 76px;
+    grid-template-columns: 33px minmax(0, 1fr) 113px;
     gap: 5px;
   }
 
@@ -1520,6 +1641,15 @@ button:disabled {
     align-items: flex-start;
     flex-direction: column;
     gap: 11px;
+  }
+
+  .volume-control {
+    grid-template-columns: 1fr 44px;
+    gap: 8px 12px;
+  }
+
+  .volume-control > span {
+    grid-column: 1 / -1;
   }
 
   .dialog-actions.triple {

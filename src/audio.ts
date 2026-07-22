@@ -1,14 +1,27 @@
 import { getPiece } from './engine';
-import type { GameEvent, GameState, Piece } from './types';
+import type { GameEvent, GamePreferences, GameState, Piece } from './types';
 
 export class AudioDirector {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
+  private readonly music: HTMLAudioElement;
   private enabled: boolean;
+  private masterVolume: number;
+  private musicVolume: number;
+  private effectsVolume: number;
+  private musicStarted = false;
   private unavailable = false;
 
-  constructor(enabled = true) {
-    this.enabled = enabled;
+  constructor(preferences: GamePreferences) {
+    this.enabled = preferences.sound;
+    this.masterVolume = preferences.masterVolume;
+    this.musicVolume = preferences.musicVolume;
+    this.effectsVolume = preferences.effectsVolume;
+    this.music = new Audio('/game-theme.mp3');
+    this.music.loop = true;
+    this.music.preload = 'auto';
+    this.music.setAttribute('aria-hidden', 'true');
+    this.syncLevels();
   }
 
   get isEnabled(): boolean {
@@ -17,7 +30,21 @@ export class AudioDirector {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (this.master) this.master.gain.value = enabled ? 0.72 : 0;
+    this.syncLevels();
+    if (!enabled) this.music.pause();
+    else if (this.musicStarted) void this.music.play().catch(() => undefined);
+  }
+
+  setVolumes(master: number, music: number, effects: number): void {
+    this.masterVolume = clamp01(master);
+    this.musicVolume = clamp01(music);
+    this.effectsVolume = clamp01(effects);
+    this.syncLevels();
+  }
+
+  startMusic(): void {
+    this.musicStarted = true;
+    if (this.enabled) void this.music.play().catch(() => undefined);
   }
 
   toggle(): boolean {
@@ -175,7 +202,7 @@ export class AudioDirector {
       if (!this.context) {
         this.context = new AudioContext();
         this.master = this.context.createGain();
-        this.master.gain.value = 0.72;
+        this.syncLevels();
         this.master.connect(this.context.destination);
       }
       if (this.context.state === 'suspended') void this.context.resume().catch(() => undefined);
@@ -185,4 +212,14 @@ export class AudioDirector {
       return null;
     }
   }
+
+  private syncLevels(): void {
+    const active = this.enabled ? 1 : 0;
+    if (this.master) this.master.gain.value = 0.72 * this.masterVolume * this.effectsVolume * active;
+    this.music.volume = clamp01(0.38 * this.masterVolume * this.musicVolume * active);
+  }
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }
