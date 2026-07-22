@@ -9,7 +9,6 @@ export class AudioDirector {
   private masterVolume: number;
   private musicVolume: number;
   private effectsVolume: number;
-  private musicStarted = false;
   private unavailable = false;
 
   constructor(preferences: GamePreferences) {
@@ -32,7 +31,7 @@ export class AudioDirector {
     this.enabled = enabled;
     this.syncLevels();
     if (!enabled) this.music.pause();
-    else if (this.musicStarted) void this.music.play().catch(() => undefined);
+    else void this.startMusic();
   }
 
   setVolumes(master: number, music: number, effects: number): void {
@@ -42,9 +41,14 @@ export class AudioDirector {
     this.syncLevels();
   }
 
-  startMusic(): void {
-    this.musicStarted = true;
-    if (this.enabled) void this.music.play().catch(() => undefined);
+  async startMusic(): Promise<boolean> {
+    if (!this.enabled) return false;
+    try {
+      await this.music.play();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   toggle(): boolean {

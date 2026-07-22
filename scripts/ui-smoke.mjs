@@ -75,10 +75,7 @@ try {
   assert((await desktop.locator('.hex-compass .compass-direction.active').getAttribute('data-direction-order')) === '0', 'Selected compass sector must stay highlighted.');
   await desktop.locator('.cancel-mode').click();
 
-  await clickHex(desktop, 0, -2);
-  await desktop.locator('#pending-card:not([hidden])').waitFor();
-  assert(await desktop.locator('#pending-card .confirm-button').isEnabled(), 'Prepared action cannot be confirmed.');
-  await desktop.locator('#pending-card .confirm-button').click();
+  await doubleClickHex(desktop, 0, -2);
   await desktop.locator('#game-canvas[data-rotating="true"]').waitFor();
   await desktop.locator('#game-canvas[data-viewpoint="amber"]').waitFor();
   if (process.env.UI_SCREENSHOT) await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-amber.png` });
@@ -111,6 +108,7 @@ try {
   assert(layout.documentWidth <= layout.viewport, `Mobile horizontal overflow: ${layout.documentWidth}px > ${layout.viewport}px.`);
   assert(layout.canvasWidth <= layout.viewport, 'Canvas exceeds mobile viewport.');
   assert(await mobile.locator('#mobile-new-game-button').isVisible(), 'Mobile new-game control is hidden.');
+  await assertTopActionsDoNotOverlap(mobile);
 
   await mobile.locator('#game-canvas').focus();
   await mobile.keyboard.press('e');
@@ -129,6 +127,13 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   assert((await mobile.locator('#battle-log li').count()) >= 1, 'Second Enter on the prepared destination must execute the order.');
+
+  const narrow = await browser.newPage({ viewport: { width: 320, height: 720 }, isMobile: true, hasTouch: true });
+  watchErrors(narrow, runtimeErrors);
+  await narrow.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await assertTopActionsDoNotOverlap(narrow);
+  assert((await narrow.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)), 'Narrow mobile header causes horizontal overflow.');
+  await narrow.close();
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log('UI smoke passed: desktop action flow, mobile 390px layout, keyboard navigation.');
@@ -149,6 +154,33 @@ async function clickHex(page, q, r) {
   const screenX = Math.cos(orientation) * worldX - Math.sin(orientation) * worldY;
   const screenY = Math.sin(orientation) * worldX + Math.cos(orientation) * worldY;
   await page.mouse.click(box.x + box.width / 2 + screenX * fitScale, box.y + box.height / 2 + screenY * fitScale);
+}
+
+async function doubleClickHex(page, q, r) {
+  const canvas = page.locator('#game-canvas');
+  const box = await canvas.boundingBox();
+  assert(box, 'Canvas has no layout box.');
+  const fitScale = Math.max(0.38, Math.min((box.width - 34) / 560, (box.height - 34) / 610));
+  const worldX = 45 * q;
+  const worldY = Math.sqrt(3) * 30 * (r + q / 2);
+  const viewpoint = await canvas.getAttribute('data-viewpoint');
+  const orientation = viewpoint === 'blue' ? Math.PI : 0;
+  const screenX = Math.cos(orientation) * worldX - Math.sin(orientation) * worldY;
+  const screenY = Math.sin(orientation) * worldX + Math.cos(orientation) * worldY;
+  await page.mouse.dblclick(box.x + box.width / 2 + screenX * fitScale, box.y + box.height / 2 + screenY * fitScale);
+}
+
+async function assertTopActionsDoNotOverlap(page) {
+  const boxes = await page.locator('.top-actions .icon-button').evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    }),
+  );
+  assert(boxes.length === 3, 'Mobile header must expose all three icon controls.');
+  for (let index = 1; index < boxes.length; index += 1) {
+    assert(boxes[index - 1].right <= boxes[index].left, 'Mobile header icon controls overlap.');
+  }
 }
 
 async function selectedHex(page) {

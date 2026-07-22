@@ -107,9 +107,16 @@ function bindControls(): void {
     renderSoundButton();
   });
 
-  const activateAudio = (): void => audio.startMusic();
-  window.addEventListener('pointerdown', activateAudio, { once: true, capture: true });
-  window.addEventListener('keydown', activateAudio, { once: true, capture: true });
+  const activateAudio = (): void => {
+    void audio.startMusic().then((started) => {
+      if (!started) return;
+      window.removeEventListener('pointerdown', activateAudio, true);
+      window.removeEventListener('keydown', activateAudio, true);
+    });
+  };
+  void audio.startMusic();
+  window.addEventListener('pointerdown', activateAudio, { capture: true });
+  window.addEventListener('keydown', activateAudio, { capture: true });
 
   logToggle.addEventListener('click', () => {
     logOpen = !logOpen;
@@ -266,6 +273,13 @@ function onCanvasKeyDown(event: KeyboardEvent): void {
 function handleCell(hex: Hex): void {
   if (animating) return;
   focusedHex = hex;
+  if (pendingAction) {
+    const destination = actionDestination(state, pendingAction);
+    if (destination && equalHex(destination, hex)) {
+      void commitPending();
+      return;
+    }
+  }
   if (!state.outcome) {
     const matching = actionsAtHex(state, visibleActions, hex);
     if (matching.length === 1) {
