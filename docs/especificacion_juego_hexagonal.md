@@ -74,20 +74,20 @@ Cada jugador cuenta con las 8 piezas siguientes.
 
 ### Reglas generales (aplican a todas las piezas salvo que se indique lo contrario)
 
-- **Captura por ocupación:** salvo que se indique lo contrario, una pieza ataca a una unidad enemiga desplazándose a la casilla que esta ocupa y pasando a ocupar dicha casilla (igual que una captura en ajedrez); la unidad enemiga queda destruida.
-- **Apilamiento:** una casilla puede contener **como máximo 2 unidades a la vez**, y únicamente en la combinación "una unidad terrestre + un Dron". Nunca puede haber dos Drones en la misma casilla, ni dos unidades terrestres en la misma casilla. Esta posibilidad la genera el Dron al desplazarse (sección 4.6); sus efectos en el combate se detallan en la sección 5, y un matiz pendiente de confirmar se recoge en la sección 9.
+- **Captura por ocupación:** salvo que se indique lo contrario, una pieza ataca a una unidad enemiga desplazándose a la casilla que esta ocupa y pasando a ocupar dicha casilla; la unidad enemiga queda destruida.
+- **Apilamiento:** una casilla puede contener **como máximo 2 unidades a la vez**, y únicamente en la combinación "una unidad terrestre + un Dron". Nunca puede haber dos Drones en la misma casilla, ni dos unidades terrestres en la misma casilla. Esta posibilidad la genera el Dron al desplazarse (sección 4.6); sus efectos en el combate se detallan en la sección 5.
 
 ### 4.1 Soldado
 
 - **Movimiento:** se desplaza una casilla por turno. Tiene una orientación (una de las 6 direcciones) y solo puede moverse a las 3 casillas situadas "delante" de él según esa orientación. Por ejemplo, orientado hacia N, solo puede moverse a NO, N o NE.
-- **Cambio de orientación al moverse:** al desplazarse, el Soldado queda orientado hacia la dirección en la que se movió. Por ejemplo, si se mueve a NE, en el turno siguiente estará orientado hacia NE, y por tanto solo podrá moverse a N, NE o SE.
+- **Cambio de orientación al moverse:** al desplazarse, el Soldado adopta la orientación de la casilla a la que se movió. Si se desplaza en diagonal (por ejemplo, de N a NE o NO), es obligatorio actualizar su orientación hacia esa nueva dirección.
 - **Ataque:** ataca desplazándose a una casilla ocupada por una unidad enemiga (dentro de las 3 casillas a las que puede moverse según su orientación actual), ocupando dicha casilla.
 - **Girar:** en su turno, puede girar (cambiar de orientación) sin desplazarse. Si lo hace, no puede desplazarse ni atacar ese mismo turno. Girar cuenta como la acción del turno (sección 6).
 
 ### 4.2 Capturador
 
 - **Movimiento:** se desplaza una casilla por turno, a cualquiera de las 6 casillas de su alrededor (no está limitado por orientación).
-- **Captura:** si al **empezar su turno** (antes de desplazarse) hay una unidad enemiga en alguna de las 6 casillas de su alrededor, puede capturarla y convertirla en unidad aliada. Ni el Capturador ni la unidad capturada se desplazan: ambas permanecen en su posición.
+- **Captura:** si al **empezar su turno** (antes de desplazarse) hay una unidad enemiga en alguna de las 6 casillas de su alrededor, puede capturarla y convertirla automáticamente en unidad aliada. Ni el Capturador ni la unidad capturada se desplazan: ambas permanecen en su posición.
 - No puede capturar una unidad enemiga que quede a su alrededor **como consecuencia** de haberse desplazado él ese mismo turno; la adyacencia debe existir ya al inicio del turno.
 - **Protección mutua:** si una unidad está en contacto simultáneo con un Capturador aliado (a ella) y un Capturador enemigo, esa unidad queda protegida y no puede ser capturada.
 
@@ -97,38 +97,39 @@ Cada jugador cuenta con las 8 piezas siguientes.
 - **Cañón:** puede orientar su cañón hacia cualquiera de las 6 direcciones, de forma independiente a la dirección del movimiento. **Desplazarse y orientar el cañón sí pueden combinarse en el mismo turno.**
 - **Disparo:** dispara a las 3 casillas situadas **a 2 casillas de distancia**, delante de su cañón. Por ejemplo, con el cañón orientado a N, dispara a las casillas que están a 2 de distancia en las direcciones NO, N y NE — **no** a las casillas NO, N o NE mismas (distancia 1).
 - **Disparar es una acción exclusiva:** si dispara, no puede desplazarse ni reorientar el cañón ese mismo turno; y si ya se desplazó y/o reorientó el cañón, no puede disparar ese turno. En resumen: "moverse + orientar cañón" es una combinación válida; "disparar" siempre va solo.
-- **Transformación en Soldado:** puede convertirse permanentemente en Soldado. Al transformarse, el jugador elige libremente su orientación inicial, y en ese mismo turno puede además moverse o atacar (ya como Soldado). Una vez transformado, no puede volver a convertirse en tanque.
+- **Transformación en Soldado (Abandono del Tanque):** puede convertirse permanentemente en Soldado. Al transformarse, el jugador elige libremente su orientación inicial, y en ese mismo turno puede además moverse o atacar (ya como Soldado). Una vez transformado, el tanque original queda abandonado de forma irreversible y no se puede recuperar.
 
 ### 4.4 Tanque de Largo Alcance
 
 - **Movimiento:** se desplaza una casilla por turno, a cualquiera de las 6 casillas de su alrededor.
 - **Disparo:** dispara, en cualquiera de las 6 direcciones, a la casilla situada **exactamente a 3 casillas de distancia** en línea recta (no a 1 ni a 2 casillas; solo a la tercera). A diferencia del Tanque de Medio Alcance, no tiene cañón orientable: puede elegir libremente cualquiera de las 6 direcciones cada vez que dispara.
 - **Disparar o moverse, nunca ambos:** debe elegir entre disparar o desplazarse en su turno.
-- **Transformación en Soldado:** misma regla que el Tanque de Medio Alcance (sección 4.3): transformación permanente, orientación inicial libre, y puede moverse o atacar en el mismo turno de la transformación.
+- **Transformación en Soldado (Abandono del Tanque):** misma regla que el Tanque de Medio Alcance (sección 4.3): transformación permanente, orientación inicial libre, y puede moverse o atacar en el mismo turno de la transformación. No se puede recuperar el tanque.
 
 ### 4.5 Tanque Rápido
 
-- **Movimiento:** se desplaza en línea recta, en cualquiera de las 6 direcciones, sin límite de casillas, siempre que todas las casillas del trayecto estén libres. En la práctica, esto lo convierte en una pieza deslizante al estilo de una torre de ajedrez: se detiene en la primera casilla ocupada que encuentre en su camino.
-- **Ataque:** ataca desplazándose a una casilla ocupada por una unidad enemiga, siempre que el trayecto hasta ella esté libre de otras unidades, ocupando dicha casilla.
-- **Transformación en Soldado:** misma regla que los demás tanques (sección 4.3): transformación permanente, orientación inicial libre, y puede moverse o atacar en el mismo turno de la transformación.
+- **Movimiento:** se desplaza en línea recta, en cualquiera de las 6 direcciones, sin límite de casillas, siempre que todas las casillas del trayecto estén libres. Funciona como una pieza deslizante (similar a una torre de ajedrez): se detiene en la primera casilla ocupada que encuentre en su camino.
+- **Ataque:** ataca desplazándose a una casilla ocupada por una unidad enemiga, siempre que el trayecto hasta ella esté libre de otras unidades, ocupando dicha casilla. No posee ataques o disparos a distancia.
+- **Transformación en Soldado (Abandono del Tanque):** misma regla que los demás tanques (sección 4.3): transformación permanente, orientación inicial libre, y puede moverse o atacar en el mismo turno de la transformación. No se puede recuperar el tanque.
 
 ### 4.6 Dron
 
 - **Movimiento:** se desplaza en línea recta, en cualquiera de las 6 direcciones, hasta un máximo de 3 casillas.
 - **Vuelo:** puede sobrevolar (pasar por encima de) otras unidades, tanto aliadas como enemigas, **excepto otros Drones**: ningún Dron puede pasar por encima de otro Dron ni terminar su movimiento sobre él, sea aliado o enemigo.
-- **Apilamiento:** puede terminar su movimiento en una casilla ya ocupada por otra unidad, siempre que no sea otro Dron. Si esa unidad es enemiga, esto es un ataque (ver punto siguiente). Si es aliada, el Dron pasa a compartir casilla con ella (ver "Apilamiento" en las reglas generales de la sección 4).
-- **Ataque:** ataca desplazándose a una casilla ocupada por una unidad enemiga, ocupando dicha casilla (si esa unidad enemiga está sola; si está apilada con otro Dron enemigo, ver la tabla de la sección 5).
-- **Interacción con el resto de unidades:** las demás unidades (no Dron) pueden desplazarse a través de / hacia una casilla ocupada por un Dron **aliado**, pero no pueden hacerlo con un Dron **enemigo** (salvo mediante las reglas de ataque específicas contra Drones enemigos indicadas en la sección 5).
+- **Apilamiento:** puede terminar su movimiento en una casilla ya ocupada por otra unidad, siempre que no sea otro Dron. Si esa unidad es enemiga, esto constituye un ataque (ver sección 5). Si es aliada, el Dron pasa a compartir casilla con ella.
+- **Ataque:** solo puede realizar su ataque en la casilla en la que finalice su desplazamiento, no a lo largo del recorrido. Ataca desplazándose a una casilla ocupada por una unidad enemiga, ocupando dicha casilla (si esa unidad enemiga está sola; si está apilada con otro Dron enemigo, ver la tabla de la sección 5).
+- **Interacción con el resto de unidades:** las demás unidades terrestres pueden desplazarse por debajo de un Dron **aliado**, pero no pueden hacerlo por debajo de un Dron **enemigo** (el Dron enemigo bloquea el paso terrestre, salvo mediante las reglas de ataque específicas detalladas en la sección 5).
 
 ### 4.7 Portamisiles Antiaéreo
 
 - **Movimiento:** se desplaza una casilla por turno, a cualquiera de las 6 casillas de su alrededor.
-- **Zona protegida:** la casilla que ocupa, junto con sus 6 casillas vecinas (7 casillas en total), forman su "zona protegida".
+- **Zona protegida:** la casilla que ocupa, junto con sus 6 casillas vecinas (7 casillas en total), forman su "zona protegida", la cual queda blindada contra cualquier ataque o presencia por aire.
 - **Restricciones que impone sobre las unidades enemigas:**
-  - Ningún Dron enemigo puede desplazarse sobre una casilla de la zona protegida.
+  - Ningún Dron enemigo puede desplazarse sobre una casilla de la zona protegida (en caso de intentar cruzarla o entrar en ella, es destruido de inmediato).
   - Ningún Tanque de Medio Alcance enemigo puede disparar sobre una casilla de la zona protegida.
   - Ningún Tanque de Largo Alcance enemigo puede disparar sobre una casilla de la zona protegida.
 - **Destrucción automática de Drones:** si, al finalizar un desplazamiento del Portamisiles, queda un Dron enemigo dentro de su zona protegida, ese Dron es destruido inmediatamente (sin necesidad de una acción de ataque aparte).
+- **Vulnerabilidades y limitaciones de ataque:** El Portamisiles Antiaéreo no puede realizar ataques activos sobre otro tipo de unidades. **Únicamente puede ser destruido por un Soldado o por un Tanque Rápido, o bien ser convertido por un Capturador**. Los tanques de Medio y Largo Alcance no pueden destruirlo bajo ninguna circunstancia (de ahí que una táctica útil sea abandonarlos para convertirlos en Soldados y poder atacarlo directamente).
 
 ### 4.8 Fortaleza
 
@@ -141,7 +142,7 @@ Cada jugador cuenta con las 8 piezas siguientes.
 
 ## 5. Ataques sobre casillas con un Dron apilado
 
-Cuando una pieza ataca o intenta capturar una casilla que contiene **un Dron enemigo apilado con otra unidad enemiga**, el objetivo permitido depende del tipo de pieza atacante:
+Cuando una pieza ataca o intenta capturar una casilla que contiene **un Dron enemigo apilado con otra unidad enemiga**, el objetivo permitido depende del tipo de pieza atacante y se rige por las siguientes normas:
 
 | Pieza atacante          | Objetivo permitido en una casilla [Dron enemigo + otra unidad enemiga] |
 | ----------------------- | ---------------------------------------------------------------------- |
@@ -152,8 +153,13 @@ Cuando una pieza ataca o intenta capturar una casilla que contiene **un Dron ene
 | Tanque de Medio Alcance | Elige libremente a cuál de las dos atacar.                             |
 | Tanque de Largo Alcance | Elige libremente a cuál de las dos atacar.                             |
 
-- Si la casilla objetivo tiene **solo** un Dron enemigo (sin ninguna otra unidad apilada), el Soldado y el Tanque Rápido sí pueden atacarlo con normalidad, y el Capturador sí puede capturarlo con normalidad. Las restricciones de la tabla solo aplican cuando hay **dos** unidades enemigas apiladas en la misma casilla.
-- El Portamisiles Antiaéreo y la Fortaleza no tienen mecánica de ataque activo, por lo que esta tabla no les afecta.
+### Reglas detalladas de resolución de combate en apilamientos:
+
+1. **Ataques terrestres por ocupación (Soldado, Tanque Rápido):** Solo dañan a la unidad terrestre oculta bajo el Dron. Al resolver el ataque, el atacante se desplaza y ocupa físicamente la casilla, quedando situado **debajo** del Dron enemigo (quedando vulnerable a ser atacado por este Dron en el siguiente turno).
+2. **Captura por tierra (Capturador):** Solo puede capturar a la unidad terrestre bajo el Dron. El Capturador permanece en su casilla de origen y la unidad capturada cambia de bando (se vuelve aliada), pero se mantiene en su posición física original bajo el Dron enemigo.
+3. **Ataques de Dron contra Dron:** Si el ataque lo realiza un Dron aliado, este solo puede fijar como objetivo al Dron enemigo (no a la unidad terrestre inferior). Al destruirlo, el Dron atacante se posiciona en la casilla, quedando apilado sobre la unidad terrestre enemiga.
+   - _Contraataque desde abajo:_ En el siguiente turno, si la unidad terrestre que quedó abajo es un Soldado, un Tanque Rápido o un Capturador, estos **sí pueden** atacar o capturar directamente al Dron enemigo situado sobre ellos. En cambio, los Tanques de Medio y Largo Alcance **no pueden** atacar a un Dron situado directamente sobre ellos.
+4. **Disparos a distancia (Tanques de Medio y Largo Alcance):** Si tienen a tiro la casilla apilada, el jugador elige libremente a cuál de las dos unidades atacar (terrestre o Dron), eliminándola, pero en ningún caso puede dañar a ambas en el mismo turno.
 
 ---
 
@@ -165,9 +171,12 @@ Cuando una pieza ataca o intenta capturar una casilla que contiene **un Dron ene
 
 ---
 
-## 7. Condición de victoria
+## 7. Condición de victoria y resolución de empates
 
-Gana la partida el jugador que consiga destruir la Fortaleza rival (ver sección 4.8 para el daño necesario según el tipo de pieza atacante).
+1. **Victoria por destrucción:** Gana la partida el jugador que consiga reducir a 0 los puntos de vida de la Fortaleza rival (sección 4.8).
+2. **Declaración de tablas (Empate por bloqueo):** En situaciones de bloqueo táctico (cuando no se pueden realizar ataques legales, o cuando a ningún jugador le conviene variar su posición y se repite de manera cíclica la misma jugada en bucle), la partida finaliza de inmediato. El ganador se determina según las siguientes condiciones:
+   - Si **ambas** Fortalezas se encuentran intactas (ambas con 2 HP), la partida se declara oficialmente en **tablas** (empate).
+   - Si alguna de las Fortalezas fue dañada previamente (reduciendo su vida a 1 HP mediante el ataque de sacrificio de un Soldado o un Capturador), **ganará la partida el jugador que haya logrado infligir ese primer daño**.
 
 ---
 
@@ -178,7 +187,7 @@ Gana la partida el jugador que consiga destruir la Fortaleza rival (ver sección
 3. **Modelo de datos de las piezas:** Definición estructurada de las 8 piezas de la sección 4, controlando su orientación (Soldado, cañón del Tanque de Medio Alcance), sus puntos de vida actuales, su estado de acción y su posible apilamiento en casillas.
 4. **Lógica de movimiento y ataque:** Validación de reglas para cada pieza, incluyendo el tratamiento del apilamiento (sección 5) y las limitaciones espaciales impuestas por el Portamisiles Antiaéreo (sección 4.7).
 5. **Bucle de juego por turnos:** Alternancia entre los 2 jugadores, aplicación del consumo de acciones por turno y verificación de la acción obligatoria (sección 6).
-6. **Detección de victoria:** Monitoreo del estado de las Fortalezas y finalización del flujo del juego cuando una sea eliminada.
+6. **Detección de victoria y empates:** Monitoreo del estado de las Fortalezas, registro cronológico del primer daño efectuado para resolver posibles bloqueos (sección 7) y finalización del flujo del juego.
 7. **Interfaz gráfica basada en Web-Canvas:** Representación visual interactiva en la que el usuario pueda hacer clic en una casilla para seleccionarla, visualizar los movimientos y ataques legales mediante capas de color semitransparentes, e interactuar con botones HTML o controles integrados en el Canvas para realizar acciones complementarias (como girar, disparar o transformar unidades).
 
 ---
