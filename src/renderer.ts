@@ -20,7 +20,7 @@ import {
   otherPlayerOf,
   protectedCells,
 } from './engine';
-import type { GameAction, GameEvent, GameState, Hex, Piece, Player } from './types';
+import type { Direction, GameAction, GameEvent, GameState, Hex, Piece, Player } from './types';
 
 const COLORS = {
   background: '#07131a',
@@ -942,9 +942,9 @@ export function pieceAccessibleLabel(state: GameState, piece: Piece): string {
   const position = `${signed(piece.position.q)}, ${signed(piece.position.r)}`;
   const layer = piece.type === 'drone' ? 'aire' : 'suelo';
   const details = piece.type === 'soldier'
-    ? `, orientado ${DIRECTION_NAMES[piece.facing]}`
+    ? `, orientado ${directionNameForPlayer(piece.facing, state.activePlayer)}`
     : piece.type === 'medium'
-      ? `, cañón ${DIRECTION_NAMES[piece.cannon]}`
+      ? `, cañón ${directionNameForPlayer(piece.cannon, state.activePlayer)}`
       : piece.type === 'fortress'
         ? `, ${piece.hp} puntos de vida`
         : '';
@@ -952,6 +952,10 @@ export function pieceAccessibleLabel(state: GameState, piece: Piece): string {
     ? ', en zona antiaérea enemiga'
     : '';
   return `${PIECE_SHORT_NAMES[piece.type]}, ${owner}, ${layer}, coordenadas ${position}${details}${protectedByEnemy}`;
+}
+
+function directionNameForPlayer(direction: Direction, player: Player): string {
+  return DIRECTION_NAMES[((direction + (player === 0 ? 3 : 0)) % 6) as Direction];
 }
 
 function signed(value: number): string {

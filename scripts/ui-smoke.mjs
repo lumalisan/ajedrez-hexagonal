@@ -62,6 +62,14 @@ try {
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert((await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'), 'Canvas selection failed.');
 
+  await desktop.locator('[data-command="rotate"]').click();
+  const visualNorth = desktop.locator('.hex-compass button[aria-label="N, orientación actual"]');
+  const visualSouth = desktop.locator('.hex-compass button[aria-label="S"]');
+  assert((await visualNorth.getAttribute('data-direction-order')) === '3', 'Cian visual north must map to model south.');
+  assert((await visualSouth.getAttribute('data-direction-order')) === '0', 'Cian visual south must map to model north.');
+  assert(!(await visualNorth.isEnabled()), 'The initial Cian soldier must visibly face north.');
+  await desktop.locator('.cancel-mode').click();
+
   await clickHex(desktop, 0, -2);
   await desktop.locator('#pending-card:not([hidden])').waitFor();
   assert(await desktop.locator('#pending-card .confirm-button').isEnabled(), 'Prepared action cannot be confirmed.');

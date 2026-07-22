@@ -483,9 +483,9 @@ function renderPieceCard(piece?: Piece): void {
 
   const ownTurn = piece.owner === state.activePlayer && !state.outcome;
   const facing = piece.type === 'soldier'
-    ? `<span>Orientación <strong>${DIRECTION_NAMES[piece.facing]}</strong></span>`
+    ? `<span>Orientación <strong>${directionNameForView(piece.facing)}</strong></span>`
     : piece.type === 'medium'
-      ? `<span>Cañón <strong>${DIRECTION_NAMES[piece.cannon]}</strong></span>`
+      ? `<span>Cañón <strong>${directionNameForView(piece.cannon)}</strong></span>`
       : piece.type === 'fortress'
         ? `<span>Integridad <strong>${piece.hp}/2 HP</strong></span>`
         : '';
@@ -673,20 +673,45 @@ function directionPanel(
 ): string {
   return `<div class="control-section direction-section">
     <h3>${title}</h3>
-    <p>Elige una de las seis direcciones.</p>
-    <div class="direction-grid">${ALL_DIRECTIONS.map((direction) => {
-      const disabled = current === direction;
-      const active = selected === direction;
-      return `<button type="button" data-${dataName}="${direction}" class="${active ? 'active' : ''}" ${disabled ? 'disabled' : ''} aria-label="${DIRECTION_NAMES[direction]}" aria-pressed="${active || disabled}"><i style="--angle:${direction * 60}deg">↑</i><span>${DIRECTION_NAMES[direction]}</span></button>`;
-    }).join('')}</div>
+    <p>Elige un rumbo en la brújula.</p>
+    ${directionCompass(current, selected, dataName, false)}
     <button type="button" class="text-button cancel-mode">Volver</button>
   </div>`;
 }
 
 function directionButtons(selected: Direction | null, dataName: string): string {
-  return `<div class="mini-directions">${ALL_DIRECTIONS.map(
-    (direction) => `<button type="button" data-${dataName}="${direction}" class="${selected === direction ? 'active' : ''}" aria-pressed="${selected === direction}">${DIRECTION_NAMES[direction]}</button>`,
-  ).join('')}</div>`;
+  return directionCompass(null, selected, dataName, true);
+}
+
+function directionCompass(
+  current: Direction | null,
+  selected: Direction | null,
+  dataName: string,
+  compact: boolean,
+): string {
+  const highlighted = selected ?? current;
+  const centerDirection = highlighted === null ? null : directionNameForView(highlighted);
+  const centerLabel = selected !== null ? 'SELECCIONADA' : current !== null ? 'ACTUAL' : 'ELIGE RUMBO';
+  return `<div class="hex-compass ${compact ? 'compact' : ''}" role="group" aria-label="Brújula de seis direcciones">
+    <div class="compass-frame" aria-hidden="true"></div>
+    <div class="compass-center" aria-hidden="true"><span>${centerLabel}</span><strong>${centerDirection ?? '·'}</strong></div>
+    ${ALL_DIRECTIONS.map((viewDirection) => {
+      const direction = modelDirectionForView(viewDirection);
+      const isCurrent = current === direction;
+      const active = selected === direction;
+      const label = DIRECTION_NAMES[viewDirection];
+      return `<button type="button" data-${dataName}="${direction}" class="compass-direction ${isCurrent ? 'current' : ''} ${active ? 'active' : ''}" style="--direction:${viewDirection}" ${isCurrent ? 'disabled' : ''} aria-label="${label}${isCurrent ? ', orientación actual' : ''}" aria-pressed="${active || isCurrent}"><i aria-hidden="true">↑</i><span>${label}</span></button>`;
+    }).join('')}
+  </div>`;
+}
+
+function modelDirectionForView(direction: Direction): Direction {
+  return ((direction + (state.activePlayer === 0 ? 3 : 0)) % 6) as Direction;
+}
+
+function directionNameForView(direction: Direction): string {
+  const viewDirection = ((direction + (state.activePlayer === 0 ? 3 : 0)) % 6) as Direction;
+  return DIRECTION_NAMES[viewDirection];
 }
 
 function targetChoiceMarkup(action: GameAction, index: number): string {

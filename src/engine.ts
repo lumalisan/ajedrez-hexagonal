@@ -877,9 +877,9 @@ export function describeAction(state: GameState, action: GameAction): string {
         : `${name} se moverá a ${formatHex(action.to)}`;
     }
     case 'rotate':
-      return `${name} girará hacia ${DIRECTION_NAMES[action.facing]}`;
+      return `${name} girará hacia ${directionNameForPlayer(action.facing, piece?.owner ?? state.activePlayer)}`;
     case 'orient':
-      return `Cañón orientado hacia ${DIRECTION_NAMES[action.cannon]}`;
+      return `Cañón orientado hacia ${directionNameForPlayer(action.cannon, piece?.owner ?? state.activePlayer)}`;
     case 'shoot': {
       const target = getPiece(state, action.targetId);
       return `${name} disparará a ${target ? PIECE_NAMES[target.type] : 'objetivo'}`;
@@ -914,10 +914,10 @@ function describeResolvedAction(
       base = `${name} avanzó a ${formatHex(action.to)}`;
       break;
     case 'rotate':
-      base = `${name} giró hacia ${DIRECTION_NAMES[action.facing]}`;
+      base = `${name} giró hacia ${directionNameForPlayer(action.facing, piece?.owner ?? before.activePlayer)}`;
       break;
     case 'orient':
-      base = `Cañón orientado hacia ${DIRECTION_NAMES[action.cannon]}`;
+      base = `Cañón orientado hacia ${directionNameForPlayer(action.cannon, piece?.owner ?? before.activePlayer)}`;
       break;
     case 'shoot': {
       const target = getPiece(before, action.targetId);
@@ -953,6 +953,10 @@ function describeResolvedAction(
       ? ` ${destroyed} baja${destroyed === 1 ? '' : 's'}.`
       : '.';
   return `${base}${suffix}`;
+}
+
+function directionNameForPlayer(direction: Direction, player: Player): string {
+  return DIRECTION_NAMES[((direction + (player === 0 ? 3 : 0)) % 6) as Direction];
 }
 
 function formatHex(hex: Hex): string {
