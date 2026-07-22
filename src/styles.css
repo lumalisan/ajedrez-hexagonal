@@ -465,6 +465,12 @@ button:disabled {
   background: var(--attack);
 }
 
+.legend-dot.range {
+  color: var(--attack);
+  border-style: dashed;
+  background: rgba(255, 92, 138, 0.12);
+}
+
 .legend-dot.convert {
   color: var(--convert);
   background: var(--convert);
@@ -1723,8 +1729,8 @@ button:disabled {
     font-size: 7px;
   }
 
-  .legend span:nth-child(3),
-  .legend span:nth-child(4) {
+  .legend span:nth-child(4),
+  .legend span:nth-child(5) {
     display: none;
   }
 

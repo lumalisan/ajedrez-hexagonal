@@ -5,6 +5,7 @@ import {
   createGameState,
   createInitialState,
   declareBlockade,
+  getFiringRangeCells,
   getLegalActionsForPiece,
   getPiece,
   occupancyAt,
@@ -12,11 +13,12 @@ import {
 } from '../src/engine';
 import {
   allBoardHexes,
+  directionAtOffset,
   hexDistance,
   isOnBoard,
   stepHex,
 } from '../src/hex';
-import type { GameAction, GameState, Hex, Piece, Player } from '../src/types';
+import type { Direction, GameAction, GameState, Hex, Piece, Player } from '../src/types';
 
 const hex = (q: number, r: number): Hex => ({ q, r });
 
@@ -185,6 +187,54 @@ describe('Capturador', () => {
 });
 
 describe('Tanques de disparo', () => {
+  it('muestra alcance potencial aunque las casillas estén vacías', () => {
+    const mediumState = base([
+      { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
+    ]);
+    expect(getFiringRangeCells(mediumState, 'medium').map(({ q, r }) => `${q},${r}`).sort()).toEqual([
+      '-1,-1',
+      '0,-2',
+      '1,-2',
+    ]);
+
+    const longState = base([{ id: 'long', type: 'long', owner: 0, position: hex(0, 0) }]);
+    const longRange = getFiringRangeCells(longState, 'long');
+    expect(longRange).toHaveLength(6);
+    expect(longRange.every((cell) => hexDistance(hex(0, 0), cell) === 3)).toBe(true);
+  });
+
+  it('previsualiza alcance desde la futura posición y orientación del cañón', () => {
+    const state = base([
+      { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
+    ]);
+    const preview = getFiringRangeCells(state, 'medium', { position: hex(1, 0), cannon: 2 });
+    expect(preview.map(({ q, r }) => `${q},${r}`).sort()).toEqual(['2,1', '3,-1', '3,0']);
+  });
+
+  it.each([0, 1, 2, 3, 4, 5] as Direction[])(
+    'Tanque medio limita el frente compacto para cañón %s',
+    (cannon) => {
+      const origin = hex(0, 0);
+      const forward = stepHex(origin, cannon);
+      const validCells = [-1, 0, 1].map((offset) =>
+        stepHex(forward, directionAtOffset(cannon, offset)),
+      );
+      const invalidCells = [-1, 1].map((offset) =>
+        stepHex(origin, directionAtOffset(cannon, offset), 2),
+      );
+      const state = base([
+        { id: 'medium', type: 'medium', owner: 0, position: origin, cannon },
+        ...validCells.map((position, index) => soldier(`valid-${index}`, 1, position, 0)),
+        ...invalidCells.map((position, index) => soldier(`outside-${index}`, 1, position, 0)),
+      ]);
+      const targetIds = getLegalActionsForPiece(state, 'medium')
+        .filter((action) => action.kind === 'shoot')
+        .map((action) => action.targetId)
+        .sort();
+      expect(targetIds).toEqual(['valid-0', 'valid-1', 'valid-2']);
+    },
+  );
+
   it('Tanque medio dispara a distancia 2 atravesando unidades', () => {
     const state = base([
       { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },

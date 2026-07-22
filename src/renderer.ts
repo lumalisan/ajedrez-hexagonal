@@ -34,6 +34,7 @@ const COLORS = {
   amber: '#ffb547',
   move: '#55e0c1',
   attack: '#ff5c8a',
+  range: '#ff7ca2',
   convert: '#b8a1ff',
   danger: '#ff765c',
 };
@@ -45,6 +46,7 @@ export interface RenderModel {
   pending: GameAction | null;
   hovered: Hex | null;
   focused: Hex | null;
+  firingRange: Hex[];
   lastEvents: GameEvent[];
   reducedMotion: boolean;
   highContrast: boolean;
@@ -66,7 +68,7 @@ interface RotationState {
   resolve: () => void;
 }
 
-type MarkerKind = 'move' | 'attack' | 'convert' | 'danger';
+type MarkerKind = 'range' | 'move' | 'attack' | 'convert' | 'danger';
 
 export class BoardRenderer {
   private readonly canvas: HTMLCanvasElement;
@@ -424,6 +426,9 @@ export class BoardRenderer {
 
   private drawActionMarkers(ctx: CanvasRenderingContext2D, model: RenderModel, time: number): void {
     const byCell = new Map<string, { hex: Hex; kind: MarkerKind }>();
+    for (const hex of model.firingRange) {
+      byCell.set(hexKey(hex), { hex, kind: 'range' });
+    }
     for (const action of model.actions) {
       const destination = actionDestination(model.state, action);
       if (!destination) continue;
@@ -441,14 +446,15 @@ export class BoardRenderer {
       const color = COLORS[marker.kind];
       ctx.save();
       ctx.translate(x, y);
-      ctx.globalAlpha = 0.22 + pulse * 0.06;
+      ctx.globalAlpha = marker.kind === 'range' ? 0.1 : 0.22 + pulse * 0.06;
       ctx.fillStyle = color;
       hexPath(ctx, 25.6);
       ctx.fill();
-      ctx.globalAlpha = 0.92;
+      ctx.globalAlpha = marker.kind === 'range' ? 0.48 : 0.92;
       ctx.strokeStyle = color;
-      ctx.lineWidth = model.highContrast ? 2.4 : 1.7;
-      if (marker.kind === 'attack') drawAttackMarker(ctx, 14 + pulse * 1.4);
+      ctx.lineWidth = marker.kind === 'range' ? (model.highContrast ? 1.8 : 1.15) : model.highContrast ? 2.4 : 1.7;
+      if (marker.kind === 'range') drawRangeMarker(ctx);
+      else if (marker.kind === 'attack') drawAttackMarker(ctx, 14 + pulse * 1.4);
       else if (marker.kind === 'convert') drawConvertMarker(ctx, 12 + pulse);
       else if (marker.kind === 'danger') drawDangerMarker(ctx, 12.5);
       else drawMoveMarker(ctx, 5.2 + pulse * 1.2);
@@ -711,7 +717,7 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
 }
 
 function markerPriority(kind: MarkerKind): number {
-  return { move: 0, convert: 1, danger: 2, attack: 3 }[kind];
+  return { range: -1, move: 0, convert: 1, danger: 2, attack: 3 }[kind];
 }
 
 function eventDuration(events: GameEvent[]): number {
@@ -761,6 +767,16 @@ function drawMoveMarker(ctx: CanvasRenderingContext2D, radius: number): void {
   ctx.fill();
   ctx.beginPath();
   ctx.arc(0, 0, radius + 5, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawRangeMarker(ctx: CanvasRenderingContext2D): void {
+  ctx.setLineDash([3, 4]);
+  hexPath(ctx, 20.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
   ctx.stroke();
 }
 

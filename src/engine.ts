@@ -1,6 +1,7 @@
 import {
   ALL_DIRECTIONS,
   DIRECTION_NAMES,
+  directionAtOffset,
   directionBetween,
   equalHex,
   frontDirections,
@@ -181,6 +182,27 @@ export function getAllLegalActions(state: GameState): GameAction[] {
     .flatMap((piece) => getLegalActionsForPiece(state, piece.id));
 }
 
+export function getFiringRangeCells(
+  state: GameState,
+  pieceId: string,
+  preview: { position?: Hex; cannon?: Direction } = {},
+): Hex[] {
+  const piece = getPiece(state, pieceId);
+  if (!piece || (piece.type !== 'medium' && piece.type !== 'long')) return [];
+  const position = preview.position ?? piece.position;
+  if (piece.type === 'medium') {
+    const cannon = preview.cannon ?? piece.cannon;
+    return mediumFiringPaths(state, piece, position, cannon).map(({ target }) => target);
+  }
+  return ALL_DIRECTIONS
+    .map((direction) => ({ direction, target: stepHex(position, direction, 3) }))
+    .filter(
+      ({ direction, target }) =>
+        isOnBoard(target) && !shotCrossesProtectionFrom(state, piece, position, direction, 3),
+    )
+    .map(({ target }) => target);
+}
+
 function soldierActions(
   state: GameState,
   piece: Extract<Piece, { type: 'soldier' }>,
@@ -277,11 +299,38 @@ function mediumActions(
   for (const cannon of ALL_DIRECTIONS) {
     if (cannon !== piece.cannon) actions.push({ kind: 'orient', pieceId: piece.id, cannon });
   }
-  for (const direction of frontDirections(piece.cannon)) {
-    actions.push(...shootActionsAt(state, piece, direction, 2));
-  }
+  actions.push(...mediumShootActions(state, piece));
   actions.push(...transformActions(state, piece));
   return actions;
+}
+
+function mediumShootActions(
+  state: GameState,
+  piece: Extract<Piece, { type: 'medium' }>,
+): GameAction[] {
+  return mediumFiringPaths(state, piece, piece.position, piece.cannon).flatMap(({ target, path }) =>
+    shootActionsAtHex(state, piece, target, path),
+  );
+}
+
+function mediumFiringPaths(
+  state: GameState,
+  piece: Extract<Piece, { type: 'medium' }>,
+  position: Hex,
+  cannon: Direction,
+): Array<{ target: Hex; path: Hex[] }> {
+  const forward = stepHex(position, cannon);
+  if (!isOnBoard(forward)) return [];
+  const enemy = otherPlayer(piece.owner);
+  return [-1, 0, 1]
+    .map((offset) => {
+      const target = stepHex(forward, directionAtOffset(cannon, offset));
+      return { target, path: [forward, target] };
+    })
+    .filter(
+      ({ target, path }) =>
+        isOnBoard(target) && !path.some((cell) => isProtectedByPlayer(state, cell, enemy)),
+    );
 }
 
 function longActions(state: GameState, piece: Extract<Piece, { type: 'long' }>): GameAction[] {
@@ -301,6 +350,18 @@ function shootActionsAt(
 ): GameAction[] {
   const targetHex = stepHex(piece.position, direction, distance);
   if (!isOnBoard(targetHex) || shotCrossesProtection(state, piece, direction, distance)) return [];
+  return shootActionsAtHex(state, piece, targetHex);
+}
+
+function shootActionsAtHex(
+  state: GameState,
+  piece: Piece,
+  targetHex: Hex,
+  path: Hex[] = [],
+): GameAction[] {
+  if (!isOnBoard(targetHex)) return [];
+  const enemy = otherPlayer(piece.owner);
+  if (path.some((cell) => isProtectedByPlayer(state, cell, enemy))) return [];
   const occupancy = occupancyAt(state, targetHex);
   return [occupancy.ground, occupancy.air]
     .filter(
@@ -316,9 +377,19 @@ function shotCrossesProtection(
   direction: Direction,
   distance: number,
 ): boolean {
+  return shotCrossesProtectionFrom(state, piece, piece.position, direction, distance);
+}
+
+function shotCrossesProtectionFrom(
+  state: GameState,
+  piece: Piece,
+  origin: Hex,
+  direction: Direction,
+  distance: number,
+): boolean {
   const enemy = otherPlayer(piece.owner);
   for (let step = 1; step <= distance; step += 1) {
-    if (isProtectedByPlayer(state, stepHex(piece.position, direction, step), enemy)) return true;
+    if (isProtectedByPlayer(state, stepHex(origin, direction, step), enemy)) return true;
   }
   return false;
 }

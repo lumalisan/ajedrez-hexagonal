@@ -16,6 +16,7 @@ import {
   createInitialState,
   declareBlockade,
   describeAction,
+  getFiringRangeCells,
   getLegalActionsForPiece,
   getPiece,
   occupancyAt,
@@ -405,11 +406,31 @@ function syncCanvas(): void {
     pending: pendingAction,
     hovered: hoveredHex,
     focused: focusedHex,
+    firingRange: currentFiringRange(),
     lastEvents,
     reducedMotion: preferences.reducedMotion,
     highContrast: preferences.highContrast,
   };
   renderer.setModel(model);
+}
+
+function currentFiringRange(): Hex[] {
+  const selected = selectedId ? getPiece(state, selectedId) : undefined;
+  if (!selected || selected.owner !== state.activePlayer) return [];
+  return getFiringRangeCells(state, selected.id, firingRangePreview(selected));
+}
+
+function firingRangePreview(piece: Piece): { position?: Hex; cannon?: Direction } | undefined {
+  const action = pendingAction;
+  if (!action || action.pieceId !== piece.id) return undefined;
+  if (action.kind === 'orient') return { cannon: action.cannon };
+  if (action.kind === 'move') {
+    return {
+      position: action.to,
+      cannon: piece.type === 'medium' ? action.cannon ?? piece.cannon : undefined,
+    };
+  }
+  return undefined;
 }
 
 function filterVisibleActions(actions: GameAction[], selected?: Piece): GameAction[] {
@@ -757,6 +778,7 @@ function renderSoundButton(): void {
 
 function renderScreenReaderBoard(): void {
   const rows: string[] = [];
+  const firingRange = new Set(currentFiringRange().map(hexKey));
   for (let r = -5; r <= 5; r += 1) {
     const cells: string[] = [];
     for (let q = -5; q <= 5; q += 1) {
@@ -768,7 +790,8 @@ function renderScreenReaderBoard(): void {
         .map((piece) => pieceAccessibleLabel(state, piece));
       const legal = [...new Set(actionsAtHex(state, visibleActions, hex).map((action) => describeAction(state, action)))];
       const cellId = accessibleCellId(hex);
-      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía}`}${legal.length ? `. Acciones legales: ${legal.join('; ')}` : ''}`;
+      const rangeLabel = firingRange.has(hexKey(hex)) ? '. Alcance potencial de disparo' : '';
+      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía}`}${rangeLabel}${legal.length ? `. Acciones legales: ${legal.join('; ')}` : ''}`;
       cells.push(`<div id="${cellId}" role="gridcell" aria-rowindex="${r + 6}" aria-colindex="${q + 6}" aria-selected="${Boolean(focusedHex && equalHex(focusedHex, hex))}" data-hex="${hexKey(hex)}">${escapeHtml(label)}</div>`);
     }
     rows.push(`<div role="row" aria-rowindex="${r + 6}">${cells.join('')}</div>`);
@@ -782,10 +805,11 @@ function announceCell(hex: Hex): void {
   const occupancy = occupancyAt(state, hex);
   const pieces = [occupancy.ground, occupancy.air].filter((piece): piece is Piece => Boolean(piece));
   const legal = [...new Set(actionsAtHex(state, visibleActions, hex).map((action) => describeAction(state, action)))];
+  const inFiringRange = currentFiringRange().some((cell) => equalHex(cell, hex));
   announce(
     `${pieces.length
       ? pieces.map((piece) => pieceAccessibleLabel(state, piece)).join('. ')
-      : `Casilla ${hex.q}, ${hex.r}, vacía.`}${legal.length ? ` Acciones legales: ${legal.join('; ')}.` : ''}`,
+      : `Casilla ${hex.q}, ${hex.r}, vacía.`}${inFiringRange ? ' Alcance potencial de disparo.' : ''}${legal.length ? ` Acciones legales: ${legal.join('; ')}.` : ''}`,
   );
 }
 
