@@ -33,7 +33,7 @@ try {
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(desktop, runtimeErrors);
   await desktop.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
-  assert((await desktop.title()) === 'Atlas de Asedio', 'Document title missing.');
+  assert((await desktop.title()) === 'Hexforge', 'Document title missing.');
   assert(
     (await desktop.locator('#sr-board [role="gridcell"]').count()) === 91,
     'Accessible board must expose 91 cells.',
