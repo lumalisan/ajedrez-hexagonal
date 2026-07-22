@@ -270,13 +270,14 @@ export class BoardRenderer {
     ctx.save();
     ctx.translate(this.width / 2 + this.pan.x, this.height / 2 + this.pan.y);
     ctx.scale(this.fitScale * this.zoom, this.fitScale * this.zoom);
-    ctx.rotate(this.orientationAt(time));
+    const orientation = this.orientationAt(time);
+    ctx.rotate(orientation);
     this.drawBoardShadow(ctx);
-    this.drawCells(ctx, model);
+    this.drawCells(ctx, model, orientation);
     this.drawProtectionZones(ctx, model);
     this.drawLastAction(ctx, model.lastEvents);
     this.drawActionMarkers(ctx, model, time);
-    this.drawPieces(ctx, model);
+    this.drawPieces(ctx, model, orientation);
     this.drawFocus(ctx, model);
     if (this.animation) this.drawAnimation(ctx, this.animation, time);
     ctx.restore();
@@ -328,7 +329,7 @@ export class BoardRenderer {
     ctx.restore();
   }
 
-  private drawCells(ctx: CanvasRenderingContext2D, model: RenderModel): void {
+  private drawCells(ctx: CanvasRenderingContext2D, model: RenderModel, orientation: number): void {
     for (const cell of this.cells) {
       const { x, y } = hexToWorld(cell);
       const ring = hexDistance({ q: 0, r: 0 }, cell);
@@ -352,11 +353,16 @@ export class BoardRenderer {
       }
 
       if (this.zoom > 1.42) {
+        ctx.save();
+        ctx.translate(0, 21);
+        ctx.rotate(-orientation);
         ctx.globalAlpha = 0.52;
         ctx.fillStyle = COLORS.muted;
         ctx.font = '500 5.6px "Segoe UI", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`${signed(cell.q)} ${signed(cell.r)}`, 0, 21);
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(`${signed(cell.q)} ${signed(cell.r)}`, 0, 0);
+        ctx.restore();
       }
       ctx.restore();
     }
@@ -496,7 +502,7 @@ export class BoardRenderer {
     }
   }
 
-  private drawPieces(ctx: CanvasRenderingContext2D, model: RenderModel): void {
+  private drawPieces(ctx: CanvasRenderingContext2D, model: RenderModel, orientation: number): void {
     const movingIds = new Set(
       this.animation?.events
         .filter((event) => event.type === 'move')
@@ -522,7 +528,9 @@ export class BoardRenderer {
         isStacked,
       });
     }
-    for (const hex of stackedHexes) this.drawStackBadge(ctx, hex, model.highContrast);
+    for (const hex of stackedHexes) {
+      this.drawStackBadge(ctx, hex, model.highContrast, orientation);
+    }
   }
 
   private drawStackBase(ctx: CanvasRenderingContext2D, hex: Hex, highContrast: boolean): void {
@@ -540,10 +548,16 @@ export class BoardRenderer {
     ctx.restore();
   }
 
-  private drawStackBadge(ctx: CanvasRenderingContext2D, hex: Hex, highContrast: boolean): void {
+  private drawStackBadge(
+    ctx: CanvasRenderingContext2D,
+    hex: Hex,
+    highContrast: boolean,
+    orientation: number,
+  ): void {
     const point = hexToWorld(hex);
     ctx.save();
     ctx.translate(point.x + 20, point.y - 19);
+    ctx.rotate(-orientation);
     ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
     ctx.shadowBlur = 5;
     ctx.fillStyle = highContrast ? COLORS.text : COLORS.move;
