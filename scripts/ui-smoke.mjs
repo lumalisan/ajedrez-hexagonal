@@ -122,6 +122,13 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert((await mobile.locator('#piece-card h2').textContent())?.includes('Soldado'), 'Keyboard hex navigation failed.');
+  await mobile.keyboard.press('w');
+  assert((await selectedHex(mobile)) === '0,-2', 'W must move focus onto the soldier destination.');
+  await mobile.keyboard.press('Enter');
+  await mobile.locator('#pending-card:not([hidden])').waitFor();
+  await mobile.keyboard.press('Enter');
+  await mobile.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  assert((await mobile.locator('#battle-log li').count()) >= 1, 'Second Enter on the prepared destination must execute the order.');
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log('UI smoke passed: desktop action flow, mobile 390px layout, keyboard navigation.');

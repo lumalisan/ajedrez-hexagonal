@@ -12,6 +12,7 @@ import {
 import {
   PIECE_NAMES,
   PLAYER_NAMES,
+  actionDestination,
   applyAction,
   createInitialState,
   declareBlockade,
@@ -246,6 +247,13 @@ function onCanvasKeyDown(event: KeyboardEvent): void {
   }
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
+    if (focusedHex && pendingAction) {
+      const destination = actionDestination(state, pendingAction);
+      if (destination && equalHex(destination, focusedHex)) {
+        void commitPending();
+        return;
+      }
+    }
     if (focusedHex) handleCell(focusedHex);
   } else if (event.key === 'Escape') {
     event.preventDefault();

@@ -172,13 +172,21 @@ export class BoardRenderer {
     const from = this.orientationAt(performance.now());
     if (Math.abs(from - target) < 0.001) return Promise.resolve();
     if (this.rotation) this.rotation.resolve();
+    this.rotation = null;
+    if (reducedMotion) {
+      this.orientation = target;
+      this.canvas.dataset.viewpoint = player === 0 ? 'blue' : 'amber';
+      delete this.canvas.dataset.rotating;
+      this.requestFrame();
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       this.canvas.dataset.rotating = 'true';
       this.rotation = {
         from,
         to: target,
         startedAt: performance.now(),
-        duration: reducedMotion ? 1 : 720,
+        duration: 720,
         resolve,
       };
       this.requestFrame();
@@ -186,14 +194,20 @@ export class BoardRenderer {
   }
 
   playEvents(events: GameEvent[], before: GameState, reducedMotion: boolean): Promise<void> {
-    if (this.animation) this.animation.resolve();
-    if (events.length === 0) return Promise.resolve();
+    if (this.animation) {
+      this.animation.resolve();
+      this.animation = null;
+    }
+    if (events.length === 0 || reducedMotion) {
+      this.requestFrame();
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       this.animation = {
         events,
         before,
         startedAt: performance.now(),
-        duration: reducedMotion ? 90 : eventDuration(events),
+        duration: eventDuration(events),
         resolve,
       };
       this.requestFrame();
