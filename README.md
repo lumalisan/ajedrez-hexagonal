@@ -1,4 +1,4 @@
-# Hexforge
+# Protocolo Hexagonal
 
 Juego táctico 2D para dos jugadores en tablero hexagonal. Implementado con TypeScript nativo y Canvas 2D según `docs/especificacion_juego_hexagonal.md`.
 
