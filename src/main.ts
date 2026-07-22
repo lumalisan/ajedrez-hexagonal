@@ -228,12 +228,9 @@ function updatePinchBaseline(): void {
 }
 
 function onCanvasKeyDown(event: KeyboardEvent): void {
-  const keyDirections: Record<string, Direction> = {
-    w: 0,
-    d: 2,
-    s: 3,
-    a: 5,
-  };
+  const keyDirections: Record<string, Direction> = state.activePlayer === 0
+    ? { w: 3, d: 5, s: 0, a: 2 }
+    : { w: 0, d: 2, s: 3, a: 5 };
   const direction = keyDirections[event.key.toLowerCase()];
   if (direction !== undefined) {
     event.preventDefault();
@@ -343,6 +340,7 @@ async function commitPending(): Promise<void> {
   render();
   try {
     await renderer.playEvents(result.events, before, preferences.reducedMotion);
+    if (!state.outcome) await renderer.rotateToPlayer(state.activePlayer, preferences.reducedMotion);
   } finally {
     animating = false;
     render();
@@ -465,7 +463,7 @@ function renderFortressStatus(player: 0 | 1, element: HTMLElement): void {
     <span class="faction-mark" aria-hidden="true"></span>
     <div><small>${PLAYER_NAMES[player]}</small><strong>Fortaleza</strong></div>
     <span class="hp" aria-label="${hp} de 2 puntos de vida">
-      <i class="${hp >= 1 ? 'active' : ''}"></i><i class="${hp >= 2 ? 'active' : ''}"></i>
+      ${[1, 2].map((point) => `<i class="${hp >= point ? 'active' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-8.5-5.2-8.5-12A4.5 4.5 0 0 1 12 6.9 4.5 4.5 0 0 1 20.5 9c0 6.8-8.5 12-8.5 12Z"/></svg></i>`).join('')}
     </span>`;
 }
 
@@ -962,6 +960,7 @@ function resetGame(): void {
   lastEvents = [];
   focusedHex = { q: 0, r: 0 };
   renderer.resetView();
+  renderer.snapToPlayer(0);
   render();
   announce('Nueva partida. Turno de Cian.');
   showToast('Despliegue restaurado. Cian inicia.');

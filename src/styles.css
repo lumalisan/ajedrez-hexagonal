@@ -192,13 +192,25 @@ button:disabled {
 }
 
 .hp i {
-  display: block;
-  width: 13px;
-  height: 4px;
-  border: 1px solid currentColor;
-  border-radius: 1px;
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
   color: var(--blue);
-  opacity: 0.25;
+  opacity: 0.34;
+}
+
+.hp svg {
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+}
+
+.hp path {
+  fill: transparent;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .player-amber .hp i {
@@ -206,9 +218,12 @@ button:disabled {
 }
 
 .hp i.active {
-  background: currentColor;
-  box-shadow: 0 0 7px currentColor;
   opacity: 1;
+}
+
+.hp i.active path {
+  fill: currentColor;
+  filter: drop-shadow(0 0 3px currentColor);
 }
 
 .turn-chip {
@@ -1252,6 +1267,10 @@ button:disabled {
   font-size: 9px;
 }
 
+.game-dialog details + .keyboard-card {
+  margin-top: 18px;
+}
+
 .keyboard-card strong {
   color: var(--text);
   font-size: 10px;
@@ -1555,8 +1574,13 @@ button:disabled {
   }
 
   .hp i {
-    width: 9px;
-    height: 4px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .hp svg {
+    width: 11px;
+    height: 11px;
   }
 
   .turn-chip {

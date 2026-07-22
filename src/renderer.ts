@@ -58,6 +58,14 @@ interface AnimationState {
   resolve: () => void;
 }
 
+interface RotationState {
+  from: number;
+  to: number;
+  startedAt: number;
+  duration: number;
+  resolve: () => void;
+}
+
 type MarkerKind = 'move' | 'attack' | 'convert' | 'danger';
 
 export class BoardRenderer {
@@ -73,6 +81,8 @@ export class BoardRenderer {
   private zoom = 1;
   private pan = { x: 0, y: 0 };
   private animation: AnimationState | null = null;
+  private orientation = Math.PI;
+  private rotation: RotationState | null = null;
   private frameId = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -80,6 +90,7 @@ export class BoardRenderer {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D no está disponible en este navegador.');
     this.ctx = context;
+    this.canvas.dataset.viewpoint = 'blue';
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.resize();
@@ -90,6 +101,7 @@ export class BoardRenderer {
     this.resizeObserver.disconnect();
     if (this.frameId) cancelAnimationFrame(this.frameId);
     if (this.animation) this.animation.resolve();
+    if (this.rotation) this.rotation.resolve();
   }
 
   setModel(model: RenderModel): void {
@@ -135,10 +147,40 @@ export class BoardRenderer {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
     const scale = this.fitScale * this.zoom;
-    const worldX = (x - this.width / 2 - this.pan.x) / scale;
-    const worldY = (y - this.height / 2 - this.pan.y) / scale;
+    const screenX = (x - this.width / 2 - this.pan.x) / scale;
+    const screenY = (y - this.height / 2 - this.pan.y) / scale;
+    const angle = this.orientationAt(performance.now());
+    const worldX = Math.cos(angle) * screenX + Math.sin(angle) * screenY;
+    const worldY = -Math.sin(angle) * screenX + Math.cos(angle) * screenY;
     const hex = worldToHex(worldX, worldY);
     return isOnBoard(hex) ? hex : null;
+  }
+
+  snapToPlayer(player: Player): void {
+    if (this.rotation) this.rotation.resolve();
+    this.rotation = null;
+    this.orientation = player === 0 ? Math.PI : 0;
+    this.canvas.dataset.viewpoint = player === 0 ? 'blue' : 'amber';
+    delete this.canvas.dataset.rotating;
+    this.requestFrame();
+  }
+
+  rotateToPlayer(player: Player, reducedMotion: boolean): Promise<void> {
+    const target = player === 0 ? Math.PI : 0;
+    const from = this.orientationAt(performance.now());
+    if (Math.abs(from - target) < 0.001) return Promise.resolve();
+    if (this.rotation) this.rotation.resolve();
+    return new Promise((resolve) => {
+      this.canvas.dataset.rotating = 'true';
+      this.rotation = {
+        from,
+        to: target,
+        startedAt: performance.now(),
+        duration: reducedMotion ? 1 : 720,
+        resolve,
+      };
+      this.requestFrame();
+    });
   }
 
   playEvents(events: GameEvent[], before: GameState, reducedMotion: boolean): Promise<void> {
@@ -164,10 +206,18 @@ export class BoardRenderer {
       this.animation = null;
       resolve();
     }
+    if (this.rotation && time - this.rotation.startedAt >= this.rotation.duration) {
+      const resolve = this.rotation.resolve;
+      this.orientation = this.rotation.to;
+      this.canvas.dataset.viewpoint = this.rotation.to === Math.PI ? 'blue' : 'amber';
+      delete this.canvas.dataset.rotating;
+      this.rotation = null;
+      resolve();
+    }
     const pulseMarkers = Boolean(
       this.model && this.model.actions.length > 0 && !this.model.reducedMotion,
     );
-    if (this.animation || pulseMarkers) this.requestFrame();
+    if (this.animation || this.rotation || pulseMarkers) this.requestFrame();
   };
 
   private requestFrame(): void {
@@ -207,6 +257,7 @@ export class BoardRenderer {
     ctx.save();
     ctx.translate(this.width / 2 + this.pan.x, this.height / 2 + this.pan.y);
     ctx.scale(this.fitScale * this.zoom, this.fitScale * this.zoom);
+    ctx.rotate(this.orientationAt(time));
     this.drawBoardShadow(ctx);
     this.drawCells(ctx, model);
     this.drawProtectionZones(ctx, model);
@@ -216,6 +267,13 @@ export class BoardRenderer {
     this.drawFocus(ctx, model);
     if (this.animation) this.drawAnimation(ctx, this.animation, time);
     ctx.restore();
+  }
+
+  private orientationAt(time: number): number {
+    if (!this.rotation) return this.orientation;
+    const raw = Math.min(1, Math.max(0, (time - this.rotation.startedAt) / this.rotation.duration));
+    const eased = raw < 0.5 ? 4 * raw ** 3 : 1 - (-2 * raw + 2) ** 3 / 2;
+    return this.rotation.from + (this.rotation.to - this.rotation.from) * eased;
   }
 
   private drawBackdrop(ctx: CanvasRenderingContext2D): void {

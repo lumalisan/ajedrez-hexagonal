@@ -36,6 +36,7 @@ try {
   assert((await desktop.locator('#sr-board [role="gridcell"]').count()) === 91, 'Accessible board must expose 91 cells.');
   const healthBars = await desktop.locator('.hp i').all();
   assert(healthBars.length === 4, 'Fortress score must expose four health bars.');
+  assert((await desktop.locator('.hp svg path').count()) === 4, 'Fortress health must use heart icons.');
   for (const bar of healthBars) {
     const box = await bar.boundingBox();
     assert(box && box.width > 0 && box.height > 0, 'Fortress health bar is visually empty.');
@@ -50,6 +51,13 @@ try {
   assert((await desktop.locator('[data-volume="masterVolume"] + output').textContent()) === '42%', 'Volume output is not synchronized.');
   await desktop.locator('[data-dialog-close]').click();
 
+  await desktop.locator('#help-button').click();
+  const keyboardGap = await desktop.locator('.game-dialog details + .keyboard-card').evaluate(
+    (element) => Number.parseFloat(getComputedStyle(element).marginTop),
+  );
+  assert(keyboardGap >= 16, 'Help keyboard section needs separation from tactical rules.');
+  await desktop.locator('[data-dialog-close]').click();
+
   await clickHex(desktop, 0, -3);
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert((await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'), 'Canvas selection failed.');
@@ -58,6 +66,9 @@ try {
   await desktop.locator('#pending-card:not([hidden])').waitFor();
   assert(await desktop.locator('#pending-card .confirm-button').isEnabled(), 'Prepared action cannot be confirmed.');
   await desktop.locator('#pending-card .confirm-button').click();
+  await desktop.locator('#game-canvas[data-rotating="true"]').waitFor();
+  await desktop.locator('#game-canvas[data-viewpoint="amber"]').waitFor();
+  if (process.env.UI_SCREENSHOT) await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-amber.png` });
   await desktop.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   assert((await desktop.locator('#battle-log li').count()) >= 1, 'Confirmed action missing from battle log.');
 
@@ -77,11 +88,9 @@ try {
   await mobile.keyboard.press('e');
   assert((await selectedHex(mobile)) === '0,0', 'E must not move keyboard focus.');
   await mobile.keyboard.press('s');
-  assert((await selectedHex(mobile)) === '0,1', 'S must move keyboard focus south.');
-  await mobile.keyboard.press('w');
-  await mobile.keyboard.press('w');
-  await mobile.keyboard.press('w');
-  await mobile.keyboard.press('w');
+  assert((await selectedHex(mobile)) === '0,-1', 'S must move focus toward the bottom of the rotated board.');
+  await mobile.keyboard.press('s');
+  await mobile.keyboard.press('s');
   await mobile.keyboard.press('Enter');
   await mobile.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert((await mobile.locator('#piece-card h2').textContent())?.includes('Soldado'), 'Keyboard hex navigation failed.');
@@ -100,7 +109,11 @@ async function clickHex(page, q, r) {
   const fitScale = Math.max(0.38, Math.min((box.width - 34) / 560, (box.height - 34) / 610));
   const worldX = 45 * q;
   const worldY = Math.sqrt(3) * 30 * (r + q / 2);
-  await page.mouse.click(box.x + box.width / 2 + worldX * fitScale, box.y + box.height / 2 + worldY * fitScale);
+  const viewpoint = await canvas.getAttribute('data-viewpoint');
+  const orientation = viewpoint === 'blue' ? Math.PI : 0;
+  const screenX = Math.cos(orientation) * worldX - Math.sin(orientation) * worldY;
+  const screenY = Math.sin(orientation) * worldX + Math.cos(orientation) * worldY;
+  await page.mouse.click(box.x + box.width / 2 + screenX * fitScale, box.y + box.height / 2 + screenY * fitScale);
 }
 
 async function selectedHex(page) {
