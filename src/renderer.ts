@@ -910,78 +910,131 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.restore();
       break;
     }
-    case 'capturer':
+    case 'capturer': {
+      // An open mechanical claw: this unit captures by occupying its target.
       ctx.beginPath();
-      ctx.arc(0, 1, 5, -Math.PI * 0.65, Math.PI * 0.65);
+      ctx.arc(-1, 0, 7.5, Math.PI * 0.25, Math.PI * 1.75);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(-2, -6);
-      ctx.lineTo(-9, -9);
-      ctx.lineTo(-7, -2);
-      ctx.moveTo(-2, 8);
-      ctx.lineTo(-9, 10);
-      ctx.lineTo(-7, 3);
+      ctx.moveTo(4.3, -5.3);
+      ctx.lineTo(10, -7.5);
+      ctx.lineTo(8.2, -1.5);
+      ctx.moveTo(4.3, 5.3);
+      ctx.lineTo(10, 7.5);
+      ctx.lineTo(8.2, 1.5);
       ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(-1, 0, 2.2, 0, Math.PI * 2);
+      ctx.fill();
       break;
+    }
     case 'medium':
-      drawTankGlyph(ctx, piece.cannon, 9, 2);
+      drawTankGlyph(ctx, piece.cannon, 10, 1);
       break;
     case 'long':
-      drawTankGlyph(ctx, 0, 13, 3);
+      drawTankGlyph(ctx, 0, 14, 3);
       break;
-    case 'fast':
+    case 'fast': {
+      // Low-profile assault vehicle with a pointed nose and visible tracks.
       ctx.beginPath();
-      ctx.moveTo(9, 0);
-      ctx.lineTo(-6, -8);
-      ctx.lineTo(-2, 0);
-      ctx.lineTo(-6, 8);
+      ctx.moveTo(10, 0);
+      ctx.lineTo(1, -6.5);
+      ctx.lineTo(-6, -5);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-6, 5);
+      ctx.lineTo(1, 6.5);
       ctx.closePath();
-      ctx.fill();
-      for (let y = -5; y <= 5; y += 5) {
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(2, -3.5);
+      ctx.lineTo(7.5, 0);
+      ctx.lineTo(2, 3.5);
+      ctx.stroke();
+      for (const y of [-8, 8]) {
         ctx.beginPath();
-        ctx.moveTo(-9, y);
-        ctx.lineTo(-13, y);
+        ctx.moveTo(-8, y);
+        ctx.lineTo(3, y);
         ctx.stroke();
       }
       break;
-    case 'drone':
+    }
+    case 'drone': {
+      // Four rotors and a central flight computer make the aerial role explicit.
+      for (const [rotorX, rotorY] of [
+        [-7, -7],
+        [7, -7],
+        [7, 7],
+        [-7, 7],
+      ] as const) {
+        ctx.beginPath();
+        ctx.moveTo(rotorX * 0.38, rotorY * 0.38);
+        ctx.lineTo(rotorX * 0.78, rotorY * 0.78);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(rotorX, rotorY, 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.beginPath();
-      ctx.moveTo(0, -9);
-      ctx.lineTo(9, 0);
-      ctx.lineTo(0, 9);
-      ctx.lineTo(-9, 0);
+      ctx.moveTo(0, -4.5);
+      ctx.lineTo(4.5, 0);
+      ctx.lineTo(0, 4.5);
+      ctx.lineTo(-4.5, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = '#0b1b22';
+      ctx.fill();
+      break;
+    }
+    case 'antiAir': {
+      // Radar dish above a twin missile rack.
+      ctx.beginPath();
+      ctx.arc(0, -1, 9, Math.PI * 1.12, Math.PI * 1.88);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -1, 5.5, Math.PI * 1.12, Math.PI * 1.88);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -1, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeRect(-7.5, 5, 5, 3.5);
+      ctx.strokeRect(2.5, 5, 5, 3.5);
+      ctx.beginPath();
+      ctx.moveTo(-5, 5);
+      ctx.lineTo(-3.5, 2.5);
+      ctx.moveTo(5, 5);
+      ctx.lineTo(3.5, 2.5);
+      ctx.stroke();
+      break;
+    }
+    case 'fortress': {
+      // Solid battlements, corner towers and a central gate.
+      ctx.beginPath();
+      ctx.moveTo(-11, 9);
+      ctx.lineTo(-11, -8);
+      ctx.lineTo(-7, -8);
+      ctx.lineTo(-7, -4);
+      ctx.lineTo(-3, -4);
+      ctx.lineTo(-3, -8);
+      ctx.lineTo(3, -8);
+      ctx.lineTo(3, -4);
+      ctx.lineTo(7, -4);
+      ctx.lineTo(7, -8);
+      ctx.lineTo(11, -8);
+      ctx.lineTo(11, 9);
       ctx.closePath();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-    case 'antiAir':
-      ctx.beginPath();
-      ctx.arc(0, 3, 10, Math.PI, Math.PI * 2);
+      ctx.moveTo(-3.5, 9);
+      ctx.lineTo(-3.5, 4);
+      ctx.arc(0, 4, 3.5, Math.PI, 0);
+      ctx.lineTo(3.5, 9);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 3, 6, Math.PI, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 3, 2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(-8, -1, 2.5, 3.5);
+      ctx.fillRect(5.5, -1, 2.5, 3.5);
       break;
-    case 'fortress':
-      ctx.beginPath();
-      ctx.moveTo(-10, 8);
-      ctx.lineTo(-10, -6);
-      ctx.lineTo(-5, -6);
-      ctx.lineTo(-5, -10);
-      ctx.lineTo(0, -10);
-      ctx.lineTo(0, -6);
-      ctx.lineTo(5, -6);
-      ctx.lineTo(5, -10);
-      ctx.lineTo(10, -10);
-      ctx.lineTo(10, 8);
-      ctx.closePath();
-      ctx.stroke();
-      break;
+    }
   }
 }
 
@@ -993,16 +1046,29 @@ function drawTankGlyph(
 ): void {
   ctx.save();
   ctx.rotate(-Math.PI / 2 + direction * (Math.PI / 3));
-  ctx.strokeRect(-7, -6, 12, 12);
+  // Top-down hull with separate tracks, rotating turret and calibrated barrel.
+  ctx.strokeRect(-7.5, -7, 10.5, 3);
+  ctx.strokeRect(-7.5, 4, 10.5, 3);
   ctx.beginPath();
-  ctx.moveTo(2, 0);
+  ctx.moveTo(-6, -4);
+  ctx.lineTo(4, -4);
+  ctx.lineTo(7, 0);
+  ctx.lineTo(4, 4);
+  ctx.lineTo(-6, 4);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
   ctx.lineTo(barrelLength, 0);
   ctx.stroke();
   for (let index = 0; index < rangeMarks; index += 1) {
-    const x = -9 - index * 2.8;
+    const x = 7.5 + index * 2.4;
     ctx.beginPath();
-    ctx.moveTo(x, -4);
-    ctx.lineTo(x, 4);
+    ctx.moveTo(x, -1.5);
+    ctx.lineTo(x, 1.5);
     ctx.stroke();
   }
   ctx.restore();
