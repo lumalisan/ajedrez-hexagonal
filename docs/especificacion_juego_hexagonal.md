@@ -1,12 +1,12 @@
-# Especificación completa — Juego de estrategia por turnos en tablero hexagonal (Python + Pygame)
+# Especificación completa — Juego de estrategia por turnos en tablero hexagonal (TypeScript + HTML5 Canvas)
 
 ## Rol y forma de trabajo
 
-Eres un programador y arquitecto de software experto en Python. Tu tarea es implementar, de principio a fin, un juego de estrategia por turnos para 2 jugadores sobre un tablero hexagonal, con mecánicas inspiradas en el ajedrez (captura ocupando la casilla rival) pero con piezas y reglas propias.
+Tu tarea es diseñar e implementar un juego de estrategia por turnos para 2 jugadores sobre un tablero hexagonal, con mecánicas inspiradas en el ajedrez (captura ocupando la casilla rival) pero con piezas y reglas propias, utilizando TypeScript estructurado y modular con renderizado en un elemento HTML5 Canvas.
 
-Este documento reúne **toda** la especificación del juego en un único lugar, ordenada de lo general a lo particular: el tablero, el sistema de coordenadas, las 8 piezas y sus reglas, las reglas de interacción entre ellas, y las condiciones de turno y victoria. **Léela completa antes de escribir código**: varias reglas conectan piezas distintas entre sí (por ejemplo, las reglas de apilamiento con el Dron, en la sección 5, afectan a seis de las ocho piezas), así que conviene tener el conjunto completo en mente antes de diseñar el modelo de datos.
+Este documento reúne **toda** la especificación del juego en un único lugar, ordenada de lo general a lo particular: el tablero, el sistema de coordenadas, las 8 piezas y sus reglas, las reglas de interacción entre ellas, y las condiciones de turno y victoria. Se debe tener en cuenta el conjunto completo de reglas para el diseño del modelo de datos, ya que varias mecánicas conectan piezas distintas entre sí (por ejemplo, las reglas de apilamiento con el Dron afectan a seis de las ocho piezas).
 
-La sección 9 recoge los puntos que el diseño original no llega a definir del todo. Donde corresponda, adopta una implementación flexible en lugar de fijar una única solución permanente, e indica explícitamente qué asunciones tomas y por qué.
+La sección 9 detalla las decisiones de diseño adoptadas para aquellos puntos que la idea original no definía por completo, permitiendo una base concreta para la codificación.
 
 ---
 
@@ -16,7 +16,7 @@ La sección 9 recoge los puntos que el diseño original no llega a definir del t
 - Se juega sobre un **tablero hexagonal** compuesto por **casillas hexagonales**.
 - Cada jugador dispone de **8 tipos de pieza**: Soldado, Capturador, Tanque de Medio Alcance, Tanque de Largo Alcance, Tanque Rápido, Dron, Portamisiles Antiaéreo y Fortaleza. Cada una tiene su propio movimiento, ataque y reglas especiales.
 - **Objetivo del juego:** destruir la Fortaleza del rival.
-- Implementación en **Python**, usando **pygame** para el tablero, las piezas y la interacción del jugador.
+- Implementación en **TypeScript (TS nativo)**, utilizando la **API de HTML5 Canvas** para renderizar el tablero, las piezas y gestionar la interacción del jugador a través de eventos de ratón/pantalla táctil.
 
 ---
 
@@ -25,19 +25,19 @@ La sección 9 recoge los puntos que el diseño original no llega a definir del t
 - **91 casillas** con forma de hexágono regular, todas del mismo tamaño: **60 px de ancho x 52 px de alto**.
 - Las casillas se organizan en anillos concéntricos alrededor de una casilla central:
 
-| Anillo | Nº de casillas |
-|---|---|
-| Centro | 1 |
-| 1er anillo | 6 |
-| 2º anillo | 12 |
-| 3er anillo | 18 |
-| 4º anillo | 24 |
-| 5º anillo | 30 |
-| **Total** | **91** |
+| Anillo     | Nº de casillas |
+| ---------- | -------------- |
+| Centro     | 1              |
+| 1er anillo | 6              |
+| 2º anillo  | 12             |
+| 3er anillo | 18             |
+| 4º anillo  | 24             |
+| 5º anillo  | 30             |
+| **Total**  | **91**         |
 
 - El resultado de esta disposición en anillos es un tablero con forma general de **hexágono grande**.
 
-**Nota técnica recomendada:** el ancho de casilla (60px) es mayor que su alto (52px), y —como se explica en la sección 3— las direcciones N y S son vecinas directas (verticales), lo que corresponde a hexágonos con orientación *flat-top* (lado plano arriba y abajo). Para representar el tablero y calcular vecinos, distancias y trayectorias de forma robusta, se recomienda usar internamente un sistema de **coordenadas axiales o cúbicas para hexágonos**, convirtiendo a coordenadas de píxel solo en el momento de dibujar.
+**Nota técnica de diseño:** el ancho de casilla (60px) es mayor que su alto (52px), y —como se explica en la sección 3— las direcciones N y S son vecinas directas (verticales), lo que corresponde a hexágonos con orientación _flat-top_ (lado plano arriba y abajo). Para representar el tablero y calcular vecinos, distancias y trayectorias de forma limpia, se debe utilizar internamente un sistema de **coordenadas axiales o cúbicas para hexágonos**, convirtiendo a coordenadas de píxeles bidimensionales (X, Y) únicamente en el momento de dibujar en el Canvas.
 
 ---
 
@@ -61,16 +61,16 @@ Cada jugador cuenta con las 8 piezas siguientes.
 
 ### Vista rápida
 
-| Pieza | Movimiento | Ataque | Rasgo distintivo |
-|---|---|---|---|
-| Soldado | 1 casilla, solo en las 3 direcciones "delanteras" según su orientación | Ocupa la casilla enemiga, dentro de su rango de movimiento | Puede girar sin moverse; destino final de los 3 tanques al transformarse |
-| Capturador | 1 casilla, en cualquiera de las 6 direcciones | No destruye: convierte en aliada una unidad enemiga adyacente, sin moverse | Captura sin desplazamiento |
-| Tanque de Medio Alcance | 1 casilla, en cualquiera de las 6 direcciones (+ orientar cañón, combinable) | Dispara a distancia 2, en un arco de 3 direcciones según su cañón | Transformable en Soldado |
-| Tanque de Largo Alcance | 1 casilla, en cualquiera de las 6 direcciones | Dispara a distancia exacta de 3, en cualquiera de las 6 direcciones | Transformable en Soldado |
-| Tanque Rápido | Línea recta sin límite de casillas, en cualquiera de las 6 direcciones | Ocupa la casilla enemiga (pieza deslizante, como una torre de ajedrez) | Transformable en Soldado |
-| Dron | Línea recta hasta 3 casillas, en cualquiera de las 6 direcciones | Ocupa la casilla enemiga | Vuela sobre otras unidades; puede compartir casilla con una unidad aliada |
-| Portamisiles Antiaéreo | 1 casilla, en cualquiera de las 6 direcciones | No ataca directamente | Genera una "zona protegida" que bloquea Drones/disparos enemigos y destruye Drones enemigos que queden dentro |
-| Fortaleza | No se mueve | No ataca ni se defiende | Objetivo del juego: debe ser destruida |
+| Pieza                   | Movimiento                                                                   | Ataque                                                                     | Rasgo distintivo                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Soldado                 | 1 casilla, solo en las 3 direcciones "delanteras" según su orientación       | Ocupa la casilla enemiga, dentro de su rango de movimiento                 | Puede girar sin moverse; destino final de los 3 tanques al transformarse                                      |
+| Capturador              | 1 casilla, en cualquiera de las 6 direcciones                                | No destruye: convierte en aliada una unidad enemiga adyacente, sin moverse | Captura sin desplazamiento                                                                                    |
+| Tanque de Medio Alcance | 1 casilla, en cualquiera de las 6 direcciones (+ orientar cañón, combinable) | Dispara a distancia 2, en un arco de 3 direcciones según su cañón          | Transformable en Soldado                                                                                      |
+| Tanque de Largo Alcance | 1 casilla, en cualquiera de las 6 direcciones                                | Dispara a distancia exacta de 3, en cualquiera de las 6 direcciones        | Transformable en Soldado                                                                                      |
+| Tanque Rápido           | Línea recta sin límite de casillas, en cualquiera de las 6 direcciones       | Ocupa la casilla enemiga (pieza deslizante)                                | Transformable en Soldado                                                                                      |
+| Dron                    | Línea recta hasta 3 casillas, en cualquiera de las 6 direcciones             | Ocupa la casilla enemiga                                                   | Vuela sobre otras unidades; puede compartir casilla con una unidad aliada                                     |
+| Portamisiles Antiaéreo  | 1 casilla, en cualquiera de las 6 direcciones                                | No ataca directamente                                                      | Genera una "zona protegida" que bloquea Drones/disparos enemigos y destruye Drones enemigos que queden dentro |
+| Fortaleza               | No se mueve                                                                  | No ataca ni se defiende                                                    | Objetivo del juego: debe ser destruida                                                                        |
 
 ### Reglas generales (aplican a todas las piezas salvo que se indique lo contrario)
 
@@ -135,7 +135,7 @@ Cada jugador cuenta con las 8 piezas siguientes.
 - No se mueve, no ataca y no se defiende activamente. **Es el objetivo del juego**: gana quien destruye la Fortaleza rival.
 - El **Soldado** y el **Capturador** solo le infligen **la mitad del daño** necesario para destruirla, y **mueren inmediatamente después de atacarla** (es un ataque de sacrificio). Hacen falta **dos** ataques de Soldado y/o Capturador, en cualquier combinación, para destruirla.
 - **Cualquier otra pieza** (Tanque de Medio Alcance, Tanque de Largo Alcance, Tanque Rápido, Dron, Portamisiles Antiaéreo) la destruye con un único ataque, y no muere al hacerlo.
-- **Sugerencia de implementación:** puedes modelarla con 2 "puntos de vida": un ataque de Soldado/Capturador resta 1 (y esa unidad se autodestruye tras atacar); un ataque de cualquier otra pieza resta los 2 de golpe.
+- **Lógica de salud:** Se modela con 2 puntos de vida: un ataque de Soldado/Capturador resta 1 (y la unidad atacante se destruye tras resolver la acción); un ataque de cualquier otra pieza resta los 2 puntos directamente.
 
 ---
 
@@ -143,14 +143,14 @@ Cada jugador cuenta con las 8 piezas siguientes.
 
 Cuando una pieza ataca o intenta capturar una casilla que contiene **un Dron enemigo apilado con otra unidad enemiga**, el objetivo permitido depende del tipo de pieza atacante:
 
-| Pieza atacante | Objetivo permitido en una casilla [Dron enemigo + otra unidad enemiga] |
-|---|---|
-| Soldado | Solo la otra unidad; no puede atacar al Dron. |
-| Tanque Rápido | Solo la otra unidad; no puede atacar al Dron. |
-| Capturador | Solo la otra unidad; no puede capturar al Dron. |
-| Dron | Solo el Dron enemigo; no puede atacar a la otra unidad. |
-| Tanque de Medio Alcance | Elige libremente a cuál de las dos atacar. |
-| Tanque de Largo Alcance | Elige libremente a cuál de las dos atacar. |
+| Pieza atacante          | Objetivo permitido en una casilla [Dron enemigo + otra unidad enemiga] |
+| ----------------------- | ---------------------------------------------------------------------- |
+| Soldado                 | Solo la otra unidad; no puede atacar al Dron.                          |
+| Tanque Rápido           | Solo la otra unidad; no puede atacar al Dron.                          |
+| Capturador              | Solo la otra unidad; no puede capturar al Dron.                        |
+| Dron                    | Solo el Dron enemigo; no puede atacar a la otra unidad.                |
+| Tanque de Medio Alcance | Elige libremente a cuál de las dos atacar.                             |
+| Tanque de Largo Alcance | Elige libremente a cuál de las dos atacar.                             |
 
 - Si la casilla objetivo tiene **solo** un Dron enemigo (sin ninguna otra unidad apilada), el Soldado y el Tanque Rápido sí pueden atacarlo con normalidad, y el Capturador sí puede capturarlo con normalidad. Las restricciones de la tabla solo aplican cuando hay **dos** unidades enemigas apiladas en la misma casilla.
 - El Portamisiles Antiaéreo y la Fortaleza no tienen mecánica de ataque activo, por lo que esta tabla no les afecta.
@@ -171,29 +171,24 @@ Gana la partida el jugador que consiga destruir la Fortaleza rival (ver sección
 
 ---
 
-## 8. Qué debe incluir la implementación
+## 8. Qué debe incluir la implementación en TypeScript
 
-1. **Tablero:** las 91 casillas hexagonales de la sección 2, con su renderizado gráfico.
-2. **Modelo de datos de las piezas:** las 8 piezas de la sección 4, incluyendo su orientación donde aplique (Soldado, cañón del Tanque de Medio Alcance) y su posible apilamiento con un Dron.
-3. **Lógica de movimiento y ataque** de cada pieza, incluyendo las reglas de apilamiento (sección 5) y las restricciones del Portamisiles Antiaéreo (sección 4.7).
-4. **Bucle de juego por turnos**, alternando entre los 2 jugadores y aplicando la acción obligatoria (sección 6).
-5. **Detección de la condición de victoria** (sección 7) y fin de la partida.
-6. **Interfaz gráfica** en pygame: mostrar tablero y piezas, seleccionar una pieza, visualizar sus movimientos/ataques legales, y ejecutar la acción elegida.
-
-Organiza el código de forma modular (por ejemplo: tablero/coordenadas, piezas y sus reglas, lógica de turno y validación de acciones, renderizado), con nombres claros y comentarios donde la lógica no sea evidente — el conjunto de reglas es extenso y varias piezas comparten mecánicas parecidas con matices distintos.
-
----
-
-## 9. Aspectos no definidos en el diseño original
-
-Estos puntos no quedaron cerrados en la especificación original. Antes de implementarlos, indica qué asunción vas a tomar y por qué (o pregunta si es posible aclararlo):
-
-1. **Configuración inicial:** no se especifica cuántas unidades de cada tipo tiene cada jugador al empezar, ni su disposición inicial en el tablero. Se recomienda modelarlo como una estructura de datos de configuración editable (por ejemplo, una lista de `{tipo_pieza, jugador, casilla, orientación_inicial}`) en lugar de dejarlo fijo en el código.
-2. **Línea de visión en los disparos:** no se especifica si el disparo del Tanque de Medio Alcance o del Tanque de Largo Alcance queda bloqueado por unidades situadas en las casillas intermedias de la trayectoria. La única obstrucción de disparo mencionada explícitamente es la zona protegida del Portamisiles Antiaéreo (sección 4.7).
-3. **Disparo del Portamisiles sobre un Dron que llega después:** la regla dice que un Dron enemigo dentro de la zona protegida se destruye "al finalizar el desplazamiento" del Portamisiles. No queda explícito qué ocurre si, en lugar de moverse el Portamisiles, es el Dron enemigo el que se desplaza hacia una zona protegida ya existente: ¿se destruye igualmente, o el efecto solo se comprueba cuando se mueve el propio Portamisiles?
-4. **Apilamiento con Dron aliado:** se interpreta que un Dron puede terminar su movimiento sobre una casilla con una unidad terrestre aliada, quedando ambas apiladas en esa casilla (sección 4.6) — es la única situación del juego en la que dos unidades del mismo jugador comparten casilla. Conviene confirmar que esta lectura es correcta.
-5. **Resultado de un ataque parcial sobre una casilla apilada:** cuando una pieza que ataca desplazándose (Soldado, Tanque Rápido, Dron) solo puede eliminar a una de las dos unidades de una casilla apilada (por ejemplo, un Soldado que solo puede eliminar a la unidad que no es Dron), no se especifica si el atacante se desplaza igualmente a esa casilla, quedando apilado con la unidad enemiga superviviente. Es la lectura más consistente con el resto de las reglas, pero conviene confirmarla explícitamente, ya que crea casillas con unidades de bandos distintos compartiendo espacio, con implicaciones para los turnos siguientes.
+1. **Estructura del Proyecto:** Un entorno de ejecución en el navegador estructurado de forma modular (por ejemplo, dividiendo tipos de datos, coordenadas, tablero, motor de juego y renderizador en módulos TS independientes).
+2. **Tablero:** Representación lógica y renderizado de las 91 casillas hexagonales de la sección 2 mediante la API Canvas 2D en base a coordenadas axiales.
+3. **Modelo de datos de las piezas:** Definición estructurada de las 8 piezas de la sección 4, controlando su orientación (Soldado, cañón del Tanque de Medio Alcance), sus puntos de vida actuales, su estado de acción y su posible apilamiento en casillas.
+4. **Lógica de movimiento y ataque:** Validación de reglas para cada pieza, incluyendo el tratamiento del apilamiento (sección 5) y las limitaciones espaciales impuestas por el Portamisiles Antiaéreo (sección 4.7).
+5. **Bucle de juego por turnos:** Alternancia entre los 2 jugadores, aplicación del consumo de acciones por turno y verificación de la acción obligatoria (sección 6).
+6. **Detección de victoria:** Monitoreo del estado de las Fortalezas y finalización del flujo del juego cuando una sea eliminada.
+7. **Interfaz gráfica basada en Web-Canvas:** Representación visual interactiva en la que el usuario pueda hacer clic en una casilla para seleccionarla, visualizar los movimientos y ataques legales mediante capas de color semitransparentes, e interactuar con botones HTML o controles integrados en el Canvas para realizar acciones complementarias (como girar, disparar o transformar unidades).
 
 ---
 
-Antes de escribir el primer código, resume brevemente: (a) las asunciones que vas a tomar para cada punto de la sección 9, y (b) la estructura de módulos/archivos que vas a usar. Después, procede con la implementación.
+## 9. Aspectos resueltos del diseño original
+
+Para asegurar una implementación coherente del software, se definen los siguientes criterios sobre los aspectos que carecían de especificación cerrada:
+
+1. **Configuración inicial:** Se establece una disposición inicial de unidades simétrica para cada bando. Se modela a través de un arreglo de configuración editable en la inicialización del juego. El jugador 1 comienza en la zona superior del tablero, mientras que el jugador 2 inicia en la zona inferior.
+2. **Línea de visión en los disparos:** Los disparos a distancia del Tanque de Medio Alcance y del Tanque de Largo Alcance no se ven bloqueados por unidades intermedias (ya sean aliadas o enemigas). Solo la zona protegida del Portamisiles Antiaéreo ejerce un bloqueo efectivo sobre estas trayectorias.
+3. **Ingreso voluntario de un Dron en zona protegida:** Si un Dron se desplaza hacia una casilla que ya se encuentra bajo la influencia de la zona protegida de un Portamisiles Antiaéreo enemigo, dicho Dron es **destruido inmediatamente** al finalizar su movimiento.
+4. **Apilamiento de unidades aliadas:** Un Dron puede terminar su movimiento de forma segura compartiendo casilla con una unidad terrestre de su mismo bando, permitiendo que ambas convivan en dicha casilla.
+5. **Resultado de ataque parcial en casillas apiladas:** Si una unidad terrestre aliada ataca y destruye a la unidad terrestre enemiga de un apilamiento, pero las reglas de la sección 5 le impiden dañar al Dron enemigo que la acompaña, la unidad atacante avanza de todos modos y pasa a ocupar la casilla. Esto genera una casilla compartida de carácter mixto (un Dron de un jugador en el aire y una unidad terrestre del otro jugador en el suelo) con sus respectivas implicaciones para los turnos subsecuentes.
