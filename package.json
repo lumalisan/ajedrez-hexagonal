@@ -1,0 +1,20 @@
+{
+  "name": "atlas-de-asedio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:ui": "node scripts/ui-smoke.mjs",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.4"
+  }
+}

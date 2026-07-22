@@ -1,0 +1,116 @@
+export type Player = 0 | 1;
+
+export type Direction = 0 | 1 | 2 | 3 | 4 | 5;
+
+export interface Hex {
+  readonly q: number;
+  readonly r: number;
+}
+
+export type PieceType =
+  | 'soldier'
+  | 'capturer'
+  | 'medium'
+  | 'long'
+  | 'fast'
+  | 'drone'
+  | 'antiAir'
+  | 'fortress';
+
+interface BasePiece {
+  id: string;
+  owner: Player;
+  position: Hex;
+}
+
+export type Piece =
+  | (BasePiece & { type: 'soldier'; facing: Direction })
+  | (BasePiece & { type: 'capturer' })
+  | (BasePiece & { type: 'medium'; cannon: Direction })
+  | (BasePiece & { type: 'long' })
+  | (BasePiece & { type: 'fast' })
+  | (BasePiece & { type: 'drone' })
+  | (BasePiece & { type: 'antiAir' })
+  | (BasePiece & { type: 'fortress'; hp: 1 | 2 });
+
+export interface CellOccupancy {
+  ground?: Piece;
+  air?: Piece;
+}
+
+export type GameAction =
+  | { kind: 'move'; pieceId: string; to: Hex; cannon?: Direction }
+  | { kind: 'rotate'; pieceId: string; facing: Direction }
+  | { kind: 'orient'; pieceId: string; cannon: Direction }
+  | { kind: 'shoot'; pieceId: string; targetId: string }
+  | { kind: 'convert'; pieceId: string; targetId: string }
+  | { kind: 'attackAbove'; pieceId: string; targetId: string }
+  | { kind: 'attackBelow'; pieceId: string; targetId: string }
+  | {
+      kind: 'transform';
+      pieceId: string;
+      facing: Direction;
+      to?: Hex;
+      attackAboveId?: string;
+    };
+
+export type GameEventType =
+  | 'move'
+  | 'destroy'
+  | 'shoot'
+  | 'convert'
+  | 'rotate'
+  | 'transform'
+  | 'intercept'
+  | 'fortressDamage'
+  | 'victory'
+  | 'draw';
+
+export interface GameEvent {
+  type: GameEventType;
+  pieceId?: string;
+  targetId?: string;
+  owner?: Player;
+  from?: Hex;
+  to?: Hex;
+  at?: Hex;
+  amount?: number;
+}
+
+export type Outcome =
+  | { type: 'win'; winner: Player; reason: 'fortress' | 'blockade' | 'repetition' }
+  | { type: 'draw'; reason: 'blockade' | 'repetition' };
+
+export interface BattleLogEntry {
+  id: number;
+  player: Player;
+  text: string;
+}
+
+export interface GameState {
+  pieces: Piece[];
+  activePlayer: Player;
+  ply: number;
+  firstFortressDamageBy: Player | null;
+  positionCounts: Record<string, number>;
+  outcome: Outcome | null;
+  history: BattleLogEntry[];
+}
+
+export interface ActionResult {
+  ok: boolean;
+  state: GameState;
+  events: GameEvent[];
+  error?: string;
+}
+
+export interface PlayerInfo {
+  name: string;
+  shortName: string;
+}
+
+export interface GamePreferences {
+  sound: boolean;
+  reducedMotion: boolean;
+  highContrast: boolean;
+}
