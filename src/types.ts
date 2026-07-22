@@ -8,14 +8,7 @@ export interface Hex {
 }
 
 export type PieceType =
-  | 'soldier'
-  | 'capturer'
-  | 'medium'
-  | 'long'
-  | 'fast'
-  | 'drone'
-  | 'antiAir'
-  | 'fortress';
+  'soldier' | 'capturer' | 'medium' | 'long' | 'fast' | 'drone' | 'antiAir' | 'fortress';
 
 interface BasePiece {
   id: string;

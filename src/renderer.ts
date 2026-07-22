@@ -254,10 +254,7 @@ export class BoardRenderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
-    this.fitScale = Math.max(
-      0.38,
-      Math.min((this.width - 34) / 560, (this.height - 34) / 610),
-    );
+    this.fitScale = Math.max(0.38, Math.min((this.width - 34) / 560, (this.height - 34) / 610));
     this.clampPan();
     this.requestFrame();
   }
@@ -380,7 +377,8 @@ export class BoardRenderer {
     const blue = protectedCells(model.state, 0);
     const amber = protectedCells(model.state, 1);
     const selected = model.selectedId ? getPiece(model.state, model.selectedId) : undefined;
-    const tactical = selected?.type === 'drone' || selected?.type === 'medium' || selected?.type === 'long';
+    const tactical =
+      selected?.type === 'drone' || selected?.type === 'medium' || selected?.type === 'long';
 
     for (const cell of this.cells) {
       const key = hexKey(cell);
@@ -466,7 +464,14 @@ export class BoardRenderer {
       ctx.fill();
       ctx.globalAlpha = marker.kind === 'range' ? 0.48 : 0.92;
       ctx.strokeStyle = color;
-      ctx.lineWidth = marker.kind === 'range' ? (model.highContrast ? 1.8 : 1.15) : model.highContrast ? 2.4 : 1.7;
+      ctx.lineWidth =
+        marker.kind === 'range'
+          ? model.highContrast
+            ? 1.8
+            : 1.15
+          : model.highContrast
+            ? 2.4
+            : 1.7;
       if (marker.kind === 'range') drawRangeMarker(ctx);
       else if (marker.kind === 'attack') drawAttackMarker(ctx, 14 + pulse * 1.4);
       else if (marker.kind === 'convert') drawConvertMarker(ctx, 12 + pulse);
@@ -493,7 +498,9 @@ export class BoardRenderer {
 
   private drawPieces(ctx: CanvasRenderingContext2D, model: RenderModel): void {
     const movingIds = new Set(
-      this.animation?.events.filter((event) => event.type === 'move').map((event) => event.pieceId) ?? [],
+      this.animation?.events
+        .filter((event) => event.type === 'move')
+        .map((event) => event.pieceId) ?? [],
     );
     const ground = model.state.pieces.filter((piece) => piece.type !== 'drone');
     const air = model.state.pieces.filter((piece) => piece.type === 'drone');
@@ -630,7 +637,11 @@ export class BoardRenderer {
     }
   }
 
-  private drawAnimation(ctx: CanvasRenderingContext2D, animation: AnimationState, time: number): void {
+  private drawAnimation(
+    ctx: CanvasRenderingContext2D,
+    animation: AnimationState,
+    time: number,
+  ): void {
     const raw = Math.min(1, Math.max(0, (time - animation.startedAt) / animation.duration));
     const eased = 1 - (1 - raw) ** 3;
 
@@ -666,7 +677,10 @@ export class BoardRenderer {
         ctx.lineDashOffset = -raw * 22;
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
-        ctx.lineTo(from.x + (to.x - from.x) * Math.min(1, raw * 1.8), from.y + (to.y - from.y) * Math.min(1, raw * 1.8));
+        ctx.lineTo(
+          from.x + (to.x - from.x) * Math.min(1, raw * 1.8),
+          from.y + (to.y - from.y) * Math.min(1, raw * 1.8),
+        );
         ctx.stroke();
         ctx.restore();
       }
@@ -691,7 +705,12 @@ export class BoardRenderer {
         ctx.restore();
       }
 
-      if ((event.type === 'convert' || event.type === 'fortressDamage' || event.type === 'transform') && event.at) {
+      if (
+        (event.type === 'convert' ||
+          event.type === 'fortressDamage' ||
+          event.type === 'transform') &&
+        event.at
+      ) {
         const at = hexToWorld(event.at);
         ctx.save();
         ctx.translate(at.x, at.y);
@@ -710,13 +729,15 @@ export class BoardRenderer {
 function markerKind(state: GameState, action: GameAction): MarkerKind {
   const piece = getPiece(state, action.pieceId);
   if (!piece) return 'move';
-  if (action.kind === 'shoot' || action.kind === 'attackAbove' || action.kind === 'attackBelow') return 'attack';
+  if (action.kind === 'shoot' || action.kind === 'attackAbove' || action.kind === 'attackBelow')
+    return 'attack';
   if (action.kind === 'convert') return 'convert';
   if (action.kind === 'transform') {
     if (action.attackAboveId) return 'attack';
     if (!action.to) return 'convert';
     const occupancy = occupancyAt(state, action.to);
-    if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner) return 'attack';
+    if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
+      return 'attack';
     if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'attack';
     return 'convert';
   }
@@ -725,7 +746,8 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
     return 'danger';
   }
   const occupancy = occupancyAt(state, action.to);
-  if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner) return 'attack';
+  if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
+    return 'attack';
   if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'attack';
   return 'move';
 }
@@ -735,7 +757,8 @@ function markerPriority(kind: MarkerKind): number {
 }
 
 function eventDuration(events: GameEvent[]): number {
-  if (events.some((event) => event.type === 'fortressDamage' || event.type === 'victory')) return 520;
+  if (events.some((event) => event.type === 'fortressDamage' || event.type === 'victory'))
+    return 520;
   if (events.some((event) => event.type === 'convert' || event.type === 'transform')) return 390;
   if (events.some((event) => event.type === 'shoot' || event.type === 'intercept')) return 330;
   return 260;
@@ -971,13 +994,14 @@ export function pieceAccessibleLabel(state: GameState, piece: Piece): string {
   const owner = piece.owner === 0 ? 'Cian' : 'Ámbar';
   const position = `${signed(piece.position.q)}, ${signed(piece.position.r)}`;
   const layer = piece.type === 'drone' ? 'aire' : 'suelo';
-  const details = piece.type === 'soldier'
-    ? `, orientado ${directionNameForPlayer(piece.facing, state.activePlayer)}`
-    : piece.type === 'medium'
-      ? `, cañón ${directionNameForPlayer(piece.cannon, state.activePlayer)}`
-      : piece.type === 'fortress'
-        ? `, ${piece.hp} puntos de vida`
-        : '';
+  const details =
+    piece.type === 'soldier'
+      ? `, orientado ${directionNameForPlayer(piece.facing, state.activePlayer)}`
+      : piece.type === 'medium'
+        ? `, cañón ${directionNameForPlayer(piece.cannon, state.activePlayer)}`
+        : piece.type === 'fortress'
+          ? `, ${piece.hp} puntos de vida`
+          : '';
   const protectedByEnemy = isProtectedByPlayer(state, piece.position, otherPlayerOf(piece.owner))
     ? ', en zona antiaérea enemiga'
     : '';

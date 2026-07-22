@@ -194,8 +194,7 @@ export function getFiringRangeCells(
     const cannon = preview.cannon ?? piece.cannon;
     return mediumFiringPaths(state, piece, position, cannon).map(({ target }) => target);
   }
-  return ALL_DIRECTIONS
-    .map((direction) => ({ direction, target: stepHex(position, direction, 3) }))
+  return ALL_DIRECTIONS.map((direction) => ({ direction, target: stepHex(position, direction, 3) }))
     .filter(
       ({ direction, target }) =>
         isOnBoard(target) && !shotCrossesProtectionFrom(state, piece, position, direction, 3),
@@ -246,11 +245,7 @@ function capturerActions(
   }
 
   const airAbove = occupancyAt(state, piece.position).air;
-  if (
-    airAbove &&
-    airAbove.owner !== piece.owner &&
-    !isProtectedFromCapture(state, airAbove)
-  ) {
+  if (airAbove && airAbove.owner !== piece.owner && !isProtectedFromCapture(state, airAbove)) {
     actions.push({ kind: 'convert', pieceId: piece.id, targetId: airAbove.id });
   }
   return actions;
@@ -284,10 +279,7 @@ function isProtectedFromCapture(state: GameState, target: Piece): boolean {
   );
 }
 
-function mediumActions(
-  state: GameState,
-  piece: Extract<Piece, { type: 'medium' }>,
-): GameAction[] {
+function mediumActions(state: GameState, piece: Extract<Piece, { type: 'medium' }>): GameAction[] {
   const actions: GameAction[] = [];
   for (const direction of ALL_DIRECTIONS) {
     const to = stepHex(piece.position, direction);
@@ -667,9 +659,8 @@ function resolveGroundCombatMove(
   const from = { ...piece.position };
   events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...to } });
   const occupancy = occupancyAt(state, to);
-  const enemyGround = occupancy.ground && occupancy.ground.owner !== piece.owner
-    ? occupancy.ground
-    : undefined;
+  const enemyGround =
+    occupancy.ground && occupancy.ground.owner !== piece.owner ? occupancy.ground : undefined;
   const enemyAir = occupancy.air && occupancy.air.owner !== piece.owner ? occupancy.air : undefined;
   const target = enemyGround ?? (!occupancy.ground ? enemyAir : undefined);
   if (target) resolveHit(state, piece.id, target.id, events);
@@ -712,9 +703,8 @@ function resolveDroneMove(
   events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...to } });
   const occupancy = occupancyAt(state, to);
   const enemyAir = occupancy.air && occupancy.air.owner !== piece.owner ? occupancy.air : undefined;
-  const enemyGround = occupancy.ground && occupancy.ground.owner !== piece.owner
-    ? occupancy.ground
-    : undefined;
+  const enemyGround =
+    occupancy.ground && occupancy.ground.owner !== piece.owner ? occupancy.ground : undefined;
   const target = enemyAir ?? enemyGround;
   if (target) resolveHit(state, piece.id, target.id, events);
   const survivor = getPiece(state, piece.id);
@@ -803,7 +793,9 @@ function resolveHit(
 }
 
 function purgeDronesInEnemyZones(state: GameState, events: GameEvent[]): void {
-  const drones = state.pieces.filter((piece): piece is Extract<Piece, { type: 'drone' }> => piece.type === 'drone');
+  const drones = state.pieces.filter(
+    (piece): piece is Extract<Piece, { type: 'drone' }> => piece.type === 'drone',
+  );
   for (const drone of drones) {
     if (!getPiece(state, drone.id)) continue;
     if (!isProtectedByPlayer(state, drone.position, otherPlayer(drone.owner))) continue;
@@ -824,7 +816,11 @@ function removePiece(state: GameState, pieceId: string): void {
   if (index >= 0) state.pieces.splice(index, 1);
 }
 
-function findLine(from: Hex, to: Hex, maxDistance: number): { direction: Direction; distance: number } | null {
+function findLine(
+  from: Hex,
+  to: Hex,
+  maxDistance: number,
+): { direction: Direction; distance: number } | null {
   for (const direction of ALL_DIRECTIONS) {
     for (let distance = 1; distance <= maxDistance; distance += 1) {
       if (equalHex(stepHex(from, direction, distance), to)) return { direction, distance };
@@ -854,7 +850,11 @@ function finishByBlockade(
   if (intact || state.firstFortressDamageBy === null) {
     state.outcome = { type: 'draw', reason };
     events.push({ type: 'draw' });
-    state.history.push({ id: state.ply + 1, player: state.activePlayer, text: 'Bloqueo confirmado: tablas.' });
+    state.history.push({
+      id: state.ply + 1,
+      player: state.activePlayer,
+      text: 'Bloqueo confirmado: tablas.',
+    });
   } else {
     state.outcome = { type: 'win', winner: state.firstFortressDamageBy, reason };
     events.push({ type: 'victory', owner: state.firstFortressDamageBy });
@@ -933,14 +933,17 @@ export function describeAction(state: GameState, action: GameAction): string {
   switch (action.kind) {
     case 'move': {
       const destination = occupancyAt(state, action.to);
-      const enemyGround = destination.ground && destination.ground.owner !== piece.owner
-        ? destination.ground
-        : undefined;
-      const enemyAir = destination.air && destination.air.owner !== piece.owner
-        ? destination.air
-        : undefined;
-      const target = piece.type === 'drone' ? enemyAir ?? enemyGround : enemyGround ?? enemyAir;
-      if (piece.type === 'drone' && isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))) {
+      const enemyGround =
+        destination.ground && destination.ground.owner !== piece.owner
+          ? destination.ground
+          : undefined;
+      const enemyAir =
+        destination.air && destination.air.owner !== piece.owner ? destination.air : undefined;
+      const target = piece.type === 'drone' ? (enemyAir ?? enemyGround) : (enemyGround ?? enemyAir);
+      if (
+        piece.type === 'drone' &&
+        isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))
+      ) {
         return `Incursión de ${name}: intercepción AA en ${formatHex(action.to)}`;
       }
       return target
@@ -966,8 +969,10 @@ export function describeAction(state: GameState, action: GameAction): string {
     case 'attackBelow':
       return `${name} atacará la unidad terrestre situada debajo`;
     case 'transform':
-      if (action.attackAboveId) return `${name} será abandonado; el Soldado atacará el Dron superior`;
-      if (action.to) return `${name} será abandonado; el Soldado avanzará a ${formatHex(action.to)}`;
+      if (action.attackAboveId)
+        return `${name} será abandonado; el Soldado atacará el Dron superior`;
+      if (action.to)
+        return `${name} será abandonado; el Soldado avanzará a ${formatHex(action.to)}`;
       return `${name} será abandonado y se convertirá en Soldado`;
   }
 }
@@ -997,9 +1002,10 @@ function describeResolvedAction(
     }
     case 'convert': {
       const target = getPiece(before, action.targetId);
-      base = target?.type === 'fortress'
-        ? `${name} saboteó la Fortaleza`
-        : `${name} convirtió ${target ? PIECE_NAMES[target.type] : 'objetivo'}`;
+      base =
+        target?.type === 'fortress'
+          ? `${name} saboteó la Fortaleza`
+          : `${name} convirtió ${target ? PIECE_NAMES[target.type] : 'objetivo'}`;
       break;
     }
     case 'attackAbove':
@@ -1016,7 +1022,9 @@ function describeResolvedAction(
           : `${name} fue abandonado y convertido en Soldado`;
       break;
   }
-  const destroyed = events.filter((event) => event.type === 'destroy' || event.type === 'intercept').length;
+  const destroyed = events.filter(
+    (event) => event.type === 'destroy' || event.type === 'intercept',
+  ).length;
   const fortressDamage = events.find((event) => event.type === 'fortressDamage');
   const suffix = fortressDamage
     ? ` Fortaleza: −${fortressDamage.amount ?? 0} HP.`
@@ -1048,11 +1056,12 @@ export function outcomeText(outcome: Outcome): string {
   if (outcome.type === 'draw') {
     return outcome.reason === 'repetition' ? 'Tablas por triple repetición' : 'Tablas por bloqueo';
   }
-  const cause = outcome.reason === 'fortress'
-    ? 'Fortaleza destruida'
-    : outcome.reason === 'repetition'
-      ? 'Primer daño y triple repetición'
-      : 'Primer daño y bloqueo';
+  const cause =
+    outcome.reason === 'fortress'
+      ? 'Fortaleza destruida'
+      : outcome.reason === 'repetition'
+        ? 'Primer daño y triple repetición'
+        : 'Primer daño y bloqueo';
   return `${PLAYER_NAMES[outcome.winner]} vence · ${cause}`;
 }
 

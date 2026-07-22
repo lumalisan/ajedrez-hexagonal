@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: "Segoe UI Variable", "Aptos", "Segoe UI", sans-serif;
+  font-family: 'Segoe UI Variable', 'Aptos', 'Segoe UI', sans-serif;
   font-synthesis: none;
   --bg: #07131a;
   --surface: #0d2029;
@@ -66,8 +66,7 @@ button:disabled {
   width: 100%;
   height: 100dvh;
   background:
-    radial-gradient(circle at 76% 8%, rgba(54, 185, 255, 0.055), transparent 27%),
-    var(--bg);
+    radial-gradient(circle at 76% 8%, rgba(54, 185, 255, 0.055), transparent 27%), var(--bg);
 }
 
 .topbar {
@@ -105,7 +104,7 @@ button:disabled {
 
 .brand strong {
   overflow: hidden;
-  font-family: "Bahnschrift", "Segoe UI Variable", sans-serif;
+  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
   font-size: 18px;
   font-weight: 650;
   letter-spacing: 0.02em;
@@ -115,7 +114,7 @@ button:disabled {
 
 .eyebrow {
   color: var(--muted);
-  font-family: "Bahnschrift", "Segoe UI", sans-serif;
+  font-family: 'Bahnschrift', 'Segoe UI', sans-serif;
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.17em;
@@ -279,7 +278,10 @@ button:disabled {
   border-radius: 10px;
   background: rgba(20, 48, 58, 0.65);
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
 }
 
 .icon-button:hover,
@@ -390,7 +392,9 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--bg);
-  box-shadow: var(--shadow), inset 0 0 80px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    var(--shadow),
+    inset 0 0 80px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
 
@@ -413,7 +417,7 @@ button:disabled {
   width: 34px;
   height: 34px;
   border-color: rgba(85, 224, 193, 0.28);
-  content: "";
+  content: '';
   pointer-events: none;
 }
 
@@ -490,8 +494,7 @@ button:disabled {
   padding: 17px clamp(16px, 1.5vw, 24px) 20px;
   border-left: 1px solid var(--line);
   background:
-    linear-gradient(180deg, rgba(20, 47, 57, 0.72), rgba(7, 20, 27, 0.96)),
-    var(--surface);
+    linear-gradient(180deg, rgba(20, 47, 57, 0.72), rgba(7, 20, 27, 0.96)), var(--surface);
   box-shadow: -18px 0 50px rgba(0, 0, 0, 0.16);
   overflow: auto;
   scrollbar-color: var(--line-strong) transparent;
@@ -527,7 +530,7 @@ button:disabled {
   height: 80px;
   border: 1px solid currentColor;
   border-radius: 50%;
-  content: "";
+  content: '';
   opacity: 0.06;
   transform: translate(36%, -42%);
 }
@@ -564,7 +567,7 @@ button:disabled {
   border: 1px solid currentColor;
   border-radius: 50%;
   background: rgba(5, 17, 23, 0.64);
-  font-family: "Bahnschrift", sans-serif;
+  font-family: 'Bahnschrift', sans-serif;
   font-size: 14px;
   font-weight: 700;
   box-shadow: 0 0 18px color-mix(in srgb, currentColor 18%, transparent);
@@ -573,7 +576,7 @@ button:disabled {
 .piece-title-row h2,
 .empty-state h2 {
   margin: 2px 0 0;
-  font-family: "Bahnschrift", "Segoe UI", sans-serif;
+  font-family: 'Bahnschrift', 'Segoe UI', sans-serif;
   font-size: 17px;
   font-weight: 600;
 }
@@ -663,7 +666,7 @@ button:disabled {
   width: 1px;
   height: 50%;
   background: linear-gradient(var(--move), transparent);
-  content: "";
+  content: '';
   transform: translateX(-50%) rotate(0deg);
   transform-origin: 50% 100%;
   animation: radar-scan 3.2s linear infinite;
@@ -707,7 +710,7 @@ button:disabled {
 
 .control-section h3 {
   margin: 0;
-  font-family: "Bahnschrift", sans-serif;
+  font-family: 'Bahnschrift', sans-serif;
   font-size: 13px;
   font-weight: 600;
 }
@@ -763,7 +766,10 @@ button:disabled {
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
 }
 
 .command-buttons button:hover,
@@ -816,7 +822,12 @@ button:disabled {
   inset: 13px;
   background:
     repeating-conic-gradient(from -30deg, rgba(184, 161, 255, 0.3) 0 1deg, transparent 1deg 60deg),
-    radial-gradient(circle, rgba(184, 161, 255, 0.08), rgba(19, 46, 56, 0.38) 58%, rgba(184, 161, 255, 0.12));
+    radial-gradient(
+      circle,
+      rgba(184, 161, 255, 0.08),
+      rgba(19, 46, 56, 0.38) 58%,
+      rgba(184, 161, 255, 0.12)
+    );
   clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
 }
 
@@ -825,7 +836,7 @@ button:disabled {
   inset: 1px;
   background: rgba(8, 27, 34, 0.72);
   clip-path: inherit;
-  content: "";
+  content: '';
 }
 
 .compass-center {
@@ -854,7 +865,7 @@ button:disabled {
 
 .compass-center strong {
   margin-top: 2px;
-  font-family: "Bahnschrift", sans-serif;
+  font-family: 'Bahnschrift', sans-serif;
   font-size: 17px;
 }
 
@@ -877,8 +888,13 @@ button:disabled {
   background: #173944;
   clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
   cursor: pointer;
-  transform: rotate(calc(var(--direction) * 60deg)) translateY(calc(var(--compass-radius) * -1)) rotate(calc(var(--direction) * -60deg)) scale(var(--compass-scale));
-  transition: background 150ms ease, color 150ms ease, filter 150ms ease, transform 150ms ease;
+  transform: rotate(calc(var(--direction) * 60deg)) translateY(calc(var(--compass-radius) * -1))
+    rotate(calc(var(--direction) * -60deg)) scale(var(--compass-scale));
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    filter 150ms ease,
+    transform 150ms ease;
 }
 
 .compass-direction:hover,
@@ -1014,7 +1030,10 @@ button:disabled {
   font-size: 10px;
   font-weight: 650;
   cursor: pointer;
-  transition: filter 150ms ease, transform 150ms ease, border-color 150ms ease;
+  transition:
+    filter 150ms ease,
+    transform 150ms ease,
+    border-color 150ms ease;
 }
 
 .secondary-button:hover {
@@ -1183,7 +1202,7 @@ button:disabled {
 
 .dialog-body > h2 {
   margin: 5px 0 10px;
-  font-family: "Bahnschrift", sans-serif;
+  font-family: 'Bahnschrift', sans-serif;
   font-size: clamp(21px, 4vw, 30px);
   font-weight: 600;
 }
@@ -1317,7 +1336,7 @@ button:disabled {
   line-height: 1.4;
 }
 
-.volume-control input[type="range"] {
+.volume-control input[type='range'] {
   width: 100%;
   accent-color: var(--move);
   cursor: pointer;
@@ -1325,7 +1344,7 @@ button:disabled {
 
 .volume-control output {
   color: var(--move);
-  font-family: "Bahnschrift", sans-serif;
+  font-family: 'Bahnschrift', sans-serif;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1406,7 +1425,7 @@ button:disabled {
   width: 40px;
   height: 40px;
   border: 1px solid currentColor;
-  content: "";
+  content: '';
   transform: rotate(30deg);
 }
 
@@ -1473,7 +1492,9 @@ button:disabled {
   font-size: 11px;
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 .toast.visible {
@@ -1512,18 +1533,34 @@ button:disabled {
 }
 
 @keyframes mark-breathe {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
 }
 
 @keyframes radar-scan {
-  from { transform: translateX(-50%) rotate(0deg); }
-  to { transform: translateX(-50%) rotate(360deg); }
+  from {
+    transform: translateX(-50%) rotate(0deg);
+  }
+  to {
+    transform: translateX(-50%) rotate(360deg);
+  }
 }
 
 @keyframes status-pulse {
-  0%, 100% { opacity: 0.35; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.15); }
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 @media (max-width: 1160px) {

@@ -161,7 +161,10 @@ export class AudioDirector {
       const gain = audio.createGain();
       oscillator.type = type;
       oscillator.frequency.setValueAtTime(frequency, start);
-      oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), start + duration);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        Math.max(20, endFrequency),
+        start + duration,
+      );
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(0.018, duration / 3));
       gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
@@ -219,7 +222,8 @@ export class AudioDirector {
 
   private syncLevels(): void {
     const active = this.enabled ? 1 : 0;
-    if (this.master) this.master.gain.value = 0.72 * this.masterVolume * this.effectsVolume * active;
+    if (this.master)
+      this.master.gain.value = 0.72 * this.masterVolume * this.effectsVolume * active;
     this.music.volume = clamp01(0.38 * this.masterVolume * this.musicVolume * active);
   }
 }

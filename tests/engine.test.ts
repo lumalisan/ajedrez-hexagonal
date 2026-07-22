@@ -11,13 +11,7 @@ import {
   occupancyAt,
   protectedCells,
 } from '../src/engine';
-import {
-  allBoardHexes,
-  directionAtOffset,
-  hexDistance,
-  isOnBoard,
-  stepHex,
-} from '../src/hex';
+import { allBoardHexes, directionAtOffset, hexDistance, isOnBoard, stepHex } from '../src/hex';
 import type { Direction, GameAction, GameState, Hex, Piece, Player } from '../src/types';
 
 const hex = (q: number, r: number): Hex => ({ q, r });
@@ -84,7 +78,10 @@ describe('geometría y despliegue', () => {
     expect(state.pieces.filter((piece) => piece.owner === 0)).toHaveLength(13);
     expect(state.pieces.filter((piece) => piece.owner === 1)).toHaveLength(13);
     for (const owner of [0, 1] as const) {
-      expect(new Set(state.pieces.filter((piece) => piece.owner === owner).map((piece) => piece.type)).size).toBe(8);
+      expect(
+        new Set(state.pieces.filter((piece) => piece.owner === owner).map((piece) => piece.type))
+          .size,
+      ).toBe(8);
     }
     expect(protectedCells(state, 0).size).toBeGreaterThanOrEqual(5);
     expect(getLegalActionsForPiece(state, 'azul-soldier-9').length).toBeGreaterThan(0);
@@ -94,13 +91,18 @@ describe('geometría y despliegue', () => {
 describe('Soldado y apilamientos terrestres', () => {
   it('solo avanza por arco frontal y actualiza orientación', () => {
     const state = base([soldier('soldier', 0, hex(0, 0), 0)]);
-    const moves = getLegalActionsForPiece(state, 'soldier').filter((action) => action.kind === 'move');
+    const moves = getLegalActionsForPiece(state, 'soldier').filter(
+      (action) => action.kind === 'move',
+    );
     expect(moves.map((action) => action.kind === 'move' && action.to)).toEqual(
       expect.arrayContaining([hex(-1, 0), hex(0, -1), hex(1, -1)]),
     );
     expect(moves).toHaveLength(3);
 
-    const next = perform(state, findAction(state, 'soldier', 'move', (action) => action.to.q === 1));
+    const next = perform(
+      state,
+      findAction(state, 'soldier', 'move', (action) => action.to.q === 1),
+    );
     const moved = getPiece(next, 'soldier');
     expect(moved?.type).toBe('soldier');
     if (moved?.type === 'soldier') expect(moved.facing).toBe(1);
@@ -108,7 +110,9 @@ describe('Soldado y apilamientos terrestres', () => {
 
   it('rechaza giro hacia orientación actual', () => {
     const state = base([soldier('soldier', 0, hex(0, 0), 0)]);
-    const rotations = getLegalActionsForPiece(state, 'soldier').filter((action) => action.kind === 'rotate');
+    const rotations = getLegalActionsForPiece(state, 'soldier').filter(
+      (action) => action.kind === 'rotate',
+    );
     expect(rotations).toHaveLength(5);
     expect(rotations.some((action) => action.kind === 'rotate' && action.facing === 0)).toBe(false);
   });
@@ -119,7 +123,10 @@ describe('Soldado y apilamientos terrestres', () => {
       soldier('ground-enemy', 1, hex(0, -1), 3),
       { id: 'air-enemy', type: 'drone', owner: 1, position: hex(0, -1) },
     ]);
-    const next = perform(state, findAction(state, 'soldier', 'move', (action) => action.to.r === -1));
+    const next = perform(
+      state,
+      findAction(state, 'soldier', 'move', (action) => action.to.r === -1),
+    );
     const occupancy = occupancyAt(next, hex(0, -1));
     expect(occupancy.ground?.id).toBe('soldier');
     expect(occupancy.air?.id).toBe('air-enemy');
@@ -141,7 +148,10 @@ describe('Soldado y apilamientos terrestres', () => {
       soldier('soldier', 0, hex(0, 0), 0),
       { id: 'air-enemy', type: 'drone', owner: 1, position: hex(0, -1) },
     ]);
-    const next = perform(state, findAction(state, 'soldier', 'move', (action) => equal(action.to, hex(0, -1))));
+    const next = perform(
+      state,
+      findAction(state, 'soldier', 'move', (action) => equal(action.to, hex(0, -1))),
+    );
     expect(getPiece(next, 'air-enemy')).toBeUndefined();
     expect(getPiece(next, 'soldier')?.position).toEqual(hex(0, -1));
   });
@@ -153,7 +163,10 @@ describe('Capturador', () => {
       { id: 'capturer', type: 'capturer', owner: 0, position: hex(0, 0) },
       soldier('target', 1, hex(0, -1), 4),
     ]);
-    const next = perform(state, findAction(state, 'capturer', 'convert', (action) => action.targetId === 'target'));
+    const next = perform(
+      state,
+      findAction(state, 'capturer', 'convert', (action) => action.targetId === 'target'),
+    );
     const target = getPiece(next, 'target');
     expect(target?.owner).toBe(0);
     expect(target?.position).toEqual(hex(0, -1));
@@ -180,9 +193,15 @@ describe('Capturador', () => {
       soldier('ground', 1, hex(0, -1), 3),
       { id: 'air', type: 'drone', owner: 1, position: hex(0, -1) },
     ]);
-    const actions = getLegalActionsForPiece(state, 'capturer').filter((action) => action.kind === 'convert');
-    expect(actions.some((action) => action.kind === 'convert' && action.targetId === 'ground')).toBe(true);
-    expect(actions.some((action) => action.kind === 'convert' && action.targetId === 'air')).toBe(false);
+    const actions = getLegalActionsForPiece(state, 'capturer').filter(
+      (action) => action.kind === 'convert',
+    );
+    expect(
+      actions.some((action) => action.kind === 'convert' && action.targetId === 'ground'),
+    ).toBe(true);
+    expect(actions.some((action) => action.kind === 'convert' && action.targetId === 'air')).toBe(
+      false,
+    );
   });
 });
 
@@ -191,11 +210,11 @@ describe('Tanques de disparo', () => {
     const mediumState = base([
       { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
     ]);
-    expect(getFiringRangeCells(mediumState, 'medium').map(({ q, r }) => `${q},${r}`).sort()).toEqual([
-      '-1,-1',
-      '0,-2',
-      '1,-2',
-    ]);
+    expect(
+      getFiringRangeCells(mediumState, 'medium')
+        .map(({ q, r }) => `${q},${r}`)
+        .sort(),
+    ).toEqual(['-1,-1', '0,-2', '1,-2']);
 
     const longState = base([{ id: 'long', type: 'long', owner: 0, position: hex(0, 0) }]);
     const longRange = getFiringRangeCells(longState, 'long');
@@ -241,13 +260,18 @@ describe('Tanques de disparo', () => {
       soldier('blocker', 0, hex(0, -1), 0),
       soldier('target', 1, hex(0, -2), 3),
     ]);
-    const next = perform(state, findAction(state, 'medium', 'shoot', (action) => action.targetId === 'target'));
+    const next = perform(
+      state,
+      findAction(state, 'medium', 'shoot', (action) => action.targetId === 'target'),
+    );
     expect(getPiece(next, 'target')).toBeUndefined();
     expect(getPiece(next, 'blocker')).toBeDefined();
   });
 
   it('Tanque medio puede mover y orientar cañón en una sola orden', () => {
-    const state = base([{ id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 }]);
+    const state = base([
+      { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
+    ]);
     const action = findAction(
       state,
       'medium',
@@ -266,9 +290,15 @@ describe('Tanques de disparo', () => {
       soldier('blocker', 1, hex(0, -1), 3),
       soldier('target', 1, hex(0, -3), 3),
     ]);
-    const shots = getLegalActionsForPiece(state, 'long').filter((action) => action.kind === 'shoot');
-    expect(shots.some((action) => action.kind === 'shoot' && action.targetId === 'blocker')).toBe(false);
-    expect(shots.some((action) => action.kind === 'shoot' && action.targetId === 'target')).toBe(true);
+    const shots = getLegalActionsForPiece(state, 'long').filter(
+      (action) => action.kind === 'shoot',
+    );
+    expect(shots.some((action) => action.kind === 'shoot' && action.targetId === 'blocker')).toBe(
+      false,
+    );
+    expect(shots.some((action) => action.kind === 'shoot' && action.targetId === 'target')).toBe(
+      true,
+    );
   });
 
   it('zona AA bloquea trayectoria de disparo y el Portamisiles nunca es objetivo', () => {
@@ -277,13 +307,17 @@ describe('Tanques de disparo', () => {
       soldier('target', 1, hex(0, -3), 3),
       { id: 'aa', type: 'antiAir', owner: 1, position: hex(1, -2) },
     ]);
-    expect(getLegalActionsForPiece(state, 'long').some((action) => action.kind === 'shoot')).toBe(false);
+    expect(getLegalActionsForPiece(state, 'long').some((action) => action.kind === 'shoot')).toBe(
+      false,
+    );
 
     const mediumState = base([
       { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
       { id: 'aa-target', type: 'antiAir', owner: 1, position: hex(0, -2) },
     ]);
-    expect(getLegalActionsForPiece(mediumState, 'medium').some((action) => action.kind === 'shoot')).toBe(false);
+    expect(
+      getLegalActionsForPiece(mediumState, 'medium').some((action) => action.kind === 'shoot'),
+    ).toBe(false);
   });
 
   it('disparo sobre apilamiento ofrece un objetivo por capa', () => {
@@ -309,8 +343,13 @@ describe('Tanque rápido y Dron', () => {
     ]);
     const moves = getLegalActionsForPiece(state, 'fast').filter((action) => action.kind === 'move');
     expect(moves.some((action) => action.kind === 'move' && action.to.q === 3)).toBe(true);
-    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(4, 0)))).toBe(false);
-    const next = perform(state, findAction(state, 'fast', 'move', (action) => equal(action.to, hex(3, 0))));
+    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(4, 0)))).toBe(
+      false,
+    );
+    const next = perform(
+      state,
+      findAction(state, 'fast', 'move', (action) => equal(action.to, hex(3, 0))),
+    );
     expect(getPiece(next, 'target')).toBeUndefined();
     expect(getPiece(next, 'friendly-air')).toBeDefined();
   });
@@ -321,9 +360,13 @@ describe('Tanque rápido y Dron', () => {
       soldier('ground', 1, hex(1, 0), 3),
       { id: 'blocking-air', type: 'drone', owner: 0, position: hex(2, 0) },
     ]);
-    const moves = getLegalActionsForPiece(state, 'drone').filter((action) => action.kind === 'move');
+    const moves = getLegalActionsForPiece(state, 'drone').filter(
+      (action) => action.kind === 'move',
+    );
     expect(moves.some((action) => action.kind === 'move' && action.to.q === 1)).toBe(true);
-    expect(moves.some((action) => action.kind === 'move' && action.to.q >= 2 && action.to.r === 0)).toBe(false);
+    expect(
+      moves.some((action) => action.kind === 'move' && action.to.q >= 2 && action.to.r === 0),
+    ).toBe(false);
   });
 
   it('Dron atacante elimina solo Dron rival y queda sobre suelo enemigo', () => {
@@ -332,7 +375,10 @@ describe('Tanque rápido y Dron', () => {
       soldier('ground', 1, hex(2, 0), 3),
       { id: 'enemy-air', type: 'drone', owner: 1, position: hex(2, 0) },
     ]);
-    const next = perform(state, findAction(state, 'drone', 'move', (action) => equal(action.to, hex(2, 0))));
+    const next = perform(
+      state,
+      findAction(state, 'drone', 'move', (action) => equal(action.to, hex(2, 0))),
+    );
     const occupancy = occupancyAt(next, hex(2, 0));
     expect(occupancy.air?.id).toBe('drone');
     expect(occupancy.ground?.id).toBe('ground');
@@ -344,7 +390,10 @@ describe('Tanque rápido y Dron', () => {
       { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
       soldier('ground', 1, hex(2, 0), 3),
     ]);
-    const next = perform(state, findAction(state, 'drone', 'move', (action) => equal(action.to, hex(2, 0))));
+    const next = perform(
+      state,
+      findAction(state, 'drone', 'move', (action) => equal(action.to, hex(2, 0))),
+    );
     expect(getPiece(next, 'ground')).toBeUndefined();
     expect(getPiece(next, 'drone')?.position).toEqual(hex(2, 0));
   });
@@ -366,10 +415,19 @@ describe('Portamisiles antiaéreo', () => {
       { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
       { id: 'aa', type: 'antiAir', owner: 1, position: hex(2, 0) },
     ]);
-    const moves = getLegalActionsForPiece(state, 'drone').filter((action) => action.kind === 'move');
-    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(1, 0)))).toBe(true);
-    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(2, 0)))).toBe(false);
-    const result = applyAction(state, findAction(state, 'drone', 'move', (action) => equal(action.to, hex(1, 0))));
+    const moves = getLegalActionsForPiece(state, 'drone').filter(
+      (action) => action.kind === 'move',
+    );
+    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(1, 0)))).toBe(
+      true,
+    );
+    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(2, 0)))).toBe(
+      false,
+    );
+    const result = applyAction(
+      state,
+      findAction(state, 'drone', 'move', (action) => equal(action.to, hex(1, 0))),
+    );
     expect(result.ok).toBe(true);
     expect(getPiece(result.state, 'drone')).toBeUndefined();
     expect(result.events.some((event) => event.type === 'intercept')).toBe(true);
@@ -382,7 +440,10 @@ describe('Portamisiles antiaéreo', () => {
       { id: 'enemy-air-b', type: 'drone', owner: 1, position: hex(2, -1) },
       { id: 'friendly-air', type: 'drone', owner: 0, position: hex(1, -1) },
     ]);
-    const next = perform(state, findAction(state, 'aa', 'move', (action) => equal(action.to, hex(1, 0))));
+    const next = perform(
+      state,
+      findAction(state, 'aa', 'move', (action) => equal(action.to, hex(1, 0))),
+    );
     expect(getPiece(next, 'enemy-air-a')).toBeUndefined();
     expect(getPiece(next, 'enemy-air-b')).toBeUndefined();
     expect(getPiece(next, 'friendly-air')).toBeDefined();
@@ -426,7 +487,10 @@ describe('Fortaleza, transformación y finales', () => {
       soldier('soldier', 0, hex(0, 0), 0),
       soldier('amber-mobile', 1, hex(2, 0), 3),
     ]);
-    const next = perform(state, findAction(state, 'soldier', 'move', (action) => action.to.r === -1));
+    const next = perform(
+      state,
+      findAction(state, 'soldier', 'move', (action) => action.to.r === -1),
+    );
     const target = getPiece(next, 'fort-amber-close');
     expect(target?.type).toBe('fortress');
     if (target?.type === 'fortress') expect(target.hp).toBe(1);
@@ -440,7 +504,10 @@ describe('Fortaleza, transformación y finales', () => {
       fortress('fort-amber-close', 1, hex(1, 0)),
       { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
     ]);
-    const next = perform(state, findAction(state, 'fast', 'move', (action) => equal(action.to, hex(1, 0))));
+    const next = perform(
+      state,
+      findAction(state, 'fast', 'move', (action) => equal(action.to, hex(1, 0))),
+    );
     expect(getPiece(next, 'fort-amber-close')).toBeUndefined();
     expect(next.outcome).toEqual({ type: 'win', winner: 0, reason: 'fortress' });
     expect(getPiece(next, 'fast')?.position).toEqual(hex(1, 0));
@@ -490,9 +557,15 @@ describe('Fortaleza, transformación y finales', () => {
     },
   ])('$label destruye Fortaleza con un ataque y sobrevive', ({ piece, target, kind }) => {
     const state = base([fortress('fort-amber-close', 1, target), piece]);
-    const action = kind === 'shoot'
-      ? findAction(state, 'attacker', 'shoot', (candidate) => candidate.targetId === 'fort-amber-close')
-      : findAction(state, 'attacker', 'move', (candidate) => equal(candidate.to, target));
+    const action =
+      kind === 'shoot'
+        ? findAction(
+            state,
+            'attacker',
+            'shoot',
+            (candidate) => candidate.targetId === 'fort-amber-close',
+          )
+        : findAction(state, 'attacker', 'move', (candidate) => equal(candidate.to, target));
     const next = perform(state, action);
     expect(getPiece(next, 'fort-amber-close')).toBeUndefined();
     expect(getPiece(next, 'attacker')).toBeDefined();
@@ -505,19 +578,25 @@ describe('Fortaleza, transformación y finales', () => {
       soldier('soldier', 0, hex(0, 0), 0),
     ]);
     state.firstFortressDamageBy = 0;
-    const next = perform(state, findAction(state, 'soldier', 'move', (action) => equal(action.to, hex(0, -1))));
+    const next = perform(
+      state,
+      findAction(state, 'soldier', 'move', (action) => equal(action.to, hex(0, -1))),
+    );
     expect(getPiece(next, 'fort-amber-close')).toBeUndefined();
     expect(getPiece(next, 'soldier')).toBeUndefined();
     expect(next.outcome).toEqual({ type: 'win', winner: 0, reason: 'fortress' });
   });
 
   it('tanque se transforma y mueve como Soldado en el mismo turno', () => {
-    const state = base([{ id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 3 }]);
+    const state = base([
+      { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 3 },
+    ]);
     const action = findAction(
       state,
       'medium',
       'transform',
-      (candidate) => candidate.facing === 0 && Boolean(candidate.to && equal(candidate.to, hex(0, -1))),
+      (candidate) =>
+        candidate.facing === 0 && Boolean(candidate.to && equal(candidate.to, hex(0, -1))),
     );
     const next = perform(state, action);
     const transformed = getPiece(next, 'medium');
@@ -548,10 +627,22 @@ describe('Fortaleza, transformación y finales', () => {
       soldier('amber-soldier', 1, hex(0, 2), 3),
     ]);
     for (let cycle = 0; cycle < 2; cycle += 1) {
-      state = perform(state, findAction(state, 'blue-soldier', 'rotate', (action) => action.facing === 1));
-      state = perform(state, findAction(state, 'amber-soldier', 'rotate', (action) => action.facing === 4));
-      state = perform(state, findAction(state, 'blue-soldier', 'rotate', (action) => action.facing === 0));
-      state = perform(state, findAction(state, 'amber-soldier', 'rotate', (action) => action.facing === 3));
+      state = perform(
+        state,
+        findAction(state, 'blue-soldier', 'rotate', (action) => action.facing === 1),
+      );
+      state = perform(
+        state,
+        findAction(state, 'amber-soldier', 'rotate', (action) => action.facing === 4),
+      );
+      state = perform(
+        state,
+        findAction(state, 'blue-soldier', 'rotate', (action) => action.facing === 0),
+      );
+      state = perform(
+        state,
+        findAction(state, 'amber-soldier', 'rotate', (action) => action.facing === 3),
+      );
     }
     expect(state.outcome).toEqual({ type: 'draw', reason: 'repetition' });
   });
@@ -559,7 +650,9 @@ describe('Fortaleza, transformación y finales', () => {
   it('bloqueo acordado concede victoria a quien infligió primer daño', () => {
     const state = base([], 0);
     state.firstFortressDamageBy = 1;
-    const blueFortress = state.pieces.find((piece) => piece.type === 'fortress' && piece.owner === 0);
+    const blueFortress = state.pieces.find(
+      (piece) => piece.type === 'fortress' && piece.owner === 0,
+    );
     if (blueFortress?.type === 'fortress') blueFortress.hp = 1;
     const result = declareBlockade(state);
     expect(result.state.outcome).toEqual({ type: 'win', winner: 1, reason: 'blockade' });
