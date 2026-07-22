@@ -68,6 +68,11 @@ try {
   assert((await visualNorth.getAttribute('data-direction-order')) === '3', 'Cian visual north must map to model south.');
   assert((await visualSouth.getAttribute('data-direction-order')) === '0', 'Cian visual south must map to model north.');
   assert(!(await visualNorth.isEnabled()), 'The initial Cian soldier must visibly face north.');
+  assert((await desktop.locator('.hex-compass .compass-direction').count()) === 6, 'Direction compass must expose six spatial choices.');
+  if (process.env.UI_SCREENSHOT) await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-compass.png` });
+  await visualSouth.click();
+  assert((await desktop.locator('.hex-compass .compass-center strong').textContent()) === 'S', 'Compass center must reflect the selected direction.');
+  assert((await desktop.locator('.hex-compass .compass-direction.active').getAttribute('data-direction-order')) === '0', 'Selected compass sector must stay highlighted.');
   await desktop.locator('.cancel-mode').click();
 
   await clickHex(desktop, 0, -2);
@@ -79,6 +84,21 @@ try {
   if (process.env.UI_SCREENSHOT) await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-amber.png` });
   await desktop.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   assert((await desktop.locator('#battle-log li').count()) >= 1, 'Confirmed action missing from battle log.');
+
+  const cannonPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(cannonPage, runtimeErrors);
+  await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await clickHex(cannonPage, 2, -5);
+  assert((await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque medio'), 'Medium tank selection failed.');
+  const mediumMoves = cannonPage.locator('#sr-board [role="gridcell"]').filter({ hasText: 'Tanque medio se moverá' });
+  const mediumMoveCount = await mediumMoves.count();
+  assert(mediumMoveCount > 0, 'Medium tank must have a legal move for compact compass test.');
+  const targetKey = await mediumMoves.nth(0).getAttribute('data-hex');
+  const [targetQ, targetR] = targetKey.split(',').map(Number);
+  await clickHex(cannonPage, targetQ, targetR);
+  assert((await cannonPage.locator('.hex-compass.compact .compass-direction').count()) === 6, 'Post-move cannon compass must expose six choices.');
+  if (process.env.UI_SCREENSHOT) await cannonPage.screenshot({ path: `${process.env.UI_SCREENSHOT}-compact-compass.png` });
+  await cannonPage.close();
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   watchErrors(mobile, runtimeErrors);

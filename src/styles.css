@@ -795,41 +795,117 @@ button:disabled {
   font-size: 11px;
 }
 
-.direction-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+.hex-compass {
+  --compass-radius: 76px;
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 5px auto 1px;
+  isolation: isolate;
 }
 
-.direction-grid button {
+.compass-frame {
+  position: absolute;
+  z-index: 0;
+  inset: 13px;
+  background:
+    repeating-conic-gradient(from -30deg, rgba(184, 161, 255, 0.3) 0 1deg, transparent 1deg 60deg),
+    radial-gradient(circle, rgba(184, 161, 255, 0.08), rgba(19, 46, 56, 0.38) 58%, rgba(184, 161, 255, 0.12));
+  clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+}
+
+.compass-frame::after {
+  position: absolute;
+  inset: 1px;
+  background: rgba(8, 27, 34, 0.72);
+  clip-path: inherit;
+  content: "";
+}
+
+.compass-center {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
   display: flex;
-  min-height: 52px;
+  width: 70px;
+  height: 62px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: rgba(19, 46, 56, 0.74);
-  cursor: pointer;
-}
-
-.direction-grid button:hover,
-.direction-grid button.active {
-  border-color: var(--convert);
-  background: rgba(184, 161, 255, 0.11);
-}
-
-.direction-grid button i {
+  background: linear-gradient(145deg, rgba(184, 161, 255, 0.2), rgba(19, 46, 56, 0.96));
+  clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
   color: var(--convert);
-  font-style: normal;
-  transform: rotate(var(--angle));
+  transform: translate(-50%, -50%);
 }
 
-.direction-grid button span {
+.compass-center span {
   color: var(--muted);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 6.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.compass-center strong {
+  margin-top: 2px;
+  font-family: "Bahnschrift", sans-serif;
+  font-size: 17px;
+}
+
+.compass-direction {
+  --compass-scale: 1;
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: 56px;
+  height: 48px;
+  margin: -24px 0 0 -28px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: #173944;
+  clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+  cursor: pointer;
+  transform: rotate(calc(var(--direction) * 60deg)) translateY(calc(var(--compass-radius) * -1)) rotate(calc(var(--direction) * -60deg)) scale(var(--compass-scale));
+  transition: background 150ms ease, color 150ms ease, filter 150ms ease, transform 150ms ease;
+}
+
+.compass-direction:hover,
+.compass-direction:focus-visible {
+  --compass-scale: 1.08;
+  background: #50486e;
+  filter: drop-shadow(0 0 7px rgba(184, 161, 255, 0.4));
+}
+
+.compass-direction.current,
+.compass-direction.active {
+  background: var(--convert);
+  color: #17142a;
+  filter: drop-shadow(0 0 7px rgba(184, 161, 255, 0.5));
+}
+
+.compass-direction.current:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.compass-direction i {
+  color: currentColor;
+  font-size: 14px;
+  font-style: normal;
+  line-height: 1;
+  transform: rotate(calc(var(--direction) * 60deg));
+}
+
+.compass-direction span {
+  color: currentColor;
+  font-size: 7.5px;
+  font-weight: 800;
 }
 
 .text-button {
@@ -965,28 +1041,47 @@ button:disabled {
   font-size: 9px;
 }
 
-.mini-directions {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 3px;
+.hex-compass.compact {
+  --compass-radius: 63px;
+  width: 188px;
+  height: 188px;
+  margin-top: 1px;
 }
 
-.mini-directions button {
-  min-width: 0;
-  min-height: 28px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: rgba(10, 29, 35, 0.76);
-  color: var(--muted);
-  font-size: 7px;
-  cursor: pointer;
+.hex-compass.compact .compass-frame {
+  inset: 9px;
 }
 
-.mini-directions button.active {
-  border-color: var(--convert);
-  color: var(--text);
-  background: rgba(184, 161, 255, 0.14);
+.hex-compass.compact .compass-center {
+  width: 54px;
+  height: 47px;
+}
+
+.hex-compass.compact .compass-center span {
+  font-size: 5.5px;
+}
+
+.hex-compass.compact .compass-center strong {
+  font-size: 14px;
+}
+
+.hex-compass.compact .compass-direction {
+  width: 48px;
+  height: 41px;
+  margin: -20.5px 0 0 -24px;
+}
+
+.hex-compass.compact .compass-direction i {
+  font-size: 11px;
+}
+
+.hex-compass.compact .compass-direction span {
+  font-size: 6.5px;
+}
+
+.high-contrast .compass-direction {
+  outline: 1px solid currentColor;
+  outline-offset: -2px;
 }
 
 .panel-footer {

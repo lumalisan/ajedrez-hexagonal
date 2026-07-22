@@ -540,8 +540,13 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   }
   if (mode.kind === 'rotate' || mode.kind === 'orient') {
     const current = piece.type === 'soldier' ? piece.facing : piece.type === 'medium' ? piece.cannon : null;
+    const selectedDirection = pendingAction?.kind === 'rotate'
+      ? pendingAction.facing
+      : pendingAction?.kind === 'orient'
+        ? pendingAction.cannon
+        : null;
     const title = mode.kind === 'rotate' ? 'Orientar Soldado' : 'Orientar cañón';
-    actionControls.innerHTML = directionPanel(title, current, null, 'direction-order');
+    actionControls.innerHTML = directionPanel(title, current, selectedDirection, 'direction-order');
     actionControls.querySelectorAll<HTMLButtonElement>('[data-direction-order]').forEach((button) => {
       const direction = Number(button.dataset.directionOrder) as Direction;
       button.addEventListener('click', () => {
