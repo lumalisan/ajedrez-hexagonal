@@ -582,12 +582,13 @@ export class BoardRenderer {
   ): void {
     const color = piece.owner === 0 ? COLORS.blue : COLORS.amber;
     const airborne = piece.type === 'drone';
+    const radius = piece.type === 'fortress' ? 19 : 16.6;
     ctx.save();
     ctx.translate(x, y - (airborne ? 3.5 : 0));
     ctx.globalAlpha = options.alpha;
-    ctx.shadowColor = 'rgba(0,0,0,0.65)';
-    ctx.shadowBlur = 7;
-    ctx.shadowOffsetY = 2;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = options.selected ? 12 : 5;
+    ctx.shadowOffsetY = 0;
 
     if (airborne) {
       ctx.strokeStyle = color;
@@ -599,16 +600,40 @@ export class BoardRenderer {
       ctx.globalAlpha = options.alpha;
     }
 
+    const tokenGradient = ctx.createRadialGradient(-5, -6, 1, 0, 0, radius + 2);
+    tokenGradient.addColorStop(0, '#1c3943');
+    tokenGradient.addColorStop(0.48, '#102831');
+    tokenGradient.addColorStop(1, '#061118');
     ctx.beginPath();
-    ctx.arc(0, 0, piece.type === 'fortress' ? 18 : 15.8, 0, Math.PI * 2);
-    ctx.fillStyle = '#0b1b22';
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = tokenGradient;
     ctx.fill();
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = color;
-    ctx.lineWidth = options.selected ? 3 : options.highContrast ? 2.3 : 1.8;
+    ctx.lineWidth = options.selected ? 2.8 : options.highContrast ? 2.2 : 1.65;
     if (piece.owner === 1) ctx.setLineDash([4, 2.4]);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    ctx.globalAlpha = options.alpha * 0.34;
+    ctx.strokeStyle = COLORS.text;
+    ctx.lineWidth = 0.65;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius - 3, Math.PI * 1.08, Math.PI * 1.92);
+    ctx.stroke();
+
+    ctx.globalAlpha = options.alpha * 0.62;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.25;
+    for (let index = 0; index < 3; index += 1) {
+      const angle =
+        -Math.PI / 2 + index * ((Math.PI * 2) / 3) + (piece.owner === 1 ? Math.PI / 3 : 0);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * (radius - 1.2), Math.sin(angle) * (radius - 1.2));
+      ctx.lineTo(Math.cos(angle) * (radius - 4.1), Math.sin(angle) * (radius - 4.1));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = options.alpha;
 
     if (options.selected) {
       ctx.globalAlpha = options.alpha * 0.5;
@@ -622,8 +647,11 @@ export class BoardRenderer {
 
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = options.highContrast ? 2.25 : 1.9;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 3.5;
     drawPieceGlyph(ctx, piece);
+    ctx.shadowColor = 'transparent';
 
     if (piece.type === 'fortress') {
       drawFortressHealth(ctx, piece.hp, color);

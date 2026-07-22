@@ -513,11 +513,28 @@ function renderFortressStatus(player: 0 | 1, element: HTMLElement): void {
   );
   const hp = fortress?.type === 'fortress' ? fortress.hp : 0;
   element.innerHTML = `
-    <span class="faction-mark" aria-hidden="true"></span>
+    ${factionMarkMarkup(player)}
     <div><small>${PLAYER_NAMES[player]}</small><strong>Fortaleza</strong></div>
     <span class="hp" aria-label="${hp} de 2 puntos de vida">
       ${[1, 2].map((point) => `<i class="${hp >= point ? 'active' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-8.5-5.2-8.5-12A4.5 4.5 0 0 1 12 6.9 4.5 4.5 0 0 1 20.5 9c0 6.8-8.5 12-8.5 12Z"/></svg></i>`).join('')}
     </span>`;
+}
+
+function factionMarkMarkup(player: 0 | 1): string {
+  const sigil =
+    player === 0
+      ? `<circle class="faction-mark-core" cx="16" cy="16" r="5.25"/>
+         <path class="faction-mark-detail" d="M16 5.5v5M16 21.5v5M5.5 16h5M21.5 16h5"/>
+         <circle class="faction-mark-node" cx="16" cy="16" r="1.8"/>`
+      : `<path class="faction-mark-core" d="m16 8 8 8-8 8-8-8Z"/>
+         <path class="faction-mark-detail" d="m16 4 3.2 5.2M28 16l-5.2 3.2M16 28l-3.2-5.2M4 16l5.2-3.2"/>
+         <path class="faction-mark-node" d="m16 12 4 4-4 4-4-4Z"/>`;
+  return `<span class="faction-mark" aria-hidden="true">
+    <svg viewBox="0 0 32 32">
+      <path class="faction-mark-frame" d="M16 2.75 27.5 9.4v13.2L16 29.25 4.5 22.6V9.4Z"/>
+      ${sigil}
+    </svg>
+  </span>`;
 }
 
 function renderPieceCard(piece?: Piece): void {

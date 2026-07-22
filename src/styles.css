@@ -165,18 +165,47 @@ button:disabled {
 }
 
 .faction-mark {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 10px rgba(54, 185, 255, 0.5);
+  display: grid;
+  flex: 0 0 auto;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  color: var(--blue);
+  filter: drop-shadow(0 0 6px rgba(54, 185, 255, 0.28));
+}
+
+.faction-mark svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.faction-mark-frame {
+  fill: rgba(54, 185, 255, 0.08);
+  stroke: currentColor;
+  stroke-width: 1.35;
+}
+
+.faction-mark-core,
+.faction-mark-detail {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.faction-mark-node {
+  fill: currentColor;
 }
 
 .player-amber .faction-mark {
-  border-radius: 1px;
-  background: var(--amber);
-  box-shadow: 0 0 10px rgba(255, 181, 71, 0.45);
-  transform: rotate(45deg);
+  color: var(--amber);
+  filter: drop-shadow(0 0 6px rgba(255, 181, 71, 0.25));
+}
+
+.player-amber .faction-mark-frame {
+  fill: rgba(255, 181, 71, 0.07);
 }
 
 .hp {
@@ -1631,7 +1660,8 @@ button:disabled {
   }
 
   .faction-mark {
-    display: none;
+    width: 19px;
+    height: 19px;
   }
 
   .turn-chip {
@@ -1709,6 +1739,12 @@ button:disabled {
 
   .fortress-status {
     min-width: 42px;
+    gap: 3px;
+  }
+
+  .faction-mark {
+    width: 16px;
+    height: 16px;
   }
 
   .hp {
