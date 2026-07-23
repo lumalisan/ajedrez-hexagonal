@@ -950,6 +950,11 @@ function showHelpDialog(): void {
       <p>Tanques pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
     </details>
     <div class="keyboard-card"><strong>Teclado</strong><span>W/A/S/D mueve el foco · Enter selecciona · Esc cancela</span></div>
+    <p class="game-credits">
+      Juego ideado por
+      <a href="https://www.instagram.com/roldan_musica" target="_blank" rel="noopener noreferrer">Miquel Roldán Llinàs</a>.
+      <span>Programado por <a href="https://lisandrorocha.vercel.app/" target="_blank" rel="noopener noreferrer">Lisandro Rocha Tau</a>.</span>
+    </p>
     <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Entendido</button></div>`);
 }
 

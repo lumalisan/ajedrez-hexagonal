@@ -1425,6 +1425,39 @@ button:disabled {
   font-size: 10px;
 }
 
+.dialog-body > .game-credits {
+  margin: 18px 0 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(129, 224, 205, 0.16);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(129, 224, 205, 0.07), rgba(143, 132, 255, 0.05));
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.game-credits span {
+  display: block;
+}
+
+.game-credits a {
+  color: var(--move);
+  font-weight: 600;
+  text-decoration-color: rgba(129, 224, 205, 0.45);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition:
+    color 150ms ease,
+    text-decoration-color 150ms ease;
+}
+
+.game-credits a:hover,
+.game-credits a:focus-visible {
+  color: var(--text);
+  text-decoration-color: var(--move);
+}
+
 .outcome-seal {
   position: relative;
   display: grid;
