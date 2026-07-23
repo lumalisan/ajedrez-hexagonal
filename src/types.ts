@@ -107,6 +107,7 @@ export interface GamePreferences {
   masterVolume: number;
   musicVolume: number;
   effectsVolume: number;
+  fixedBoard: boolean;
   reducedMotion: boolean;
   highContrast: boolean;
 }

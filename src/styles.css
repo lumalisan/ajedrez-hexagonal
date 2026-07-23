@@ -1261,6 +1261,88 @@ button:disabled {
   background: rgba(255, 118, 92, 0.06);
 }
 
+.mode-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 22px 0 8px;
+}
+
+.mode-card {
+  display: flex;
+  min-height: 166px;
+  padding: 19px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(6, 22, 29, 0.72);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.mode-card:hover,
+.mode-card:focus-visible {
+  border-color: var(--move);
+  background: rgba(91, 224, 190, 0.09);
+  transform: translateY(-2px);
+}
+
+.mode-card.featured {
+  border-color: color-mix(in srgb, var(--convert) 55%, var(--line));
+}
+
+.mode-card .mode-icon {
+  min-height: 35px;
+  color: var(--move);
+  font-size: 25px;
+  letter-spacing: 5px;
+}
+
+.mode-card.featured .mode-icon {
+  color: var(--convert);
+}
+
+.mode-card strong {
+  font-family: 'Bahnschrift', sans-serif;
+  font-size: 15px;
+}
+
+.mode-card small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.machine-wait {
+  display: grid;
+  justify-items: center;
+  padding: 25px 15px;
+  text-align: center;
+}
+
+.thinking-pulse {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 8px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--convert);
+  border-radius: 50%;
+  animation: thinking-spin 900ms linear infinite;
+}
+
+@keyframes thinking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .dialog-actions.triple {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1359,7 +1441,8 @@ button:disabled {
 
 .volume-control small,
 .toggle-row small,
-.accessibility-settings p {
+.accessibility-settings p,
+.board-settings p {
   color: var(--muted);
   font-size: 9px;
   line-height: 1.4;
@@ -1379,15 +1462,21 @@ button:disabled {
   text-align: right;
 }
 
-.accessibility-settings {
+.accessibility-settings,
+.board-settings {
   display: grid;
   gap: 7px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
 }
 
-.accessibility-settings p {
+.accessibility-settings p,
+.board-settings p {
   margin: 3px 0 5px;
+}
+
+.board-settings {
+  margin-bottom: 18px;
 }
 
 .toggle-row {
@@ -1870,6 +1959,14 @@ button:disabled {
 
   .help-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mode-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-card {
+    min-height: 126px;
   }
 
   .settings-row {

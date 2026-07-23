@@ -1098,15 +1098,19 @@ function drawOwnerMark(ctx: CanvasRenderingContext2D, owner: Player, color: stri
   }
 }
 
-export function pieceAccessibleLabel(state: GameState, piece: Piece): string {
+export function pieceAccessibleLabel(
+  state: GameState,
+  piece: Piece,
+  viewpoint: Player = state.activePlayer,
+): string {
   const owner = piece.owner === 0 ? 'Cian' : 'Ámbar';
   const position = `${signed(piece.position.q)}, ${signed(piece.position.r)}`;
   const layer = piece.type === 'drone' ? 'aire' : 'suelo';
   const details =
     piece.type === 'soldier'
-      ? `, orientado ${directionNameForPlayer(piece.facing, state.activePlayer)}`
+      ? `, orientado ${directionNameForPlayer(piece.facing, viewpoint)}`
       : piece.type === 'medium'
-        ? `, cañón ${directionNameForPlayer(piece.cannon, state.activePlayer)}`
+        ? `, cañón ${directionNameForPlayer(piece.cannon, viewpoint)}`
         : piece.type === 'fortress'
           ? `, ${piece.hp} puntos de vida`
           : '';

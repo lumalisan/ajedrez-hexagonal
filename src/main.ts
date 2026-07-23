@@ -1,5 +1,6 @@
 import './styles.css';
 
+import { chooseMachineAction } from './ai';
 import { AudioDirector } from './audio';
 import { ALL_DIRECTIONS, DIRECTION_NAMES, equalHex, hexKey, isOnBoard, stepHex } from './hex';
 import {
@@ -18,6 +19,8 @@ import {
 } from './engine';
 import { BoardRenderer, actionsAtHex, pieceAccessibleLabel, type RenderModel } from './renderer';
 import type { Direction, GameAction, GameEvent, GamePreferences, Hex, Piece } from './types';
+
+type GameMode = 'local' | 'machine';
 
 type UiMode =
   | { kind: 'default' }
@@ -50,6 +53,8 @@ let focusedHex: Hex | null = { q: 0, r: 0 };
 let visibleActions: GameAction[] = [];
 let lastEvents: GameEvent[] = [];
 let animating = false;
+let gameMode: GameMode | null = null;
+let machineThinking = false;
 let logOpen = false;
 let renderedStatusKey = '';
 
@@ -78,6 +83,7 @@ const srBoard = requireElement<HTMLElement>('sr-board');
 applyPreferences();
 bindControls();
 render();
+showGameModeDialog(true);
 
 function bindControls(): void {
   requireElement<HTMLButtonElement>('zoom-in').addEventListener('click', () =>
@@ -147,7 +153,10 @@ function bindControls(): void {
   });
 
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target === dialog && gameMode !== null) dialog.close();
+  });
+  dialog.addEventListener('cancel', (event) => {
+    if (gameMode === null) event.preventDefault();
   });
 }
 
@@ -238,7 +247,7 @@ function updatePinchBaseline(): void {
 
 function onCanvasKeyDown(event: KeyboardEvent): void {
   const keyDirections: Record<string, Direction> =
-    state.activePlayer === 0 ? { w: 3, d: 5, s: 0, a: 2 } : { w: 0, d: 2, s: 3, a: 5 };
+    viewPlayer() === 0 ? { w: 3, d: 5, s: 0, a: 2 } : { w: 0, d: 2, s: 3, a: 5 };
   const direction = keyDirections[event.key.toLowerCase()];
   if (direction !== undefined) {
     event.preventDefault();
@@ -270,7 +279,7 @@ function onCanvasKeyDown(event: KeyboardEvent): void {
 }
 
 function handleCell(hex: Hex): void {
-  if (animating) return;
+  if (animating || isMachineTurn()) return;
   focusedHex = hex;
   if (pendingAction) {
     const destination = actionDestination(state, pendingAction);
@@ -321,7 +330,7 @@ function selectPiece(pieceId: string): void {
   audio.playSelect();
   render();
   announce(
-    `${pieceAccessibleLabel(state, piece)}. ${piece.owner === state.activePlayer ? 'Unidad lista.' : 'Unidad rival.'}`,
+    `${pieceAccessibleLabel(state, piece, viewPlayer())}. ${piece.owner === state.activePlayer ? 'Unidad lista.' : 'Unidad rival.'}`,
   );
 }
 
@@ -347,9 +356,14 @@ function setPending(action: GameAction): void {
 }
 
 async function commitPending(): Promise<void> {
-  if (!pendingAction || animating) return;
+  if (!pendingAction || animating || isMachineTurn()) return;
+  await executeTurn(pendingAction);
+}
+
+async function executeTurn(action: GameAction): Promise<void> {
+  if (animating) return;
   const before = state;
-  const result = applyAction(state, pendingAction);
+  const result = applyAction(state, action);
   if (!result.ok) {
     audio.playInvalid();
     showToast(result.error ?? 'Orden rechazada.');
@@ -366,8 +380,8 @@ async function commitPending(): Promise<void> {
   render();
   try {
     await renderer.playEvents(result.events, before, preferences.reducedMotion);
-    if (!state.outcome)
-      await renderer.rotateToPlayer(state.activePlayer, preferences.reducedMotion);
+    if (!state.outcome && !preferences.fixedBoard)
+      await renderer.rotateToPlayer(viewPlayer(), preferences.reducedMotion);
   } finally {
     animating = false;
     render();
@@ -379,7 +393,37 @@ async function commitPending(): Promise<void> {
   } else {
     audio.playTurn();
     announce(`Turno de ${PLAYER_NAMES[state.activePlayer]}.`);
+    if (isMachineTurn()) void runMachineTurn();
   }
+}
+
+async function runMachineTurn(): Promise<void> {
+  if (!isMachineTurn() || state.outcome || animating) return;
+  machineThinking = true;
+  selectedId = null;
+  pendingAction = null;
+  mode = { kind: 'default' };
+  render();
+  announce('Turno de la máquina. Pensando jugada.');
+  await new Promise<void>((resolve) =>
+    window.setTimeout(resolve, preferences.reducedMotion ? 80 : 550),
+  );
+  if (!isMachineTurn() || state.outcome) {
+    machineThinking = false;
+    render();
+    return;
+  }
+  const action = chooseMachineAction(state);
+  machineThinking = false;
+  if (!action) {
+    render();
+    return;
+  }
+  await executeTurn(action);
+}
+
+function isMachineTurn(): boolean {
+  return gameMode === 'machine' && state.activePlayer === 1;
 }
 
 function render(): void {
@@ -486,13 +530,14 @@ function filterVisibleActions(actions: GameAction[], selected?: Piece): GameActi
 }
 
 function renderStatus(): void {
-  blockadeButton.disabled = Boolean(state.outcome) || animating;
+  blockadeButton.disabled = Boolean(state.outcome) || animating || gameMode === 'machine';
+  blockadeButton.hidden = gameMode === 'machine';
   const fortressState = state.pieces
     .filter((piece) => piece.type === 'fortress')
     .map((piece) => `${piece.owner}:${piece.hp}`)
     .sort()
     .join('|');
-  const statusKey = `${state.activePlayer}:${state.ply}:${fortressState}:${JSON.stringify(state.outcome)}`;
+  const statusKey = `${state.activePlayer}:${state.ply}:${fortressState}:${JSON.stringify(state.outcome)}:${gameMode}:${machineThinking}`;
   if (statusKey === renderedStatusKey) return;
   renderedStatusKey = statusKey;
   renderFortressStatus(0, blueFortress);
@@ -503,7 +548,12 @@ function renderStatus(): void {
   } else {
     const playerClass = state.activePlayer === 0 ? 'blue' : 'amber';
     turnChip.className = `turn-chip ${playerClass}`;
-    turnChip.innerHTML = `<span>TURNO ${Math.floor(state.ply / 2) + 1}</span><strong>${PLAYER_NAMES[state.activePlayer]} en mando</strong>`;
+    const commander = isMachineTurn()
+      ? machineThinking
+        ? 'Máquina pensando…'
+        : 'Máquina en mando'
+      : `${PLAYER_NAMES[state.activePlayer]} en mando`;
+    turnChip.innerHTML = `<span>TURNO ${Math.floor(state.ply / 2) + 1}</span><strong>${commander}</strong>`;
   }
 }
 
@@ -547,7 +597,9 @@ function renderPieceCard(piece?: Piece): void {
       <span class="key-map">Teclado: W A S D · Enter</span>`;
     selectionSummary.textContent = state.outcome
       ? outcomeText(state.outcome)
-      : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
+      : isMachineTurn()
+        ? 'La máquina está calculando su siguiente orden.'
+        : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
     return;
   }
 
@@ -593,7 +645,9 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
     return;
   }
   if (!piece) {
-    actionControls.innerHTML = '';
+    actionControls.innerHTML = isMachineTurn()
+      ? '<div class="control-section machine-wait"><span class="thinking-pulse" aria-hidden="true"></span><strong>Máquina pensando</strong><p>Ámbar está evaluando sus órdenes.</p></div>'
+      : '';
     return;
   }
   if (mode.kind === 'actionChoice') {
@@ -816,12 +870,16 @@ function directionCompass(
 }
 
 function modelDirectionForView(direction: Direction): Direction {
-  return ((direction + (state.activePlayer === 0 ? 3 : 0)) % 6) as Direction;
+  return ((direction + (viewPlayer() === 0 ? 3 : 0)) % 6) as Direction;
 }
 
 function directionNameForView(direction: Direction): string {
-  const viewDirection = ((direction + (state.activePlayer === 0 ? 3 : 0)) % 6) as Direction;
+  const viewDirection = ((direction + (viewPlayer() === 0 ? 3 : 0)) % 6) as Direction;
   return DIRECTION_NAMES[viewDirection];
+}
+
+function viewPlayer(): 0 | 1 {
+  return gameMode === 'machine' || preferences.fixedBoard ? 0 : state.activePlayer;
 }
 
 function targetChoiceMarkup(action: GameAction, index: number): string {
@@ -872,7 +930,7 @@ function renderScreenReaderBoard(): void {
       const occupancy = occupancyAt(state, hex);
       const pieces = [occupancy.ground, occupancy.air]
         .filter((piece): piece is Piece => Boolean(piece))
-        .map((piece) => pieceAccessibleLabel(state, piece));
+        .map((piece) => pieceAccessibleLabel(state, piece, viewPlayer()));
       const legal = [
         ...new Set(
           actionsAtHex(state, visibleActions, hex).map((action) => describeAction(state, action)),
@@ -906,7 +964,7 @@ function announceCell(hex: Hex): void {
   announce(
     `${
       pieces.length
-        ? pieces.map((piece) => pieceAccessibleLabel(state, piece)).join('. ')
+        ? pieces.map((piece) => pieceAccessibleLabel(state, piece, viewPlayer())).join('. ')
         : `Casilla ${hex.q}, ${hex.r}, vacía.`
     }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${legal.length ? ` Acciones legales: ${legal.join('; ')}.` : ''}`,
   );
@@ -920,18 +978,34 @@ function announce(message: string): void {
 }
 
 function showNewGameDialog(): void {
+  showGameModeDialog(false);
+}
+
+function showGameModeDialog(initial: boolean): void {
   openDialog(`
-    <div class="dialog-icon">↻</div>
-    <span class="eyebrow">NUEVA PARTIDA</span>
-    <h2>¿Replegar todas las unidades?</h2>
-    <p>Se restaurará el despliegue simétrico inicial. El progreso de esta batalla se perderá.</p>
-    <div class="dialog-actions">
-      <button type="button" class="secondary-button" data-dialog-close>Cancelar</button>
-      <button type="button" class="confirm-button" data-new-game>Reiniciar partida</button>
-    </div>`);
-  dialog.querySelector('[data-new-game]')?.addEventListener('click', () => {
-    dialog.close();
-    resetGame();
+    <div class="dialog-icon">♟</div>
+    <span class="eyebrow">${initial ? 'BIENVENIDO' : 'NUEVA PARTIDA'}</span>
+    <h2>¿Cómo quieres jugar?</h2>
+    <p>${initial ? 'Elige un modo para desplegar las unidades.' : 'El progreso de esta batalla se perderá al elegir un modo.'}</p>
+    <div class="mode-choice" role="group" aria-label="Modo de juego">
+      <button type="button" class="mode-card" data-game-mode="local">
+        <span class="mode-icon" aria-hidden="true">♙ ♟</span>
+        <strong>Vs otra persona</strong>
+        <small>Dos jugadores comparten este dispositivo y alternan turnos.</small>
+      </button>
+      <button type="button" class="mode-card featured" data-game-mode="machine">
+        <span class="mode-icon" aria-hidden="true">♙ ⬡</span>
+        <strong>Vs la máquina</strong>
+        <small>Juegas como Cian; la máquina controla a Ámbar.</small>
+      </button>
+    </div>
+    ${initial ? '' : '<div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>Cancelar</button></div>'}`);
+  dialog.querySelectorAll<HTMLButtonElement>('[data-game-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      gameMode = button.dataset.gameMode as GameMode;
+      dialog.close();
+      resetGame();
+    });
   });
 }
 
@@ -961,12 +1035,16 @@ function showHelpDialog(): void {
 function showSettingsDialog(): void {
   openDialog(`
     <span class="eyebrow">OPCIONES</span>
-    <h2>Audio y accesibilidad</h2>
-    <p>Ajusta cada canal por separado. Los cambios se guardan automáticamente.</p>
+    <h2>Audio, vista y accesibilidad</h2>
+    <p>Personaliza la partida. Los cambios se guardan automáticamente.</p>
     <div class="volume-settings" aria-label="Controles de volumen">
       ${volumeControlMarkup('masterVolume', 'Volumen maestro', 'Controla toda la mezcla', preferences.masterVolume)}
       ${volumeControlMarkup('musicVolume', 'Música', 'Tema ambiental en bucle', preferences.musicVolume)}
       ${volumeControlMarkup('effectsVolume', 'Efectos especiales', 'Movimientos, ataques y avisos', preferences.effectsVolume)}
+    </div>
+    <div class="board-settings">
+      <div><span class="eyebrow">VISTA DEL TABLERO</span><p>Elige si la perspectiva cambia con cada turno.</p></div>
+      <label class="toggle-row"><span><strong>Mantener tablero fijo</strong><small>Cian permanece abajo y Ámbar arriba durante toda la partida</small></span><input type="checkbox" data-pref="fixed-board" ${preferences.fixedBoard ? 'checked' : ''}/></label>
     </div>
     <div class="accessibility-settings">
       <div><span class="eyebrow">ACCESIBILIDAD</span><p>Adapta la presentación visual a tus necesidades.</p></div>
@@ -992,6 +1070,19 @@ function showSettingsDialog(): void {
       savePreferences();
     });
   });
+  dialog
+    .querySelector<HTMLInputElement>('[data-pref="fixed-board"]')
+    ?.addEventListener('change', (event) => {
+      preferences.fixedBoard = (event.currentTarget as HTMLInputElement).checked;
+      savePreferences();
+      renderer.snapToPlayer(viewPlayer());
+      render();
+      announce(
+        preferences.fixedBoard
+          ? 'Tablero fijo. Cian permanece abajo y Ámbar arriba.'
+          : `Giro por turnos activado. Vista de ${PLAYER_NAMES[state.activePlayer]}.`,
+      );
+    });
   dialog
     .querySelector<HTMLInputElement>('[data-pref="contrast"]')
     ?.addEventListener('change', (event) => {
@@ -1089,14 +1180,18 @@ function showOutcomeDialog(): void {
     </div>
     <div class="dialog-actions triple">
       <button type="button" class="text-button" data-dialog-close>Revisar tablero</button>
-      <button type="button" class="secondary-button" data-new-game>Revancha</button>
+      <button type="button" class="secondary-button" data-rematch>Revancha</button>
       <button type="button" class="confirm-button" data-new-game>Nueva partida</button>
     </div>`);
   dialog.querySelectorAll('[data-new-game]').forEach((button) => {
     button.addEventListener('click', () => {
       dialog.close();
-      resetGame();
+      showGameModeDialog(false);
     });
+  });
+  dialog.querySelector('[data-rematch]')?.addEventListener('click', () => {
+    dialog.close();
+    resetGame();
   });
 }
 
@@ -1128,10 +1223,20 @@ function resetGame(): void {
   lastEvents = [];
   focusedHex = { q: 0, r: 0 };
   renderer.resetView();
-  renderer.snapToPlayer(0);
+  renderer.snapToPlayer(viewPlayer());
+  renderedStatusKey = '';
+  machineThinking = false;
   render();
-  announce('Nueva partida. Turno de Cian.');
-  showToast('Despliegue restaurado. Cian inicia.');
+  announce(
+    gameMode === 'machine'
+      ? 'Nueva partida contra la máquina. Juegas como Cian.'
+      : 'Nueva partida para dos personas. Turno de Cian.',
+  );
+  showToast(
+    gameMode === 'machine'
+      ? 'Modo contra la máquina. Tú controlas a Cian.'
+      : 'Modo para dos personas. Cian inicia.',
+  );
 }
 
 function showToast(message: string): void {
@@ -1157,6 +1262,7 @@ function loadPreferences(): GamePreferences {
     masterVolume: 0.8,
     musicVolume: 0.55,
     effectsVolume: 0.8,
+    fixedBoard: true,
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     highContrast: false,
   };

@@ -33,6 +33,11 @@ try {
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(desktop, runtimeErrors);
   await desktop.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  assert(
+    (await desktop.locator('[data-game-mode]').count()) === 2,
+    'Initial game-mode choice is missing.',
+  );
+  await selectMode(desktop, 'local');
   assert((await desktop.title()) === 'Protocolo Hexagonal', 'Document title missing.');
   assert(
     (await desktop.locator('#sr-board [role="gridcell"]').count()) === 91,
@@ -59,6 +64,17 @@ try {
   assert(
     (await desktop.locator('.accessibility-settings .toggle-row').count()) === 2,
     'Accessibility options missing.',
+  );
+  const fixedBoardToggle = desktop.locator('[data-pref="fixed-board"]');
+  assert((await fixedBoardToggle.count()) === 1, 'Fixed-board option missing.');
+  assert(await fixedBoardToggle.isChecked(), 'Fixed-board option must be enabled by default.');
+  await fixedBoardToggle.uncheck();
+  await fixedBoardToggle.check();
+  assert(
+    await desktop.evaluate(
+      () => JSON.parse(localStorage.getItem('atlas-preferences-v1') ?? '{}').fixedBoard === true,
+    ),
+    'Fixed-board preference must be persisted.',
   );
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-options.png` });
@@ -115,11 +131,27 @@ try {
   await desktop.locator('.cancel-mode').click();
 
   await doubleClickHex(desktop, 0, -1);
-  await desktop.locator('#game-canvas[data-rotating="true"]').waitFor();
+  await desktop.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  assert(
+    (await desktop.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
+    'Fixed board must keep Cian below during the Ámbar turn.',
+  );
+  assert(
+    (await desktop.locator('#game-canvas').getAttribute('data-rotating')) === null,
+    'Fixed board must not start a turn rotation.',
+  );
+  await desktop.locator('#game-canvas').focus();
+  await desktop.keyboard.press('s');
+  assert(
+    (await selectedHex(desktop)) === '0,-2',
+    'Keyboard navigation must stay aligned with the fixed Cian viewpoint.',
+  );
+  await desktop.locator('#settings-button').click();
+  await desktop.locator('[data-pref="fixed-board"]').uncheck();
   await desktop.locator('#game-canvas[data-viewpoint="amber"]').waitFor();
+  await desktop.locator('[data-dialog-close]').click();
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-amber.png` });
-  await desktop.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   assert(
     (await desktop.locator('#battle-log li').count()) >= 1,
     'Confirmed action missing from battle log.',
@@ -128,6 +160,7 @@ try {
   const cannonPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(cannonPage, runtimeErrors);
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(cannonPage, 'local');
   await clickHex(cannonPage, 3, -5);
   assert(
     (await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque medio'),
@@ -156,6 +189,7 @@ try {
   });
   watchErrors(mobile, runtimeErrors);
   await mobile.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(mobile, 'local');
   const layout = await mobile.evaluate(() => ({
     viewport: window.innerWidth,
     documentWidth: document.documentElement.scrollWidth,
@@ -205,12 +239,35 @@ try {
   });
   watchErrors(narrow, runtimeErrors);
   await narrow.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(narrow, 'local');
   await assertTopActionsDoNotOverlap(narrow);
   assert(
     await narrow.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     'Narrow mobile header causes horizontal overflow.',
   );
   await narrow.close();
+
+  const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(solo, runtimeErrors);
+  await solo.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(solo, 'machine');
+  assert(
+    await solo.locator('#blockade-button').isHidden(),
+    'Draw proposals must be hidden when there is no second human player.',
+  );
+  await clickHex(solo, 0, -2);
+  await doubleClickHex(solo, 0, -1);
+  await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 10_000 });
+  await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
+  assert(
+    (await solo.locator('#battle-log li').count()) >= 2,
+    'The machine must answer the human move with a legal move.',
+  );
+  assert(
+    (await solo.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
+    'Solo mode must keep the board viewed from the human side.',
+  );
+  await solo.close();
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log('UI smoke passed: desktop action flow, mobile 390px layout, keyboard navigation.');
@@ -234,6 +291,11 @@ async function clickHex(page, q, r) {
     box.x + box.width / 2 + screenX * fitScale,
     box.y + box.height / 2 + screenY * fitScale,
   );
+}
+
+async function selectMode(page, mode) {
+  await page.locator(`[data-game-mode="${mode}"]`).click();
+  await page.locator('#game-dialog').waitFor({ state: 'hidden' });
 }
 
 async function doubleClickHex(page, q, r) {
