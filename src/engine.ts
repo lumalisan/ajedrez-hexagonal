@@ -24,6 +24,7 @@ import type {
   Piece,
   PieceType,
   Player,
+  MatchConfig,
 } from './types';
 
 export const PIECE_NAMES: Record<PieceType, string> = {
@@ -109,6 +110,44 @@ function validatePieces(pieces: Piece[]): void {
   if (fortresses[0] !== 1 || fortresses[1] !== 1) {
     throw new Error('La partida necesita exactamente una Fortaleza por jugador.');
   }
+}
+
+/** Validates imported, saved, or generated states without mutating them. */
+export function validateState(state: GameState, config?: MatchConfig): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  const boardCells = config ? new Set(config.board.cells.map(hexKey)) : null;
+  const layers = new Map<string, { ground: number; air: number }>();
+  for (const piece of state.pieces) {
+    if (ids.has(piece.id)) errors.push(`Identificador de pieza duplicado: ${piece.id}.`);
+    ids.add(piece.id);
+    if (!isOnBoard(piece.position) || (boardCells && !boardCells.has(hexKey(piece.position))))
+      errors.push(`La pieza ${piece.id} está fuera del tablero.`);
+    const key = hexKey(piece.position);
+    const count = layers.get(key) ?? { ground: 0, air: 0 };
+    if (piece.type === 'drone') count.air += 1;
+    else count.ground += 1;
+    layers.set(key, count);
+    if (piece.type === 'fortress' && piece.hp !== 1 && piece.hp !== 2)
+      errors.push(`La Fortaleza ${piece.id} tiene puntos de vida inválidos.`);
+  }
+  for (const [key, count] of layers) {
+    if (count.ground > 1) errors.push(`Hay más de una unidad terrestre en ${key}.`);
+    if (count.air > 1) errors.push(`Hay más de una unidad aérea en ${key}.`);
+  }
+  for (const owner of [0, 1] as const) {
+    const fortresses = state.pieces.filter(
+      (piece) => piece.owner === owner && piece.type === 'fortress',
+    );
+    if (!state.outcome && fortresses.length !== 1)
+      errors.push(`El jugador ${owner} debe tener exactamente una Fortaleza.`);
+    if (fortresses.length > 1) errors.push(`El jugador ${owner} tiene varias Fortalezas.`);
+  }
+  if (state.activePlayer !== 0 && state.activePlayer !== 1)
+    errors.push('El jugador activo no es válido.');
+  if (!Number.isInteger(state.ply) || state.ply < 0)
+    errors.push('El contador de turnos no es válido.');
+  return errors;
 }
 
 export function getPiece(state: GameState, id: string): Piece | undefined {

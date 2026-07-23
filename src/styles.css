@@ -38,6 +38,23 @@ body {
   overflow: hidden;
 }
 
+html.modal-open,
+html.modal-open body {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+html.modal-open body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
+html.modal-open .app-shell {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 button,
 input {
   font: inherit;
@@ -376,6 +393,7 @@ button:disabled {
 }
 
 .board-stage {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -504,9 +522,16 @@ button:disabled {
   background: rgba(255, 92, 138, 0.12);
 }
 
-.legend-dot.convert {
-  color: var(--convert);
-  background: var(--convert);
+.legend-hand {
+  width: 11px;
+  height: 14px;
+  overflow: visible;
+  color: var(--text);
+  fill: var(--surface);
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .legend-dot.danger {
@@ -1218,6 +1243,7 @@ button:disabled {
   color: var(--text);
   box-shadow: 0 34px 100px rgba(0, 0, 0, 0.7);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .game-dialog::backdrop {
@@ -1270,8 +1296,8 @@ button:disabled {
 
 .mode-card {
   display: flex;
-  min-height: 166px;
-  padding: 19px;
+  min-height: 132px;
+  padding: 16px 18px;
   border: 1px solid var(--line-strong);
   border-radius: 14px;
   align-items: flex-start;
@@ -1966,7 +1992,7 @@ button:disabled {
   }
 
   .mode-card {
-    min-height: 126px;
+    min-height: 110px;
   }
 
   .settings-row {
@@ -2056,6 +2082,267 @@ button:disabled {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.continue-card {
+  display: grid;
+  width: 100%;
+  margin: 8px 0 18px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--blue) 58%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  gap: 4px;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.continue-card small,
+.scenario-list small {
+  color: var(--muted);
+}
+
+.continue-card:hover,
+.continue-card:focus-visible,
+.scenario-list button:hover,
+.scenario-list button:focus-visible {
+  border-color: var(--move);
+  background: color-mix(in srgb, var(--move) 9%, var(--surface));
+  transform: translateY(-2px);
+}
+
+.mode-choice .academy-card {
+  grid-column: 1 / -1;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(150px, 1.2fr);
+  align-items: center;
+  margin: 12px 0;
+  gap: 16px;
+}
+
+.field-row input,
+.field-row select,
+.match-options select {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.match-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.match-option-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.scenario-list {
+  display: grid;
+  max-height: min(52vh, 500px);
+  overflow: auto;
+  gap: 8px;
+}
+
+.scenario-list button {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.scenario-list button span {
+  grid-row: 1 / 3;
+  color: var(--move);
+  font-size: 18px;
+}
+
+.scenario-list button small {
+  grid-column: 2;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-detail {
+  color: var(--muted);
+  text-align: center;
+}
+
+[data-replay-slider] {
+  width: 100%;
+  margin: 18px 0;
+}
+
+.replay-dock {
+  position: absolute;
+  z-index: 8;
+  bottom: 42px;
+  left: 50%;
+  display: grid;
+  width: min(620px, calc(100% - 28px));
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.replay-heading,
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.replay-heading {
+  justify-content: space-between;
+}
+
+.replay-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.replay-heading strong {
+  font-size: 12px;
+}
+
+.replay-close {
+  min-width: 34px;
+  min-height: 34px;
+  font-size: 20px;
+}
+
+.replay-description {
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-controls [data-replay-slider] {
+  min-width: 0;
+  margin: 0;
+  flex: 1;
+}
+
+.replay-controls button {
+  min-width: 42px;
+  min-height: 38px;
+}
+
+.replay-export {
+  position: absolute;
+  top: 16px;
+  right: 58px;
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 9px;
+}
+
+.scenario-objective {
+  padding: 12px 14px;
+  border-left: 3px solid var(--move);
+  background: color-mix(in srgb, var(--move) 7%, transparent);
+}
+
+.scenario-steps {
+  display: grid;
+  margin: 16px 0;
+  padding-left: 24px;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dialog-note {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.scenario-editor {
+  width: 100%;
+  min-height: min(42vh, 360px);
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #061017;
+  color: var(--text);
+  font:
+    12px/1.45 ui-monospace,
+    'Cascadia Code',
+    monospace;
+}
+
+@media (max-width: 560px) {
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .mode-choice .academy-card {
+    grid-column: auto;
+  }
+
+  .command-panel {
+    position: relative;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -14px 40px rgb(0 0 0 / 24%);
+  }
+
+  .pending-card:not([hidden]) {
+    position: sticky;
+    z-index: 4;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 32px rgb(0 0 0 / 30%);
+  }
+
+  .replay-dock {
+    bottom: 34px;
+    width: calc(100% - 18px);
+    padding: 10px;
+  }
+
+  .replay-export {
+    display: none;
   }
 }
 

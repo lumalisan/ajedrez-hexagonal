@@ -35,6 +35,82 @@ export function chooseMachineAction(state: GameState): GameAction | null {
   return best;
 }
 
+export interface SearchOptions {
+  depth: 1 | 2 | 3;
+  budgetMs: number;
+  seed?: number;
+}
+
+/** Time-bounded alpha-beta search used by both the worker and deterministic tests. */
+export function searchMachineAction(state: GameState, options: SearchOptions): GameAction | null {
+  const actions = getAllLegalActions(state);
+  if (!actions.length) return null;
+  const deadline = performance.now() + Math.max(10, options.budgetMs);
+  const player = state.activePlayer;
+  const ordered = orderActions(state, actions, player);
+  let best = ordered[0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const action of ordered) {
+    if (performance.now() >= deadline) break;
+    const result = applyAction(state, action);
+    if (!result.ok) continue;
+    const score =
+      minimax(result.state, options.depth - 1, player, deadline, -Infinity, Infinity) +
+      stableActionBias(action);
+    if (score > bestScore) {
+      best = action;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function minimax(
+  state: GameState,
+  depth: number,
+  player: Player,
+  deadline: number,
+  alpha: number,
+  beta: number,
+): number {
+  if (depth <= 0 || state.outcome || performance.now() >= deadline)
+    return evaluateState(state, player);
+  const actions = orderActions(state, getAllLegalActions(state), player);
+  if (!actions.length) return evaluateState(state, player);
+  const maximizing = state.activePlayer === player;
+  let value = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+  for (const action of actions) {
+    if (performance.now() >= deadline) break;
+    const result = applyAction(state, action);
+    if (!result.ok) continue;
+    const score = minimax(result.state, depth - 1, player, deadline, alpha, beta);
+    if (maximizing) {
+      value = Math.max(value, score);
+      alpha = Math.max(alpha, value);
+    } else {
+      value = Math.min(value, score);
+      beta = Math.min(beta, value);
+    }
+    if (beta <= alpha) break;
+  }
+  return Number.isFinite(value) ? value : evaluateState(state, player);
+}
+
+function orderActions(state: GameState, actions: GameAction[], player: Player): GameAction[] {
+  return [...actions]
+    .map((action) => {
+      const result = applyAction(state, action);
+      return {
+        action,
+        score: result.ok
+          ? evaluateState(result.state, player) + tacticalBonus(state, result.state, action)
+          : -Infinity,
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .map(({ action }) => action);
+}
+
 function evaluateState(state: GameState, player: Player): number {
   if (state.outcome?.type === 'win')
     return state.outcome.winner === player ? 1_000_000 : -1_000_000;

@@ -34,10 +34,22 @@ try {
   watchErrors(desktop, runtimeErrors);
   await desktop.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   assert(
-    (await desktop.locator('[data-game-mode]').count()) === 2,
+    (await desktop.locator('[data-game-mode]').count()) === 3,
     'Initial game-mode choice is missing.',
   );
+  assert(
+    await desktop.evaluate(
+      () =>
+        document.documentElement.classList.contains('modal-open') &&
+        getComputedStyle(document.body).position === 'fixed',
+    ),
+    'Opening a modal must lock background scrolling.',
+  );
   await selectMode(desktop, 'local');
+  assert(
+    await desktop.evaluate(() => !document.documentElement.classList.contains('modal-open')),
+    'Closing a modal must restore the page scroll state.',
+  );
   assert((await desktop.title()) === 'Protocolo Hexagonal', 'Document title missing.');
   assert(
     (await desktop.locator('#sr-board [role="gridcell"]').count()) === 91,
@@ -62,7 +74,7 @@ try {
     'Options must expose three volume sliders.',
   );
   assert(
-    (await desktop.locator('.accessibility-settings .toggle-row').count()) === 2,
+    (await desktop.locator('.accessibility-settings .toggle-row').count()) >= 2,
     'Accessibility options missing.',
   );
   const fixedBoardToggle = desktop.locator('[data-pref="fixed-board"]');
@@ -214,7 +226,9 @@ try {
 
   await mobile.locator('#game-canvas').focus();
   await mobile.keyboard.press('e');
-  assert((await selectedHex(mobile)) === '0,0', 'E must not move keyboard focus.');
+  assert((await selectedHex(mobile)) === '1,0', 'E must move in the sixth hexagonal direction.');
+  await mobile.keyboard.press('a');
+  assert((await selectedHex(mobile)) === '0,0', 'A must move opposite to E.');
   await mobile.keyboard.press('s');
   assert(
     (await selectedHex(mobile)) === '0,-1',
@@ -253,6 +267,77 @@ try {
   );
   await narrow.close();
 
+  const academy = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(academy, runtimeErrors);
+  await academy.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  const modeCardHeights = await academy
+    .locator('[data-game-mode]')
+    .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().height));
+  assert(
+    modeCardHeights.every((height) => height <= 140),
+    'Main mode cards should use the compact height.',
+  );
+  await academy.locator('[data-game-mode="academy"]').click();
+  assert(
+    await academy
+      .locator('[data-scenario="movement"]')
+      .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
+    'Scenario cards must expose a pointer cursor.',
+  );
+  await academy.locator('[data-scenario="movement"]').hover();
+  assert(
+    await academy
+      .locator('[data-scenario="movement"]')
+      .evaluate((element) => getComputedStyle(element).transform !== 'none'),
+    'Scenario cards must animate on hover.',
+  );
+  await academy.locator('[data-scenario="movement"]').click();
+  assert(
+    (await academy.locator('.scenario-steps li').count()) >= 3,
+    'Academy briefing must explain the exercise step by step.',
+  );
+  await academy.locator('[data-dialog-close]').click();
+  await academy.locator('#game-canvas').focus();
+  await academy.keyboard.press('Enter');
+  await academy.keyboard.press('s');
+  await academy.keyboard.press('Enter');
+  await academy.keyboard.press('Enter');
+  await academy.getByText('OBJETIVO COMPLETADO').waitFor();
+  assert(
+    (await academy.getByText('Tablas por bloqueo').count()) === 0,
+    'Academy completion must not report a classical blockade draw.',
+  );
+  await academy.locator('[data-academy-menu]').click();
+  await academy.keyboard.press('Escape');
+  await academy.locator('#settings-button').click();
+  await academy.locator('[data-open-replay]').click();
+  assert(
+    await academy.locator('.replay-dock').isVisible(),
+    'Replay controls must use a board dock.',
+  );
+  assert(
+    await academy.locator('#game-canvas').isVisible(),
+    'The board must remain visible while reviewing history.',
+  );
+  assert(
+    !(await academy.locator('#game-dialog').isVisible()),
+    'Replay must not occupy the screen as a modal dialog.',
+  );
+  await academy.locator('[data-replay-step="-1"]').click();
+  assert(
+    (await academy.locator('[data-replay-output]').textContent()) === '0',
+    'Replay dock must navigate to the initial position.',
+  );
+  await academy.locator('[data-replay-close]').click();
+  await academy.reload({ waitUntil: 'networkidle' });
+  assert(
+    await academy
+      .locator('[data-continue-match]')
+      .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
+    'Continue card must expose a pointer cursor.',
+  );
+  await academy.close();
+
   const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(solo, runtimeErrors);
   await solo.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
@@ -272,6 +357,34 @@ try {
   assert(
     (await solo.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
     'Solo mode must keep the board viewed from the human side.',
+  );
+  await solo.locator('#settings-button').click();
+  await solo.locator('[data-undo-match]').click();
+  await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
+  assert(
+    (await solo.locator('#battle-log li:not(.empty-log)').count()) === 0,
+    'Undo after a machine response must return to the human decision before both orders.',
+  );
+  await solo.waitForTimeout(1_000);
+  assert(
+    (await solo.locator('#battle-log li:not(.empty-log)').count()) === 0,
+    'Undo must cancel stale machine calculations instead of committing another order.',
+  );
+  assert(
+    !(await solo.locator('#turn-chip').textContent())?.includes('Pensando'),
+    'Undo must clear the machine thinking state.',
+  );
+
+  await clickHex(solo, 0, -2);
+  await doubleClickHex(solo, 0, -1);
+  await solo.locator('#turn-chip').getByText('Máquina pensando…').waitFor();
+  await solo.locator('#settings-button').click();
+  await solo.locator('[data-undo-match]').click();
+  await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
+  await solo.waitForTimeout(1_000);
+  assert(
+    (await solo.locator('#battle-log li:not(.empty-log)').count()) === 0,
+    'Undo while the machine is thinking must cancel its pending response.',
   );
   await solo.close();
 
@@ -301,6 +414,7 @@ async function clickHex(page, q, r) {
 
 async function selectMode(page, mode) {
   await page.locator(`[data-game-mode="${mode}"]`).click();
+  await page.locator('[data-start-free]').click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
 }
 

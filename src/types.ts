@@ -110,4 +110,91 @@ export interface GamePreferences {
   fixedBoard: boolean;
   reducedMotion: boolean;
   highContrast: boolean;
+  confirmation: ConfirmationMode;
+  contextualHints: boolean;
+  handoffScreen: boolean;
+}
+
+export type ConfirmationMode = 'always' | 'critical' | 'quick';
+
+export type GameMode = 'local' | 'machine' | 'academy';
+
+export type AiDifficulty = 'recruit' | 'tactical' | 'commander';
+
+export interface Participant {
+  kind: 'human' | 'machine';
+  name: string;
+  difficulty?: AiDifficulty;
+}
+
+export interface BoardDefinition {
+  kind: 'hex-set';
+  cells: Hex[];
+}
+
+export interface PieceSetup {
+  id: string;
+  piece: Piece;
+}
+
+export interface VictoryDefinition {
+  kind: 'classic-fortress';
+  repetition: number;
+  blockade: boolean;
+}
+
+export interface MatchOptions {
+  confirmation: ConfirmationMode;
+  contextualHints: boolean;
+  fixedBoard: boolean;
+  handoffScreen: boolean;
+  clockSeconds: number | null;
+  allowUndo: boolean;
+}
+
+export interface MatchConfig {
+  definitionId: string;
+  rulesetId: 'classic-v1';
+  participants: [Participant, Participant];
+  board: BoardDefinition;
+  setup: PieceSetup[];
+  victory: VictoryDefinition;
+  options: MatchOptions;
+}
+
+export interface MatchRecord {
+  version: 1;
+  config: MatchConfig;
+  initialState: GameState;
+  actions: GameAction[];
+  currentAction: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ScenarioObjective =
+  | { kind: 'perform-action'; actionKind: GameAction['kind']; pieceId?: string }
+  | { kind: 'capture'; targetId: string }
+  | { kind: 'damage-fortress'; owner: Player }
+  | { kind: 'win' };
+
+export interface ScenarioDefinition {
+  id: string;
+  title: string;
+  summary: string;
+  controlledPlayer: Player;
+  initialState: GameState;
+  objective: ScenarioObjective;
+  maxPlies?: number;
+  hints: string[];
+  successText: string;
+}
+
+export interface MatchStatistics {
+  plies: number;
+  captures: [number, number];
+  fortressDamage: [number, number];
+  transformations: [number, number];
+  startedAt: string;
+  updatedAt: string;
 }

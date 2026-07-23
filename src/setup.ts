@@ -28,7 +28,13 @@ const BLUE_SETUP: SetupPiece[] = [
 
 function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {
   const id = `${owner === 0 ? 'azul' : 'ambar'}-${spec.type}-${index + 1}`;
-  const position = owner === 0 ? spec.position : { q: -spec.position.q, r: -spec.position.r };
+  const position =
+    owner === 0
+      ? spec.position
+      : {
+          q: spec.position.q === 0 ? 0 : -spec.position.q,
+          r: spec.position.r === 0 ? 0 : -spec.position.r,
+        };
 
   switch (spec.type) {
     case 'soldier':

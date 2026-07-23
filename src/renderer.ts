@@ -826,7 +826,7 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
     if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
       return 'capture';
     if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'capture';
-    return 'convert';
+    return 'move';
   }
   if (action.kind === 'rotate' || action.kind === 'orient') return 'convert';
   if (piece.type === 'drone' && isProtectedByPlayer(state, action.to, otherPlayerOf(piece.owner))) {

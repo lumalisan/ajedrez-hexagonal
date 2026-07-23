@@ -1,0 +1,17 @@
+{
+  "name": "Protocolo Hexagonal",
+  "short_name": "Protocolo Hex",
+  "description": "Juego táctico hexagonal para dos personas o contra la máquina.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07131a",
+  "theme_color": "#07131a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
