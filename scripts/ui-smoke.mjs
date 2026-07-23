@@ -76,7 +76,7 @@ try {
   assert(keyboardGap >= 16, 'Help keyboard section needs separation from tactical rules.');
   await desktop.locator('[data-dialog-close]').click();
 
-  await clickHex(desktop, 0, -3);
+  await clickHex(desktop, 0, -2);
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert(
     (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
@@ -114,7 +114,7 @@ try {
   );
   await desktop.locator('.cancel-mode').click();
 
-  await doubleClickHex(desktop, 0, -2);
+  await doubleClickHex(desktop, 0, -1);
   await desktop.locator('#game-canvas[data-rotating="true"]').waitFor();
   await desktop.locator('#game-canvas[data-viewpoint="amber"]').waitFor();
   if (process.env.UI_SCREENSHOT)
@@ -128,7 +128,7 @@ try {
   const cannonPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(cannonPage, runtimeErrors);
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
-  await clickHex(cannonPage, 2, -5);
+  await clickHex(cannonPage, 3, -5);
   assert(
     (await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque medio'),
     'Medium tank selection failed.',
@@ -181,7 +181,6 @@ try {
     'S must move focus toward the bottom of the rotated board.',
   );
   await mobile.keyboard.press('s');
-  await mobile.keyboard.press('s');
   await mobile.keyboard.press('Enter');
   await mobile.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert(
@@ -189,7 +188,7 @@ try {
     'Keyboard hex navigation failed.',
   );
   await mobile.keyboard.press('w');
-  assert((await selectedHex(mobile)) === '0,-2', 'W must move focus onto the soldier destination.');
+  assert((await selectedHex(mobile)) === '0,-1', 'W must move focus onto the soldier destination.');
   await mobile.keyboard.press('Enter');
   await mobile.locator('#pending-card:not([hidden])').waitFor();
   await mobile.keyboard.press('Enter');

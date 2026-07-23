@@ -8,19 +8,22 @@ interface SetupPiece {
 }
 
 const BLUE_SETUP: SetupPiece[] = [
-  { type: 'fortress', position: { q: 0, r: -5 } },
-  { type: 'antiAir', position: { q: 1, r: -5 } },
+  { type: 'long', position: { q: 0, r: -5 } },
   { type: 'drone', position: { q: -1, r: -4 } },
-  { type: 'drone', position: { q: 2, r: -4 } },
-  { type: 'long', position: { q: -2, r: -3 } },
-  { type: 'fast', position: { q: 0, r: -4 } },
-  { type: 'medium', position: { q: 2, r: -5 }, cannon: 3 },
-  { type: 'capturer', position: { q: -2, r: -2 } },
-  { type: 'soldier', position: { q: -3, r: -2 }, facing: 3 },
-  { type: 'soldier', position: { q: -1, r: -3 }, facing: 3 },
-  { type: 'soldier', position: { q: 1, r: -4 }, facing: 3 },
-  { type: 'soldier', position: { q: 3, r: -5 }, facing: 3 },
-  { type: 'soldier', position: { q: 0, r: -3 }, facing: 3 },
+  { type: 'drone', position: { q: 1, r: -5 } },
+  { type: 'fast', position: { q: -2, r: -3 } },
+  { type: 'fortress', position: { q: 0, r: -4 } },
+  { type: 'fast', position: { q: 2, r: -5 } },
+  { type: 'medium', position: { q: -3, r: -2 }, cannon: 3 },
+  { type: 'antiAir', position: { q: -1, r: -3 } },
+  { type: 'antiAir', position: { q: 1, r: -4 } },
+  { type: 'medium', position: { q: 3, r: -5 }, cannon: 3 },
+  { type: 'soldier', position: { q: -2, r: -2 }, facing: 3 },
+  { type: 'capturer', position: { q: 0, r: -3 } },
+  { type: 'soldier', position: { q: 2, r: -4 }, facing: 3 },
+  { type: 'soldier', position: { q: -1, r: -2 }, facing: 3 },
+  { type: 'soldier', position: { q: 1, r: -3 }, facing: 3 },
+  { type: 'soldier', position: { q: 0, r: -2 }, facing: 3 },
 ];
 
 function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {

@@ -75,16 +75,66 @@ describe('geometría y despliegue', () => {
 
   it('crea despliegue simétrico con todos los tipos', () => {
     const state = createInitialState();
-    expect(state.pieces.filter((piece) => piece.owner === 0)).toHaveLength(13);
-    expect(state.pieces.filter((piece) => piece.owner === 1)).toHaveLength(13);
+    expect(state.pieces.filter((piece) => piece.owner === 0)).toHaveLength(16);
+    expect(state.pieces.filter((piece) => piece.owner === 1)).toHaveLength(16);
     for (const owner of [0, 1] as const) {
+      const pieces = state.pieces.filter((piece) => piece.owner === owner);
+      expect(new Set(pieces.map((piece) => piece.type)).size).toBe(8);
       expect(
-        new Set(state.pieces.filter((piece) => piece.owner === owner).map((piece) => piece.type))
-          .size,
-      ).toBe(8);
+        pieces.reduce<Record<string, number>>((counts, piece) => {
+          counts[piece.type] = (counts[piece.type] ?? 0) + 1;
+          return counts;
+        }, {}),
+      ).toEqual({
+        long: 1,
+        drone: 2,
+        fast: 2,
+        fortress: 1,
+        medium: 2,
+        antiAir: 2,
+        soldier: 5,
+        capturer: 1,
+      });
+    }
+    expect(
+      Object.fromEntries(
+        state.pieces
+          .filter((piece) => piece.owner === 0)
+          .map((piece) => [`${piece.position.q},${piece.position.r}`, piece.type]),
+      ),
+    ).toEqual({
+      '0,-5': 'long',
+      '-1,-4': 'drone',
+      '1,-5': 'drone',
+      '-2,-3': 'fast',
+      '0,-4': 'fortress',
+      '2,-5': 'fast',
+      '-3,-2': 'medium',
+      '-1,-3': 'antiAir',
+      '1,-4': 'antiAir',
+      '3,-5': 'medium',
+      '-2,-2': 'soldier',
+      '0,-3': 'capturer',
+      '2,-4': 'soldier',
+      '-1,-2': 'soldier',
+      '1,-3': 'soldier',
+      '0,-2': 'soldier',
+    });
+    for (const blue of state.pieces.filter((piece) => piece.owner === 0)) {
+      expect(
+        state.pieces.some(
+          (amber) =>
+            amber.owner === 1 &&
+            amber.type === blue.type &&
+            amber.position.q === -blue.position.q &&
+            amber.position.r === -blue.position.r,
+        ),
+      ).toBe(true);
     }
     expect(protectedCells(state, 0).size).toBeGreaterThanOrEqual(5);
-    expect(getLegalActionsForPiece(state, 'azul-soldier-9').length).toBeGreaterThan(0);
+    const blueSoldier = state.pieces.find((piece) => piece.owner === 0 && piece.type === 'soldier');
+    expect(blueSoldier).toBeDefined();
+    expect(getLegalActionsForPiece(state, blueSoldier!.id).length).toBeGreaterThan(0);
   });
 });
 

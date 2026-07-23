@@ -1,6 +1,9 @@
 import { getPiece } from './engine';
 import type { GameEvent, GamePreferences, GameState, Piece } from './types';
 
+const EFFECTS_OUTPUT_GAIN = 9.5;
+const MUSIC_OUTPUT_GAIN = 0.4;
+
 export class AudioDirector {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -223,8 +226,9 @@ export class AudioDirector {
   private syncLevels(): void {
     const active = this.enabled ? 1 : 0;
     if (this.master)
-      this.master.gain.value = 0.72 * this.masterVolume * this.effectsVolume * active;
-    this.music.volume = clamp01(0.38 * this.masterVolume * this.musicVolume * active);
+      this.master.gain.value =
+        EFFECTS_OUTPUT_GAIN * this.masterVolume * this.effectsVolume * active;
+    this.music.volume = clamp01(MUSIC_OUTPUT_GAIN * this.masterVolume * this.musicVolume * active);
   }
 }
 
