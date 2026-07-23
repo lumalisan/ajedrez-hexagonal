@@ -288,6 +288,12 @@ function handleCell(hex: Hex): void {
       return;
     }
   }
+  const selected = selectedId ? getPiece(state, selectedId) : undefined;
+  if (selected && equalHex(selected.position, hex)) {
+    clearSelection();
+    announce('Unidad deseleccionada.');
+    return;
+  }
   if (!state.outcome) {
     const matching = actionsAtHex(state, visibleActions, hex);
     if (matching.length === 1) {

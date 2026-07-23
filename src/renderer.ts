@@ -33,8 +33,8 @@ const COLORS = {
   blue: '#36b9ff',
   amber: '#ffb547',
   move: '#55e0c1',
-  attack: '#ff5c8a',
-  range: '#ff7ca2',
+  attack: '#ff174f',
+  range: '#ff174f',
   convert: '#b8a1ff',
   danger: '#ff765c',
 };
@@ -68,7 +68,13 @@ interface RotationState {
   resolve: () => void;
 }
 
-type MarkerKind = 'range' | 'move' | 'attack' | 'convert' | 'danger';
+type MarkerKind = 'range' | 'move' | 'capture' | 'shoot' | 'convert' | 'danger';
+
+interface ActionMarker {
+  hex: Hex;
+  kind: MarkerKind;
+  owner?: Player;
+}
 
 export class BoardRenderer {
   private readonly canvas: HTMLCanvasElement;
@@ -278,6 +284,7 @@ export class BoardRenderer {
     this.drawLastAction(ctx, model.lastEvents);
     this.drawActionMarkers(ctx, model, time);
     this.drawPieces(ctx, model, orientation);
+    this.drawTargetOverlays(ctx, model, time, orientation);
     this.drawFocus(ctx, model);
     if (this.animation) this.drawAnimation(ctx, this.animation, time);
     ctx.restore();
@@ -443,46 +450,30 @@ export class BoardRenderer {
   }
 
   private drawActionMarkers(ctx: CanvasRenderingContext2D, model: RenderModel, time: number): void {
-    const byCell = new Map<string, { hex: Hex; kind: MarkerKind }>();
-    for (const hex of model.firingRange) {
-      byCell.set(hexKey(hex), { hex, kind: 'range' });
-    }
-    for (const action of model.actions) {
-      const destination = actionDestination(model.state, action);
-      if (!destination) continue;
-      const kind = markerKind(model.state, action);
-      const key = hexKey(destination);
-      const current = byCell.get(key);
-      if (!current || markerPriority(kind) > markerPriority(current.kind)) {
-        byCell.set(key, { hex: destination, kind });
-      }
-    }
-
+    const byCell = actionMarkers(model);
     const pulse = model.reducedMotion ? 0 : (Math.sin(time / 360) + 1) / 2;
     for (const marker of byCell.values()) {
       const { x, y } = hexToWorld(marker.hex);
-      const color = COLORS[marker.kind];
+      const color = markerColor(marker);
       ctx.save();
       ctx.translate(x, y);
-      ctx.globalAlpha = marker.kind === 'range' ? 0.1 : 0.22 + pulse * 0.06;
+      ctx.globalAlpha = marker.kind === 'range' ? 0.2 : 0.22 + pulse * 0.06;
       ctx.fillStyle = color;
       hexPath(ctx, 25.6);
       ctx.fill();
-      ctx.globalAlpha = marker.kind === 'range' ? 0.48 : 0.92;
+      ctx.globalAlpha = marker.kind === 'range' ? 0.88 : 0.92;
       ctx.strokeStyle = color;
       ctx.lineWidth =
         marker.kind === 'range'
           ? model.highContrast
-            ? 1.8
-            : 1.15
+            ? 2.2
+            : 1.65
           : model.highContrast
             ? 2.4
             : 1.7;
       if (marker.kind === 'range') drawRangeMarker(ctx);
-      else if (marker.kind === 'attack') drawAttackMarker(ctx, 14 + pulse * 1.4);
-      else if (marker.kind === 'convert') drawConvertMarker(ctx, 12 + pulse);
+      else if (marker.kind === 'move') drawMoveMarker(ctx, 5.2 + pulse * 1.2);
       else if (marker.kind === 'danger') drawDangerMarker(ctx, 12.5);
-      else drawMoveMarker(ctx, 5.2 + pulse * 1.2);
       ctx.restore();
     }
 
@@ -499,6 +490,33 @@ export class BoardRenderer {
         ctx.stroke();
         ctx.restore();
       }
+    }
+  }
+
+  private drawTargetOverlays(
+    ctx: CanvasRenderingContext2D,
+    model: RenderModel,
+    time: number,
+    orientation: number,
+  ): void {
+    const pulse = model.reducedMotion ? 0 : (Math.sin(time / 360) + 1) / 2;
+    for (const marker of actionMarkers(model).values()) {
+      if (marker.kind !== 'capture' && marker.kind !== 'shoot' && marker.kind !== 'convert')
+        continue;
+      const { x, y } = hexToWorld(marker.hex);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.strokeStyle = markerColor(marker);
+      ctx.fillStyle = markerColor(marker);
+      ctx.lineWidth = model.highContrast ? 3.2 : 2.65;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 4;
+      if (marker.kind === 'shoot') drawShootMarker(ctx, 11.5 + pulse);
+      else if (marker.kind === 'convert') {
+        ctx.rotate(-orientation);
+        drawConvertMarker(ctx, 12 + pulse);
+      } else drawCaptureMarker(ctx, 5.2 + pulse * 1.2);
+      ctx.restore();
     }
   }
 
@@ -768,19 +786,46 @@ export class BoardRenderer {
   }
 }
 
+function actionMarkers(model: RenderModel): Map<string, ActionMarker> {
+  const byCell = new Map<string, ActionMarker>();
+  for (const hex of model.firingRange) {
+    byCell.set(hexKey(hex), { hex, kind: 'range' });
+  }
+  for (const action of model.actions) {
+    const destination = actionDestination(model.state, action);
+    if (!destination) continue;
+    const kind = markerKind(model.state, action);
+    const piece = getPiece(model.state, action.pieceId);
+    const key = hexKey(destination);
+    const current = byCell.get(key);
+    if (!current || markerPriority(kind) > markerPriority(current.kind)) {
+      byCell.set(key, { hex: destination, kind, owner: piece?.owner });
+    }
+  }
+  return byCell;
+}
+
+function markerColor(marker: ActionMarker): string {
+  if (marker.kind === 'convert' && marker.owner !== undefined) {
+    return marker.owner === 0 ? COLORS.blue : COLORS.amber;
+  }
+  if (marker.kind === 'capture' || marker.kind === 'shoot') return COLORS.attack;
+  return COLORS[marker.kind];
+}
+
 function markerKind(state: GameState, action: GameAction): MarkerKind {
   const piece = getPiece(state, action.pieceId);
   if (!piece) return 'move';
-  if (action.kind === 'shoot' || action.kind === 'attackAbove' || action.kind === 'attackBelow')
-    return 'attack';
+  if (action.kind === 'shoot') return 'shoot';
+  if (action.kind === 'attackAbove' || action.kind === 'attackBelow') return 'capture';
   if (action.kind === 'convert') return 'convert';
   if (action.kind === 'transform') {
-    if (action.attackAboveId) return 'attack';
+    if (action.attackAboveId) return 'capture';
     if (!action.to) return 'convert';
     const occupancy = occupancyAt(state, action.to);
     if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
-      return 'attack';
-    if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'attack';
+      return 'capture';
+    if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'capture';
     return 'convert';
   }
   if (action.kind === 'rotate' || action.kind === 'orient') return 'convert';
@@ -789,13 +834,13 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
   }
   const occupancy = occupancyAt(state, action.to);
   if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
-    return 'attack';
-  if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'attack';
+    return 'capture';
+  if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'capture';
   return 'move';
 }
 
 function markerPriority(kind: MarkerKind): number {
-  return { range: -1, move: 0, convert: 1, danger: 2, attack: 3 }[kind];
+  return { range: -1, move: 0, convert: 1, danger: 2, capture: 3, shoot: 4 }[kind];
 }
 
 function eventDuration(events: GameEvent[]): number {
@@ -859,26 +904,56 @@ function drawRangeMarker(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
-function drawAttackMarker(ctx: CanvasRenderingContext2D, radius: number): void {
+function drawShootMarker(ctx: CanvasRenderingContext2D, radius: number): void {
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(0, 0, radius * 0.48, 0, Math.PI * 2);
+  ctx.moveTo(-radius, -radius);
+  ctx.lineTo(radius, radius);
+  ctx.moveTo(radius, -radius);
+  ctx.lineTo(-radius, radius);
   ctx.stroke();
-  for (let index = 0; index < 4; index += 1) {
-    const angle = Math.PI / 4 + index * (Math.PI / 2);
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-    ctx.lineTo(Math.cos(angle) * radius * 0.62, Math.sin(angle) * radius * 0.62);
-    ctx.stroke();
-  }
+}
+
+function drawCaptureMarker(ctx: CanvasRenderingContext2D, radius: number): void {
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, 0, radius + 5, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
 function drawConvertMarker(ctx: CanvasRenderingContext2D, radius: number): void {
+  const scale = radius / 12;
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(0, 0, radius, 0.2, Math.PI * 1.55);
+  ctx.moveTo(-7, 3);
+  ctx.lineTo(-7, -3);
+  ctx.quadraticCurveTo(-7, -5, -5.5, -5);
+  ctx.quadraticCurveTo(-4, -5, -4, -3);
+  ctx.lineTo(-4, -8);
+  ctx.quadraticCurveTo(-4, -10, -2.5, -10);
+  ctx.quadraticCurveTo(-1, -10, -1, -8);
+  ctx.lineTo(-1, -10);
+  ctx.quadraticCurveTo(-1, -12, 0.5, -12);
+  ctx.quadraticCurveTo(2, -12, 2, -10);
+  ctx.lineTo(2, -9);
+  ctx.quadraticCurveTo(2, -11, 3.5, -11);
+  ctx.quadraticCurveTo(5, -11, 5, -9);
+  ctx.lineTo(5, -7);
+  ctx.quadraticCurveTo(5, -9, 6.5, -9);
+  ctx.quadraticCurveTo(8, -9, 8, -7);
+  ctx.lineTo(8, 1);
+  ctx.quadraticCurveTo(8, 8, 1, 10);
+  ctx.quadraticCurveTo(-5, 9, -7, 3);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(7, 19, 26, 0.88)';
+  ctx.fill();
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, radius - 4, Math.PI + 0.2, Math.PI * 2.55);
-  ctx.stroke();
+  ctx.restore();
 }
 
 function drawDangerMarker(ctx: CanvasRenderingContext2D, radius: number): void {

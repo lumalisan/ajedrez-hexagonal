@@ -98,6 +98,12 @@ try {
     (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
     'Canvas selection failed.',
   );
+  await clickHex(desktop, 0, -2);
+  assert(
+    (await desktop.locator('#piece-card h2').textContent())?.includes('Esperando selecci'),
+    'Clicking the selected piece must deselect it.',
+  );
+  await clickHex(desktop, 0, -2);
 
   await desktop.locator('[data-command="rotate"]').click();
   const visualNorth = desktop.locator('.hex-compass button[aria-label="N, orientación actual"]');
