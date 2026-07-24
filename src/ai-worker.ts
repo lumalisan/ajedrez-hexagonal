@@ -6,7 +6,7 @@ import type { GameState } from './types';
 interface SearchRequest {
   id: number;
   state: GameState;
-  depth: 1 | 2 | 3;
+  depth: number;
   budgetMs: number;
 }
 

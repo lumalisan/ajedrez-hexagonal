@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chooseMachineAction } from '../src/ai';
+import { chooseMachineAction, searchMachineAction } from '../src/ai';
 import { applyAction, createGameState, getAllLegalActions } from '../src/engine';
 import { stepHex } from '../src/hex';
 import type { Piece } from '../src/types';
@@ -39,5 +39,32 @@ describe('machine player', () => {
     expect(action?.kind).toBe('move');
     expect(result?.ok).toBe(true);
     expect(result?.state.pieces.some((piece) => piece.id === 'human-soldier')).toBe(false);
+  });
+
+  it('advanced search sees a recapture that the recruit overlooks', () => {
+    const pieces: Piece[] = [
+      { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+      { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+      { id: 'machine-fast', type: 'fast', owner: 1, position: { q: 0, r: 0 } },
+      {
+        id: 'human-bait',
+        type: 'soldier',
+        owner: 0,
+        position: { q: 0, r: -2 },
+        facing: 3,
+      },
+      { id: 'human-capturer', type: 'capturer', owner: 0, position: { q: 1, r: -2 } },
+    ];
+    const state = createGameState(pieces, 1);
+    const recruit = chooseMachineAction(state);
+    const advanced = searchMachineAction(state, { depth: 3, budgetMs: 1_000 });
+
+    expect(recruit).toMatchObject({ kind: 'move', pieceId: 'machine-fast', to: { q: 0, r: -2 } });
+    expect(advanced).not.toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-fast',
+      to: { q: 0, r: -2 },
+    });
+    expect(getAllLegalActions(state)).toContainEqual(advanced);
   });
 });

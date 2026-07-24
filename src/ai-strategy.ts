@@ -11,10 +11,10 @@ export interface AiStrategy {
   dispose(): void;
 }
 
-const DIFFICULTY: Record<AiDifficulty, { depth: 1 | 2 | 3; maxMs: number }> = {
+const DIFFICULTY: Record<AiDifficulty, { depth: number; maxMs: number }> = {
   recruit: { depth: 1, maxMs: 120 },
-  tactical: { depth: 2, maxMs: 650 },
-  commander: { depth: 3, maxMs: 1_600 },
+  tactical: { depth: 3, maxMs: 900 },
+  commander: { depth: 5, maxMs: 2_500 },
 };
 
 export function difficultyBudget(difficulty: AiDifficulty, mobile = false): number {
