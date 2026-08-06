@@ -15,6 +15,7 @@ import {
   PIECE_SHORT_NAMES,
   actionDestination,
   getPiece,
+  isAirPiece,
   isProtectedByPlayer,
   occupancyAt,
   otherPlayerOf,
@@ -391,7 +392,10 @@ export class BoardRenderer {
     const amber = protectedCells(model.state, 1);
     const selected = model.selectedId ? getPiece(model.state, model.selectedId) : undefined;
     const tactical =
-      selected?.type === 'drone' || selected?.type === 'medium' || selected?.type === 'long';
+      selected?.type === 'drone' ||
+      selected?.type === 'airplane' ||
+      selected?.type === 'medium' ||
+      selected?.type === 'long';
 
     for (const cell of this.cells) {
       const key = hexKey(cell);
@@ -526,19 +530,19 @@ export class BoardRenderer {
         .filter((event) => event.type === 'move')
         .map((event) => event.pieceId) ?? [],
     );
-    const ground = model.state.pieces.filter((piece) => piece.type !== 'drone');
-    const air = model.state.pieces.filter((piece) => piece.type === 'drone');
+    const ground = model.state.pieces.filter((piece) => !isAirPiece(piece));
+    const air = model.state.pieces.filter(isAirPiece);
     const stackedHexes = air
-      .filter((drone) => ground.some((piece) => equalHex(piece.position, drone.position)))
-      .map((drone) => drone.position);
+      .filter((unit) => ground.some((piece) => equalHex(piece.position, unit.position)))
+      .map((unit) => unit.position);
 
     for (const hex of stackedHexes) this.drawStackBase(ctx, hex, model.highContrast);
     for (const piece of [...ground, ...air]) {
       if (movingIds.has(piece.id)) continue;
       const point = hexToWorld(piece.position);
       const isStacked = stackedHexes.some((hex) => equalHex(hex, piece.position));
-      const stackX = isStacked ? (piece.type === 'drone' ? 5 : -5) : 0;
-      const stackY = isStacked ? (piece.type === 'drone' ? -7 : 6) : 0;
+      const stackX = isStacked ? (isAirPiece(piece) ? 5 : -5) : 0;
+      const stackY = isStacked ? (isAirPiece(piece) ? -7 : 6) : 0;
       this.drawPiece(ctx, piece, point.x + stackX, point.y + stackY, {
         selected: piece.id === model.selectedId,
         highContrast: model.highContrast,
@@ -599,7 +603,7 @@ export class BoardRenderer {
     options: { selected: boolean; highContrast: boolean; alpha: number; isStacked?: boolean },
   ): void {
     const color = piece.owner === 0 ? COLORS.blue : COLORS.amber;
-    const airborne = piece.type === 'drone';
+    const airborne = isAirPiece(piece);
     const radius = piece.type === 'fortress' ? 19 : 16.6;
     ctx.save();
     ctx.translate(x, y - (airborne ? 3.5 : 0));
@@ -829,7 +833,7 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
     return 'move';
   }
   if (action.kind === 'rotate' || action.kind === 'orient') return 'convert';
-  if (piece.type === 'drone' && isProtectedByPlayer(state, action.to, otherPlayerOf(piece.owner))) {
+  if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayerOf(piece.owner))) {
     return 'danger';
   }
   const occupancy = occupancyAt(state, action.to);
@@ -1062,6 +1066,30 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.fill();
       break;
     }
+    case 'airplane': {
+      ctx.save();
+      ctx.rotate(-Math.PI / 2 + piece.facing * (Math.PI / 3));
+      ctx.beginPath();
+      ctx.moveTo(11, 0);
+      ctx.lineTo(1.5, -3.2);
+      ctx.lineTo(-2, -10);
+      ctx.lineTo(-5, -9);
+      ctx.lineTo(-3.4, -2.5);
+      ctx.lineTo(-10, -1.6);
+      ctx.lineTo(-10, 1.6);
+      ctx.lineTo(-3.4, 2.5);
+      ctx.lineTo(-5, 9);
+      ctx.lineTo(-2, 10);
+      ctx.lineTo(1.5, 3.2);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-5.5, 0);
+      ctx.lineTo(6.5, 0);
+      ctx.stroke();
+      ctx.restore();
+      break;
+    }
     case 'antiAir': {
       // Radar dish above a twin missile rack.
       ctx.beginPath();
@@ -1180,15 +1208,17 @@ export function pieceAccessibleLabel(
 ): string {
   const owner = piece.owner === 0 ? 'Cian' : 'Ámbar';
   const position = `${signed(piece.position.q)}, ${signed(piece.position.r)}`;
-  const layer = piece.type === 'drone' ? 'aire' : 'suelo';
+  const layer = isAirPiece(piece) ? 'aire' : 'suelo';
   const details =
     piece.type === 'soldier'
       ? `, orientado ${directionNameForPlayer(piece.facing, viewpoint)}`
-      : piece.type === 'medium'
-        ? `, cañón ${directionNameForPlayer(piece.cannon, viewpoint)}`
-        : piece.type === 'fortress'
-          ? `, ${piece.hp} puntos de vida`
-          : '';
+      : piece.type === 'airplane'
+        ? `, orientado ${directionNameForPlayer(piece.facing, viewpoint)}`
+        : piece.type === 'medium'
+          ? `, cañón ${directionNameForPlayer(piece.cannon, viewpoint)}`
+          : piece.type === 'fortress'
+            ? `, ${piece.hp} puntos de vida`
+            : '';
   const protectedByEnemy = isProtectedByPlayer(state, piece.position, otherPlayerOf(piece.owner))
     ? ', en zona antiaérea enemiga'
     : '';

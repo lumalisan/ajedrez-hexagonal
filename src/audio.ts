@@ -92,7 +92,7 @@ export class AudioDirector {
     const move = events.find((event) => event.type === 'move' && event.pieceId);
     if (move?.pieceId) {
       const piece = getPiece(before, move.pieceId);
-      if (piece?.type === 'drone') this.playDroneMove();
+      if (piece?.type === 'drone' || piece?.type === 'airplane') this.playDroneMove();
       else this.playGroundMove(piece);
     }
     if (events.some((event) => event.type === 'shoot')) this.playShot();

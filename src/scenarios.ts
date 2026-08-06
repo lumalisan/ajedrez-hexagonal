@@ -139,7 +139,7 @@ export const SCENARIOS: ScenarioDefinition[] = [
     { kind: 'capture', targetId: 'academy-enemy-drone' },
     [
       'Selecciona tu Dron.',
-      'El Portamisiles rival protege su propia casilla y las seis adyacentes.',
+      'El Escudo antiaéreo rival protege su propia casilla y las seis adyacentes.',
       'Mueve el Dron a una marca dentro de esa zona para observar la intercepción automática.',
     ],
     'La intercepción antiaérea funciona automáticamente.',

@@ -8,22 +8,24 @@ interface SetupPiece {
 }
 
 const BLUE_SETUP: SetupPiece[] = [
-  { type: 'long', position: { q: 0, r: -5 } },
-  { type: 'drone', position: { q: -1, r: -4 } },
-  { type: 'drone', position: { q: 1, r: -5 } },
-  { type: 'fast', position: { q: -2, r: -3 } },
-  { type: 'fortress', position: { q: 0, r: -4 } },
-  { type: 'fast', position: { q: 2, r: -5 } },
-  { type: 'medium', position: { q: -3, r: -2 }, cannon: 3 },
-  { type: 'antiAir', position: { q: -1, r: -3 } },
-  { type: 'antiAir', position: { q: 1, r: -4 } },
-  { type: 'medium', position: { q: 3, r: -5 }, cannon: 3 },
-  { type: 'soldier', position: { q: -2, r: -2 }, facing: 3 },
-  { type: 'capturer', position: { q: 0, r: -3 } },
-  { type: 'soldier', position: { q: 2, r: -4 }, facing: 3 },
-  { type: 'soldier', position: { q: -1, r: -2 }, facing: 3 },
-  { type: 'soldier', position: { q: 1, r: -3 }, facing: 3 },
+  { type: 'soldier', position: { q: 4, r: -4 }, facing: 3 },
+  { type: 'soldier', position: { q: 2, r: -3 }, facing: 3 },
   { type: 'soldier', position: { q: 0, r: -2 }, facing: 3 },
+  { type: 'soldier', position: { q: -2, r: -1 }, facing: 3 },
+  { type: 'soldier', position: { q: -4, r: 0 }, facing: 3 },
+  { type: 'long', position: { q: 3, r: -4 } },
+  { type: 'long', position: { q: -3, r: -1 } },
+  { type: 'medium', position: { q: 1, r: -3 }, cannon: 3 },
+  { type: 'medium', position: { q: -1, r: -2 }, cannon: 3 },
+  { type: 'fast', position: { q: 4, r: -5 } },
+  { type: 'fast', position: { q: -4, r: -1 } },
+  { type: 'capturer', position: { q: 0, r: -3 } },
+  { type: 'drone', position: { q: 2, r: -5 } },
+  { type: 'drone', position: { q: -2, r: -3 } },
+  { type: 'fortress', position: { q: 0, r: -4 } },
+  { type: 'airplane', position: { q: 1, r: -5 }, facing: 3 },
+  { type: 'airplane', position: { q: -1, r: -4 }, facing: 3 },
+  { type: 'antiAir', position: { q: 0, r: -5 } },
 ];
 
 function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {
@@ -41,6 +43,8 @@ function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {
       return { id, type: 'soldier', owner, position, facing: owner === 0 ? 3 : 0 };
     case 'medium':
       return { id, type: 'medium', owner, position, cannon: owner === 0 ? 3 : 0 };
+    case 'airplane':
+      return { id, type: 'airplane', owner, position, facing: owner === 0 ? 3 : 0 };
     case 'fortress':
       return { id, type: 'fortress', owner, position, hp: 2 };
     case 'capturer':

@@ -75,23 +75,24 @@ describe('geometría y despliegue', () => {
 
   it('crea despliegue simétrico con todos los tipos', () => {
     const state = createInitialState();
-    expect(state.pieces.filter((piece) => piece.owner === 0)).toHaveLength(16);
-    expect(state.pieces.filter((piece) => piece.owner === 1)).toHaveLength(16);
+    expect(state.pieces.filter((piece) => piece.owner === 0)).toHaveLength(18);
+    expect(state.pieces.filter((piece) => piece.owner === 1)).toHaveLength(18);
     for (const owner of [0, 1] as const) {
       const pieces = state.pieces.filter((piece) => piece.owner === owner);
-      expect(new Set(pieces.map((piece) => piece.type)).size).toBe(8);
+      expect(new Set(pieces.map((piece) => piece.type)).size).toBe(9);
       expect(
         pieces.reduce<Record<string, number>>((counts, piece) => {
           counts[piece.type] = (counts[piece.type] ?? 0) + 1;
           return counts;
         }, {}),
       ).toEqual({
-        long: 1,
+        long: 2,
         drone: 2,
+        airplane: 2,
         fast: 2,
         fortress: 1,
         medium: 2,
-        antiAir: 2,
+        antiAir: 1,
         soldier: 5,
         capturer: 1,
       });
@@ -103,22 +104,24 @@ describe('geometría y despliegue', () => {
           .map((piece) => [`${piece.position.q},${piece.position.r}`, piece.type]),
       ),
     ).toEqual({
-      '0,-5': 'long',
-      '-1,-4': 'drone',
-      '1,-5': 'drone',
-      '-2,-3': 'fast',
-      '0,-4': 'fortress',
-      '2,-5': 'fast',
-      '-3,-2': 'medium',
-      '-1,-3': 'antiAir',
-      '1,-4': 'antiAir',
-      '3,-5': 'medium',
-      '-2,-2': 'soldier',
-      '0,-3': 'capturer',
-      '2,-4': 'soldier',
-      '-1,-2': 'soldier',
-      '1,-3': 'soldier',
+      '4,-4': 'soldier',
+      '2,-3': 'soldier',
       '0,-2': 'soldier',
+      '-2,-1': 'soldier',
+      '-4,0': 'soldier',
+      '3,-4': 'long',
+      '-3,-1': 'long',
+      '1,-3': 'medium',
+      '-1,-2': 'medium',
+      '4,-5': 'fast',
+      '-4,-1': 'fast',
+      '0,-3': 'capturer',
+      '2,-5': 'drone',
+      '-2,-3': 'drone',
+      '0,-4': 'fortress',
+      '1,-5': 'airplane',
+      '-1,-4': 'airplane',
+      '0,-5': 'antiAir',
     });
     for (const blue of state.pieces.filter((piece) => piece.owner === 0)) {
       expect(
@@ -131,7 +134,7 @@ describe('geometría y despliegue', () => {
         ),
       ).toBe(true);
     }
-    expect(protectedCells(state, 0).size).toBeGreaterThanOrEqual(5);
+    expect(protectedCells(state, 0).size).toBe(4);
     const blueSoldier = state.pieces.find((piece) => piece.owner === 0 && piece.type === 'soldier');
     expect(blueSoldier).toBeDefined();
     expect(getLegalActionsForPiece(state, blueSoldier!.id).length).toBeGreaterThan(0);
@@ -268,7 +271,7 @@ describe('Tanques de disparo', () => {
 
     const longState = base([{ id: 'long', type: 'long', owner: 0, position: hex(0, 0) }]);
     const longRange = getFiringRangeCells(longState, 'long');
-    expect(longRange).toHaveLength(6);
+    expect(longRange).toHaveLength(18);
     expect(longRange.every((cell) => hexDistance(hex(0, 0), cell) === 3)).toBe(true);
   });
 
@@ -459,7 +462,97 @@ describe('Tanque rápido y Dron', () => {
   });
 });
 
-describe('Portamisiles antiaéreo', () => {
+describe('Avión', () => {
+  it('distingue la orientación al registrar posiciones para triple repetición', () => {
+    const north = base([
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 0 },
+    ]);
+    const northEast = base([
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 1 },
+    ]);
+    expect(Object.keys(north.positionCounts)).not.toEqual(Object.keys(northEast.positionCounts));
+  });
+
+  it('vuela hasta dos casillas por el frente, sobrevuela suelo y gira al desplazarse en diagonal', () => {
+    const state = base([
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 0 },
+      soldier('ground', 0, hex(1, -1), 0),
+    ]);
+    const next = perform(
+      state,
+      findAction(state, 'airplane', 'move', (action) => equal(action.to, hex(2, -2))),
+    );
+    const airplane = getPiece(next, 'airplane');
+    expect(airplane?.position).toEqual(hex(2, -2));
+    if (airplane?.type === 'airplane') expect(airplane.facing).toBe(1);
+  });
+
+  it('dispara a las ocho casillas del cono frontal y comparte la central con el movimiento', () => {
+    const state = base([
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 0 },
+    ]);
+    const range = getFiringRangeCells(state, 'airplane');
+    expect(range.map(({ q, r }) => `${q},${r}`).sort()).toEqual([
+      '-1,-1',
+      '-1,-2',
+      '-2,-1',
+      '0,-2',
+      '0,-3',
+      '1,-2',
+      '1,-3',
+      '2,-3',
+    ]);
+    const moves = getLegalActionsForPiece(state, 'airplane').filter(
+      (action) => action.kind === 'move',
+    );
+    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(0, -2)))).toBe(
+      true,
+    );
+  });
+
+  it('realiza un kamikaze contra suelo o aire y destruye ambas unidades', () => {
+    const state = base([
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 0 },
+      { id: 'enemy-air', type: 'drone', owner: 1, position: hex(0, -2) },
+    ]);
+    const next = perform(
+      state,
+      findAction(state, 'airplane', 'move', (action) => equal(action.to, hex(0, -2))),
+    );
+    expect(getPiece(next, 'airplane')).toBeUndefined();
+    expect(getPiece(next, 'enemy-air')).toBeUndefined();
+  });
+
+  it('es pulverizado al entrar en un escudo antes de completar un kamikaze', () => {
+    const state = base([
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 1 },
+      { id: 'aa', type: 'antiAir', owner: 1, position: hex(2, -1) },
+      soldier('target', 1, hex(1, -1), 3),
+    ]);
+    const result = applyAction(
+      state,
+      findAction(state, 'airplane', 'move', (action) => equal(action.to, hex(1, -1))),
+    );
+    expect(getPiece(result.state, 'airplane')).toBeUndefined();
+    expect(getPiece(result.state, 'target')).toBeDefined();
+    expect(result.events.some((event) => event.type === 'intercept')).toBe(true);
+  });
+
+  it('bloquea el paso y el aterrizaje de los Drones', () => {
+    const state = base([
+      { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
+      { id: 'airplane', type: 'airplane', owner: 1, position: hex(1, 0), facing: 3 },
+    ]);
+    const moves = getLegalActionsForPiece(state, 'drone').filter(
+      (action) => action.kind === 'move',
+    );
+    expect(
+      moves.some((action) => action.kind === 'move' && action.to.r === 0 && action.to.q > 0),
+    ).toBe(false);
+  });
+});
+
+describe('Escudo antiaéreo', () => {
   it('intercepta Dron en primera casilla protegida', () => {
     const state = base([
       { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
@@ -483,20 +576,9 @@ describe('Portamisiles antiaéreo', () => {
     expect(result.events.some((event) => event.type === 'intercept')).toBe(true);
   });
 
-  it('al moverse destruye todos los Drones enemigos de su nueva zona', () => {
-    const state = base([
-      { id: 'aa', type: 'antiAir', owner: 0, position: hex(0, 0) },
-      { id: 'enemy-air-a', type: 'drone', owner: 1, position: hex(2, 0) },
-      { id: 'enemy-air-b', type: 'drone', owner: 1, position: hex(2, -1) },
-      { id: 'friendly-air', type: 'drone', owner: 0, position: hex(1, -1) },
-    ]);
-    const next = perform(
-      state,
-      findAction(state, 'aa', 'move', (action) => equal(action.to, hex(1, 0))),
-    );
-    expect(getPiece(next, 'enemy-air-a')).toBeUndefined();
-    expect(getPiece(next, 'enemy-air-b')).toBeUndefined();
-    expect(getPiece(next, 'friendly-air')).toBeDefined();
+  it('permanece inmóvil y no genera acciones propias', () => {
+    const state = base([{ id: 'aa', type: 'antiAir', owner: 0, position: hex(0, 0) }]);
+    expect(getLegalActionsForPiece(state, 'aa')).toEqual([]);
   });
 
   it('solo Soldado y Tanque rápido lo destruyen por ocupación; Capturador lo convierte', () => {
@@ -597,12 +679,6 @@ describe('Fortaleza, transformación y finales', () => {
       label: 'Dron',
       piece: { id: 'attacker', type: 'drone', owner: 0, position: hex(0, 0) } as Piece,
       target: hex(2, 0),
-      kind: 'move' as const,
-    },
-    {
-      label: 'Portamisiles',
-      piece: { id: 'attacker', type: 'antiAir', owner: 0, position: hex(0, 0) } as Piece,
-      target: hex(1, 0),
       kind: 'move' as const,
     },
   ])('$label destruye Fortaleza con un ataque y sobrevive', ({ piece, target, kind }) => {

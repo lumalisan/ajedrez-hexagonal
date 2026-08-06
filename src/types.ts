@@ -8,7 +8,15 @@ export interface Hex {
 }
 
 export type PieceType =
-  'soldier' | 'capturer' | 'medium' | 'long' | 'fast' | 'drone' | 'antiAir' | 'fortress';
+  | 'soldier'
+  | 'capturer'
+  | 'medium'
+  | 'long'
+  | 'fast'
+  | 'drone'
+  | 'airplane'
+  | 'antiAir'
+  | 'fortress';
 
 interface BasePiece {
   id: string;
@@ -23,6 +31,7 @@ export type Piece =
   | (BasePiece & { type: 'long' })
   | (BasePiece & { type: 'fast' })
   | (BasePiece & { type: 'drone' })
+  | (BasePiece & { type: 'airplane'; facing: Direction })
   | (BasePiece & { type: 'antiAir' })
   | (BasePiece & { type: 'fortress'; hp: 1 | 2 });
 

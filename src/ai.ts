@@ -1,5 +1,5 @@
-import { applyAction, getAllLegalActions } from './engine';
-import { BOARD_RADIUS, hexDistance } from './hex';
+import { applyAction, getAllLegalActions, getFiringRangeCells } from './engine';
+import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
 import type { GameAction, GameState, Piece, PieceType, Player } from './types';
 
 const MATE_SCORE = 1_000_000;
@@ -13,6 +13,7 @@ const PIECE_VALUE: Record<PieceType, number> = {
   long: 400,
   fast: 500,
   drone: 450,
+  airplane: 460,
   antiAir: 300,
   fortress: 0,
 };
@@ -289,6 +290,7 @@ function evaluateState(state: GameState, player: Player): number {
     const centerDistance = hexDistance(piece.position, { q: 0, r: 0 });
     score += sign * (BOARD_RADIUS - centerDistance) * 2;
     score += sign * supportScore(state, piece);
+    if (piece.type === 'airplane') score += sign * airplanePressureScore(state, piece);
   }
   return score;
 }
@@ -375,15 +377,35 @@ function supportScore(state: GameState, piece: Piece): number {
   for (const ally of state.pieces) {
     if (ally.id === piece.id || ally.owner !== piece.owner) continue;
     const distance = hexDistance(piece.position, ally.position);
-    if (ally.type === 'antiAir' && distance <= 1) score += piece.type === 'drone' ? 18 : 8;
+    if (ally.type === 'antiAir' && distance <= 1)
+      score += piece.type === 'drone' || piece.type === 'airplane' ? 18 : 8;
     if (ally.type === 'capturer' && piece.type === 'capturer' && distance === 1) score += 14;
   }
   return score;
 }
 
+function airplanePressureScore(
+  state: GameState,
+  airplane: Extract<Piece, { type: 'airplane' }>,
+): number {
+  const firingCells = new Set(getFiringRangeCells(state, airplane.id).map(hexKey));
+  return state.pieces
+    .filter(
+      (target) =>
+        target.owner !== airplane.owner &&
+        target.type !== 'antiAir' &&
+        firingCells.has(hexKey(target.position)),
+    )
+    .reduce(
+      (score, target) =>
+        score + (target.type === 'fortress' ? 80 : Math.max(5, PIECE_VALUE[target.type] / 20)),
+      0,
+    );
+}
+
 function positionalAdvance(type: PieceType): number {
   if (type === 'capturer') return 8;
-  if (type === 'fast' || type === 'drone') return 5;
+  if (type === 'fast' || type === 'drone' || type === 'airplane') return 5;
   if (type === 'soldier') return 4;
   return 3;
 }
@@ -413,7 +435,7 @@ function fortressOf(
 function positionKey(state: GameState): string {
   const pieces = state.pieces
     .map((piece) => {
-      const facing = piece.type === 'soldier' ? piece.facing : '-';
+      const facing = piece.type === 'soldier' || piece.type === 'airplane' ? piece.facing : '-';
       const cannon = piece.type === 'medium' ? piece.cannon : '-';
       const hp = piece.type === 'fortress' ? piece.hp : '-';
       return `${piece.id}:${piece.owner}:${piece.type}:${piece.position.q},${piece.position.r}:${facing}:${cannon}:${hp}`;

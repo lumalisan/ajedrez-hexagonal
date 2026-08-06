@@ -67,4 +67,93 @@ describe('machine player', () => {
     });
     expect(getAllLegalActions(state)).toContainEqual(advanced);
   });
+
+  it('prefers shooting over a kamikaze when both can destroy the same target', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'machine-airplane', type: 'airplane', owner: 1, position: { q: 0, r: 0 }, facing: 3 },
+        { id: 'human-fast', type: 'fast', owner: 0, position: { q: 0, r: 2 } },
+      ],
+      1,
+    );
+
+    expect(chooseMachineAction(state)).toMatchObject({
+      kind: 'shoot',
+      pieceId: 'machine-airplane',
+      targetId: 'human-fast',
+    });
+  });
+
+  it('uses kamikaze for a favorable exchange but rejects it against a Soldier', () => {
+    const favorable = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'machine-airplane', type: 'airplane', owner: 1, position: { q: 0, r: 0 }, facing: 3 },
+        { id: 'human-fast', type: 'fast', owner: 0, position: { q: 0, r: 1 } },
+      ],
+      1,
+    );
+    expect(chooseMachineAction(favorable)).toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-airplane',
+      to: { q: 0, r: 1 },
+    });
+
+    const unfavorable = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'machine-airplane', type: 'airplane', owner: 1, position: { q: 0, r: 0 }, facing: 3 },
+        { id: 'human-soldier', type: 'soldier', owner: 0, position: { q: 0, r: 1 }, facing: 0 },
+      ],
+      1,
+    );
+    expect(chooseMachineAction(unfavorable)).not.toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-airplane',
+      to: { q: 0, r: 1 },
+    });
+  });
+
+  it('avoids a fake kamikaze stopped by an enemy shield', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'machine-airplane', type: 'airplane', owner: 1, position: { q: 0, r: 0 }, facing: 3 },
+        { id: 'human-shield', type: 'antiAir', owner: 0, position: { q: 1, r: 0 } },
+        { id: 'human-fast', type: 'fast', owner: 0, position: { q: 0, r: 1 } },
+      ],
+      1,
+    );
+
+    expect(chooseMachineAction(state)).not.toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-airplane',
+      to: { q: 0, r: 1 },
+    });
+  });
+
+  it('sacrifices the Avión para destruir inmediatamente la Fortaleza', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: 1 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'machine-airplane', type: 'airplane', owner: 1, position: { q: 0, r: 0 }, facing: 3 },
+      ],
+      1,
+    );
+
+    const action = chooseMachineAction(state);
+    expect(action).toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-airplane',
+      to: { q: 0, r: 1 },
+    });
+    const result = action ? applyAction(state, action) : null;
+    expect(result?.state.outcome).toEqual({ type: 'win', winner: 1, reason: 'fortress' });
+  });
 });

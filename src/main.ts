@@ -3,7 +3,15 @@ import './styles.css';
 import { WorkerAiStrategy, difficultyBudget } from './ai-strategy';
 import { AudioDirector } from './audio';
 import { createClassicConfig } from './game-config';
-import { ALL_DIRECTIONS, DIRECTION_NAMES, equalHex, hexKey, isOnBoard, stepHex } from './hex';
+import {
+  ALL_DIRECTIONS,
+  DIRECTION_NAMES,
+  directionBetween,
+  equalHex,
+  hexKey,
+  isOnBoard,
+  stepHex,
+} from './hex';
 import {
   PIECE_NAMES,
   PLAYER_NAMES,
@@ -15,6 +23,7 @@ import {
   getFiringRangeCells,
   getLegalActionsForPiece,
   getPiece,
+  isAirPiece,
   occupancyAt,
   outcomeText,
 } from './engine';
@@ -658,7 +667,9 @@ function currentFiringRange(): Hex[] {
   return getFiringRangeCells(state, selected.id, firingRangePreview(selected));
 }
 
-function firingRangePreview(piece: Piece): { position?: Hex; cannon?: Direction } | undefined {
+function firingRangePreview(
+  piece: Piece,
+): { position?: Hex; cannon?: Direction; facing?: Direction } | undefined {
   const action = pendingAction;
   if (!action || action.pieceId !== piece.id) return undefined;
   if (action.kind === 'orient') return { cannon: action.cannon };
@@ -666,6 +677,10 @@ function firingRangePreview(piece: Piece): { position?: Hex; cannon?: Direction 
     return {
       position: action.to,
       cannon: piece.type === 'medium' ? (action.cannon ?? piece.cannon) : undefined,
+      facing:
+        piece.type === 'airplane'
+          ? (directionBetween(piece.position, action.to) ?? piece.facing)
+          : undefined,
     };
   }
   return undefined;
@@ -774,12 +789,14 @@ function renderPieceCard(piece?: Piece): void {
   const facing =
     piece.type === 'soldier'
       ? `<span>Orientación <strong>${directionNameForView(piece.facing)}</strong></span>`
-      : piece.type === 'medium'
-        ? `<span>Cañón <strong>${directionNameForView(piece.cannon)}</strong></span>`
-        : piece.type === 'fortress'
-          ? `<span>Integridad <strong>${piece.hp}/2 HP</strong></span>`
-          : '';
-  const layer = piece.type === 'drone' ? 'Aire' : 'Suelo';
+      : piece.type === 'airplane'
+        ? `<span>Orientación <strong>${directionNameForView(piece.facing)}</strong></span>`
+        : piece.type === 'medium'
+          ? `<span>Cañón <strong>${directionNameForView(piece.cannon)}</strong></span>`
+          : piece.type === 'fortress'
+            ? `<span>Integridad <strong>${piece.hp}/2 HP</strong></span>`
+            : '';
+  const layer = isAirPiece(piece) ? 'Aire' : 'Suelo';
   const q = piece.position.q >= 0 ? `+${piece.position.q}` : `${piece.position.q}`;
   const r = piece.position.r >= 0 ? `+${piece.position.r}` : `${piece.position.r}`;
   pieceCard.className = `piece-card player-${piece.owner === 0 ? 'blue' : 'amber'}`;
@@ -809,7 +826,8 @@ function contextualHint(piece: Piece): string {
     long: 'Consejo · El Tanque largo dispara únicamente a tres hexágonos exactos.',
     fast: 'Consejo · El Tanque rápido puede avanzar hasta dos hexágonos en línea.',
     drone: 'Consejo · El Dron puede volar y compartir casilla con una unidad terrestre.',
-    antiAir: 'Consejo · El Portamisiles protege su casilla y las seis adyacentes.',
+    airplane: 'Consejo · El Avión elige entre volar y disparar; entrar en un escudo lo destruye.',
+    antiAir: 'Consejo · El Escudo antiaéreo es inmóvil y protege las seis casillas adyacentes.',
     fortress: 'Consejo · La Fortaleza tiene 2 HP; protégela para evitar la derrota.',
   };
   return hints[piece.type];
@@ -821,7 +839,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
       .map((id) => {
         const candidate = getPiece(state, id);
         return candidate
-          ? `<button type="button" data-piece-choice="${id}"><span>${candidate.type === 'drone' ? 'AIRE' : 'SUELO'}</span><strong>${PIECE_NAMES[candidate.type]}</strong></button>`
+          ? `<button type="button" data-piece-choice="${id}"><span>${isAirPiece(candidate) ? 'AIRE' : 'SUELO'}</span><strong>${PIECE_NAMES[candidate.type]}</strong></button>`
           : '';
       })
       .join('')}</div></div>`;
@@ -943,7 +961,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
       <div class="command-buttons">
         ${canRotate ? '<button type="button" data-command="rotate">Girar unidad</button>' : ''}
         ${canOrient ? '<button type="button" data-command="orient">Orientar cañón</button>' : ''}
-        ${above ? '<button type="button" data-command="above">Atacar Dron superior</button>' : ''}
+        ${above ? '<button type="button" data-command="above">Atacar aeronave superior</button>' : ''}
         ${below ? '<button type="button" data-command="below">Atacar unidad inferior</button>' : ''}
         ${canTransform ? '<button type="button" class="danger-command" data-command="transform">Abandonar tanque</button>' : ''}
       </div>
@@ -1079,7 +1097,7 @@ function targetChoiceMarkup(action: GameAction, index: number): string {
         ? action.attackAboveId
         : undefined;
   const target = targetId ? getPiece(state, targetId) : undefined;
-  const layer = target?.type === 'drone' ? 'AIRE' : 'SUELO';
+  const layer = target && isAirPiece(target) ? 'AIRE' : 'SUELO';
   return `<button type="button" data-action-choice="${index}"><span>${layer}</span><strong>${target ? PIECE_NAMES[target.type] : 'Objetivo'}</strong></button>`;
 }
 
@@ -1320,7 +1338,8 @@ function showHelpDialog(): void {
       <section><strong>Victoria</strong><p>Fortaleza tiene 2 HP. Soldado y Capturador causan 1 HP y se sacrifican; resto causa 2 HP.</p></section>
     </div>
     <details><summary>Reglas tácticas esenciales</summary>
-      <p>Drones vuelan hasta tres casillas y pueden apilarse sobre una unidad terrestre. Portamisiles protege su hexágono y seis vecinos: intercepta Drones y bloquea disparos enemigos. Solo Soldado, Tanque rápido o Capturador neutralizan un Portamisiles.</p>
+      <p>El Tanque largo dispara a todo el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
+      <p>El Avión vuela hasta dos casillas por su frente o dispara a su cono ofensivo. Su kamikaze destruye objetivo y Avión. El Escudo antiaéreo es inmóvil: pulveriza aeronaves enemigas y bloquea sus disparos.</p>
       <p>Tanques pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
     </details>
     <div class="keyboard-card"><strong>Teclado</strong><span>Q/W/E y A/S/D cubren las seis direcciones · teclado numérico 7/8/9/4/2/6 · Enter selecciona · Esc cancela · H ayuda · L registro · C centra</span></div>
@@ -1955,6 +1974,7 @@ function pieceMonogram(piece: Piece): string {
     long: 'L3',
     fast: 'R',
     drone: 'D',
+    airplane: 'A',
     antiAir: 'AA',
     fortress: 'F',
   }[piece.type];
@@ -1969,7 +1989,9 @@ function pieceDescription(piece: Piece): string {
     long: 'Mueve una casilla o dispara exactamente a distancia 3 en cualquier dirección.',
     fast: 'Recorre una línea libre sin límite y captura ocupando el destino.',
     drone: 'Vuela hasta tres casillas, sobrevuela suelo y puede compartir hexágono.',
-    antiAir: 'Protege siete hexágonos, intercepta Drones y bloquea fuego a distancia.',
+    airplane:
+      'Vuela hasta dos casillas por su arco frontal o dispara al cono ofensivo. Puede atacar en kamikaze.',
+    antiAir: 'Escudo inmóvil: protege siete hexágonos, pulveriza aeronaves y bloquea disparos.',
     fortress: 'Objetivo estratégico inmóvil. Su destrucción termina la partida.',
   }[piece.type];
 }

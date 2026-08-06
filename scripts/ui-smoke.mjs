@@ -179,7 +179,7 @@ try {
   watchErrors(cannonPage, runtimeErrors);
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await selectMode(cannonPage, 'local');
-  await clickHex(cannonPage, 3, -5);
+  await clickHex(cannonPage, 1, -3);
   assert(
     (await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque medio'),
     'Medium tank selection failed.',

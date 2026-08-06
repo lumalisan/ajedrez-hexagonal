@@ -1,6 +1,7 @@
 import {
   ALL_DIRECTIONS,
   DIRECTION_NAMES,
+  allBoardHexes,
   directionAtOffset,
   directionBetween,
   equalHex,
@@ -34,7 +35,8 @@ export const PIECE_NAMES: Record<PieceType, string> = {
   long: 'Tanque de largo alcance',
   fast: 'Tanque rápido',
   drone: 'Dron',
-  antiAir: 'Portamisiles AA',
+  airplane: 'Avión',
+  antiAir: 'Escudo antiaéreo',
   fortress: 'Fortaleza',
 };
 
@@ -45,7 +47,8 @@ export const PIECE_SHORT_NAMES: Record<PieceType, string> = {
   long: 'TLA',
   fast: 'TRP',
   drone: 'DRN',
-  antiAir: 'PAA',
+  airplane: 'AVI',
+  antiAir: 'EAA',
   fortress: 'FOR',
 };
 
@@ -99,7 +102,7 @@ function validatePieces(pieces: Piece[]): void {
 
     const key = hexKey(piece.position);
     const count = cells.get(key) ?? { ground: 0, air: 0 };
-    if (piece.type === 'drone') count.air += 1;
+    if (isAirPiece(piece)) count.air += 1;
     else count.ground += 1;
     if (count.air > 1 || count.ground > 1) throw new Error(`Apilamiento inválido en ${key}`);
     cells.set(key, count);
@@ -125,7 +128,7 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
       errors.push(`La pieza ${piece.id} está fuera del tablero.`);
     const key = hexKey(piece.position);
     const count = layers.get(key) ?? { ground: 0, air: 0 };
-    if (piece.type === 'drone') count.air += 1;
+    if (isAirPiece(piece)) count.air += 1;
     else count.ground += 1;
     layers.set(key, count);
     if (piece.type === 'fortress' && piece.hp !== 1 && piece.hp !== 2)
@@ -155,14 +158,18 @@ export function getPiece(state: GameState, id: string): Piece | undefined {
 }
 
 export function isGroundPiece(piece: Piece): boolean {
-  return piece.type !== 'drone';
+  return !isAirPiece(piece);
+}
+
+export function isAirPiece(piece: Piece): boolean {
+  return piece.type === 'drone' || piece.type === 'airplane';
 }
 
 export function occupancyAt(state: GameState, position: Hex): CellOccupancy {
   const occupancy: CellOccupancy = {};
   for (const piece of state.pieces) {
     if (!equalHex(piece.position, position)) continue;
-    if (piece.type === 'drone') occupancy.air = piece;
+    if (isAirPiece(piece)) occupancy.air = piece;
     else occupancy.ground = piece;
   }
   return occupancy;
@@ -207,8 +214,10 @@ export function getLegalActionsForPiece(state: GameState, pieceId: string): Game
       return fastActions(state, piece);
     case 'drone':
       return droneActions(state, piece);
+    case 'airplane':
+      return airplaneActions(state, piece);
     case 'antiAir':
-      return antiAirActions(state, piece);
+      return antiAirActions();
     case 'fortress':
       return [];
   }
@@ -224,21 +233,26 @@ export function getAllLegalActions(state: GameState): GameAction[] {
 export function getFiringRangeCells(
   state: GameState,
   pieceId: string,
-  preview: { position?: Hex; cannon?: Direction } = {},
+  preview: { position?: Hex; cannon?: Direction; facing?: Direction } = {},
 ): Hex[] {
   const piece = getPiece(state, pieceId);
-  if (!piece || (piece.type !== 'medium' && piece.type !== 'long')) return [];
+  if (!piece || !['medium', 'long', 'airplane'].includes(piece.type)) return [];
   const position = preview.position ?? piece.position;
   if (piece.type === 'medium') {
     const cannon = preview.cannon ?? piece.cannon;
     return mediumFiringPaths(state, piece, position, cannon).map(({ target }) => target);
   }
-  return ALL_DIRECTIONS.map((direction) => ({ direction, target: stepHex(position, direction, 3) }))
-    .filter(
-      ({ direction, target }) =>
-        isOnBoard(target) && !shotCrossesProtectionFrom(state, piece, position, direction, 3),
-    )
-    .map(({ target }) => target);
+  const enemy = otherPlayer(piece.owner);
+  if (piece.type === 'airplane') {
+    return airplaneFiringCells(position, preview.facing ?? piece.facing).filter(
+      (target) => isOnBoard(target) && !isProtectedByPlayer(state, target, enemy),
+    );
+  }
+  return allBoardHexes().filter(
+    (target) =>
+      hexDistance(position, target) === 3 &&
+      !hexLine(position, target).some((cell) => isProtectedByPlayer(state, cell, enemy)),
+  );
 }
 
 function soldierActions(
@@ -366,22 +380,11 @@ function mediumFiringPaths(
 
 function longActions(state: GameState, piece: Extract<Piece, { type: 'long' }>): GameAction[] {
   const actions = adjacentQuietMoves(state, piece);
-  for (const direction of ALL_DIRECTIONS) {
-    actions.push(...shootActionsAt(state, piece, direction, 3));
+  for (const target of getFiringRangeCells(state, piece.id)) {
+    actions.push(...shootActionsAtHex(state, piece, target));
   }
   actions.push(...transformActions(state, piece));
   return actions;
-}
-
-function shootActionsAt(
-  state: GameState,
-  piece: Piece,
-  direction: Direction,
-  distance: number,
-): GameAction[] {
-  const targetHex = stepHex(piece.position, direction, distance);
-  if (!isOnBoard(targetHex) || shotCrossesProtection(state, piece, direction, distance)) return [];
-  return shootActionsAtHex(state, piece, targetHex);
 }
 
 function shootActionsAtHex(
@@ -402,27 +405,32 @@ function shootActionsAtHex(
     .map((target) => ({ kind: 'shoot', pieceId: piece.id, targetId: target.id }));
 }
 
-function shotCrossesProtection(
-  state: GameState,
-  piece: Piece,
-  direction: Direction,
-  distance: number,
-): boolean {
-  return shotCrossesProtectionFrom(state, piece, piece.position, direction, distance);
+function hexLine(from: Hex, to: Hex): Hex[] {
+  const distance = hexDistance(from, to);
+  const cells: Hex[] = [];
+  for (let index = 1; index <= distance; index += 1) {
+    const amount = index / distance;
+    const q = from.q + (to.q - from.q) * amount;
+    const r = from.r + (to.r - from.r) * amount;
+    cells.push(roundHex(q + 1e-6, r + 2e-6));
+  }
+  return cells;
 }
 
-function shotCrossesProtectionFrom(
-  state: GameState,
-  piece: Piece,
-  origin: Hex,
-  direction: Direction,
-  distance: number,
-): boolean {
-  const enemy = otherPlayer(piece.owner);
-  for (let step = 1; step <= distance; step += 1) {
-    if (isProtectedByPlayer(state, stepHex(origin, direction, step), enemy)) return true;
-  }
-  return false;
+function roundHex(q: number, r: number): Hex {
+  const x = q;
+  const z = r;
+  const y = -x - z;
+  let roundedX = Math.round(x);
+  let roundedY = Math.round(y);
+  let roundedZ = Math.round(z);
+  const xDiff = Math.abs(roundedX - x);
+  const yDiff = Math.abs(roundedY - y);
+  const zDiff = Math.abs(roundedZ - z);
+  if (xDiff > yDiff && xDiff > zDiff) roundedX = -roundedY - roundedZ;
+  else if (yDiff > zDiff) roundedY = -roundedX - roundedZ;
+  else roundedZ = -roundedX - roundedY;
+  return { q: roundedX, r: roundedZ };
 }
 
 function fastActions(state: GameState, piece: Extract<Piece, { type: 'fast' }>): GameAction[] {
@@ -475,7 +483,9 @@ function droneActions(state: GameState, piece: Extract<Piece, { type: 'drone' }>
 
       const air = occupancyAt(state, to).air;
       if (air) {
-        if (air.owner !== piece.owner) actions.push({ kind: 'move', pieceId: piece.id, to });
+        if (air.type === 'drone' && air.owner !== piece.owner) {
+          actions.push({ kind: 'move', pieceId: piece.id, to });
+        }
         break;
       }
       actions.push({ kind: 'move', pieceId: piece.id, to });
@@ -484,24 +494,57 @@ function droneActions(state: GameState, piece: Extract<Piece, { type: 'drone' }>
   return actions;
 }
 
-function antiAirActions(
+function airplaneActions(
   state: GameState,
-  piece: Extract<Piece, { type: 'antiAir' }>,
+  piece: Extract<Piece, { type: 'airplane' }>,
 ): GameAction[] {
   const actions: GameAction[] = [];
-  for (const direction of ALL_DIRECTIONS) {
-    const to = stepHex(piece.position, direction);
-    if (!isOnBoard(to)) continue;
-    const occupancy = occupancyAt(state, to);
-    if (occupancy.ground) {
-      if (occupancy.ground.owner !== piece.owner && occupancy.ground.type === 'fortress') {
+  const enemy = otherPlayer(piece.owner);
+
+  for (const direction of frontDirections(piece.facing)) {
+    for (let distance = 1; distance <= 2; distance += 1) {
+      const to = stepHex(piece.position, direction, distance);
+      if (!isOnBoard(to)) break;
+      if (isProtectedByPlayer(state, to, enemy)) {
         actions.push({ kind: 'move', pieceId: piece.id, to });
+        break;
       }
-      continue;
+      const air = occupancyAt(state, to).air;
+      if (air) {
+        if (air.owner !== piece.owner) actions.push({ kind: 'move', pieceId: piece.id, to });
+        break;
+      }
+      actions.push({ kind: 'move', pieceId: piece.id, to });
     }
-    actions.push({ kind: 'move', pieceId: piece.id, to });
+  }
+
+  for (const target of getFiringRangeCells(state, piece.id)) {
+    actions.push(...shootActionsAtHex(state, piece, target));
   }
   return actions;
+}
+
+function airplaneFiringCells(origin: Hex, facing: Direction): Hex[] {
+  const cells = new Map<string, Hex>();
+  const forwardOne = stepHex(origin, facing);
+  const forwardTwo = stepHex(origin, facing, 2);
+  for (const direction of frontDirections(facing)) {
+    const inner = stepHex(forwardOne, direction);
+    cells.set(hexKey(inner), inner);
+  }
+  for (const offset of [-1, 0, 1] as const) {
+    const outer = stepHex(forwardTwo, directionAtOffset(facing, offset));
+    cells.set(hexKey(outer), outer);
+  }
+  for (const offset of [-1, 1] as const) {
+    const outerEdge = stepHex(forwardOne, directionAtOffset(facing, offset), 2);
+    cells.set(hexKey(outerEdge), outerEdge);
+  }
+  return [...cells.values()];
+}
+
+function antiAirActions(): GameAction[] {
+  return [];
 }
 
 function adjacentQuietMoves(state: GameState, piece: Piece): GameAction[] {
@@ -568,7 +611,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   if (!actor) return failure(state, 'La unidad ya no está disponible.');
 
   executeAction(next, action, events);
-  purgeDronesInEnemyZones(next, events);
+  purgeAirUnitsInEnemyZones(next, events);
   next.ply += 1;
   next.history.push({
     id: next.ply,
@@ -672,6 +715,7 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
     }
     case 'move':
       if (piece.type === 'drone') resolveDroneMove(state, piece, action.to, events);
+      else if (piece.type === 'airplane') resolveAirplaneMove(state, piece, action.to, events);
       else if (piece.type === 'soldier' || piece.type === 'fast') {
         resolveGroundCombatMove(state, piece, action.to, events);
       } else if (piece.type === 'antiAir') {
@@ -681,6 +725,62 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
         if (piece.type === 'medium' && action.cannon !== undefined) piece.cannon = action.cannon;
       }
   }
+}
+
+function resolveAirplaneMove(
+  state: GameState,
+  piece: Extract<Piece, { type: 'airplane' }>,
+  to: Hex,
+  events: GameEvent[],
+): void {
+  const from = { ...piece.position };
+  const line = findLine(from, to, 2);
+  if (!line) return;
+  for (let distance = 1; distance <= line.distance; distance += 1) {
+    const at = stepHex(from, line.direction, distance);
+    if (!isProtectedByPlayer(state, at, otherPlayer(piece.owner))) continue;
+    events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...at } });
+    removePiece(state, piece.id);
+    events.push({
+      type: 'intercept',
+      pieceId: piece.id,
+      targetId: piece.id,
+      owner: otherPlayer(piece.owner),
+      at: { ...at },
+    });
+    return;
+  }
+
+  events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...to } });
+  const occupancy = occupancyAt(state, to);
+  const target =
+    occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner
+      ? occupancy.air
+      : occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner
+        ? occupancy.ground
+        : undefined;
+  if (target) {
+    const at = { ...target.position };
+    removePiece(state, target.id);
+    removePiece(state, piece.id);
+    events.push({
+      type: 'destroy',
+      pieceId: piece.id,
+      targetId: target.id,
+      owner: piece.owner,
+      at,
+    });
+    events.push({
+      type: 'destroy',
+      pieceId: piece.id,
+      targetId: piece.id,
+      owner: otherPlayer(piece.owner),
+      at,
+    });
+    return;
+  }
+  piece.position = { ...to };
+  piece.facing = line.direction;
 }
 
 function resolveQuietMove(piece: Piece, to: Hex, events: GameEvent[]): void {
@@ -831,20 +931,18 @@ function resolveHit(
   });
 }
 
-function purgeDronesInEnemyZones(state: GameState, events: GameEvent[]): void {
-  const drones = state.pieces.filter(
-    (piece): piece is Extract<Piece, { type: 'drone' }> => piece.type === 'drone',
-  );
-  for (const drone of drones) {
-    if (!getPiece(state, drone.id)) continue;
-    if (!isProtectedByPlayer(state, drone.position, otherPlayer(drone.owner))) continue;
-    const at = { ...drone.position };
-    removePiece(state, drone.id);
+function purgeAirUnitsInEnemyZones(state: GameState, events: GameEvent[]): void {
+  const airUnits = state.pieces.filter(isAirPiece);
+  for (const unit of airUnits) {
+    if (!getPiece(state, unit.id)) continue;
+    if (!isProtectedByPlayer(state, unit.position, otherPlayer(unit.owner))) continue;
+    const at = { ...unit.position };
+    removePiece(state, unit.id);
     events.push({
       type: 'intercept',
-      pieceId: drone.id,
-      targetId: drone.id,
-      owner: otherPlayer(drone.owner),
+      pieceId: unit.id,
+      targetId: unit.id,
+      owner: otherPlayer(unit.owner),
       at,
     });
   }
@@ -916,7 +1014,7 @@ export function declareBlockade(state: GameState): ActionResult {
 function positionHash(state: GameState): string {
   const pieces = state.pieces
     .map((piece) => {
-      const facing = piece.type === 'soldier' ? piece.facing : '-';
+      const facing = piece.type === 'soldier' || piece.type === 'airplane' ? piece.facing : '-';
       const cannon = piece.type === 'medium' ? piece.cannon : '-';
       const hp = piece.type === 'fortress' ? piece.hp : '-';
       return `${piece.owner}:${piece.type}:${piece.position.q}:${piece.position.r}:${facing}:${cannon}:${hp}`;
@@ -978,11 +1076,8 @@ export function describeAction(state: GameState, action: GameAction): string {
           : undefined;
       const enemyAir =
         destination.air && destination.air.owner !== piece.owner ? destination.air : undefined;
-      const target = piece.type === 'drone' ? (enemyAir ?? enemyGround) : (enemyGround ?? enemyAir);
-      if (
-        piece.type === 'drone' &&
-        isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))
-      ) {
+      const target = isAirPiece(piece) ? (enemyAir ?? enemyGround) : (enemyGround ?? enemyAir);
+      if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))) {
         return `Incursión de ${name}: intercepción AA en ${formatHex(action.to)}`;
       }
       return target
@@ -1004,7 +1099,7 @@ export function describeAction(state: GameState, action: GameAction): string {
         : `${name} convertirá ${target ? PIECE_NAMES[target.type] : 'objetivo'}`;
     }
     case 'attackAbove':
-      return `${name} neutralizará el Dron situado encima`;
+      return `${name} neutralizará la aeronave situada encima`;
     case 'attackBelow':
       return `${name} atacará la unidad terrestre situada debajo`;
     case 'transform':
@@ -1048,7 +1143,7 @@ function describeResolvedAction(
       break;
     }
     case 'attackAbove':
-      base = `${name} neutralizó el Dron superior`;
+      base = `${name} neutralizó la aeronave superior`;
       break;
     case 'attackBelow':
       base = `${name} neutralizó la unidad inferior`;

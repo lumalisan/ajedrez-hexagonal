@@ -68,11 +68,10 @@ export function frontDirections(direction: Direction): Direction[] {
 }
 
 export function directionBetween(from: Hex, to: Hex): Direction | null {
-  const dq = to.q - from.q;
-  const dr = to.r - from.r;
   for (const direction of ALL_DIRECTIONS) {
-    const vector = DIRECTION_VECTORS[direction];
-    if (vector.q === dq && vector.r === dr) return direction;
+    for (let distance = 1; distance <= BOARD_RADIUS * 2; distance += 1) {
+      if (equalHex(stepHex(from, direction, distance), to)) return direction;
+    }
   }
   return null;
 }
