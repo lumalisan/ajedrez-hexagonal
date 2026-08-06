@@ -4,4 +4,4 @@ coverage/
 .vite/
 *.log
 .DS_Store
-Thumbs.db
+.agents
