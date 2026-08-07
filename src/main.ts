@@ -23,6 +23,7 @@ import {
   getFiringRangeCells,
   getLegalActionsForPiece,
   getPiece,
+  getPreviewActionsForPiece,
   isAirPiece,
   occupancyAt,
   outcomeText,
@@ -414,7 +415,7 @@ function handleCell(hex: Hex): void {
     announce('Unidad deseleccionada.');
     return;
   }
-  if (!state.outcome) {
+  if (!state.outcome && selected?.owner === state.activePlayer) {
     const matching = actionsAtHex(state, visibleActions, hex);
     if (matching.length === 1) {
       setPending(matching[0]);
@@ -424,7 +425,7 @@ function handleCell(hex: Hex): void {
       mode = { kind: 'actionChoice', actions: matching };
       pendingAction = null;
       render();
-      announce('Hay varios objetivos en esa casilla. Elige aire o suelo en el panel.');
+      announce('Hay varias maniobras en esa casilla. Elige la orden en el panel.');
       return;
     }
   }
@@ -617,8 +618,14 @@ function render(): void {
     pendingAction = null;
     mode = { kind: 'default' };
   }
-  const legalActions = selectedId ? getLegalActionsForPiece(state, selectedId) : [];
-  visibleActions = filterVisibleActions(legalActions, selected);
+  const actionable = selected?.owner === state.activePlayer;
+  const legalActions = actionable && selectedId ? getLegalActionsForPiece(state, selectedId) : [];
+  const displayActions = selectedId
+    ? actionable
+      ? legalActions
+      : getPreviewActionsForPiece(state, selectedId)
+    : [];
+  visibleActions = filterVisibleActions(displayActions, selected);
   renderStatus();
   renderPieceCard(selected);
   renderActionControls(selected, legalActions);
@@ -663,7 +670,8 @@ function syncCanvas(): void {
 
 function currentFiringRange(): Hex[] {
   const selected = selectedId ? getPiece(state, selectedId) : undefined;
-  if (!selected || selected.owner !== state.activePlayer) return [];
+  if (!selected) return [];
+  if (selected.owner !== state.activePlayer) return getFiringRangeCells(state, selected.id);
   return getFiringRangeCells(state, selected.id, firingRangePreview(selected));
 }
 
@@ -815,7 +823,7 @@ function renderPieceCard(piece?: Piece): void {
         ? preferences.contextualHints
           ? contextualHint(piece)
           : `${PIECE_NAMES[piece.type]} seleccionada · elige una orden o un destino marcado.`
-        : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]} · inspección táctica.`;
+        : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]} · inspección táctica; sus amenazas aparecen atenuadas.`;
 }
 
 function contextualHint(piece: Piece): string {
@@ -855,7 +863,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
     return;
   }
   if (mode.kind === 'actionChoice') {
-    actionControls.innerHTML = `<div class="control-section"><h3>Elegir objetivo</h3><p>El ataque afecta una sola capa.</p><div class="choice-list">${mode.actions
+    actionControls.innerHTML = `<div class="control-section"><h3>Elegir maniobra</h3><p>Esta casilla admite varias órdenes.</p><div class="choice-list">${mode.actions
       .map((action, index) => targetChoiceMarkup(action, index))
       .join(
         '',
@@ -931,7 +939,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
 
   if (piece.owner !== state.activePlayer || state.outcome) {
     actionControls.innerHTML =
-      '<div class="control-section muted-section">Sin órdenes disponibles durante este turno.</div>';
+      '<div class="control-section muted-section"><strong>Vista rival</strong><p>Los marcadores atenuados muestran sus desplazamientos y ataques potenciales. No puedes ejecutar esas órdenes.</p></div>';
     return;
   }
 
@@ -943,7 +951,8 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
       action.kind === 'shoot' ||
       action.kind === 'convert' ||
       action.kind === 'attackAbove' ||
-      action.kind === 'attackBelow',
+      action.kind === 'attackBelow' ||
+      (action.kind === 'move' && Boolean(action.kamikaze)),
   ).length;
   const canRotate = legalActions.some((action) => action.kind === 'rotate');
   const canOrient = legalActions.some((action) => action.kind === 'orient');
@@ -1087,6 +1096,7 @@ function viewPlayer(): 0 | 1 {
 }
 
 function targetChoiceMarkup(action: GameAction, index: number): string {
+  const actor = getPiece(state, action.pieceId);
   const targetId =
     action.kind === 'shoot' ||
     action.kind === 'convert' ||
@@ -1097,6 +1107,18 @@ function targetChoiceMarkup(action: GameAction, index: number): string {
         ? action.attackAboveId
         : undefined;
   const target = targetId ? getPiece(state, targetId) : undefined;
+  const destination = actionDestination(state, action);
+  const destinationOccupancy = destination ? occupancyAt(state, destination) : undefined;
+  if (action.kind === 'move' && action.kamikaze) {
+    const victim = destinationOccupancy?.air ?? destinationOccupancy?.ground;
+    return `<button type="button" data-action-choice="${index}"><span>KAMIKAZE</span><strong>Destruir ${victim ? PIECE_NAMES[victim.type] : 'objetivo'}</strong></button>`;
+  }
+  if (actor?.type === 'airplane' && action.kind === 'move' && destinationOccupancy?.ground) {
+    return `<button type="button" data-action-choice="${index}"><span>SOBREVUELO</span><strong>Quedar sobre ${PIECE_NAMES[destinationOccupancy.ground.type]}</strong></button>`;
+  }
+  if (action.kind === 'shoot') {
+    return `<button type="button" data-action-choice="${index}"><span>DISPARO</span><strong>Atacar ${target ? PIECE_NAMES[target.type] : 'objetivo'}</strong></button>`;
+  }
   const layer = target && isAirPiece(target) ? 'AIRE' : 'SUELO';
   return `<button type="button" data-action-choice="${index}"><span>${layer}</span><strong>${target ? PIECE_NAMES[target.type] : 'Objetivo'}</strong></button>`;
 }
@@ -1125,6 +1147,9 @@ function renderSoundButton(): void {
 
 function renderScreenReaderBoard(): void {
   const rows: string[] = [];
+  const inspected = selectedId ? getPiece(state, selectedId) : undefined;
+  const actionLabel =
+    inspected?.owner !== state.activePlayer ? 'Amenazas potenciales' : 'Acciones legales';
   const firingRange = new Set(currentFiringRange().map(hexKey));
   for (let r = -5; r <= 5; r += 1) {
     const cells: string[] = [];
@@ -1142,7 +1167,7 @@ function renderScreenReaderBoard(): void {
       ];
       const cellId = accessibleCellId(hex);
       const rangeLabel = firingRange.has(hexKey(hex)) ? '. Alcance potencial de disparo' : '';
-      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía}`}${rangeLabel}${legal.length ? `. Acciones legales: ${legal.join('; ')}` : ''}`;
+      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía}`}${rangeLabel}${legal.length ? `. ${actionLabel}: ${legal.join('; ')}` : ''}`;
       cells.push(
         `<div id="${cellId}" role="gridcell" aria-rowindex="${r + 6}" aria-colindex="${q + 6}" aria-selected="${Boolean(focusedHex && equalHex(focusedHex, hex))}" data-hex="${hexKey(hex)}">${escapeHtml(label)}</div>`,
       );
@@ -1155,6 +1180,9 @@ function renderScreenReaderBoard(): void {
 }
 
 function announceCell(hex: Hex): void {
+  const inspected = selectedId ? getPiece(state, selectedId) : undefined;
+  const actionLabel =
+    inspected?.owner !== state.activePlayer ? 'Amenazas potenciales' : 'Acciones legales';
   const occupancy = occupancyAt(state, hex);
   const pieces = [occupancy.ground, occupancy.air].filter((piece): piece is Piece =>
     Boolean(piece),
@@ -1170,7 +1198,7 @@ function announceCell(hex: Hex): void {
       pieces.length
         ? pieces.map((piece) => pieceAccessibleLabel(state, piece, viewPlayer())).join('. ')
         : `Casilla ${hex.q}, ${hex.r}, vacía.`
-    }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${legal.length ? ` Acciones legales: ${legal.join('; ')}.` : ''}`,
+    }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${legal.length ? ` ${actionLabel}: ${legal.join('; ')}.` : ''}`,
   );
 }
 

@@ -100,6 +100,7 @@ describe('machine player', () => {
       kind: 'move',
       pieceId: 'machine-airplane',
       to: { q: 0, r: 1 },
+      kamikaze: true,
     });
 
     const unfavorable = createGameState(
@@ -115,6 +116,7 @@ describe('machine player', () => {
       kind: 'move',
       pieceId: 'machine-airplane',
       to: { q: 0, r: 1 },
+      kamikaze: true,
     });
   });
 
@@ -134,6 +136,7 @@ describe('machine player', () => {
       kind: 'move',
       pieceId: 'machine-airplane',
       to: { q: 0, r: 1 },
+      kamikaze: true,
     });
   });
 
@@ -152,6 +155,7 @@ describe('machine player', () => {
       kind: 'move',
       pieceId: 'machine-airplane',
       to: { q: 0, r: 1 },
+      kamikaze: true,
     });
     const result = action ? applyAction(state, action) : null;
     expect(result?.state.outcome).toEqual({ type: 'win', winner: 1, reason: 'fortress' });

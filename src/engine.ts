@@ -223,6 +223,13 @@ export function getLegalActionsForPiece(state: GameState, pieceId: string): Game
   }
 }
 
+export function getPreviewActionsForPiece(state: GameState, pieceId: string): GameAction[] {
+  const piece = getPiece(state, pieceId);
+  if (!piece || state.outcome) return [];
+  if (piece.owner === state.activePlayer) return getLegalActionsForPiece(state, pieceId);
+  return getLegalActionsForPiece({ ...state, activePlayer: piece.owner }, pieceId);
+}
+
 export function getAllLegalActions(state: GameState): GameAction[] {
   if (state.outcome) return [];
   return state.pieces
@@ -511,10 +518,16 @@ function airplaneActions(
       }
       const air = occupancyAt(state, to).air;
       if (air) {
-        if (air.owner !== piece.owner) actions.push({ kind: 'move', pieceId: piece.id, to });
+        if (air.owner !== piece.owner) {
+          actions.push({ kind: 'move', pieceId: piece.id, to, kamikaze: true });
+        }
         break;
       }
       actions.push({ kind: 'move', pieceId: piece.id, to });
+      const ground = occupancyAt(state, to).ground;
+      if (ground && ground.owner !== piece.owner) {
+        actions.push({ kind: 'move', pieceId: piece.id, to, kamikaze: true });
+      }
     }
   }
 
@@ -715,7 +728,8 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
     }
     case 'move':
       if (piece.type === 'drone') resolveDroneMove(state, piece, action.to, events);
-      else if (piece.type === 'airplane') resolveAirplaneMove(state, piece, action.to, events);
+      else if (piece.type === 'airplane')
+        resolveAirplaneMove(state, piece, action.to, Boolean(action.kamikaze), events);
       else if (piece.type === 'soldier' || piece.type === 'fast') {
         resolveGroundCombatMove(state, piece, action.to, events);
       } else if (piece.type === 'antiAir') {
@@ -731,6 +745,7 @@ function resolveAirplaneMove(
   state: GameState,
   piece: Extract<Piece, { type: 'airplane' }>,
   to: Hex,
+  kamikaze: boolean,
   events: GameEvent[],
 ): void {
   const from = { ...piece.position };
@@ -753,13 +768,14 @@ function resolveAirplaneMove(
 
   events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...to } });
   const occupancy = occupancyAt(state, to);
-  const target =
-    occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner
+  const target = kamikaze
+    ? occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner
       ? occupancy.air
       : occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner
         ? occupancy.ground
-        : undefined;
-  if (target) {
+        : undefined
+    : undefined;
+  if (kamikaze && target) {
     const at = { ...target.position };
     removePiece(state, target.id);
     removePiece(state, piece.id);
@@ -1027,7 +1043,7 @@ function positionHash(state: GameState): string {
 function actionKey(action: GameAction): string {
   switch (action.kind) {
     case 'move':
-      return `move:${action.pieceId}:${hexKey(action.to)}:${action.cannon ?? '-'}`;
+      return `move:${action.pieceId}:${hexKey(action.to)}:${action.cannon ?? '-'}:${action.kamikaze ? 'k' : '-'}`;
     case 'rotate':
       return `rotate:${action.pieceId}:${action.facing}`;
     case 'orient':
@@ -1080,6 +1096,12 @@ export function describeAction(state: GameState, action: GameAction): string {
       if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))) {
         return `Incursión de ${name}: intercepción AA en ${formatHex(action.to)}`;
       }
+      if (piece.type === 'airplane' && action.kamikaze && target) {
+        return `${name} realizará un kamikaze contra ${PIECE_NAMES[target.type]} en ${formatHex(action.to)}`;
+      }
+      if (piece.type === 'airplane' && destination.ground) {
+        return `${name} sobrevolará ${PIECE_NAMES[destination.ground.type]} en ${formatHex(action.to)}`;
+      }
       return target
         ? `${name} atacará ${PIECE_NAMES[target.type]} en ${formatHex(action.to)}`
         : `${name} se moverá a ${formatHex(action.to)}`;
@@ -1121,7 +1143,12 @@ function describeResolvedAction(
   let base: string;
   switch (action.kind) {
     case 'move':
-      base = `${name} avanzó a ${formatHex(action.to)}`;
+      base =
+        piece?.type === 'airplane' && action.kamikaze
+          ? `${name} ejecutó un ataque kamikaze en ${formatHex(action.to)}`
+          : piece?.type === 'airplane' && occupancyAt(before, action.to).ground
+            ? `${name} sobrevoló una unidad en ${formatHex(action.to)}`
+            : `${name} avanzó a ${formatHex(action.to)}`;
       break;
     case 'rotate':
       base = `${name} giró hacia ${directionNameForPlayer(action.facing, piece?.owner ?? before.activePlayer)}`;

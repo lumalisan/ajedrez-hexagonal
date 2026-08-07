@@ -517,10 +517,58 @@ describe('Avión', () => {
     ]);
     const next = perform(
       state,
-      findAction(state, 'airplane', 'move', (action) => equal(action.to, hex(0, -2))),
+      findAction(
+        state,
+        'airplane',
+        'move',
+        (action) => Boolean(action.kamikaze) && equal(action.to, hex(0, -2)),
+      ),
     );
     expect(getPiece(next, 'airplane')).toBeUndefined();
     expect(getPiece(next, 'enemy-air')).toBeUndefined();
+  });
+
+  it('permite elegir entre sobrevuelo, kamikaze y disparo en la casilla mixta ocupada', () => {
+    const pieces: Piece[] = [
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 0 },
+      soldier('target', 1, hex(0, -2), 3),
+    ];
+    const state = base(pieces);
+    const actions = getLegalActionsForPiece(state, 'airplane');
+    const moves = actions.filter(
+      (action) => action.kind === 'move' && equal(action.to, hex(0, -2)),
+    );
+    expect(moves).toHaveLength(2);
+    expect(moves.some((action) => action.kind === 'move' && !action.kamikaze)).toBe(true);
+    expect(moves.some((action) => action.kind === 'move' && action.kamikaze)).toBe(true);
+    expect(actions.some((action) => action.kind === 'shoot' && action.targetId === 'target')).toBe(
+      true,
+    );
+
+    const overflight = perform(
+      state,
+      findAction(
+        state,
+        'airplane',
+        'move',
+        (action) => !action.kamikaze && equal(action.to, hex(0, -2)),
+      ),
+    );
+    expect(getPiece(overflight, 'airplane')?.position).toEqual(hex(0, -2));
+    expect(getPiece(overflight, 'target')).toBeDefined();
+
+    const kamikazeState = base(pieces);
+    const kamikaze = perform(
+      kamikazeState,
+      findAction(
+        kamikazeState,
+        'airplane',
+        'move',
+        (action) => Boolean(action.kamikaze) && equal(action.to, hex(0, -2)),
+      ),
+    );
+    expect(getPiece(kamikaze, 'airplane')).toBeUndefined();
+    expect(getPiece(kamikaze, 'target')).toBeUndefined();
   });
 
   it('es pulverizado al entrar en un escudo antes de completar un kamikaze', () => {

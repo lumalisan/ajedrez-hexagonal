@@ -115,6 +115,21 @@ try {
     (await desktop.locator('#piece-card h2').textContent())?.includes('Esperando selecci'),
     'Clicking the selected piece must deselect it.',
   );
+  await clickHex(desktop, 0, 2);
+  assert(
+    (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
+    'Enemy unit inspection failed.',
+  );
+  assert(
+    (await desktop.locator('#action-controls').textContent())?.includes('Vista rival'),
+    'Enemy inspection must explain that its markers are not actionable.',
+  );
+  assert(
+    (await desktop
+      .locator('#sr-board [role="gridcell"]', { hasText: 'Amenazas potenciales' })
+      .count()) > 0,
+    'Enemy inspection must expose potential threats to assistive technology.',
+  );
   await clickHex(desktop, 0, -2);
 
   await desktop.locator('[data-command="rotate"]').click();

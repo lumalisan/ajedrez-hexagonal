@@ -1,4 +1,4 @@
-import { applyAction, getAllLegalActions, getFiringRangeCells } from './engine';
+import { applyAction, getAllLegalActions, getFiringRangeCells, getPiece } from './engine';
 import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
 import type { GameAction, GameState, Piece, PieceType, Player } from './types';
 
@@ -347,6 +347,8 @@ function isTacticalAction(state: GameState, action: GameAction): boolean {
     return true;
   }
   if (!('to' in action) || !action.to) return false;
+  const actor = getPiece(state, action.pieceId);
+  if (actor?.type === 'airplane' && action.kind === 'move' && !action.kamikaze) return false;
   return state.pieces.some(
     (piece) =>
       piece.owner !== state.activePlayer &&

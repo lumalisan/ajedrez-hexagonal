@@ -124,10 +124,10 @@ Cada jugador cuenta con los 9 tipos de pieza siguientes.
 ### 4.7 Avión
 
 - **Orientación y movimiento:** está orientado hacia una de las 6 direcciones. Puede desplazarse una o dos casillas en las tres direcciones de su arco frontal. Si avanza en diagonal, adopta esa nueva orientación.
-- **Vuelo y apilamiento:** puede sobrevolar unidades terrestres aliadas o enemigas y terminar sobre una unidad terrestre. No puede sobrevolar ni compartir casilla con otro Dron o Avión.
+- **Vuelo y apilamiento:** puede sobrevolar unidades terrestres aliadas o enemigas y terminar sobre una unidad terrestre, incluso enemiga, sin atacarla. No puede sobrevolar ni compartir casilla con otro Dron o Avión.
 - **Disparo:** puede disparar a las ocho casillas de su cono ofensivo: tres casillas en la franja interior de distancia 2 y cinco en la franja exterior de distancia 3. La casilla central a distancia 2 pertenece tanto a su alcance de movimiento como al de disparo.
 - **Acción exclusiva:** en cada turno debe elegir entre moverse y disparar.
-- **Kamikaze:** puede desplazarse sobre una unidad enemiga terrestre o aérea; ambas unidades quedan destruidas. Si el trayecto entra en una zona antiaérea enemiga, el Avión es pulverizado antes del impacto y el objetivo sobrevive.
+- **Kamikaze:** puede desplazarse sobre una unidad enemiga terrestre o aérea; ambas unidades quedan destruidas. Si una unidad terrestre enemiga ocupa una casilla que también admite disparo, el jugador elige entre sobrevolarla, dispararla o realizar un kamikaze. Si el trayecto entra en una zona antiaérea enemiga, el Avión es pulverizado antes del impacto y el objetivo sobrevive.
 
 ### 4.8 Escudo Antiaéreo
 

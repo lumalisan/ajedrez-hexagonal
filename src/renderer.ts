@@ -75,6 +75,9 @@ interface ActionMarker {
   hex: Hex;
   kind: MarkerKind;
   owner?: Player;
+  hasRange: boolean;
+  canMove: boolean;
+  canAttack: boolean;
 }
 
 export class BoardRenderer {
@@ -456,16 +459,18 @@ export class BoardRenderer {
   private drawActionMarkers(ctx: CanvasRenderingContext2D, model: RenderModel, time: number): void {
     const byCell = actionMarkers(model);
     const pulse = model.reducedMotion ? 0 : (Math.sin(time / 360) + 1) / 2;
+    const selected = model.selectedId ? getPiece(model.state, model.selectedId) : undefined;
+    const inspectionAlpha = selected && selected.owner !== model.state.activePlayer ? 0.46 : 1;
     for (const marker of byCell.values()) {
       const { x, y } = hexToWorld(marker.hex);
       const color = markerColor(marker);
       ctx.save();
       ctx.translate(x, y);
-      ctx.globalAlpha = marker.kind === 'range' ? 0.2 : 0.22 + pulse * 0.06;
+      ctx.globalAlpha = (marker.kind === 'range' ? 0.2 : 0.22 + pulse * 0.06) * inspectionAlpha;
       ctx.fillStyle = color;
       hexPath(ctx, 25.6);
       ctx.fill();
-      ctx.globalAlpha = marker.kind === 'range' ? 0.88 : 0.92;
+      ctx.globalAlpha = (marker.kind === 'range' ? 0.88 : 0.92) * inspectionAlpha;
       ctx.strokeStyle = color;
       ctx.lineWidth =
         marker.kind === 'range'
@@ -475,7 +480,13 @@ export class BoardRenderer {
           : model.highContrast
             ? 2.4
             : 1.7;
-      if (marker.kind === 'range') drawRangeMarker(ctx);
+      if (marker.hasRange && marker.canMove) {
+        ctx.strokeStyle = COLORS.range;
+        drawRangeMarker(ctx);
+        ctx.strokeStyle = COLORS.move;
+        ctx.fillStyle = COLORS.move;
+        drawMoveMarker(ctx, 5.2 + pulse * 1.2);
+      } else if (marker.kind === 'range') drawRangeMarker(ctx);
       else if (marker.kind === 'move') drawMoveMarker(ctx, 5.2 + pulse * 1.2);
       else if (marker.kind === 'danger') drawDangerMarker(ctx, 12.5);
       ctx.restore();
@@ -504,8 +515,15 @@ export class BoardRenderer {
     orientation: number,
   ): void {
     const pulse = model.reducedMotion ? 0 : (Math.sin(time / 360) + 1) / 2;
+    const selected = model.selectedId ? getPiece(model.state, model.selectedId) : undefined;
+    const inspectionAlpha = selected && selected.owner !== model.state.activePlayer ? 0.46 : 1;
     for (const marker of actionMarkers(model).values()) {
-      if (marker.kind !== 'capture' && marker.kind !== 'shoot' && marker.kind !== 'convert')
+      if (
+        marker.kind !== 'capture' &&
+        marker.kind !== 'shoot' &&
+        marker.kind !== 'convert' &&
+        !(marker.hasRange && marker.canMove && marker.canAttack)
+      )
         continue;
       const { x, y } = hexToWorld(marker.hex);
       ctx.save();
@@ -515,7 +533,9 @@ export class BoardRenderer {
       ctx.lineWidth = model.highContrast ? 3.2 : 2.65;
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 4;
-      if (marker.kind === 'shoot') drawShootMarker(ctx, 11.5 + pulse);
+      ctx.globalAlpha = inspectionAlpha;
+      if (marker.kind === 'shoot' || (marker.hasRange && marker.canMove && marker.canAttack))
+        drawShootMarker(ctx, 11.5 + pulse);
       else if (marker.kind === 'convert') {
         ctx.rotate(-orientation);
         drawConvertMarker(ctx, 12 + pulse);
@@ -793,7 +813,13 @@ export class BoardRenderer {
 function actionMarkers(model: RenderModel): Map<string, ActionMarker> {
   const byCell = new Map<string, ActionMarker>();
   for (const hex of model.firingRange) {
-    byCell.set(hexKey(hex), { hex, kind: 'range' });
+    byCell.set(hexKey(hex), {
+      hex,
+      kind: 'range',
+      hasRange: true,
+      canMove: false,
+      canAttack: false,
+    });
   }
   for (const action of model.actions) {
     const destination = actionDestination(model.state, action);
@@ -802,8 +828,23 @@ function actionMarkers(model: RenderModel): Map<string, ActionMarker> {
     const piece = getPiece(model.state, action.pieceId);
     const key = hexKey(destination);
     const current = byCell.get(key);
+    const canMove = action.kind === 'move' && !action.kamikaze && kind !== 'danger';
+    const canAttack =
+      kind === 'capture' ||
+      kind === 'shoot' ||
+      (action.kind === 'move' && Boolean(action.kamikaze));
     if (!current || markerPriority(kind) > markerPriority(current.kind)) {
-      byCell.set(key, { hex: destination, kind, owner: piece?.owner });
+      byCell.set(key, {
+        hex: destination,
+        kind,
+        owner: piece?.owner,
+        hasRange: current?.hasRange ?? false,
+        canMove: (current?.canMove ?? false) || canMove,
+        canAttack: (current?.canAttack ?? false) || canAttack,
+      });
+    } else {
+      current.canMove ||= canMove;
+      current.canAttack ||= canAttack;
     }
   }
   return byCell;
@@ -835,6 +876,9 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
   if (action.kind === 'rotate' || action.kind === 'orient') return 'convert';
   if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayerOf(piece.owner))) {
     return 'danger';
+  }
+  if (piece.type === 'airplane' && action.kind === 'move') {
+    return action.kamikaze ? 'capture' : 'move';
   }
   const occupancy = occupancyAt(state, action.to);
   if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)

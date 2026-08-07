@@ -41,7 +41,7 @@ export interface CellOccupancy {
 }
 
 export type GameAction =
-  | { kind: 'move'; pieceId: string; to: Hex; cannon?: Direction }
+  | { kind: 'move'; pieceId: string; to: Hex; cannon?: Direction; kamikaze?: boolean }
   | { kind: 'rotate'; pieceId: string; facing: Direction }
   | { kind: 'orient'; pieceId: string; cannon: Direction }
   | { kind: 'shoot'; pieceId: string; targetId: string }
