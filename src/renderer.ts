@@ -40,6 +40,12 @@ const COLORS = {
   danger: '#ff765c',
 };
 
+const DEPTH_BOARD_TILT = 0.72;
+const TILE_DEPTH = 7;
+const GROUND_LIFT = 4;
+const AIR_LIFT = 27;
+const DEPTH_TRANSITION_DURATION = 420;
+
 export interface RenderModel {
   state: GameState;
   selectedId: string | null;
@@ -69,6 +75,13 @@ interface RotationState {
   resolve: () => void;
 }
 
+interface DepthTransitionState {
+  from: number;
+  to: number;
+  startedAt: number;
+  duration: number;
+}
+
 type MarkerKind = 'range' | 'move' | 'capture' | 'shoot' | 'convert' | 'danger';
 
 interface ActionMarker {
@@ -95,6 +108,9 @@ export class BoardRenderer {
   private animation: AnimationState | null = null;
   private orientation = Math.PI;
   private rotation: RotationState | null = null;
+  private depth = 0;
+  private renderedDepth = 0;
+  private depthTransition: DepthTransitionState | null = null;
   private frameId = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -103,6 +119,7 @@ export class BoardRenderer {
     if (!context) throw new Error('Canvas 2D no está disponible en este navegador.');
     this.ctx = context;
     this.canvas.dataset.viewpoint = 'blue';
+    this.canvas.dataset.perspective = '2d';
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.resize();
@@ -118,6 +135,30 @@ export class BoardRenderer {
 
   setModel(model: RenderModel): void {
     this.model = model;
+    this.requestFrame();
+  }
+
+  setDepthMode(enabled: boolean, reducedMotion: boolean): void {
+    const target = enabled ? 1 : 0;
+    const now = performance.now();
+    const from = this.depthAt(now);
+    this.depthTransition = null;
+    this.canvas.dataset.perspective = enabled ? '2.5d' : '2d';
+    if (reducedMotion || Math.abs(from - target) < 0.001) {
+      this.depth = target;
+      this.renderedDepth = target;
+      delete this.canvas.dataset.perspectiveTransition;
+      this.fitScale = this.fitScaleFor(target);
+      this.requestFrame();
+      return;
+    }
+    this.depthTransition = {
+      from,
+      to: target,
+      startedAt: now,
+      duration: DEPTH_TRANSITION_DURATION,
+    };
+    this.canvas.dataset.perspectiveTransition = 'true';
     this.requestFrame();
   }
 
@@ -159,13 +200,44 @@ export class BoardRenderer {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
     const scale = this.fitScale * this.zoom;
-    const screenX = (x - this.width / 2 - this.pan.x) / scale;
-    const screenY = (y - this.height / 2 - this.pan.y) / scale;
+    const projectedX = (x - this.width / 2 - this.pan.x) / scale;
+    const projectedY = (y - this.height / 2 - this.pan.y) / scale;
     const angle = this.orientationAt(performance.now());
+    const depth = this.depthAt(performance.now());
+    const tilt = boardTilt(depth);
+    const pieceHit = this.pieceAtProjectedPoint(projectedX, projectedY, angle, depth);
+    if (pieceHit) return pieceHit;
+
+    const screenX = projectedX;
+    const screenY = projectedY / tilt;
     const worldX = Math.cos(angle) * screenX + Math.sin(angle) * screenY;
     const worldY = -Math.sin(angle) * screenX + Math.cos(angle) * screenY;
     const hex = worldToHex(worldX, worldY);
     return isOnBoard(hex) ? hex : null;
+  }
+
+  private pieceAtProjectedPoint(
+    x: number,
+    y: number,
+    orientation: number,
+    depth: number,
+  ): Hex | null {
+    if (!this.model) return null;
+    const pieces = [...this.model.state.pieces].sort(
+      (left, right) => Number(isAirPiece(right)) - Number(isAirPiece(left)),
+    );
+    for (const piece of pieces) {
+      const point = projectHex(piece.position, orientation, depth);
+      const occupancy = occupancyAt(this.model.state, piece.position);
+      const stacked = Boolean(occupancy.ground && occupancy.air);
+      const stackX = stacked ? (isAirPiece(piece) ? 4 : -4) : 0;
+      const stackY = stacked && !isAirPiece(piece) ? 3 : 0;
+      const lift = (isAirPiece(piece) ? AIR_LIFT : GROUND_LIFT) * depth;
+      if (Math.hypot(x - point.x - stackX, y - point.y - stackY + lift) <= 21) {
+        return { ...piece.position };
+      }
+    }
+    return null;
   }
 
   snapToPlayer(player: Player): void {
@@ -240,10 +312,20 @@ export class BoardRenderer {
       this.rotation = null;
       resolve();
     }
+    if (
+      this.depthTransition &&
+      time - this.depthTransition.startedAt >= this.depthTransition.duration
+    ) {
+      this.depth = this.depthTransition.to;
+      this.renderedDepth = this.depth;
+      this.depthTransition = null;
+      delete this.canvas.dataset.perspectiveTransition;
+    }
     const pulseMarkers = Boolean(
       this.model && this.model.actions.length > 0 && !this.model.reducedMotion,
     );
-    if (this.animation || this.rotation || pulseMarkers) this.requestFrame();
+    if (this.animation || this.rotation || this.depthTransition || pulseMarkers)
+      this.requestFrame();
   };
 
   private requestFrame(): void {
@@ -264,7 +346,7 @@ export class BoardRenderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
-    this.fitScale = Math.max(0.38, Math.min((this.width - 34) / 560, (this.height - 34) / 610));
+    this.fitScale = this.fitScaleFor(this.depthAt(performance.now()));
     this.clampPan();
     this.requestFrame();
   }
@@ -277,21 +359,45 @@ export class BoardRenderer {
     this.drawBackdrop(ctx);
     if (!model) return;
 
+    const depth = this.depthAt(time);
+    this.renderedDepth = depth;
+    this.fitScale = this.fitScaleFor(depth);
+    const tilt = boardTilt(depth);
     ctx.save();
     ctx.translate(this.width / 2 + this.pan.x, this.height / 2 + this.pan.y);
     ctx.scale(this.fitScale * this.zoom, this.fitScale * this.zoom);
     const orientation = this.orientationAt(time);
+    ctx.save();
+    ctx.scale(1, tilt);
     ctx.rotate(orientation);
-    this.drawBoardShadow(ctx);
+    this.drawBoardShadow(ctx, orientation);
     this.drawCells(ctx, model, orientation);
     this.drawProtectionZones(ctx, model);
     this.drawLastAction(ctx, model.lastEvents);
     this.drawActionMarkers(ctx, model, time);
+    this.drawFocus(ctx, model);
+    ctx.restore();
     this.drawPieces(ctx, model, orientation);
     this.drawTargetOverlays(ctx, model, time, orientation);
-    this.drawFocus(ctx, model);
-    if (this.animation) this.drawAnimation(ctx, this.animation, time);
+    if (this.animation) this.drawAnimation(ctx, this.animation, time, orientation);
     ctx.restore();
+  }
+
+  private depthAt(time: number): number {
+    if (!this.depthTransition) return this.depth;
+    const raw = Math.min(
+      1,
+      Math.max(0, (time - this.depthTransition.startedAt) / this.depthTransition.duration),
+    );
+    const eased = 1 - (1 - raw) ** 3;
+    return (
+      this.depthTransition.from + (this.depthTransition.to - this.depthTransition.from) * eased
+    );
+  }
+
+  private fitScaleFor(depth: number): number {
+    const verticalExtent = 610 + (500 - 610) * depth;
+    return Math.max(0.38, Math.min((this.width - 34) / 560, (this.height - 42) / verticalExtent));
   }
 
   private orientationAt(time: number): number {
@@ -330,17 +436,38 @@ export class BoardRenderer {
     ctx.restore();
   }
 
-  private drawBoardShadow(ctx: CanvasRenderingContext2D): void {
+  private drawBoardShadow(ctx: CanvasRenderingContext2D, orientation: number): void {
+    const tilt = boardTilt(this.renderedDepth);
+    const depth = boardDepthVector(orientation, 16 * this.renderedDepth, tilt);
     ctx.save();
+    ctx.translate(depth.x, depth.y);
     ctx.shadowColor = 'rgba(0, 0, 0, 0.72)';
-    ctx.shadowBlur = 34;
-    ctx.fillStyle = '#09191f';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = (9 * this.renderedDepth) / tilt;
+    ctx.fillStyle = '#041017';
     boardOutlinePath(ctx);
     ctx.fill();
     ctx.restore();
   }
 
   private drawCells(ctx: CanvasRenderingContext2D, model: RenderModel, orientation: number): void {
+    const tilt = boardTilt(this.renderedDepth);
+    const depth = boardDepthVector(orientation, TILE_DEPTH * this.renderedDepth, tilt);
+    for (const cell of this.cells) {
+      const { x, y } = hexToWorld(cell);
+      const ring = hexDistance({ q: 0, r: 0 }, cell);
+      ctx.save();
+      ctx.translate(x + depth.x, y + depth.y);
+      hexPath(ctx, 28.9);
+      ctx.fillStyle = ring % 2 === 0 ? '#071a22' : '#092029';
+      ctx.fill();
+      ctx.strokeStyle = '#27434b';
+      ctx.globalAlpha = model.highContrast ? 0.9 : 0.72;
+      ctx.lineWidth = model.highContrast ? 1.4 : 0.9;
+      ctx.stroke();
+      ctx.restore();
+    }
+
     for (const cell of this.cells) {
       const { x, y } = hexToWorld(cell);
       const ring = hexDistance({ q: 0, r: 0 }, cell);
@@ -367,6 +494,7 @@ export class BoardRenderer {
         ctx.save();
         ctx.translate(0, 21);
         ctx.rotate(-orientation);
+        ctx.scale(1, 1 / tilt);
         ctx.globalAlpha = 0.52;
         ctx.fillStyle = COLORS.muted;
         ctx.font = '500 5.6px "Segoe UI", sans-serif';
@@ -525,7 +653,7 @@ export class BoardRenderer {
         !(marker.hasRange && marker.canMove && marker.canAttack)
       )
         continue;
-      const { x, y } = hexToWorld(marker.hex);
+      const { x, y } = projectHex(marker.hex, orientation, this.renderedDepth);
       ctx.save();
       ctx.translate(x, y);
       ctx.strokeStyle = markerColor(marker);
@@ -537,7 +665,6 @@ export class BoardRenderer {
       if (marker.kind === 'shoot' || (marker.hasRange && marker.canMove && marker.canAttack))
         drawShootMarker(ctx, 11.5 + pulse);
       else if (marker.kind === 'convert') {
-        ctx.rotate(-orientation);
         drawConvertMarker(ctx, 12 + pulse);
       } else drawCaptureMarker(ctx, 5.2 + pulse * 1.2);
       ctx.restore();
@@ -556,18 +683,25 @@ export class BoardRenderer {
       .filter((unit) => ground.some((piece) => equalHex(piece.position, unit.position)))
       .map((unit) => unit.position);
 
-    for (const hex of stackedHexes) this.drawStackBase(ctx, hex, model.highContrast);
-    for (const piece of [...ground, ...air]) {
+    for (const hex of stackedHexes) this.drawStackBase(ctx, hex, model.highContrast, orientation);
+    const ordered = [...ground, ...air].sort((left, right) => {
+      const leftPoint = projectHex(left.position, orientation, this.renderedDepth);
+      const rightPoint = projectHex(right.position, orientation, this.renderedDepth);
+      if (Math.abs(leftPoint.y - rightPoint.y) > 0.01) return leftPoint.y - rightPoint.y;
+      return Number(isAirPiece(left)) - Number(isAirPiece(right));
+    });
+    for (const piece of ordered) {
       if (movingIds.has(piece.id)) continue;
-      const point = hexToWorld(piece.position);
+      const point = projectHex(piece.position, orientation, this.renderedDepth);
       const isStacked = stackedHexes.some((hex) => equalHex(hex, piece.position));
-      const stackX = isStacked ? (isAirPiece(piece) ? 5 : -5) : 0;
-      const stackY = isStacked ? (isAirPiece(piece) ? -7 : 6) : 0;
+      const stackX = isStacked ? (isAirPiece(piece) ? 4 : -4) : 0;
+      const stackY = isStacked && !isAirPiece(piece) ? 3 : 0;
       this.drawPiece(ctx, piece, point.x + stackX, point.y + stackY, {
         selected: piece.id === model.selectedId,
         highContrast: model.highContrast,
         alpha: 1,
         isStacked,
+        orientation,
       });
     }
     for (const hex of stackedHexes) {
@@ -575,8 +709,13 @@ export class BoardRenderer {
     }
   }
 
-  private drawStackBase(ctx: CanvasRenderingContext2D, hex: Hex, highContrast: boolean): void {
-    const point = hexToWorld(hex);
+  private drawStackBase(
+    ctx: CanvasRenderingContext2D,
+    hex: Hex,
+    highContrast: boolean,
+    orientation: number,
+  ): void {
+    const point = projectHex(hex, orientation, this.renderedDepth);
     ctx.save();
     ctx.translate(point.x, point.y);
     ctx.fillStyle = 'rgba(5, 15, 20, 0.82)';
@@ -584,7 +723,7 @@ export class BoardRenderer {
     ctx.lineWidth = highContrast ? 2 : 1.25;
     ctx.setLineDash([3, 2]);
     ctx.beginPath();
-    ctx.ellipse(0, 2, 25, 20, -0.12, 0, Math.PI * 2);
+    ctx.ellipse(0, 4, 25, 8, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -596,10 +735,9 @@ export class BoardRenderer {
     highContrast: boolean,
     orientation: number,
   ): void {
-    const point = hexToWorld(hex);
+    const point = projectHex(hex, orientation, this.renderedDepth);
     ctx.save();
-    ctx.translate(point.x + 20, point.y - 19);
-    ctx.rotate(-orientation);
+    ctx.translate(point.x + 21, point.y - 29);
     ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
     ctx.shadowBlur = 5;
     ctx.fillStyle = highContrast ? COLORS.text : COLORS.move;
@@ -620,27 +758,54 @@ export class BoardRenderer {
     piece: Piece,
     x: number,
     y: number,
-    options: { selected: boolean; highContrast: boolean; alpha: number; isStacked?: boolean },
+    options: {
+      selected: boolean;
+      highContrast: boolean;
+      alpha: number;
+      isStacked?: boolean;
+      orientation: number;
+    },
   ): void {
     const color = piece.owner === 0 ? COLORS.blue : COLORS.amber;
     const airborne = isAirPiece(piece);
     const radius = piece.type === 'fortress' ? 19 : 16.6;
+    const lift = (airborne ? AIR_LIFT : GROUND_LIFT) * this.renderedDepth;
     ctx.save();
-    ctx.translate(x, y - (airborne ? 3.5 : 0));
+    ctx.translate(x, y);
     ctx.globalAlpha = options.alpha;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = options.selected ? 12 : 5;
-    ctx.shadowOffsetY = 0;
 
-    if (airborne) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+    ctx.beginPath();
+    ctx.ellipse(0, 5, airborne ? 19 : 16, airborne ? 6.5 : 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (airborne && this.renderedDepth > 0.01) {
       ctx.strokeStyle = color;
       ctx.lineWidth = options.selected ? 3 : options.isStacked ? 2.6 : 1.7;
       ctx.globalAlpha = options.alpha * (options.isStacked ? 1 : 0.68);
       ctx.beginPath();
-      ctx.ellipse(0, 5.5, 17, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 5, 19, 6.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -1);
+      ctx.lineTo(0, -lift + 5);
       ctx.stroke();
       ctx.globalAlpha = options.alpha;
     }
+
+    ctx.translate(0, -lift);
+    ctx.shadowColor = color;
+    ctx.shadowBlur = options.selected ? 12 : 5;
+    ctx.shadowOffsetY = 0;
+
+    ctx.beginPath();
+    ctx.arc(0, 4, radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#040d12';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = options.alpha * 0.46;
+    ctx.stroke();
+    ctx.globalAlpha = options.alpha;
 
     const tokenGradient = ctx.createRadialGradient(-5, -6, 1, 0, 0, radius + 2);
     tokenGradient.addColorStop(0, '#1c3943');
@@ -692,7 +857,10 @@ export class BoardRenderer {
     ctx.lineWidth = options.highContrast ? 2.25 : 1.9;
     ctx.shadowColor = color;
     ctx.shadowBlur = 3.5;
+    ctx.save();
+    ctx.rotate(options.orientation);
     drawPieceGlyph(ctx, piece);
+    ctx.restore();
     ctx.shadowColor = 'transparent';
 
     if (piece.type === 'fortress') {
@@ -725,6 +893,7 @@ export class BoardRenderer {
     ctx: CanvasRenderingContext2D,
     animation: AnimationState,
     time: number,
+    orientation: number,
   ): void {
     const raw = Math.min(1, Math.max(0, (time - animation.startedAt) / animation.duration));
     const eased = 1 - (1 - raw) ** 3;
@@ -738,8 +907,8 @@ export class BoardRenderer {
         const afterPiece = this.model ? getPiece(this.model.state, event.pieceId) : undefined;
         const piece = transformed && afterPiece ? afterPiece : beforePiece;
         if (!piece) continue;
-        const from = hexToWorld(event.from);
-        const to = hexToWorld(event.to);
+        const from = projectHex(event.from, orientation, this.renderedDepth);
+        const to = projectHex(event.to, orientation, this.renderedDepth);
         const x = from.x + (to.x - from.x) * eased;
         const y = from.y + (to.y - from.y) * eased - Math.sin(raw * Math.PI) * 4;
         const survives = this.model ? Boolean(getPiece(this.model.state, piece.id)) : true;
@@ -747,12 +916,13 @@ export class BoardRenderer {
           selected: false,
           highContrast: this.model?.highContrast ?? false,
           alpha: survives ? 1 : Math.max(0, 1 - raw * 0.9),
+          orientation,
         });
       }
 
       if (event.type === 'shoot' && event.from && event.to) {
-        const from = hexToWorld(event.from);
-        const to = hexToWorld(event.to);
+        const from = projectHex(event.from, orientation, this.renderedDepth);
+        const to = projectHex(event.to, orientation, this.renderedDepth);
         ctx.save();
         ctx.globalAlpha = Math.sin(raw * Math.PI);
         ctx.strokeStyle = COLORS.attack;
@@ -770,7 +940,7 @@ export class BoardRenderer {
       }
 
       if ((event.type === 'destroy' || event.type === 'intercept') && event.at) {
-        const at = hexToWorld(event.at);
+        const at = projectHex(event.at, orientation, this.renderedDepth);
         ctx.save();
         ctx.translate(at.x, at.y);
         ctx.globalAlpha = Math.sin(raw * Math.PI);
@@ -795,7 +965,7 @@ export class BoardRenderer {
           event.type === 'transform') &&
         event.at
       ) {
-        const at = hexToWorld(event.at);
+        const at = projectHex(event.at, orientation, this.renderedDepth);
         ctx.save();
         ctx.translate(at.x, at.y);
         ctx.globalAlpha = Math.sin(raw * Math.PI) * 0.9;
@@ -930,6 +1100,32 @@ function boardOutlinePath(ctx: CanvasRenderingContext2D): void {
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
+}
+
+function projectHex(hex: Hex, orientation: number, depth: number): { x: number; y: number } {
+  const point = hexToWorld(hex);
+  const cosine = Math.cos(orientation);
+  const sine = Math.sin(orientation);
+  return {
+    x: cosine * point.x - sine * point.y,
+    y: (sine * point.x + cosine * point.y) * boardTilt(depth),
+  };
+}
+
+function boardTilt(depth: number): number {
+  return 1 + (DEPTH_BOARD_TILT - 1) * depth;
+}
+
+function boardDepthVector(
+  orientation: number,
+  screenDepth: number,
+  tilt: number,
+): { x: number; y: number } {
+  const depth = screenDepth / tilt;
+  return {
+    x: Math.sin(orientation) * depth,
+    y: Math.cos(orientation) * depth,
+  };
 }
 
 function drawMoveMarker(ctx: CanvasRenderingContext2D, radius: number): void {

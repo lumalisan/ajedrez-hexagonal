@@ -118,6 +118,7 @@ export interface GamePreferences {
   musicVolume: number;
   effectsVolume: number;
   fixedBoard: boolean;
+  boardDepth: boolean;
   reducedMotion: boolean;
   highContrast: boolean;
   confirmation: ConfirmationMode;

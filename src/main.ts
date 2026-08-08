@@ -86,6 +86,7 @@ interface PointerState {
 const canvas = requireElement<HTMLCanvasElement>('game-canvas');
 const renderer = new BoardRenderer(canvas);
 const preferences = loadPreferences();
+renderer.setDepthMode(preferences.boardDepth, true);
 const audio = new AudioDirector(preferences);
 const aiStrategy = new WorkerAiStrategy();
 audio.setEnabled(preferences.sound);
@@ -1395,7 +1396,8 @@ function showSettingsDialog(): void {
       ${volumeControlMarkup('effectsVolume', 'Efectos especiales', 'Movimientos, ataques y avisos', preferences.effectsVolume)}
     </div>
     <div class="board-settings">
-      <div><span class="eyebrow">VISTA DEL TABLERO</span><p>Elige si la perspectiva cambia con cada turno.</p></div>
+      <div><span class="eyebrow">VISTA DEL TABLERO</span><p>Configura la profundidad y la orientación durante la partida.</p></div>
+      <label class="toggle-row"><span><strong>Perspectiva 2.5D</strong><small>Inclina el tablero y eleva las unidades aéreas</small></span><input type="checkbox" data-pref="board-depth" ${preferences.boardDepth ? 'checked' : ''}/></label>
       <label class="toggle-row"><span><strong>Mantener tablero fijo</strong><small>Cian permanece abajo y Ámbar arriba durante toda la partida</small></span><input type="checkbox" data-pref="fixed-board" ${preferences.fixedBoard ? 'checked' : ''}/></label>
       <label class="field-row"><span>Confirmación de órdenes</span><select data-pref="confirmation"><option value="always" ${preferences.confirmation === 'always' ? 'selected' : ''}>Siempre</option><option value="critical" ${preferences.confirmation === 'critical' ? 'selected' : ''}>Solo críticas</option><option value="quick" ${preferences.confirmation === 'quick' ? 'selected' : ''}>Rápida</option></select></label>
       <label class="toggle-row"><span><strong>Consejos contextuales</strong><small>Muestra orientación cuando una mecánica sea relevante</small></span><input type="checkbox" data-pref="hints" ${preferences.contextualHints ? 'checked' : ''}/></label>
@@ -1436,6 +1438,14 @@ function showSettingsDialog(): void {
       savePreferences();
     });
   });
+  dialog
+    .querySelector<HTMLInputElement>('[data-pref="board-depth"]')
+    ?.addEventListener('change', (event) => {
+      preferences.boardDepth = (event.currentTarget as HTMLInputElement).checked;
+      savePreferences();
+      renderer.setDepthMode(preferences.boardDepth, preferences.reducedMotion);
+      announce(preferences.boardDepth ? 'Perspectiva 2.5D activada.' : 'Perspectiva 2D activada.');
+    });
   dialog
     .querySelector<HTMLInputElement>('[data-pref="fixed-board"]')
     ?.addEventListener('change', (event) => {

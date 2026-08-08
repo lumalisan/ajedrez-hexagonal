@@ -12,6 +12,7 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   musicVolume: 0.52,
   effectsVolume: 0.86,
   fixedBoard: true,
+  boardDepth: false,
   reducedMotion: false,
   highContrast: false,
   confirmation: 'always',

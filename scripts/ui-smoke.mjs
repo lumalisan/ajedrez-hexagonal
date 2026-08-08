@@ -78,6 +78,25 @@ try {
     'Accessibility options missing.',
   );
   const fixedBoardToggle = desktop.locator('[data-pref="fixed-board"]');
+  const boardDepthToggle = desktop.locator('[data-pref="board-depth"]');
+  assert((await boardDepthToggle.count()) === 1, '2.5D board option missing.');
+  assert(!(await boardDepthToggle.isChecked()), 'The board must use 2D by default.');
+  await boardDepthToggle.check();
+  assert(
+    (await desktop.locator('#game-canvas').getAttribute('data-perspective')) === '2.5d',
+    'Enabling 2.5D must update the canvas perspective.',
+  );
+  assert(
+    (await desktop.locator('#game-canvas').getAttribute('data-perspective-transition')) === 'true',
+    'Changing perspective must start a transition.',
+  );
+  await desktop.locator('#game-canvas:not([data-perspective-transition])').waitFor();
+  await boardDepthToggle.uncheck();
+  await desktop.locator('#game-canvas:not([data-perspective-transition])').waitFor();
+  assert(
+    (await desktop.locator('#game-canvas').getAttribute('data-perspective')) === '2d',
+    'Disabling 2.5D must restore the flat board.',
+  );
   assert((await fixedBoardToggle.count()) === 1, 'Fixed-board option missing.');
   assert(await fixedBoardToggle.isChecked(), 'Fixed-board option must be enabled by default.');
   await fixedBoardToggle.uncheck();
@@ -196,15 +215,15 @@ try {
   await selectMode(cannonPage, 'local');
   await clickHex(cannonPage, 1, -3);
   assert(
-    (await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque medio'),
-    'Medium tank selection failed.',
+    (await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque'),
+    'Tank selection failed.',
   );
   const mediumMoves = cannonPage
     .locator('#sr-board [role="gridcell"]')
-    .filter({ hasText: 'Tanque medio se moverá' });
+    .filter({ hasText: 'Tanque se moverá' });
   const mediumMoveCount = await mediumMoves.count();
   assert(mediumMoveCount > 0, 'Medium tank must have a legal move for compact compass test.');
-  const targetKey = await mediumMoves.nth(0).getAttribute('data-hex');
+  const targetKey = await mediumMoves.nth(mediumMoveCount - 1).getAttribute('data-hex');
   const [targetQ, targetR] = targetKey.split(',').map(Number);
   await clickHex(cannonPage, targetQ, targetR);
   assert(
@@ -411,20 +430,8 @@ try {
 }
 
 async function clickHex(page, q, r) {
-  const canvas = page.locator('#game-canvas');
-  const box = await canvas.boundingBox();
-  assert(box, 'Canvas has no layout box.');
-  const fitScale = Math.max(0.38, Math.min((box.width - 34) / 560, (box.height - 34) / 610));
-  const worldX = 45 * q;
-  const worldY = Math.sqrt(3) * 30 * (r + q / 2);
-  const viewpoint = await canvas.getAttribute('data-viewpoint');
-  const orientation = viewpoint === 'blue' ? Math.PI : 0;
-  const screenX = Math.cos(orientation) * worldX - Math.sin(orientation) * worldY;
-  const screenY = Math.sin(orientation) * worldX + Math.cos(orientation) * worldY;
-  await page.mouse.click(
-    box.x + box.width / 2 + screenX * fitScale,
-    box.y + box.height / 2 + screenY * fitScale,
-  );
+  const point = await pointForHex(page, q, r);
+  await page.mouse.click(point.x, point.y);
 }
 
 async function selectMode(page, mode) {
@@ -434,20 +441,31 @@ async function selectMode(page, mode) {
 }
 
 async function doubleClickHex(page, q, r) {
+  const point = await pointForHex(page, q, r);
+  await page.mouse.dblclick(point.x, point.y);
+}
+
+async function pointForHex(page, q, r) {
   const canvas = page.locator('#game-canvas');
   const box = await canvas.boundingBox();
   assert(box, 'Canvas has no layout box.');
-  const fitScale = Math.max(0.38, Math.min((box.width - 34) / 560, (box.height - 34) / 610));
+  const perspective = await canvas.getAttribute('data-perspective');
+  const verticalExtent = perspective === '2.5d' ? 500 : 610;
+  const fitScale = Math.max(
+    0.38,
+    Math.min((box.width - 34) / 560, (box.height - 42) / verticalExtent),
+  );
   const worldX = 45 * q;
   const worldY = Math.sqrt(3) * 30 * (r + q / 2);
   const viewpoint = await canvas.getAttribute('data-viewpoint');
   const orientation = viewpoint === 'blue' ? Math.PI : 0;
+  const tilt = perspective === '2.5d' ? 0.72 : 1;
   const screenX = Math.cos(orientation) * worldX - Math.sin(orientation) * worldY;
-  const screenY = Math.sin(orientation) * worldX + Math.cos(orientation) * worldY;
-  await page.mouse.dblclick(
-    box.x + box.width / 2 + screenX * fitScale,
-    box.y + box.height / 2 + screenY * fitScale,
-  );
+  const screenY = (Math.sin(orientation) * worldX + Math.cos(orientation) * worldY) * tilt;
+  return {
+    x: box.x + box.width / 2 + screenX * fitScale,
+    y: box.y + box.height / 2 + screenY * fitScale,
+  };
 }
 
 async function assertTopActionsDoNotOverlap(page) {
