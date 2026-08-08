@@ -80,6 +80,16 @@
               Selecciona una unidad para desplegar sus órdenes.
             </div>
             <div class="zoom-controls" aria-label="Controles de vista">
+              <button
+                type="button"
+                id="threat-toggle"
+                class="threat-toggle"
+                aria-label="Mostrar amenazas inmediatas"
+                aria-pressed="false"
+                title="Amenazas inmediatas"
+              >
+                <span aria-hidden="true">!</span>
+              </button>
               <button type="button" id="zoom-out" aria-label="Alejar">−</button>
               <button type="button" id="reset-view" aria-label="Centrar tablero">◎</button>
               <button type="button" id="zoom-in" aria-label="Acercar">+</button>
@@ -110,6 +120,7 @@
               >Conversión</span
             >
             <span><i class="legend-dot danger"></i>Intercepción AA</span>
+            <span><i class="legend-dot threat"></i>Amenaza inmediata</span>
           </div>
         </section>
 

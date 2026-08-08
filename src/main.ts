@@ -47,6 +47,7 @@ import {
   savePreferences as persistPreferences,
 } from './match-storage';
 import { BoardRenderer, actionsAtHex, pieceAccessibleLabel, type RenderModel } from './renderer';
+import { analyzeImmediateThreats } from './tactical-analysis';
 import { SCENARIOS, evaluateScenario, scenarioById } from './scenarios';
 import {
   loadScenarioCatalog,
@@ -128,6 +129,7 @@ const logToggle = requireElement<HTMLButtonElement>('log-toggle');
 const soundButton = requireElement<HTMLButtonElement>('sound-button');
 const blockadeButton = requireElement<HTMLButtonElement>('blockade-button');
 const mobileNewGameButton = requireElement<HTMLButtonElement>('mobile-new-game-button');
+const threatToggle = requireElement<HTMLButtonElement>('threat-toggle');
 const dialog = requireElement<HTMLDialogElement>('game-dialog');
 const toastRegion = requireElement<HTMLElement>('toast-region');
 const announcer = requireElement<HTMLElement>('announcer');
@@ -142,6 +144,19 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 function bindControls(): void {
+  threatToggle.addEventListener('click', () => {
+    preferences.tacticalThreats = !preferences.tacticalThreats;
+    savePreferences();
+    render();
+    const count = preferences.tacticalThreats
+      ? analyzeImmediateThreats(state).threatenedPieceIds.length
+      : 0;
+    announce(
+      preferences.tacticalThreats
+        ? `Amenazas inmediatas visibles. ${count} ${count === 1 ? 'unidad amenazada' : 'unidades amenazadas'}.`
+        : 'Amenazas inmediatas ocultas.',
+    );
+  });
   requireElement<HTMLButtonElement>('zoom-in').addEventListener('click', () =>
     renderer.zoomBy(1.16),
   );
@@ -638,6 +653,7 @@ function render(): void {
   renderPendingCard(selected, legalActions);
   renderBattleLog();
   renderSoundButton();
+  renderThreatToggle();
   renderScreenReaderBoard();
   syncCanvas();
   if (restoreDynamicFocus) {
@@ -659,6 +675,7 @@ function render(): void {
 }
 
 function syncCanvas(): void {
+  const tacticalAnalysis = preferences.tacticalThreats ? analyzeImmediateThreats(state) : null;
   const model: RenderModel = {
     state,
     selectedId,
@@ -668,6 +685,7 @@ function syncCanvas(): void {
     focused: focusedHex,
     firingRange: currentFiringRange(),
     lastEvents,
+    threatenedCells: tacticalAnalysis?.threatenedCells ?? [],
     reducedMotion: preferences.reducedMotion,
     highContrast: preferences.highContrast,
   };
@@ -813,6 +831,7 @@ function renderPieceCard(piece?: Piece): void {
   const layer = isAirPiece(piece) ? 'Aire' : 'Suelo';
   const q = piece.position.q >= 0 ? `+${piece.position.q}` : `${piece.position.q}`;
   const r = piece.position.r >= 0 ? `+${piece.position.r}` : `${piece.position.r}`;
+  const threatNote = threatSummaryMarkup(piece);
   pieceCard.className = `piece-card player-${piece.owner === 0 ? 'blue' : 'amber'}`;
   pieceCard.innerHTML = `
     <div class="piece-title-row">
@@ -821,6 +840,7 @@ function renderPieceCard(piece?: Piece): void {
       <span class="unit-state ${ownTurn ? 'ready' : ''}">${ownTurn ? 'LISTA' : 'INSPECCIÓN'}</span>
     </div>
     <p>${pieceDescription(piece)}</p>
+    ${threatNote}
     <div class="piece-stats"><span>Coordenadas <strong>${q}, ${r}</strong></span>${facing}</div>`;
   selectionSummary.textContent =
     activeScenario && ownTurn
@@ -830,6 +850,23 @@ function renderPieceCard(piece?: Piece): void {
           ? contextualHint(piece)
           : `${PIECE_NAMES[piece.type]} seleccionada · elige una orden o un destino marcado.`
         : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]} · inspección táctica; sus amenazas aparecen atenuadas.`;
+}
+
+function threatSummaryMarkup(piece: Piece): string {
+  if (!preferences.tacticalThreats || piece.owner !== state.activePlayer) return '';
+  const threats = analyzeImmediateThreats(state, piece.owner).threats.filter(
+    (threat) => threat.targetId === piece.id,
+  );
+  if (!threats.length) return '';
+  const attackers = [
+    ...new Set(
+      threats
+        .map((threat) => getPiece(state, threat.attackerId))
+        .filter((attacker): attacker is Piece => Boolean(attacker))
+        .map((attacker) => PIECE_NAMES[attacker.type]),
+    ),
+  ];
+  return `<div class="threat-note" role="status"><strong>Amenaza inmediata</strong><span>${escapeHtml(attackers.join(', '))}</span></div>`;
 }
 
 function contextualHint(piece: Piece): string {
@@ -1151,12 +1188,29 @@ function renderSoundButton(): void {
   soundButton.title = preferences.sound ? 'Silenciar sonido' : 'Activar sonido';
 }
 
+function renderThreatToggle(): void {
+  const enabled = preferences.tacticalThreats;
+  const count = enabled ? analyzeImmediateThreats(state).threatenedPieceIds.length : 0;
+  threatToggle.classList.toggle('active', enabled);
+  threatToggle.setAttribute('aria-pressed', String(enabled));
+  threatToggle.setAttribute(
+    'aria-label',
+    enabled
+      ? `Ocultar amenazas inmediatas. ${count} ${count === 1 ? 'unidad amenazada' : 'unidades amenazadas'}`
+      : 'Mostrar amenazas inmediatas',
+  );
+  threatToggle.title = enabled ? `Amenazas visibles · ${count}` : 'Amenazas inmediatas';
+}
+
 function renderScreenReaderBoard(): void {
   const rows: string[] = [];
   const inspected = selectedId ? getPiece(state, selectedId) : undefined;
   const actionLabel =
     inspected?.owner !== state.activePlayer ? 'Amenazas potenciales' : 'Acciones legales';
   const firingRange = new Set(currentFiringRange().map(hexKey));
+  const threatenedPieces = new Set(
+    preferences.tacticalThreats ? analyzeImmediateThreats(state).threatenedPieceIds : [],
+  );
   for (let r = -5; r <= 5; r += 1) {
     const cells: string[] = [];
     for (let q = -5; q <= 5; q += 1) {
@@ -1173,7 +1227,12 @@ function renderScreenReaderBoard(): void {
       ];
       const cellId = accessibleCellId(hex);
       const rangeLabel = firingRange.has(hexKey(hex)) ? '. Alcance potencial de disparo' : '';
-      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía}`}${rangeLabel}${legal.length ? `. ${actionLabel}: ${legal.join('; ')}` : ''}`;
+      const threatLabel = [occupancy.ground, occupancy.air].some(
+        (piece) => piece && threatenedPieces.has(piece.id),
+      )
+        ? '. Amenaza inmediata rival'
+        : '';
+      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía`}${rangeLabel}${threatLabel}${legal.length ? `. ${actionLabel}: ${legal.join('; ')}` : ''}`;
       cells.push(
         `<div id="${cellId}" role="gridcell" aria-rowindex="${r + 6}" aria-colindex="${q + 6}" aria-selected="${Boolean(focusedHex && equalHex(focusedHex, hex))}" data-hex="${hexKey(hex)}">${escapeHtml(label)}</div>`,
       );
@@ -1199,12 +1258,16 @@ function announceCell(hex: Hex): void {
     ),
   ];
   const inFiringRange = currentFiringRange().some((cell) => equalHex(cell, hex));
+  const threatenedPieces = new Set(
+    preferences.tacticalThreats ? analyzeImmediateThreats(state).threatenedPieceIds : [],
+  );
+  const isThreatened = pieces.some((piece) => threatenedPieces.has(piece.id));
   announce(
     `${
       pieces.length
         ? pieces.map((piece) => pieceAccessibleLabel(state, piece, viewPlayer())).join('. ')
         : `Casilla ${hex.q}, ${hex.r}, vacía.`
-    }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${legal.length ? ` ${actionLabel}: ${legal.join('; ')}.` : ''}`,
+    }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${isThreatened ? ' Amenaza inmediata rival.' : ''}${legal.length ? ` ${actionLabel}: ${legal.join('; ')}.` : ''}`,
   );
 }
 
@@ -1401,6 +1464,7 @@ function showSettingsDialog(): void {
       <label class="toggle-row"><span><strong>Mantener tablero fijo</strong><small>Cian permanece abajo y Ámbar arriba durante toda la partida</small></span><input type="checkbox" data-pref="fixed-board" ${preferences.fixedBoard ? 'checked' : ''}/></label>
       <label class="field-row"><span>Confirmación de órdenes</span><select data-pref="confirmation"><option value="always" ${preferences.confirmation === 'always' ? 'selected' : ''}>Siempre</option><option value="critical" ${preferences.confirmation === 'critical' ? 'selected' : ''}>Solo críticas</option><option value="quick" ${preferences.confirmation === 'quick' ? 'selected' : ''}>Rápida</option></select></label>
       <label class="toggle-row"><span><strong>Consejos contextuales</strong><small>Muestra orientación cuando una mecánica sea relevante</small></span><input type="checkbox" data-pref="hints" ${preferences.contextualHints ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span><strong>Amenazas inmediatas</strong><small>Marca unidades que el rival puede atacar en su próxima orden</small></span><input type="checkbox" data-pref="threats" ${preferences.tacticalThreats ? 'checked' : ''}/></label>
       <label class="toggle-row"><span><strong>Pantalla de entrega</strong><small>Oculta la posición entre turnos locales</small></span><input type="checkbox" data-pref="handoff" ${preferences.handoffScreen ? 'checked' : ''}/></label>
     </div>
     <div class="accessibility-settings">
@@ -1484,11 +1548,13 @@ function showSettingsDialog(): void {
     });
   for (const [selector, key] of [
     ['[data-pref="hints"]', 'contextualHints'],
+    ['[data-pref="threats"]', 'tacticalThreats'],
     ['[data-pref="handoff"]', 'handoffScreen'],
   ] as const) {
     dialog.querySelector<HTMLInputElement>(selector)?.addEventListener('change', (event) => {
       preferences[key] = (event.currentTarget as HTMLInputElement).checked;
       savePreferences();
+      if (key === 'tacticalThreats') render();
     });
   }
   dialog.querySelector('[data-export-match]')?.addEventListener('click', exportCurrentMatch);

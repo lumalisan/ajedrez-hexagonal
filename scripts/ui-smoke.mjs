@@ -51,9 +51,29 @@ try {
     'Closing a modal must restore the page scroll state.',
   );
   assert((await desktop.title()) === 'Protocolo Hexagonal', 'Document title missing.');
+  const threatToggle = desktop.locator('#threat-toggle');
+  assert(
+    (await threatToggle.getAttribute('aria-pressed')) === 'false',
+    'Threat overlay must start disabled.',
+  );
+  await threatToggle.click();
+  assert(
+    (await threatToggle.getAttribute('aria-pressed')) === 'true',
+    'Threat overlay toggle did not activate.',
+  );
+  assert(
+    await threatToggle.evaluate((button) => button.classList.contains('active')),
+    'Threat overlay active state is not visible.',
+  );
   assert(
     (await desktop.locator('#sr-board [role="gridcell"]').count()) === 91,
     'Accessible board must expose 91 cells.',
+  );
+  assert(
+    !(await desktop.locator('#sr-board [role="gridcell"]').allTextContents()).some((label) =>
+      label.includes('}'),
+    ),
+    'Accessible cell labels contain stray template characters.',
   );
   const healthBars = await desktop.locator('.hp i').all();
   assert(healthBars.length === 4, 'Fortress score must expose four health bars.');

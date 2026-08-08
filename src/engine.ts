@@ -11,6 +11,7 @@ import {
   isOnBoard,
   stepHex,
 } from './hex';
+import { actionKey } from './action-identity';
 import { createInitialPieces } from './setup';
 import type {
   ActionResult,
@@ -1048,26 +1049,6 @@ function positionHash(state: GameState): string {
     .sort()
     .join('|');
   return `${state.activePlayer}@${state.firstFortressDamageBy ?? '-'}@${pieces}`;
-}
-
-function actionKey(action: GameAction): string {
-  switch (action.kind) {
-    case 'move':
-      return `move:${action.pieceId}:${hexKey(action.to)}:${action.cannon ?? '-'}:${action.kamikaze ? 'k' : '-'}`;
-    case 'rotate':
-      return `rotate:${action.pieceId}:${action.facing}`;
-    case 'orient':
-      return `orient:${action.pieceId}:${action.cannon}`;
-    case 'shoot':
-      return `shoot:${action.pieceId}:${action.targetId}`;
-    case 'convert':
-      return `convert:${action.pieceId}:${action.targetId}`;
-    case 'attackAbove':
-    case 'attackBelow':
-      return `${action.kind}:${action.pieceId}:${action.targetId}`;
-    case 'transform':
-      return `transform:${action.pieceId}:${action.facing}:${action.to ? hexKey(action.to) : '-'}:${action.attackAboveId ?? '-'}`;
-  }
 }
 
 export function actionDestination(state: GameState, action: GameAction): Hex | null {

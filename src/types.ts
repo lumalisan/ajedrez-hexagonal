@@ -123,6 +123,7 @@ export interface GamePreferences {
   highContrast: boolean;
   confirmation: ConfirmationMode;
   contextualHints: boolean;
+  tacticalThreats: boolean;
   handoffScreen: boolean;
 }
 

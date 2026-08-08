@@ -33,6 +33,7 @@ pnpm test:a11y
 - **Academia táctica:** ocho escenarios reproducibles que usan `classic-v1`.
 - **Laboratorio:** editor JSON validado y catálogo local.
 - Autoguardado después de cada orden, continuar, importar/exportar y visor de repetición.
+- Capa opcional de amenazas inmediatas, con detalle accesible y preferencias persistentes.
 - PWA instalable con caché offline del shell.
 
 Los guardados declaran versión y ruleset. Una repetición importada se reconstruye acción por acción y se rechaza si contiene una orden ilegal.
@@ -54,6 +55,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/engine.ts`: reglas puras, turnos, combate y finales.
 - `src/game-config.ts`: configuración validada y contrato `classic-v1`.
 - `src/match-record.ts`: diario versionado, replay y estadísticas.
+- `src/action-identity.ts` y `src/tactical-analysis.ts`: identidad canónica y consulta táctica pura.
 - `src/match-store.ts` y `src/match-controller.ts`: estado explícito de partida e interfaz.
 - `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
@@ -63,5 +65,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/audio.ts`: paisajes sonoros sintetizados con Web Audio.
 - `src/main.ts`: interacción, accesibilidad y flujo de interfaz.
 - `tests/engine.test.ts`: pruebas de reglas y casos límite.
+
+La auditoría técnica y el siguiente orden de evolución están en `docs/auditoria-mejoras-2026.md`.
 
 No usa recursos gráficos o sonoros externos. Logotipo, fichas, efectos y audio se generan localmente.

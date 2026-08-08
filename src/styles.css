@@ -16,6 +16,7 @@
   --attack: #ff5c8a;
   --convert: #b8a1ff;
   --danger: #ff765c;
+  --threat: #ffd166;
   --radius: 16px;
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
@@ -330,6 +331,21 @@ button:disabled {
     transform 160ms ease;
 }
 
+.zoom-controls .threat-toggle {
+  margin-inline-end: 4px;
+  color: var(--threat);
+  border-style: dashed;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.zoom-controls .threat-toggle.active {
+  color: #07131a;
+  border-color: var(--threat);
+  border-style: solid;
+  background: var(--threat);
+}
+
 .icon-button:hover,
 .menu-button:hover,
 .zoom-controls button:hover {
@@ -540,6 +556,13 @@ button:disabled {
   transform: rotate(45deg);
 }
 
+.legend-dot.threat {
+  color: var(--threat);
+  border-style: dashed;
+  border-radius: 2px;
+  background: transparent;
+}
+
 .command-panel {
   display: flex;
   min-height: 0;
@@ -667,6 +690,26 @@ button:disabled {
   padding-top: 11px;
   border-top: 1px solid var(--line);
   font-size: 10px;
+}
+
+.threat-note {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  color: var(--threat);
+  border: 1px dashed color-mix(in srgb, var(--threat) 55%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--threat) 7%, transparent);
+  font-size: 11px;
+}
+
+.threat-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  text-align: end;
 }
 
 .piece-stats span {
@@ -1662,7 +1705,6 @@ button:disabled {
   max-width: min(330px, calc(100vw - 36px));
   padding: 11px 14px;
   border: 1px solid var(--line-strong);
-  border-left: 3px solid var(--move);
   border-radius: 9px;
   background: rgba(10, 29, 36, 0.96);
   box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
@@ -1956,6 +1998,10 @@ button:disabled {
 
   .legend span:nth-child(4),
   .legend span:nth-child(5) {
+    display: none;
+  }
+
+  .legend span:nth-child(6) {
     display: none;
   }
 
@@ -2278,7 +2324,8 @@ button:disabled {
 
 .scenario-objective {
   padding: 12px 14px;
-  border-left: 3px solid var(--move);
+  border: 1px solid color-mix(in srgb, var(--move) 32%, transparent);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--move) 7%, transparent);
 }
 

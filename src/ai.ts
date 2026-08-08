@@ -1,4 +1,5 @@
 import { applyAction, getAllLegalActions, getFiringRangeCells, getPiece } from './engine';
+import { actionKey } from './action-identity';
 import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
 import type { GameAction, GameState, Piece, PieceType, Player } from './types';
 
@@ -473,10 +474,6 @@ function checkTime(context: SearchContext, force = false): void {
   ) {
     throw new SearchTimeout();
   }
-}
-
-function actionKey(action: GameAction): string {
-  return JSON.stringify(action);
 }
 
 function stableActionBias(action: GameAction, ply: number): number {

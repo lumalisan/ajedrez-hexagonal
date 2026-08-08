@@ -38,6 +38,7 @@ const COLORS = {
   range: '#ff174f',
   convert: '#b8a1ff',
   danger: '#ff765c',
+  threat: '#ffd166',
 };
 
 const DEPTH_BOARD_TILT = 0.72;
@@ -55,6 +56,7 @@ export interface RenderModel {
   focused: Hex | null;
   firingRange: Hex[];
   lastEvents: GameEvent[];
+  threatenedCells: Hex[];
   reducedMotion: boolean;
   highContrast: boolean;
 }
@@ -373,6 +375,7 @@ export class BoardRenderer {
     this.drawBoardShadow(ctx, orientation);
     this.drawCells(ctx, model, orientation);
     this.drawProtectionZones(ctx, model);
+    this.drawThreatZones(ctx, model);
     this.drawLastAction(ctx, model.lastEvents);
     this.drawActionMarkers(ctx, model, time);
     this.drawFocus(ctx, model);
@@ -580,6 +583,32 @@ export class BoardRenderer {
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
       ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawThreatZones(ctx: CanvasRenderingContext2D, model: RenderModel): void {
+    ctx.save();
+    ctx.strokeStyle = COLORS.threat;
+    ctx.lineWidth = model.highContrast ? 2.4 : 1.65;
+    ctx.setLineDash([3, 3]);
+    for (const cell of model.threatenedCells) {
+      const { x, y } = hexToWorld(cell);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.globalAlpha = 0.92;
+      hexPath(ctx, 23.8);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = model.highContrast ? 2.8 : 2;
+      for (let direction = 0; direction < 6; direction += 1) {
+        const angle = direction * (Math.PI / 3);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * 20, Math.sin(angle) * 20);
+        ctx.lineTo(Math.cos(angle) * 14, Math.sin(angle) * 14);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
     ctx.restore();
   }

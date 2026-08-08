@@ -1,4 +1,5 @@
 import { applyAction, getLegalActionsForPiece } from './engine';
+import { sameAction } from './action-identity';
 import { appendAction, replayRecord, setReplayCursor } from './match-record';
 import { MatchStore } from './match-store';
 import type { ActionResult, GameAction, MatchRecord } from './types';
@@ -18,8 +19,7 @@ export class MatchController {
 
   prepare(action: GameAction): boolean {
     const legal = this.legalActions(action.pieceId);
-    if (!legal.some((candidate) => JSON.stringify(candidate) === JSON.stringify(action)))
-      return false;
+    if (!legal.some((candidate) => sameAction(candidate, action))) return false;
     this.store.update((current) => ({
       ...current,
       ui: { ...current.ui, pendingAction: action },

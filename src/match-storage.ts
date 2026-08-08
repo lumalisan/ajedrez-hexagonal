@@ -17,6 +17,7 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   highContrast: false,
   confirmation: 'always',
   contextualHints: true,
+  tacticalThreats: false,
   handoffScreen: false,
 };
 
