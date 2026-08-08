@@ -31,9 +31,9 @@ import type {
 export const PIECE_NAMES: Record<PieceType, string> = {
   soldier: 'Soldado',
   capturer: 'Capturador',
-  medium: 'Tanque medio',
-  long: 'Tanque de largo alcance',
-  fast: 'Tanque rápido',
+  medium: 'Tanque',
+  long: 'Lanzamisiles',
+  fast: 'Embestidor',
   drone: 'Dron',
   airplane: 'Avión',
   antiAir: 'Escudo antiaéreo',
@@ -43,9 +43,9 @@ export const PIECE_NAMES: Record<PieceType, string> = {
 export const PIECE_SHORT_NAMES: Record<PieceType, string> = {
   soldier: 'SOL',
   capturer: 'CAP',
-  medium: 'TMA',
-  long: 'TLA',
-  fast: 'TRP',
+  medium: 'TNQ',
+  long: 'LMS',
+  fast: 'EMB',
   drone: 'DRN',
   airplane: 'AVI',
   antiAir: 'EAA',
@@ -490,7 +490,7 @@ function droneActions(state: GameState, piece: Extract<Piece, { type: 'drone' }>
 
       const air = occupancyAt(state, to).air;
       if (air) {
-        if (air.type === 'drone' && air.owner !== piece.owner) {
+        if (air.owner !== piece.owner) {
           actions.push({ kind: 'move', pieceId: piece.id, to });
         }
         break;
@@ -641,17 +641,27 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   }
 
   next.activePlayer = otherPlayer(next.activePlayer);
+  passTurnIfBlocked(next, events);
   const hash = positionHash(next);
   const repetitions = (next.positionCounts[hash] ?? 0) + 1;
   next.positionCounts[hash] = repetitions;
 
-  if (repetitions >= 3) {
-    finishByBlockade(next, 'repetition', events);
-  } else if (getAllLegalActions(next).length === 0) {
-    finishByBlockade(next, 'blockade', events);
-  }
+  if (repetitions >= 3) finishByBlockade(next, 'repetition', events);
 
   return { ok: true, state: next, events };
+}
+
+function passTurnIfBlocked(state: GameState, events: GameEvent[]): void {
+  if (getAllLegalActions(state).length > 0) return;
+  const blockedPlayer = state.activePlayer;
+  state.activePlayer = otherPlayer(blockedPlayer);
+  events.push({ type: 'pass', owner: blockedPlayer });
+  state.history.push({
+    id: state.ply,
+    player: blockedPlayer,
+    text: `${PLAYER_NAMES[blockedPlayer]} no tiene acciones legales y pasa el turno.`,
+  });
+  if (state.history.length > 80) state.history.shift();
 }
 
 function executeAction(state: GameState, action: GameAction, events: GameEvent[]): void {

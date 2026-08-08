@@ -284,7 +284,7 @@ describe('Tanques de disparo', () => {
   });
 
   it.each([0, 1, 2, 3, 4, 5] as Direction[])(
-    'Tanque medio limita el frente compacto para cañón %s',
+    'Tanque limita el frente compacto para cañón %s',
     (cannon) => {
       const origin = hex(0, 0);
       const forward = stepHex(origin, cannon);
@@ -307,7 +307,7 @@ describe('Tanques de disparo', () => {
     },
   );
 
-  it('Tanque medio dispara a distancia 2 atravesando unidades', () => {
+  it('Tanque dispara a distancia 2 atravesando unidades', () => {
     const state = base([
       { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
       soldier('blocker', 0, hex(0, -1), 0),
@@ -321,7 +321,7 @@ describe('Tanques de disparo', () => {
     expect(getPiece(next, 'blocker')).toBeDefined();
   });
 
-  it('Tanque medio puede mover y orientar cañón en una sola orden', () => {
+  it('Tanque puede mover y orientar cañón en una sola orden', () => {
     const state = base([
       { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 },
     ]);
@@ -337,7 +337,7 @@ describe('Tanques de disparo', () => {
     if (medium?.type === 'medium') expect(medium.cannon).toBe(3);
   });
 
-  it('Tanque largo ignora bloqueadores ordinarios y exige distancia 3', () => {
+  it('Lanzamisiles ignora bloqueadores ordinarios y exige distancia 3', () => {
     const state = base([
       { id: 'long', type: 'long', owner: 0, position: hex(0, 0) },
       soldier('blocker', 1, hex(0, -1), 3),
@@ -386,8 +386,8 @@ describe('Tanques de disparo', () => {
   });
 });
 
-describe('Tanque rápido y Dron', () => {
-  it('Tanque rápido atraviesa Dron aliado, pero se detiene en primer suelo enemigo', () => {
+describe('Embestidor y Dron', () => {
+  it('Embestidor atraviesa Dron aliado, pero se detiene en primer suelo enemigo', () => {
     const state = base([
       { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
       { id: 'friendly-air', type: 'drone', owner: 0, position: hex(1, 0) },
@@ -436,6 +436,29 @@ describe('Tanque rápido y Dron', () => {
     expect(occupancy.air?.id).toBe('drone');
     expect(occupancy.ground?.id).toBe('ground');
     expect(getPiece(next, 'enemy-air')).toBeUndefined();
+  });
+
+  it('Dron captura un Avión rival y no puede atravesarlo', () => {
+    const state = base([
+      { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
+      { id: 'airplane', type: 'airplane', owner: 1, position: hex(2, 0), facing: 3 },
+    ]);
+    const moves = getLegalActionsForPiece(state, 'drone').filter(
+      (action) => action.kind === 'move',
+    );
+    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(2, 0)))).toBe(
+      true,
+    );
+    expect(moves.some((action) => action.kind === 'move' && equal(action.to, hex(3, 0)))).toBe(
+      false,
+    );
+
+    const next = perform(
+      state,
+      findAction(state, 'drone', 'move', (action) => equal(action.to, hex(2, 0))),
+    );
+    expect(getPiece(next, 'airplane')).toBeUndefined();
+    expect(getPiece(next, 'drone')?.position).toEqual(hex(2, 0));
   });
 
   it('Dron destruye unidad terrestre solitaria al aterrizar', () => {
@@ -586,10 +609,10 @@ describe('Avión', () => {
     expect(result.events.some((event) => event.type === 'intercept')).toBe(true);
   });
 
-  it('bloquea el paso y el aterrizaje de los Drones', () => {
+  it('un Avión aliado bloquea el paso y el aterrizaje de los Drones', () => {
     const state = base([
       { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
-      { id: 'airplane', type: 'airplane', owner: 1, position: hex(1, 0), facing: 3 },
+      { id: 'airplane', type: 'airplane', owner: 0, position: hex(1, 0), facing: 3 },
     ]);
     const moves = getLegalActionsForPiece(state, 'drone').filter(
       (action) => action.kind === 'move',
@@ -629,7 +652,7 @@ describe('Escudo antiaéreo', () => {
     expect(getLegalActionsForPiece(state, 'aa')).toEqual([]);
   });
 
-  it('solo Soldado y Tanque rápido lo destruyen por ocupación; Capturador lo convierte', () => {
+  it('solo Soldado y Embestidor lo destruyen por ocupación; Capturador lo convierte', () => {
     const soldierState = base([
       soldier('soldier', 0, hex(0, 0), 0),
       { id: 'aa', type: 'antiAir', owner: 1, position: hex(0, -1) },
@@ -712,13 +735,13 @@ describe('Fortaleza, transformación y finales', () => {
 
   it.each([
     {
-      label: 'Tanque medio',
+      label: 'Tanque',
       piece: { id: 'attacker', type: 'medium', owner: 0, position: hex(0, 0), cannon: 0 } as Piece,
       target: hex(0, -2),
       kind: 'shoot' as const,
     },
     {
-      label: 'Tanque largo',
+      label: 'Lanzamisiles',
       piece: { id: 'attacker', type: 'long', owner: 0, position: hex(0, 0) } as Piece,
       target: hex(0, -3),
       kind: 'shoot' as const,
@@ -830,6 +853,20 @@ describe('Fortaleza, transformación y finales', () => {
     if (blueFortress?.type === 'fortress') blueFortress.hp = 1;
     const result = declareBlockade(state);
     expect(result.state.outcome).toEqual({ type: 'win', winner: 1, reason: 'blockade' });
+  });
+
+  it('pasa automáticamente el turno de un jugador sin acciones legales', () => {
+    const state = base([
+      { id: 'blue-drone', type: 'drone', owner: 0, position: hex(0, 0) },
+      { id: 'amber-aa', type: 'antiAir', owner: 1, position: hex(4, 0) },
+    ]);
+    const result = applyAction(
+      state,
+      findAction(state, 'blue-drone', 'move', (action) => equal(action.to, hex(0, -1))),
+    );
+    expect(result.state.outcome).toBeNull();
+    expect(result.state.activePlayer).toBe(0);
+    expect(result.events).toContainEqual({ type: 'pass', owner: 1 });
   });
 });
 

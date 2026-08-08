@@ -343,7 +343,7 @@ Los consejos deben poder desactivarse y reiniciarse desde Opciones.
 El flujo actual de preparar y confirmar protege contra errores, pero puede resultar lento cuando el jugador ya domina el juego.
 
 - Añadir preferencia de confirmación: `siempre`, `solo ataques/acciones irreversibles` o `rápida`.
-- Mantener confirmación obligatoria para abandonar un tanque y proponer tablas.
+- Mantener confirmación obligatoria para abandonar un vehículo y proponer tablas.
 - Mostrar en la tarjeta pendiente una consecuencia concreta: pieza capturada, daño a Fortaleza, sacrificio o intercepción.
 - Conservar la distinción visual entre movimiento, captura, disparo, conversión e intercepción.
 - Mostrar por qué una orden no es posible al inspeccionar una casilla bloqueada, sin llenar el tablero de mensajes.
@@ -444,11 +444,11 @@ Primer conjunto sugerido:
 
 1. Movimiento y orientación del Soldado.
 2. Captura sin movimiento del Capturador.
-3. Alcance y orientación del Tanque medio.
-4. Distancia exacta del Tanque largo.
+3. Alcance y orientación del Tanque.
+4. Distancia exacta del Lanzamisiles.
 5. Vuelo y apilamientos del Dron.
 6. Intercepción del Portamisiles.
-7. Abandono de tanque.
+7. Abandono de vehículo.
 8. Asalto final a la Fortaleza.
 
 Después pueden añadirse puzles de “gana en N turnos” sin tocar el motor clásico.

@@ -65,6 +65,7 @@ export type GameEventType =
   | 'transform'
   | 'intercept'
   | 'fortressDamage'
+  | 'pass'
   | 'victory'
   | 'draw';
 

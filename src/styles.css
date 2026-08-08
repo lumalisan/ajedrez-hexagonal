@@ -522,14 +522,14 @@ button:disabled {
   background: rgba(255, 92, 138, 0.12);
 }
 
-.legend-hand {
-  width: 11px;
+.legend-net {
+  width: 14px;
   height: 14px;
   overflow: visible;
   color: var(--text);
-  fill: var(--surface);
+  fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }

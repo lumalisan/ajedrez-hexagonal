@@ -977,31 +977,50 @@ function drawConvertMarker(ctx: CanvasRenderingContext2D, radius: number): void 
   ctx.scale(scale, scale);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  const angles = [-1.57, -0.82, -0.08, 0.7, 1.52, 2.31, 3.08, 3.88];
+  const outerRadii = [10.5, 9.6, 10.2, 9.8, 10.6, 9.7, 10.3, 9.5];
+
+  // Uneven spokes and inward-bowed strands read as a web rather than a wheel.
+  for (let index = 0; index < angles.length; index += 1) {
+    const angle = angles[index];
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(angle) * 1.1, Math.sin(angle) * 1.1);
+    ctx.lineTo(Math.cos(angle) * outerRadii[index], Math.sin(angle) * outerRadii[index]);
+    ctx.stroke();
+  }
+  for (const ring of [3.4, 6.4, 9.2]) traceWebRing(ctx, angles, outerRadii, ring);
+
   ctx.beginPath();
-  ctx.moveTo(-7, 3);
-  ctx.lineTo(-7, -3);
-  ctx.quadraticCurveTo(-7, -5, -5.5, -5);
-  ctx.quadraticCurveTo(-4, -5, -4, -3);
-  ctx.lineTo(-4, -8);
-  ctx.quadraticCurveTo(-4, -10, -2.5, -10);
-  ctx.quadraticCurveTo(-1, -10, -1, -8);
-  ctx.lineTo(-1, -10);
-  ctx.quadraticCurveTo(-1, -12, 0.5, -12);
-  ctx.quadraticCurveTo(2, -12, 2, -10);
-  ctx.lineTo(2, -9);
-  ctx.quadraticCurveTo(2, -11, 3.5, -11);
-  ctx.quadraticCurveTo(5, -11, 5, -9);
-  ctx.lineTo(5, -7);
-  ctx.quadraticCurveTo(5, -9, 6.5, -9);
-  ctx.quadraticCurveTo(8, -9, 8, -7);
-  ctx.lineTo(8, 1);
-  ctx.quadraticCurveTo(8, 8, 1, 10);
-  ctx.quadraticCurveTo(-5, 9, -7, 3);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(7, 19, 26, 0.88)';
+  ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
   ctx.restore();
+}
+
+function traceWebRing(
+  ctx: CanvasRenderingContext2D,
+  angles: number[],
+  outerRadii: number[],
+  radius: number,
+): void {
+  const points = angles.map((angle, index) => {
+    const adjustedRadius = Math.min(radius, outerRadii[index]);
+    return {
+      x: Math.cos(angle) * adjustedRadius,
+      y: Math.sin(angle) * adjustedRadius,
+    };
+  });
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 0; index < points.length; index += 1) {
+    const next = points[(index + 1) % points.length];
+    const midAngle =
+      (angles[index] +
+        (index === points.length - 1 ? angles[0] + Math.PI * 2 : angles[index + 1])) /
+      2;
+    const sag = radius * 0.9;
+    ctx.quadraticCurveTo(Math.cos(midAngle) * sag, Math.sin(midAngle) * sag, next.x, next.y);
+  }
+  ctx.stroke();
 }
 
 function drawDangerMarker(ctx: CanvasRenderingContext2D, radius: number): void {
@@ -1055,7 +1074,7 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       drawTankGlyph(ctx, piece.cannon, 10, 1);
       break;
     case 'long':
-      drawTankGlyph(ctx, 0, 14, 3);
+      drawMissileLauncherGlyph(ctx);
       break;
     case 'fast': {
       // Low-profile assault vehicle with a pointed nose and visible tracks.
@@ -1218,6 +1237,41 @@ function drawTankGlyph(
     ctx.lineTo(x, 1.5);
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+function drawMissileLauncherGlyph(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.rotate(-Math.PI / 2);
+  // Twin guided missiles on a compact tracked launch platform.
+  ctx.strokeRect(-8, -8, 5, 16);
+  ctx.beginPath();
+  ctx.moveTo(-5.5, -6);
+  ctx.lineTo(4.5, -6);
+  ctx.moveTo(-5.5, 6);
+  ctx.lineTo(4.5, 6);
+  ctx.moveTo(-2, -8);
+  ctx.lineTo(-2, 8);
+  ctx.stroke();
+  for (const y of [-4, 4]) {
+    ctx.beginPath();
+    ctx.moveTo(-6.5, y - 1.8);
+    ctx.lineTo(5.5, y - 1.8);
+    ctx.lineTo(10, y);
+    ctx.lineTo(5.5, y + 1.8);
+    ctx.lineTo(-6.5, y + 1.8);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-5, y - 1.8);
+    ctx.lineTo(-8, y - 4);
+    ctx.moveTo(-5, y + 1.8);
+    ctx.lineTo(-8, y + 4);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(-2, 0, 2.4, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 

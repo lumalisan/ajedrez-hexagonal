@@ -75,14 +75,14 @@ export const SCENARIOS: ScenarioDefinition[] = [
     { kind: 'perform-action', actionKind: 'convert', pieceId: 'academy-capturer' },
     [
       'Selecciona el Capturador del centro.',
-      'La mano sobre la unidad rival señala una conversión, no un movimiento.',
+      'La red sobre la unidad rival señala una conversión, no un movimiento.',
       'Elige al Soldado rival y confirma: cambiará de bando sin que el Capturador se desplace.',
     ],
     'Conversión completada sin desplazamiento.',
   ),
   scenario(
     'medium',
-    '3 · Tanque medio',
+    '3 · Tanque',
     'Orienta el cañón o alcanza el objetivo frontal.',
     [
       { id: 'academy-medium', type: 'medium', owner: 0, position: { q: 0, r: 1 }, cannon: 0 },
@@ -90,23 +90,23 @@ export const SCENARIOS: ScenarioDefinition[] = [
     ],
     { kind: 'capture', targetId: 'medium-target' },
     [
-      'Selecciona el Tanque medio.',
+      'Selecciona el Tanque.',
       'Su cañón cubre un abanico frontal de hasta dos casillas.',
       'Elige el objetivo rosa y confirma. Disparar no desplaza el tanque.',
     ],
-    'Objetivo neutralizado con el Tanque medio.',
+    'Objetivo neutralizado con el Tanque.',
   ),
   scenario(
     'long',
     '4 · Distancia exacta',
-    'El Tanque largo dispara exactamente a distancia tres.',
+    'El Lanzamisiles dispara exactamente a distancia tres.',
     [
       { id: 'academy-long', type: 'long', owner: 0, position: { q: 0, r: 2 } },
       soldier('long-target', 1, 0, -1, 3),
     ],
     { kind: 'capture', targetId: 'long-target' },
     [
-      'Selecciona el Tanque largo.',
+      'Selecciona el Lanzamisiles.',
       'Solo puede disparar a exactamente tres hexágonos, aunque haya casillas vacías entre medias.',
       'Elige el marcador rosa sobre el Soldado rival y confirma.',
     ],
@@ -146,13 +146,13 @@ export const SCENARIOS: ScenarioDefinition[] = [
   ),
   scenario(
     'transform',
-    '7 · Abandono de tanque',
-    'Convierte el tanque en Soldado.',
+    '7 · Abandono de vehículo',
+    'Convierte el Embestidor en Soldado.',
     [{ id: 'academy-fast', type: 'fast', owner: 0, position: { q: 0, r: 0 } }],
     { kind: 'perform-action', actionKind: 'transform', pieceId: 'academy-fast' },
     [
-      'Selecciona el Tanque rápido.',
-      'Pulsa Transformar: abandonar un tanque es permanente.',
+      'Selecciona el Embestidor.',
+      'Pulsa Transformar: abandonar el Embestidor es permanente.',
       'Elige la orientación del nuevo Soldado y confirma.',
     ],
     'La tripulación continúa como Soldado.',

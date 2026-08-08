@@ -558,7 +558,12 @@ async function executeTurn(action: GameAction): Promise<void> {
     showOutcomeDialog();
   } else {
     audio.playTurn();
-    announce(`Turno de ${PLAYER_NAMES[state.activePlayer]}.`);
+    const passedPlayer = result.events.find((event) => event.type === 'pass')?.owner;
+    if (passedPlayer !== undefined) {
+      const message = `${PLAYER_NAMES[passedPlayer]} no tiene acciones legales y pasa. Turno de ${PLAYER_NAMES[state.activePlayer]}.`;
+      showToast(message);
+      announce(message);
+    } else announce(`Turno de ${PLAYER_NAMES[state.activePlayer]}.`);
     if (gameMode === 'local' && preferences.handoffScreen) showHandoffDialog();
     else if (isMachineTurn()) void runMachineTurn();
   }
@@ -830,9 +835,9 @@ function contextualHint(piece: Piece): string {
   const hints: Record<Piece['type'], string> = {
     soldier: 'Consejo · El Soldado avanza por su arco frontal; girarlo también consume el turno.',
     capturer: 'Consejo · El Capturador convierte una unidad adyacente sin desplazarse.',
-    medium: 'Consejo · El Tanque medio puede mover y elegir la orientación final del cañón.',
-    long: 'Consejo · El Tanque largo dispara únicamente a tres hexágonos exactos.',
-    fast: 'Consejo · El Tanque rápido puede avanzar hasta dos hexágonos en línea.',
+    medium: 'Consejo · El Tanque puede mover y elegir la orientación final del cañón.',
+    long: 'Consejo · El Lanzamisiles dispara únicamente a tres hexágonos exactos.',
+    fast: 'Consejo · El Embestidor recorre una línea libre y captura ocupando el destino.',
     drone: 'Consejo · El Dron puede volar y compartir casilla con una unidad terrestre.',
     airplane: 'Consejo · El Avión elige entre volar y disparar; entrar en un escudo lo destruye.',
     antiAir: 'Consejo · El Escudo antiaéreo es inmóvil y protege las seis casillas adyacentes.',
@@ -912,7 +917,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
     return;
   }
   if (mode.kind === 'transform') {
-    actionControls.innerHTML = `${directionPanel('Abandonar tanque', null, mode.facing, 'transform-facing')}
+    actionControls.innerHTML = `${directionPanel('Abandonar vehículo', null, mode.facing, 'transform-facing')}
       <div class="transform-note"><strong>Movimiento opcional</strong><span>Tras elegir orientación, toca uno de los tres destinos frontales o confirma sin mover.</span></div>`;
     actionControls
       .querySelectorAll<HTMLButtonElement>('[data-transform-facing]')
@@ -972,7 +977,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
         ${canOrient ? '<button type="button" data-command="orient">Orientar cañón</button>' : ''}
         ${above ? '<button type="button" data-command="above">Atacar aeronave superior</button>' : ''}
         ${below ? '<button type="button" data-command="below">Atacar unidad inferior</button>' : ''}
-        ${canTransform ? '<button type="button" class="danger-command" data-command="transform">Abandonar tanque</button>' : ''}
+        ${canTransform ? '<button type="button" class="danger-command" data-command="transform">Abandonar vehículo</button>' : ''}
       </div>
     </div>`;
   actionControls.querySelector('[data-command="rotate"]')?.addEventListener('click', () => {
@@ -1360,15 +1365,15 @@ function showHelpDialog(): void {
         : ''
     }
     <div class="help-grid">
-      <section><strong>1 · Selecciona</strong><p>Elige una unidad propia. Menta indica movimiento, rosa ataque, una mano sobre el objetivo indica conversión y naranja intercepción.</p></section>
+      <section><strong>1 · Selecciona</strong><p>Elige una unidad propia. Menta indica movimiento, rosa ataque, una red sobre el objetivo indica conversión y naranja intercepción.</p></section>
       <section><strong>2 · Prepara</strong><p>Toca destino. En casillas apiladas podrás elegir aire o suelo. Revisa consecuencia antes de confirmar.</p></section>
       <section><strong>3 · Confirma</strong><p>Cada turno exige una acción. Girar Soldado y orientar cañón también consumen turno.</p></section>
       <section><strong>Victoria</strong><p>Fortaleza tiene 2 HP. Soldado y Capturador causan 1 HP y se sacrifican; resto causa 2 HP.</p></section>
     </div>
     <details><summary>Reglas tácticas esenciales</summary>
-      <p>El Tanque largo dispara a todo el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
+      <p>El Lanzamisiles dispara a todo el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
       <p>El Avión vuela hasta dos casillas por su frente o dispara a su cono ofensivo. Su kamikaze destruye objetivo y Avión. El Escudo antiaéreo es inmóvil: pulveriza aeronaves enemigas y bloquea sus disparos.</p>
-      <p>Tanques pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
+      <p>Tanque, Lanzamisiles y Embestidor pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
     </details>
     <div class="keyboard-card"><strong>Teclado</strong><span>Q/W/E y A/S/D cubren las seis direcciones · teclado numérico 7/8/9/4/2/6 · Enter selecciona · Esc cancela · H ayuda · L registro · C centra</span></div>
     <p class="game-credits">
@@ -1998,9 +2003,9 @@ function pieceMonogram(piece: Piece): string {
   return {
     soldier: 'S',
     capturer: 'C',
-    medium: 'M2',
-    long: 'L3',
-    fast: 'R',
+    medium: 'T',
+    long: 'LM',
+    fast: 'E',
     drone: 'D',
     airplane: 'A',
     antiAir: 'AA',
