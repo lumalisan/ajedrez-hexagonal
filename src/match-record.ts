@@ -19,7 +19,7 @@ export function createMatchRecord(
   if (errors.length) throw new Error(`Estado inicial inválido: ${errors.join(' ')}`);
   const now = new Date().toISOString();
   return {
-    version: 1,
+    version: 2,
     config: structuredClone(config),
     initialState: cloneState(state),
     actions: [],
@@ -41,7 +41,7 @@ export function appendAction(record: MatchRecord, action: GameAction): MatchReco
 }
 
 export function replayRecord(record: MatchRecord, actionCount = record.currentAction): GameState {
-  if (record.version !== 1) throw new ReplayError('Versión de repetición incompatible.');
+  if (record.version !== 2) throw new ReplayError('Versión de repetición incompatible.');
   assertValidMatchConfig(record.config);
   if (!Number.isInteger(actionCount) || actionCount < 0 || actionCount > record.actions.length)
     throw new ReplayError('Índice de repetición inválido.');
@@ -79,7 +79,7 @@ export function parseRecord(value: string): MatchRecord {
   if (!parsed || typeof parsed !== 'object' || !('version' in parsed))
     throw new ReplayError('El archivo no es una repetición de Protocolo Hexagonal.');
   const candidate = parsed as MatchRecord;
-  if (candidate.version !== 1) throw new ReplayError('Versión de guardado incompatible.');
+  if (candidate.version !== 2) throw new ReplayError('Versión de guardado incompatible.');
   if (!Array.isArray(candidate.actions))
     throw new ReplayError('El diario de acciones no es válido.');
   replayRecord(candidate);

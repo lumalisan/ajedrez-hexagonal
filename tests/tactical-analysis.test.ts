@@ -31,9 +31,12 @@ describe('identidad canónica de órdenes', () => {
       kind: 'move',
     } as GameAction;
     const kamikaze: GameAction = { ...first, kamikaze: true };
+    const airKamikaze: GameAction = { ...kamikaze, targetId: 'air-target' };
+    const groundKamikaze: GameAction = { ...kamikaze, targetId: 'ground-target' };
 
     expect(sameAction(first, reordered)).toBe(true);
     expect(actionKey(first)).not.toBe(actionKey(kamikaze));
+    expect(actionKey(airKamikaze)).not.toBe(actionKey(groundKamikaze));
   });
 });
 
@@ -88,7 +91,7 @@ describe('análisis de amenazas inmediatas', () => {
     expect(analyzeImmediateThreats(state).threatenedPieceIds).not.toContain('blue-soldier');
   });
 
-  it('marca el daño a Fortaleza aunque el primer sacrificio no la destruya', () => {
+  it('no considera que un Capturador amenace la Fortaleza', () => {
     const state = createGameState(
       [
         { id: 'fort-blue', type: 'fortress', owner: 0, position: { q: 0, r: 0 }, hp: 2 },
@@ -98,13 +101,9 @@ describe('análisis de amenazas inmediatas', () => {
       0,
     );
 
-    expect(analyzeImmediateThreats(state).threats).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          targetId: 'fort-blue',
-          consequence: 'fortress-damage',
-        }),
-      ]),
-    );
+    expect(analyzeImmediateThreats(state).threatenedPieceIds).not.toContain('fort-blue');
+    expect(
+      analyzeImmediateThreats(state).threats.some((threat) => threat.targetId === 'fort-blue'),
+    ).toBe(false);
   });
 });

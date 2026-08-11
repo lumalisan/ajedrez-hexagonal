@@ -1,10 +1,10 @@
 import { createMatchRecord } from './match-record';
 import type { GameState, MatchConfig } from './types';
 
-const CATALOG_KEY = 'atlas-scenario-catalog-v1';
+const CATALOG_KEY = 'atlas-scenario-catalog-v2';
 
 export interface CustomScenario {
-  version: 1;
+  version: 2;
   id: string;
   title: string;
   config: MatchConfig;
@@ -12,7 +12,7 @@ export interface CustomScenario {
 }
 
 export function validateCustomScenario(value: CustomScenario): CustomScenario {
-  if (value.version !== 1) throw new Error('Versión de escenario incompatible.');
+  if (value.version !== 2) throw new Error('Versión de escenario incompatible.');
   if (!value.id?.trim() || !value.title?.trim())
     throw new Error('El escenario necesita identificador y título.');
   createMatchRecord(value.config, value.initialState);

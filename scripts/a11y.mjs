@@ -26,10 +26,12 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
-  await page.locator('[data-game-mode="local"]').click();
+  const homeResults = await new AxeBuilder({ page }).analyze();
+  await page.locator('[data-home-action="new"]').click();
+  await page.locator('[data-home-mode="local"]').click();
   await page.locator('[data-start-free]').click();
   const results = await new AxeBuilder({ page }).analyze();
-  const serious = results.violations.filter(
+  const serious = [...homeResults.violations, ...results.violations].filter(
     (violation) => violation.impact === 'serious' || violation.impact === 'critical',
   );
   if (serious.length) {
@@ -43,7 +45,9 @@ try {
       .join('\n');
     throw new Error(`Accessibility violations:\n${summary}`);
   }
-  console.log(`Axe passed: ${results.passes.length} rules, no serious or critical violations.`);
+  console.log(
+    `Axe passed: home and match, ${homeResults.passes.length + results.passes.length} rule checks, no serious or critical violations.`,
+  );
 } finally {
   await browser.close();
   await server.close();

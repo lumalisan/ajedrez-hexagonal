@@ -2,13 +2,14 @@ import { createGameState, getPiece } from './engine';
 import type {
   GameAction,
   GameState,
+  FortressHp,
   Piece,
   Player,
   ScenarioDefinition,
   ScenarioObjective,
 } from './types';
 
-const fortress = (id: string, owner: Player, q: number, r: number, hp: 1 | 2 = 2): Piece => ({
+const fortress = (id: string, owner: Player, q: number, r: number, hp: FortressHp = 2): Piece => ({
   id,
   type: 'fortress',
   owner,

@@ -3,7 +3,7 @@ import type { GamePreferences, MatchRecord } from './types';
 
 const PREFERENCES_KEY = 'atlas-preferences-v2';
 const LEGACY_PREFERENCES_KEY = 'atlas-preferences-v1';
-const MATCH_KEY = 'atlas-match-classic-v1';
+const MATCH_KEY = 'atlas-match-classic-v2';
 const PROGRESS_KEY = 'atlas-academy-progress-v1';
 
 export const DEFAULT_PREFERENCES: GamePreferences = {

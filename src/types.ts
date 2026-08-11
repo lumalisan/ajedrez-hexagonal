@@ -2,6 +2,8 @@ export type Player = 0 | 1;
 
 export type Direction = 0 | 1 | 2 | 3 | 4 | 5;
 
+export type FortressHp = 1 | 2 | 3;
+
 export interface Hex {
   readonly q: number;
   readonly r: number;
@@ -33,7 +35,7 @@ export type Piece =
   | (BasePiece & { type: 'drone' })
   | (BasePiece & { type: 'airplane'; facing: Direction })
   | (BasePiece & { type: 'antiAir' })
-  | (BasePiece & { type: 'fortress'; hp: 1 | 2 });
+  | (BasePiece & { type: 'fortress'; hp: FortressHp });
 
 export interface CellOccupancy {
   ground?: Piece;
@@ -41,7 +43,14 @@ export interface CellOccupancy {
 }
 
 export type GameAction =
-  | { kind: 'move'; pieceId: string; to: Hex; cannon?: Direction; kamikaze?: boolean }
+  | {
+      kind: 'move';
+      pieceId: string;
+      to: Hex;
+      cannon?: Direction;
+      kamikaze?: boolean;
+      targetId?: string;
+    }
   | { kind: 'rotate'; pieceId: string; facing: Direction }
   | { kind: 'orient'; pieceId: string; cannon: Direction }
   | { kind: 'shoot'; pieceId: string; targetId: string }
@@ -81,7 +90,7 @@ export interface GameEvent {
 }
 
 export type Outcome =
-  | { type: 'win'; winner: Player; reason: 'fortress' | 'blockade' | 'repetition' }
+  | { type: 'win'; winner: Player; reason: 'fortress' }
   | { type: 'draw'; reason: 'blockade' | 'repetition' };
 
 export interface BattleLogEntry {
@@ -131,7 +140,7 @@ export type ConfirmationMode = 'always' | 'critical' | 'quick';
 
 export type GameMode = 'local' | 'machine' | 'academy';
 
-export type AiDifficulty = 'recruit' | 'tactical' | 'commander';
+export type AiDifficulty = 'recruit' | 'tactical' | 'commander' | 'expert';
 
 export interface Participant {
   kind: 'human' | 'machine';
@@ -166,7 +175,7 @@ export interface MatchOptions {
 
 export interface MatchConfig {
   definitionId: string;
-  rulesetId: 'classic-v1';
+  rulesetId: 'classic-v2';
   participants: [Participant, Participant];
   board: BoardDefinition;
   setup: PieceSetup[];
@@ -175,7 +184,7 @@ export interface MatchConfig {
 }
 
 export interface MatchRecord {
-  version: 1;
+  version: 2;
   config: MatchConfig;
   initialState: GameState;
   actions: GameAction[];

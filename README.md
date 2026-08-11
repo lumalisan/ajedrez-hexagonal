@@ -30,7 +30,7 @@ pnpm test:a11y
 ## Modos y datos
 
 - **Partida libre:** local o contra IA Recluta, Táctico y Comandante.
-- **Academia táctica:** ocho escenarios reproducibles que usan `classic-v1`.
+- **Academia táctica:** ocho escenarios reproducibles que usan `classic-v2`.
 - **Laboratorio:** editor JSON validado y catálogo local.
 - Autoguardado después de cada orden, continuar, importar/exportar y visor de repetición.
 - Capa opcional de amenazas inmediatas, con detalle accesible y preferencias persistentes.
@@ -53,7 +53,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 ## Estructura
 
 - `src/engine.ts`: reglas puras, turnos, combate y finales.
-- `src/game-config.ts`: configuración validada y contrato `classic-v1`.
+- `src/game-config.ts`: configuración validada y contrato `classic-v2`.
 - `src/match-record.ts`: diario versionado, replay y estadísticas.
 - `src/action-identity.ts` y `src/tactical-analysis.ts`: identidad canónica y consulta táctica pura.
 - `src/match-store.ts` y `src/match-controller.ts`: estado explícito de partida e interfaz.

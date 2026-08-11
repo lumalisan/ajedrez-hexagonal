@@ -3,6 +3,7 @@ import { createInitialPieces } from './setup';
 import type {
   AiDifficulty,
   ConfirmationMode,
+  FortressHp,
   GameMode,
   MatchConfig,
   MatchOptions,
@@ -18,6 +19,7 @@ export interface MatchConfigInput {
   handoffScreen?: boolean;
   clockSeconds?: number | null;
   playerNames?: [string, string];
+  fortressHp?: FortressHp;
 }
 
 export function createClassicConfig(input: MatchConfigInput): MatchConfig {
@@ -36,10 +38,10 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     clockSeconds: input.clockSeconds ?? null,
     allowUndo: input.mode === 'machine',
   };
-  const pieces = createInitialPieces();
+  const pieces = createInitialPieces(input.fortressHp ?? 2);
   return {
     definitionId: 'classic',
-    rulesetId: 'classic-v1',
+    rulesetId: 'classic-v2',
     participants,
     board: { kind: 'hex-set', cells: allBoardHexes() },
     setup: pieces.map((piece) => ({ id: piece.id, piece })),
@@ -50,7 +52,7 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
 
 export function validateMatchConfig(config: MatchConfig): string[] {
   const errors: string[] = [];
-  if (config.rulesetId !== 'classic-v1') errors.push('Ruleset no compatible.');
+  if (config.rulesetId !== 'classic-v2') errors.push('Ruleset no compatible.');
   if (!config.definitionId.trim()) errors.push('La definición no tiene identificador.');
   if (config.participants.length !== 2) errors.push('La partida necesita dos participantes.');
   const cells = new Set(config.board.cells.map(hexKey));
@@ -63,6 +65,8 @@ export function validateMatchConfig(config: MatchConfig): string[] {
     ids.add(setup.id);
     if (!cells.has(hexKey(setup.piece.position)))
       errors.push(`La pieza ${setup.id} está fuera del tablero configurado.`);
+    if (setup.piece.type === 'fortress' && ![1, 2, 3].includes(setup.piece.hp))
+      errors.push(`La Fortaleza ${setup.id} tiene puntos de vida inválidos.`);
   }
   for (const player of [0, 1] as const) {
     const fortresses = config.setup.filter(

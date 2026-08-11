@@ -5,7 +5,7 @@ import type { GameAction } from './types';
 export function actionKey(action: GameAction): string {
   switch (action.kind) {
     case 'move':
-      return `move:${action.pieceId}:${hexKey(action.to)}:${action.cannon ?? '-'}:${action.kamikaze ? 'k' : '-'}`;
+      return `move:${action.pieceId}:${hexKey(action.to)}:${action.cannon ?? '-'}:${action.kamikaze ? 'k' : '-'}:${action.targetId ?? '-'}`;
     case 'rotate':
       return `rotate:${action.pieceId}:${action.facing}`;
     case 'orient':

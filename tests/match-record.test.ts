@@ -13,7 +13,7 @@ import {
 import { SCENARIOS, evaluateScenario } from '../src/scenarios';
 
 describe('configuración, invariantes y diario', () => {
-  it('valida classic-v1 y todos los escenarios', () => {
+  it('valida classic-v2 y todos los escenarios', () => {
     const config = createClassicConfig({ mode: 'local' });
     expect(validateMatchConfig(config)).toEqual([]);
     expect(validateState(createMatchRecord(config).initialState, config)).toEqual([]);
@@ -31,6 +31,18 @@ describe('configuración, invariantes y diario', () => {
         return result.ok && evaluateScenario(scenario, scenario.initialState, result.state, action);
       });
       expect(solves, `${scenario.id} debe tener una solución legal inmediata`).toBe(true);
+    }
+  });
+
+  it('configura ambas Fortalezas con entre 1 y 3 HP', () => {
+    for (const fortressHp of [1, 2, 3] as const) {
+      const config = createClassicConfig({ mode: 'local', fortressHp });
+      expect(
+        config.setup
+          .filter(({ piece }) => piece.type === 'fortress')
+          .map(({ piece }) => (piece.type === 'fortress' ? piece.hp : 0)),
+      ).toEqual([fortressHp, fortressHp]);
+      expect(validateMatchConfig(config)).toEqual([]);
     }
   });
 
@@ -55,6 +67,15 @@ describe('configuración, invariantes y diario', () => {
   it('rechaza versiones incompatibles y acciones manipuladas', () => {
     const record = createMatchRecord(createClassicConfig({ mode: 'local' }));
     expect(() => parseRecord(JSON.stringify({ ...record, version: 99 }))).toThrow(ReplayError);
+    expect(() =>
+      parseRecord(
+        JSON.stringify({
+          ...record,
+          version: 1,
+          config: { ...record.config, rulesetId: 'classic-v1' },
+        }),
+      ),
+    ).toThrow(ReplayError);
     const tampered = {
       ...record,
       actions: [{ kind: 'move', pieceId: 'inexistente', to: { q: 0, r: 0 } }],

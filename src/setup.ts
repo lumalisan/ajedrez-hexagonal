@@ -1,4 +1,4 @@
-import type { Direction, Hex, Piece, PieceType, Player } from './types';
+import type { Direction, FortressHp, Hex, Piece, PieceType, Player } from './types';
 
 interface SetupPiece {
   type: PieceType;
@@ -28,7 +28,7 @@ const BLUE_SETUP: SetupPiece[] = [
   { type: 'antiAir', position: { q: 0, r: -5 } },
 ];
 
-function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {
+function makePiece(spec: SetupPiece, owner: Player, index: number, fortressHp: FortressHp): Piece {
   const id = `${owner === 0 ? 'azul' : 'ambar'}-${spec.type}-${index + 1}`;
   const position =
     owner === 0
@@ -46,7 +46,7 @@ function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {
     case 'airplane':
       return { id, type: 'airplane', owner, position, facing: owner === 0 ? 3 : 0 };
     case 'fortress':
-      return { id, type: 'fortress', owner, position, hp: 2 };
+      return { id, type: 'fortress', owner, position, hp: fortressHp };
     case 'capturer':
     case 'long':
     case 'fast':
@@ -56,8 +56,8 @@ function makePiece(spec: SetupPiece, owner: Player, index: number): Piece {
   }
 }
 
-export function createInitialPieces(): Piece[] {
+export function createInitialPieces(fortressHp: FortressHp = 2): Piece[] {
   return ([0, 1] as const).flatMap((owner) =>
-    BLUE_SETUP.map((piece, index) => makePiece(piece, owner, index)),
+    BLUE_SETUP.map((piece, index) => makePiece(piece, owner, index, fortressHp)),
   );
 }

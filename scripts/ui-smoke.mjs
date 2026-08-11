@@ -34,9 +34,79 @@ try {
   watchErrors(desktop, runtimeErrors);
   await desktop.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   assert(
-    (await desktop.locator('[data-game-mode]').count()) === 3,
-    'Initial game-mode choice is missing.',
+    await desktop.locator('#home-screen').isVisible(),
+    'The new home screen must be visible on first load.',
   );
+  assert(
+    (await desktop.locator('[data-home-action]').count()) === 4,
+    'Home must expose New game, Continue, Rules and Tutorial.',
+  );
+  assert(
+    (await desktop.locator('#home-settings-button, #home-sound-button').count()) === 2,
+    'Home quick settings and sound controls are missing.',
+  );
+  await desktop.waitForFunction(
+    () => document.querySelector('#turn-chip')?.textContent?.includes('Ámbar en mando'),
+    undefined,
+    { timeout: 5_000 },
+  );
+  if (process.env.UI_SCREENSHOT)
+    await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-home.png` });
+
+  await desktop.locator('[data-home-action="rules"]').click();
+  assert(
+    (await desktop.locator('[data-rule-section]').count()) === 12,
+    'Rules must expose the twelve requested sections.',
+  );
+  await desktop.locator('[data-rule-search]').fill('capturador');
+  const filteredRuleCount = await desktop.locator('[data-rule-section]:not([hidden])').count();
+  assert(
+    filteredRuleCount > 0 &&
+      filteredRuleCount < 12 &&
+      !(await desktop.locator('[data-rule-section="capturador"]').isHidden()),
+    'Rules search must filter the navigation.',
+  );
+  const filteredTab = desktop.locator('[data-rule-section="capturador"]');
+  await filteredTab.focus();
+  await filteredTab.press('ArrowDown');
+  assert(
+    !(await desktop.locator('[data-rule-section][aria-selected="true"]').isHidden()),
+    'Keyboard navigation must not activate a filtered-out rules section.',
+  );
+  await desktop.locator('[data-rule-search]').fill('');
+  await filteredTab.focus();
+  await filteredTab.press('Enter');
+  assert(
+    await desktop
+      .locator('#rules-article h3')
+      .evaluate(
+        (heading) =>
+          document.activeElement === heading && getComputedStyle(heading).outlineStyle !== 'none',
+      ),
+    'Keyboard rule activation must retain a visible focus indicator.',
+  );
+  assert(
+    (await desktop.locator('#rules-article').textContent())?.includes(
+      'no puede capturar ni atacar la fortaleza',
+    ),
+    'Updated Capturer rule is missing.',
+  );
+  await desktop.waitForFunction(() =>
+    [...document.querySelectorAll('.rule-media img')].every(
+      (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+    ),
+  );
+  if (process.env.UI_SCREENSHOT)
+    await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-rules.png` });
+  await desktop.locator('.rules-close').click();
+
+  await desktop.locator('[data-home-action="new"]').click();
+  assert(
+    (await desktop.locator('[data-home-mode]').count()) === 2 &&
+      (await desktop.locator('.home-nav-button.unavailable').isDisabled()),
+    'New game menu must expose two playable modes and disabled online play.',
+  );
+  await desktop.locator('[data-home-mode="local"]').click();
   assert(
     await desktop.evaluate(
       () =>
@@ -45,7 +115,12 @@ try {
     ),
     'Opening a modal must lock background scrolling.',
   );
-  await selectMode(desktop, 'local');
+  assert(
+    (await desktop.locator('[data-fortress-hp]').inputValue()) === '1',
+    'Fortress health must default to the recommended 1 HP.',
+  );
+  await desktop.locator('[data-start-free]').click();
+  await desktop.locator('#game-dialog').waitFor({ state: 'hidden' });
   assert(
     await desktop.evaluate(() => !document.documentElement.classList.contains('modal-open')),
     'Closing a modal must restore the page scroll state.',
@@ -76,9 +151,9 @@ try {
     'Accessible cell labels contain stray template characters.',
   );
   const healthBars = await desktop.locator('.hp i').all();
-  assert(healthBars.length === 4, 'Fortress score must expose four health bars.');
+  assert(healthBars.length === 2, 'The default 1 HP match must expose two health indicators.');
   assert(
-    (await desktop.locator('.hp svg path').count()) === 4,
+    (await desktop.locator('.hp svg path').count()) === 2,
     'Fortress health must use heart icons.',
   );
   for (const bar of healthBars) {
@@ -261,6 +336,12 @@ try {
   });
   watchErrors(mobile, runtimeErrors);
   await mobile.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  assert(
+    await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    'Mobile home screen causes horizontal overflow.',
+  );
+  if (process.env.UI_SCREENSHOT)
+    await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-home.png` });
   await selectMode(mobile, 'local');
   const layout = await mobile.evaluate(() => ({
     viewport: window.innerWidth,
@@ -272,6 +353,8 @@ try {
     `Mobile horizontal overflow: ${layout.documentWidth}px > ${layout.viewport}px.`,
   );
   assert(layout.canvasWidth <= layout.viewport, 'Canvas exceeds mobile viewport.');
+  if (process.env.UI_SCREENSHOT)
+    await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-game.png` });
   assert(
     await mobile.locator('#mobile-new-game-button').isVisible(),
     'Mobile new-game control is hidden.',
@@ -325,13 +408,13 @@ try {
   watchErrors(academy, runtimeErrors);
   await academy.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   const modeCardHeights = await academy
-    .locator('[data-game-mode]')
+    .locator('.home-nav-button')
     .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().height));
   assert(
     modeCardHeights.every((height) => height <= 140),
-    'Main mode cards should use the compact height.',
+    'Home navigation should use a compact, scannable height.',
   );
-  await academy.locator('[data-game-mode="academy"]').click();
+  await academy.locator('[data-home-action="tutorial"]').click();
   assert(
     await academy
       .locator('[data-scenario="movement"]')
@@ -386,7 +469,7 @@ try {
   await academy.reload({ waitUntil: 'networkidle' });
   assert(
     await academy
-      .locator('[data-continue-match]')
+      .locator('[data-home-action="continue"]')
       .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
     'Continue card must expose a pointer cursor.',
   );
@@ -455,7 +538,13 @@ async function clickHex(page, q, r) {
 }
 
 async function selectMode(page, mode) {
-  await page.locator(`[data-game-mode="${mode}"]`).click();
+  if (await page.locator('#home-screen').isVisible()) {
+    if (!(await page.locator(`[data-home-mode="${mode}"]`).isVisible()))
+      await page.locator('[data-home-action="new"]').click();
+    await page.locator(`[data-home-mode="${mode}"]`).click();
+  } else {
+    await page.locator(`[data-game-mode="${mode}"]`).click();
+  }
   await page.locator('[data-start-free]').click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
 }

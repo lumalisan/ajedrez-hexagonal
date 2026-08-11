@@ -13,7 +13,82 @@
     <title>Protocolo Hexagonal</title>
   </head>
   <body>
-    <div id="app" class="app-shell">
+    <div id="app" class="app-shell home-active">
+      <section id="home-screen" class="home-screen" aria-label="Portada de Protocolo Hexagonal">
+        <aside class="home-menu-panel">
+          <div class="home-brand">
+            <img src="/atlas-mark.svg" alt="" width="58" height="58" />
+            <div>
+              <span>ESTRATEGIA HEXAGONAL</span>
+              <h1>Protocolo<br />Hexagonal</h1>
+            </div>
+          </div>
+
+          <div id="home-menu-content" class="home-menu-content">
+            <p class="home-intro">Domina el frente. Protege tu fortaleza.</p>
+            <nav class="home-navigation" aria-label="Menú principal">
+              <button type="button" class="home-nav-button primary" data-home-action="new">
+                <span>Nueva partida</span>
+                <small>Configura un nuevo enfrentamiento</small>
+              </button>
+              <button
+                type="button"
+                class="home-nav-button"
+                id="home-continue-button"
+                data-home-action="continue"
+              >
+                <span>Continuar partida</span>
+                <small id="home-continue-detail">No hay una partida guardada</small>
+              </button>
+              <button type="button" class="home-nav-button" data-home-action="rules">
+                <span>Reglas</span>
+                <small>Consulta unidades, acciones y victoria</small>
+              </button>
+              <button type="button" class="home-nav-button" data-home-action="tutorial">
+                <span>Tutorial</span>
+                <small>Aprende con desafíos tácticos</small>
+              </button>
+            </nav>
+          </div>
+        </aside>
+
+        <div class="home-utility-actions" aria-label="Accesos rápidos">
+          <button
+            class="icon-button"
+            id="home-settings-button"
+            type="button"
+            aria-label="Abrir ajustes"
+            title="Ajustes"
+          >
+            <svg class="settings-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 7h10m4 0h2M4 17h2m4 0h10M14 4v6M6 14v6" />
+              <circle cx="14" cy="7" r="2" />
+              <circle cx="8" cy="17" r="2" />
+            </svg>
+          </button>
+          <button
+            class="icon-button"
+            id="home-sound-button"
+            type="button"
+            aria-label="Silenciar sonido"
+            title="Sonido"
+          >
+            <svg class="sound-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 9.5v5h4l4.5 3.5V6L8 9.5H4Z" />
+              <path class="sound-wave sound-wave-1" d="M15 9a4 4 0 0 1 0 6" />
+              <path class="sound-wave sound-wave-2" d="M17.5 6.5a7.5 7.5 0 0 1 0 11" />
+              <path class="sound-muted-mark" d="m16 9 5 6m0-6-5 6" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="demo-status" aria-hidden="true">
+          <span class="demo-live-dot"></span>
+          <span>Partida de demostración</span>
+          <strong>IA Cian vs. IA Ámbar</strong>
+        </div>
+      </section>
+
       <header class="topbar">
         <div
           class="brand"

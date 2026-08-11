@@ -132,7 +132,7 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
     if (isAirPiece(piece)) count.air += 1;
     else count.ground += 1;
     layers.set(key, count);
-    if (piece.type === 'fortress' && piece.hp !== 1 && piece.hp !== 2)
+    if (piece.type === 'fortress' && piece.hp !== 1 && piece.hp !== 2 && piece.hp !== 3)
       errors.push(`La Fortaleza ${piece.id} tiene puntos de vida inválidos.`);
   }
   for (const [key, count] of layers) {
@@ -278,7 +278,7 @@ function soldierActions(
     if (facing !== piece.facing) actions.push({ kind: 'rotate', pieceId: piece.id, facing });
   }
   const air = occupancyAt(state, piece.position).air;
-  if (air && air.owner !== piece.owner) {
+  if (air?.type === 'drone' && air.owner !== piece.owner) {
     actions.push({ kind: 'attackAbove', pieceId: piece.id, targetId: air.id });
   }
   return actions;
@@ -306,7 +306,11 @@ function capturerActions(
   }
 
   const airAbove = occupancyAt(state, piece.position).air;
-  if (airAbove && airAbove.owner !== piece.owner && !isProtectedFromCapture(state, airAbove)) {
+  if (
+    airAbove?.type === 'drone' &&
+    airAbove.owner !== piece.owner &&
+    !isProtectedFromCapture(state, airAbove)
+  ) {
     actions.push({ kind: 'convert', pieceId: piece.id, targetId: airAbove.id });
   }
   return actions;
@@ -326,7 +330,7 @@ function captureActionsAt(
   else targets = [groundEnemy, airEnemy].filter((piece): piece is Piece => Boolean(piece));
 
   return targets
-    .filter((target) => target.type === 'fortress' || !isProtectedFromCapture(state, target))
+    .filter((target) => target.type !== 'fortress' && !isProtectedFromCapture(state, target))
     .map((target) => ({ kind: 'convert', pieceId: capturer.id, targetId: target.id }));
 }
 
@@ -456,7 +460,7 @@ function fastActions(state: GameState, piece: Extract<Piece, { type: 'fast' }>):
         break;
       }
 
-      if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) {
+      if (occupancy.air?.type === 'drone' && occupancy.air.owner !== piece.owner) {
         actions.push({ kind: 'move', pieceId: piece.id, to });
         break;
       }
@@ -465,7 +469,7 @@ function fastActions(state: GameState, piece: Extract<Piece, { type: 'fast' }>):
     }
   }
   const air = occupancyAt(state, piece.position).air;
-  if (air && air.owner !== piece.owner) {
+  if (air?.type === 'drone' && air.owner !== piece.owner) {
     actions.push({ kind: 'attackAbove', pieceId: piece.id, targetId: air.id });
   }
   actions.push(...transformActions(state, piece));
@@ -520,7 +524,25 @@ function airplaneActions(
       const air = occupancyAt(state, to).air;
       if (air) {
         if (air.owner !== piece.owner) {
-          actions.push({ kind: 'move', pieceId: piece.id, to, kamikaze: true });
+          const ground = occupancyAt(state, to).ground;
+          if (ground && ground.owner !== piece.owner) {
+            actions.push({
+              kind: 'move',
+              pieceId: piece.id,
+              to,
+              kamikaze: true,
+              targetId: air.id,
+            });
+            actions.push({
+              kind: 'move',
+              pieceId: piece.id,
+              to,
+              kamikaze: true,
+              targetId: ground.id,
+            });
+          } else {
+            actions.push({ kind: 'move', pieceId: piece.id, to, kamikaze: true });
+          }
         }
         break;
       }
@@ -574,7 +596,10 @@ function adjacentQuietMoves(state: GameState, piece: Piece): GameAction[] {
 
 function canQuietGroundEnter(state: GameState, piece: Piece, to: Hex): boolean {
   const occupancy = occupancyAt(state, to);
-  return !occupancy.ground && (!occupancy.air || occupancy.air.owner === piece.owner);
+  return (
+    !occupancy.ground &&
+    (!occupancy.air || occupancy.air.owner === piece.owner || occupancy.air.type === 'airplane')
+  );
 }
 
 function transformActions(
@@ -585,7 +610,7 @@ function transformActions(
   const airAbove = occupancyAt(state, piece.position).air;
   for (const facing of ALL_DIRECTIONS) {
     actions.push({ kind: 'transform', pieceId: piece.id, facing });
-    if (airAbove && airAbove.owner !== piece.owner) {
+    if (airAbove?.type === 'drone' && airAbove.owner !== piece.owner) {
       actions.push({
         kind: 'transform',
         pieceId: piece.id,
@@ -614,7 +639,20 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   if (state.outcome) return failure(state, 'La partida ya ha terminado.');
   const legal = getLegalActionsForPiece(state, action.pieceId);
   const canonical = actionKey(action);
-  if (!legal.some((candidate) => actionKey(candidate) === canonical)) {
+  let legacyKamikazeCanonical: string | null = null;
+  if (action.kind === 'move' && action.kamikaze && !action.targetId) {
+    const legacyKamikazeTarget = occupancyAt(state, action.to).air?.id;
+    if (legacyKamikazeTarget) {
+      legacyKamikazeCanonical = actionKey({ ...action, targetId: legacyKamikazeTarget });
+    }
+  }
+  if (
+    !legal.some(
+      (candidate) =>
+        actionKey(candidate) === canonical ||
+        (legacyKamikazeCanonical !== null && actionKey(candidate) === legacyKamikazeCanonical),
+    )
+  ) {
     return failure(state, 'Esa orden no es legal en la posición actual.');
   }
 
@@ -699,18 +737,14 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
     case 'convert': {
       const target = getPiece(state, action.targetId);
       if (!target) return;
-      if (target.type === 'fortress') {
-        resolveHit(state, piece.id, target.id, events);
-      } else {
-        target.owner = piece.owner;
-        events.push({
-          type: 'convert',
-          pieceId: piece.id,
-          targetId: target.id,
-          owner: piece.owner,
-          at: { ...target.position },
-        });
-      }
+      target.owner = piece.owner;
+      events.push({
+        type: 'convert',
+        pieceId: piece.id,
+        targetId: target.id,
+        owner: piece.owner,
+        at: { ...target.position },
+      });
       return;
     }
     case 'attackAbove':
@@ -740,7 +774,14 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
     case 'move':
       if (piece.type === 'drone') resolveDroneMove(state, piece, action.to, events);
       else if (piece.type === 'airplane')
-        resolveAirplaneMove(state, piece, action.to, Boolean(action.kamikaze), events);
+        resolveAirplaneMove(
+          state,
+          piece,
+          action.to,
+          Boolean(action.kamikaze),
+          action.targetId,
+          events,
+        );
       else if (piece.type === 'soldier' || piece.type === 'fast') {
         resolveGroundCombatMove(state, piece, action.to, events);
       } else if (piece.type === 'antiAir') {
@@ -757,6 +798,7 @@ function resolveAirplaneMove(
   piece: Extract<Piece, { type: 'airplane' }>,
   to: Hex,
   kamikaze: boolean,
+  targetId: string | undefined,
   events: GameEvent[],
 ): void {
   const from = { ...piece.position };
@@ -779,24 +821,24 @@ function resolveAirplaneMove(
 
   events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...to } });
   const occupancy = occupancyAt(state, to);
-  const target = kamikaze
-    ? occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner
-      ? occupancy.air
-      : occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner
-        ? occupancy.ground
-        : undefined
-    : undefined;
+  const requestedTarget = targetId ? getPiece(state, targetId) : undefined;
+  const target =
+    kamikaze &&
+    requestedTarget &&
+    requestedTarget.owner !== piece.owner &&
+    equalHex(requestedTarget.position, to)
+      ? requestedTarget
+      : kamikaze
+        ? occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner
+          ? occupancy.air
+          : occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner
+            ? occupancy.ground
+            : undefined
+        : undefined;
   if (kamikaze && target) {
     const at = { ...target.position };
-    removePiece(state, target.id);
+    resolveHit(state, piece.id, target.id, events);
     removePiece(state, piece.id);
-    events.push({
-      type: 'destroy',
-      pieceId: piece.id,
-      targetId: target.id,
-      owner: piece.owner,
-      at,
-    });
     events.push({
       type: 'destroy',
       pieceId: piece.id,
@@ -827,7 +869,10 @@ function resolveGroundCombatMove(
   const occupancy = occupancyAt(state, to);
   const enemyGround =
     occupancy.ground && occupancy.ground.owner !== piece.owner ? occupancy.ground : undefined;
-  const enemyAir = occupancy.air && occupancy.air.owner !== piece.owner ? occupancy.air : undefined;
+  const enemyAir =
+    occupancy.air?.type === 'drone' && occupancy.air.owner !== piece.owner
+      ? occupancy.air
+      : undefined;
   const target = enemyGround ?? (!occupancy.ground ? enemyAir : undefined);
   if (target) resolveHit(state, piece.id, target.id, events);
 
@@ -904,11 +949,11 @@ function resolveHit(
   if (!attacker || !target) return;
 
   if (target.type === 'fortress') {
-    const sacrifice = attacker.type === 'soldier' || attacker.type === 'capturer';
-    const damage = sacrifice ? 1 : 2;
+    const sacrifice = attacker.type === 'soldier' || attacker.type === 'fast';
+    const damage = 1;
     const targetAt = { ...target.position };
     const previousHp = target.hp;
-    if (previousHp === 2 && damage === 1 && state.firstFortressDamageBy === null) {
+    if (state.firstFortressDamageBy === null) {
       state.firstFortressDamageBy = attacker.owner;
     }
     events.push({
@@ -930,7 +975,7 @@ function resolveHit(
         at: targetAt,
       });
     } else {
-      target.hp = 1;
+      target.hp = previousHp === 3 ? 2 : 1;
     }
 
     if (sacrifice) {
@@ -1007,27 +1052,13 @@ function finishByBlockade(
   reason: 'blockade' | 'repetition',
   events: GameEvent[],
 ): void {
-  const fortresses = state.pieces.filter(
-    (piece): piece is Extract<Piece, { type: 'fortress' }> => piece.type === 'fortress',
-  );
-  const intact = fortresses.length === 2 && fortresses.every((fortress) => fortress.hp === 2);
-  if (intact || state.firstFortressDamageBy === null) {
-    state.outcome = { type: 'draw', reason };
-    events.push({ type: 'draw' });
-    state.history.push({
-      id: state.ply + 1,
-      player: state.activePlayer,
-      text: 'Bloqueo confirmado: tablas.',
-    });
-  } else {
-    state.outcome = { type: 'win', winner: state.firstFortressDamageBy, reason };
-    events.push({ type: 'victory', owner: state.firstFortressDamageBy });
-    state.history.push({
-      id: state.ply + 1,
-      player: state.firstFortressDamageBy,
-      text: `${PLAYER_NAMES[state.firstFortressDamageBy]} vence por primer daño a Fortaleza.`,
-    });
-  }
+  state.outcome = { type: 'draw', reason };
+  events.push({ type: 'draw' });
+  state.history.push({
+    id: state.ply + 1,
+    player: state.activePlayer,
+    text: reason === 'repetition' ? 'Triple repetición: tablas.' : 'Bloqueo confirmado: tablas.',
+  });
 }
 
 export function declareBlockade(state: GameState): ActionResult {
@@ -1083,7 +1114,16 @@ export function describeAction(state: GameState, action: GameAction): string {
           : undefined;
       const enemyAir =
         destination.air && destination.air.owner !== piece.owner ? destination.air : undefined;
-      const target = isAirPiece(piece) ? (enemyAir ?? enemyGround) : (enemyGround ?? enemyAir);
+      const requestedTarget = action.targetId ? getPiece(state, action.targetId) : undefined;
+      const target =
+        piece.type === 'airplane' &&
+        action.kamikaze &&
+        requestedTarget &&
+        equalHex(requestedTarget.position, action.to)
+          ? requestedTarget
+          : isAirPiece(piece)
+            ? (enemyAir ?? enemyGround)
+            : (enemyGround ?? (enemyAir?.type === 'drone' ? enemyAir : undefined));
       if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))) {
         return `Incursión de ${name}: intercepción AA en ${formatHex(action.to)}`;
       }
@@ -1208,13 +1248,7 @@ export function outcomeText(outcome: Outcome): string {
   if (outcome.type === 'draw') {
     return outcome.reason === 'repetition' ? 'Tablas por triple repetición' : 'Tablas por bloqueo';
   }
-  const cause =
-    outcome.reason === 'fortress'
-      ? 'Fortaleza destruida'
-      : outcome.reason === 'repetition'
-        ? 'Primer daño y triple repetición'
-        : 'Primer daño y bloqueo';
-  return `${PLAYER_NAMES[outcome.winner]} vence · ${cause}`;
+  return `${PLAYER_NAMES[outcome.winner]} vence · Fortaleza destruida`;
 }
 
 export function battleLogEntry(state: GameState, indexFromEnd = 0): BattleLogEntry | undefined {

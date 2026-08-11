@@ -1,5 +1,6 @@
 import './styles.css';
 
+import { chooseMachineAction } from './ai';
 import { WorkerAiStrategy, difficultyBudget } from './ai-strategy';
 import { AudioDirector } from './audio';
 import { createClassicConfig } from './game-config';
@@ -55,7 +56,9 @@ import {
   validateCustomScenario,
   type CustomScenario,
 } from './scenario-catalog';
+import { RULE_SECTIONS, type RuleSection } from './rules-content';
 import type {
+  AiDifficulty,
   Direction,
   GameAction,
   GameEvent,
@@ -85,6 +88,11 @@ interface PointerState {
 }
 
 const canvas = requireElement<HTMLCanvasElement>('game-canvas');
+const app = requireElement<HTMLElement>('app');
+const homeScreen = requireElement<HTMLElement>('home-screen');
+const homeMenuContent = requireElement<HTMLElement>('home-menu-content');
+const topbar = requireElementBySelector<HTMLElement>('.topbar');
+const gameLayout = requireElementBySelector<HTMLElement>('.game-layout');
 const renderer = new BoardRenderer(canvas);
 const preferences = loadPreferences();
 renderer.setDepthMode(preferences.boardDepth, true);
@@ -111,6 +119,8 @@ let replayDock: HTMLElement | null = null;
 let machineThinking = false;
 let logOpen = false;
 let renderedStatusKey = '';
+let homeDemoTimer: number | null = null;
+let homeDemoBusy = false;
 
 const pointers = new Map<number, PointerState>();
 let previousPinchDistance = 0;
@@ -127,6 +137,8 @@ const amberFortress = requireElement<HTMLElement>('amber-fortress');
 const battleLog = requireElement<HTMLOListElement>('battle-log');
 const logToggle = requireElement<HTMLButtonElement>('log-toggle');
 const soundButton = requireElement<HTMLButtonElement>('sound-button');
+const homeSoundButton = requireElement<HTMLButtonElement>('home-sound-button');
+const homeSettingsButton = requireElement<HTMLButtonElement>('home-settings-button');
 const blockadeButton = requireElement<HTMLButtonElement>('blockade-button');
 const mobileNewGameButton = requireElement<HTMLButtonElement>('mobile-new-game-button');
 const threatToggle = requireElement<HTMLButtonElement>('threat-toggle');
@@ -137,13 +149,13 @@ const srBoard = requireElement<HTMLElement>('sr-board');
 
 applyPreferences();
 bindControls();
-render();
-showGameModeDialog(true);
+showHomeScreen();
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js'));
 }
 
 function bindControls(): void {
+  homeMenuContent.addEventListener('click', onHomeMenuClick);
   threatToggle.addEventListener('click', () => {
     preferences.tacticalThreats = !preferences.tacticalThreats;
     savePreferences();
@@ -173,13 +185,16 @@ function bindControls(): void {
     'click',
     showSettingsDialog,
   );
+  homeSettingsButton.addEventListener('click', showSettingsDialog);
   blockadeButton.addEventListener('click', showBlockadeDialog);
 
-  soundButton.addEventListener('click', () => {
-    preferences.sound = audio.toggle();
-    savePreferences();
-    renderSoundButton();
-  });
+  for (const button of [soundButton, homeSoundButton]) {
+    button.addEventListener('click', () => {
+      preferences.sound = audio.toggle();
+      savePreferences();
+      renderSoundButton();
+    });
+  }
 
   const activateAudio = (): void => {
     void audio.startMusic().then((started) => {
@@ -224,10 +239,10 @@ function bindControls(): void {
   });
 
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog && gameMode !== null) dialog.close();
+    if (event.target === dialog && dialog.dataset.mandatory !== 'true') dialog.close();
   });
   dialog.addEventListener('cancel', (event) => {
-    if (gameMode === null) event.preventDefault();
+    if (dialog.dataset.mandatory === 'true') event.preventDefault();
   });
   dialog.addEventListener('close', () => {
     if (!dialog.open) unlockPageScroll();
@@ -678,6 +693,7 @@ function syncCanvas(): void {
   const tacticalAnalysis = preferences.tacticalThreats ? analyzeImmediateThreats(state) : null;
   const model: RenderModel = {
     state,
+    fortressMaxHp: [fortressMaximumHp(0), fortressMaximumHp(1)],
     selectedId,
     actions: visibleActions,
     pending: pendingAction,
@@ -774,12 +790,25 @@ function renderFortressStatus(player: 0 | 1, element: HTMLElement): void {
     (piece) => piece.type === 'fortress' && piece.owner === player,
   );
   const hp = fortress?.type === 'fortress' ? fortress.hp : 0;
+  const maxHp = fortressMaximumHp(player);
   element.innerHTML = `
     ${factionMarkMarkup(player)}
     <div><small>${PLAYER_NAMES[player]}</small><strong>Fortaleza</strong></div>
-    <span class="hp" role="img" aria-label="${hp} de 2 puntos de vida">
-      ${[1, 2].map((point) => `<i class="${hp >= point ? 'active' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-8.5-5.2-8.5-12A4.5 4.5 0 0 1 12 6.9 4.5 4.5 0 0 1 20.5 9c0 6.8-8.5 12-8.5 12Z"/></svg></i>`).join('')}
+    <span class="hp" role="img" aria-label="${hp} de ${maxHp} puntos de vida">
+      ${Array.from({ length: maxHp }, (_, index) => index + 1)
+        .map(
+          (point) =>
+            `<i class="${hp >= point ? 'active' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-8.5-5.2-8.5-12A4.5 4.5 0 0 1 12 6.9 4.5 4.5 0 0 1 20.5 9c0 6.8-8.5 12-8.5 12Z"/></svg></i>`,
+        )
+        .join('')}
     </span>`;
+}
+
+function fortressMaximumHp(player: 0 | 1): 1 | 2 | 3 {
+  const configured = matchConfig?.setup.find(
+    ({ piece }) => piece.type === 'fortress' && piece.owner === player,
+  )?.piece;
+  return configured?.type === 'fortress' ? configured.hp : 2;
 }
 
 function factionMarkMarkup(player: 0 | 1): string {
@@ -826,7 +855,7 @@ function renderPieceCard(piece?: Piece): void {
         : piece.type === 'medium'
           ? `<span>Cañón <strong>${directionNameForView(piece.cannon)}</strong></span>`
           : piece.type === 'fortress'
-            ? `<span>Integridad <strong>${piece.hp}/2 HP</strong></span>`
+            ? `<span>Integridad <strong>${piece.hp}/${fortressMaximumHp(piece.owner)} HP</strong></span>`
             : '';
   const layer = isAirPiece(piece) ? 'Aire' : 'Suelo';
   const q = piece.position.q >= 0 ? `+${piece.position.q}` : `${piece.position.q}`;
@@ -879,7 +908,7 @@ function contextualHint(piece: Piece): string {
     drone: 'Consejo · El Dron puede volar y compartir casilla con una unidad terrestre.',
     airplane: 'Consejo · El Avión elige entre volar y disparar; entrar en un escudo lo destruye.',
     antiAir: 'Consejo · El Escudo antiaéreo es inmóvil y protege las seis casillas adyacentes.',
-    fortress: 'Consejo · La Fortaleza tiene 2 HP; protégela para evitar la derrota.',
+    fortress: `Consejo · La Fortaleza tiene ${fortressMaximumHp(piece.owner)} HP; protégela para evitar la derrota.`,
   };
   return hints[piece.type];
 }
@@ -955,8 +984,19 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
     return;
   }
   if (mode.kind === 'transform') {
+    const transformFacing = mode.facing;
+    const attackAbove =
+      transformFacing === null
+        ? undefined
+        : legalActions.find(
+            (action) =>
+              action.kind === 'transform' &&
+              action.facing === transformFacing &&
+              Boolean(action.attackAboveId),
+          );
     actionControls.innerHTML = `${directionPanel('Abandonar vehículo', null, mode.facing, 'transform-facing')}
-      <div class="transform-note"><strong>Movimiento opcional</strong><span>Tras elegir orientación, toca uno de los tres destinos frontales o confirma sin mover.</span></div>`;
+      <div class="transform-note"><strong>Acción inmediata</strong><span>Tras elegir orientación, confirma sin mover, toca un destino frontal o ataca al Dron situado encima.</span></div>
+      ${attackAbove ? '<button type="button" class="stacked-response" data-transform-attack>Transformarse y atacar al Dron superior</button>' : ''}`;
     actionControls
       .querySelectorAll<HTMLButtonElement>('[data-transform-facing]')
       .forEach((button) => {
@@ -974,6 +1014,9 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
           render();
         });
       });
+    actionControls.querySelector('[data-transform-attack]')?.addEventListener('click', () => {
+      if (attackAbove) setPending(attackAbove);
+    });
     actionControls
       .querySelector<HTMLButtonElement>('.cancel-mode')
       ?.addEventListener('click', cancelDraft);
@@ -1002,6 +1045,11 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   const canTransform = legalActions.some((action) => action.kind === 'transform');
   const above = legalActions.find((action) => action.kind === 'attackAbove');
   const below = legalActions.find((action) => action.kind === 'attackBelow');
+  const captureAbove = legalActions.find((action) => {
+    if (action.kind !== 'convert') return false;
+    const target = getPiece(state, action.targetId);
+    return Boolean(target && equalHex(target.position, piece.position) && isAirPiece(target));
+  });
 
   actionControls.innerHTML = `
     <div class="control-section">
@@ -1015,6 +1063,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
         ${canOrient ? '<button type="button" data-command="orient">Orientar cañón</button>' : ''}
         ${above ? '<button type="button" data-command="above">Atacar aeronave superior</button>' : ''}
         ${below ? '<button type="button" data-command="below">Atacar unidad inferior</button>' : ''}
+        ${captureAbove ? '<button type="button" data-command="capture-above">Capturar Dron superior</button>' : ''}
         ${canTransform ? '<button type="button" class="danger-command" data-command="transform">Abandonar vehículo</button>' : ''}
       </div>
     </div>`;
@@ -1033,6 +1082,9 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   });
   actionControls.querySelector('[data-command="below"]')?.addEventListener('click', () => {
     if (below) setPending(below);
+  });
+  actionControls.querySelector('[data-command="capture-above"]')?.addEventListener('click', () => {
+    if (captureAbove) setPending(captureAbove);
   });
   actionControls.querySelector('[data-command="transform"]')?.addEventListener('click', () => {
     mode = { kind: 'transform', facing: null };
@@ -1148,16 +1200,27 @@ function targetChoiceMarkup(action: GameAction, index: number): string {
       ? action.targetId
       : action.kind === 'transform'
         ? action.attackAboveId
-        : undefined;
+        : action.kind === 'move'
+          ? action.targetId
+          : undefined;
   const target = targetId ? getPiece(state, targetId) : undefined;
   const destination = actionDestination(state, action);
   const destinationOccupancy = destination ? occupancyAt(state, destination) : undefined;
   if (action.kind === 'move' && action.kamikaze) {
-    const victim = destinationOccupancy?.air ?? destinationOccupancy?.ground;
+    const victim = target ?? destinationOccupancy?.air ?? destinationOccupancy?.ground;
     return `<button type="button" data-action-choice="${index}"><span>KAMIKAZE</span><strong>Destruir ${victim ? PIECE_NAMES[victim.type] : 'objetivo'}</strong></button>`;
   }
   if (actor?.type === 'airplane' && action.kind === 'move' && destinationOccupancy?.ground) {
     return `<button type="button" data-action-choice="${index}"><span>SOBREVUELO</span><strong>Quedar sobre ${PIECE_NAMES[destinationOccupancy.ground.type]}</strong></button>`;
+  }
+  if (
+    actor &&
+    !isAirPiece(actor) &&
+    action.kind === 'move' &&
+    destinationOccupancy?.air?.type === 'airplane' &&
+    destinationOccupancy.air.owner !== actor.owner
+  ) {
+    return `<button type="button" data-action-choice="${index}"><span>MOVIMIENTO</span><strong>Quedar bajo Avión</strong></button>`;
   }
   if (action.kind === 'shoot') {
     return `<button type="button" data-action-choice="${index}"><span>DISPARO</span><strong>Atacar ${target ? PIECE_NAMES[target.type] : 'objetivo'}</strong></button>`;
@@ -1182,10 +1245,12 @@ function renderBattleLog(): void {
 }
 
 function renderSoundButton(): void {
-  soundButton.classList.toggle('muted', !preferences.sound);
-  soundButton.setAttribute('aria-label', preferences.sound ? 'Silenciar sonido' : 'Activar sonido');
-  soundButton.setAttribute('aria-pressed', String(!preferences.sound));
-  soundButton.title = preferences.sound ? 'Silenciar sonido' : 'Activar sonido';
+  for (const button of [soundButton, homeSoundButton]) {
+    button.classList.toggle('muted', !preferences.sound);
+    button.setAttribute('aria-label', preferences.sound ? 'Silenciar sonido' : 'Activar sonido');
+    button.setAttribute('aria-pressed', String(!preferences.sound));
+    button.title = preferences.sound ? 'Silenciar sonido' : 'Activar sonido';
+  }
 }
 
 function renderThreatToggle(): void {
@@ -1278,8 +1343,171 @@ function announce(message: string): void {
   }, 20);
 }
 
+function showHomeScreen(view: 'main' | 'new' = 'main'): void {
+  aiAbortController?.abort();
+  stopHomeDemo();
+  closeReplay();
+  if (dialog.open) dialog.close();
+  gameMode = null;
+  matchConfig = null;
+  matchRecord = null;
+  matchController = null;
+  activeScenario = null;
+  selectedId = null;
+  pendingAction = null;
+  mode = { kind: 'default' };
+  lastEvents = [];
+  state = createInitialState();
+  focusedHex = { q: 0, r: 0 };
+  machineThinking = false;
+  homeDemoBusy = false;
+  renderedStatusKey = '';
+  app.classList.add('home-active');
+  homeScreen.hidden = false;
+  homeScreen.inert = false;
+  topbar.inert = true;
+  gameLayout.inert = true;
+  renderer.resetView();
+  renderer.snapToPlayer(0);
+  if (view === 'new') showHomeNewGameMenu();
+  else showHomeMainMenu();
+  render();
+  startHomeDemo();
+}
+
+function leaveHomeScreen(): void {
+  stopHomeDemo();
+  app.classList.remove('home-active');
+  homeScreen.hidden = true;
+  homeScreen.inert = true;
+  topbar.inert = false;
+  gameLayout.inert = false;
+}
+
+function isHomeScreenActive(): boolean {
+  return app.classList.contains('home-active');
+}
+
+function showHomeMainMenu(): void {
+  const saved = loadActiveMatch();
+  const completed = loadAcademyProgress();
+  const continueDetail = saved.record
+    ? `${saved.record.currentAction} órdenes guardadas · ${saved.record.config.participants[0].name} vs. ${saved.record.config.participants[1].name}`
+    : saved.error
+      ? 'La última partida no se pudo recuperar'
+      : 'No hay una partida guardada';
+  homeMenuContent.innerHTML = `
+    <p class="home-intro">Domina el frente. Protege tu fortaleza.</p>
+    <nav class="home-navigation" aria-label="Menú principal">
+      <button type="button" class="home-nav-button primary" data-home-action="new">
+        <span>Nueva partida</span><small>Configura un nuevo enfrentamiento</small>
+      </button>
+      <button type="button" class="home-nav-button" data-home-action="continue" ${saved.record ? '' : 'disabled'}>
+        <span>Continuar partida</span><small>${escapeHtml(continueDetail)}</small>
+      </button>
+      <button type="button" class="home-nav-button" data-home-action="rules">
+        <span>Reglas</span><small>Consulta unidades, acciones y victoria</small>
+      </button>
+      <button type="button" class="home-nav-button" data-home-action="tutorial">
+        <span>Tutorial</span><small>${completed.length} de ${SCENARIOS.length} desafíos completados</small>
+      </button>
+    </nav>`;
+}
+
+function showHomeNewGameMenu(): void {
+  homeMenuContent.innerHTML = `
+    <button type="button" class="home-back-button" data-home-action="back" aria-label="Volver al menú principal">← <span>Nueva partida</span></button>
+    <p class="home-intro">Elige cómo quieres disputar la batalla.</p>
+    <nav class="home-navigation mode-navigation" aria-label="Tipo de partida">
+      <button type="button" class="home-nav-button primary" data-home-mode="machine">
+        <span>Individual vs. IA</span><small>Juega contra la inteligencia artificial</small>
+      </button>
+      <button type="button" class="home-nav-button" data-home-mode="local">
+        <span>Dos jugadores</span><small>Juega contra otra persona en el mismo ordenador</small>
+      </button>
+      <button type="button" class="home-nav-button unavailable" disabled>
+        <span>En línea</span><small>Próximamente</small>
+      </button>
+    </nav>`;
+}
+
+function onHomeMenuClick(event: MouseEvent): void {
+  const target = event.target instanceof Element ? event.target : null;
+  const button = target?.closest<HTMLButtonElement>('button');
+  if (!button || button.disabled) return;
+  const action = button.dataset.homeAction;
+  const requestedMode = button.dataset.homeMode;
+  if (requestedMode === 'machine' || requestedMode === 'local') {
+    showFreeMatchConfig(requestedMode);
+    return;
+  }
+  if (action === 'new') showHomeNewGameMenu();
+  else if (action === 'back') showHomeMainMenu();
+  else if (action === 'rules') showRulesDialog();
+  else if (action === 'tutorial') {
+    gameMode = 'academy';
+    showAcademyDialog();
+  } else if (action === 'continue') {
+    const saved = loadActiveMatch();
+    if (!saved.record) {
+      showToast('No hay una partida guardada que continuar.');
+      showHomeMainMenu();
+      return;
+    }
+    loadRecordIntoMatch(saved.record);
+  }
+}
+
+function startHomeDemo(): void {
+  stopHomeDemo();
+  homeDemoTimer = window.setTimeout(() => void runHomeDemoTurn(), 850);
+}
+
+function stopHomeDemo(): void {
+  if (homeDemoTimer !== null) window.clearTimeout(homeDemoTimer);
+  homeDemoTimer = null;
+}
+
+async function runHomeDemoTurn(): Promise<void> {
+  homeDemoTimer = null;
+  if (!isHomeScreenActive() || homeDemoBusy) return;
+  if (dialog.open || document.visibilityState === 'hidden') {
+    homeDemoTimer = window.setTimeout(() => void runHomeDemoTurn(), 700);
+    return;
+  }
+  if (state.outcome || state.ply >= 46) {
+    state = createInitialState();
+    lastEvents = [];
+    renderer.snapToPlayer(0);
+    render();
+  }
+  const action = chooseMachineAction(state);
+  if (!action) {
+    state = createInitialState();
+    render();
+    homeDemoTimer = window.setTimeout(() => void runHomeDemoTurn(), 900);
+    return;
+  }
+  const before = state;
+  const result = applyAction(state, action);
+  if (!result.ok) {
+    homeDemoTimer = window.setTimeout(() => void runHomeDemoTurn(), 900);
+    return;
+  }
+  state = result.state;
+  lastEvents = result.events;
+  homeDemoBusy = true;
+  render();
+  try {
+    await renderer.playEvents(result.events, before, preferences.reducedMotion);
+  } finally {
+    homeDemoBusy = false;
+  }
+  if (isHomeScreenActive()) homeDemoTimer = window.setTimeout(() => void runHomeDemoTurn(), 1_050);
+}
+
 function showNewGameDialog(): void {
-  showGameModeDialog(false);
+  showHomeScreen('new');
 }
 
 function showGameModeDialog(initial: boolean): void {
@@ -1307,7 +1535,7 @@ function showGameModeDialog(initial: boolean): void {
       <button type="button" class="mode-card featured" data-game-mode="machine">
         <span class="mode-icon" aria-hidden="true">♙ ⬡</span>
         <strong>Partida libre vs IA</strong>
-        <small>Elige entre Recluta, Táctico y Comandante.</small>
+        <small>Elige entre Fácil, Media, Difícil y Experto.</small>
       </button>
       <button type="button" class="mode-card academy-card" data-game-mode="academy">
         <span class="mode-icon" aria-hidden="true">◎</span>
@@ -1332,61 +1560,66 @@ function showGameModeDialog(initial: boolean): void {
 
 function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
   openDialog(`
-    <span class="eyebrow">PARTIDA LIBRE 2.0</span>
-    <h2>Configuración clásica</h2>
-    <p>El despliegue y las reglas clásicas ya están preparados.</p>
+    <button type="button" class="config-close" data-dialog-close aria-label="Cerrar configuración">×</button>
+    <span class="eyebrow">NUEVA PARTIDA</span>
+    <h2>${modeToConfigure === 'machine' ? 'Individual vs. IA' : 'Dos jugadores'}</h2>
+    <p>Configura el enfrentamiento antes de desplegar los ejércitos.</p>
     ${
       modeToConfigure === 'machine'
-        ? `<label class="field-row"><span>Dificultad</span><select data-ai-difficulty><option value="recruit">Recluta · ágil</option><option value="tactical">Táctico · anticipa</option><option value="commander">Comandante · profundiza</option></select></label>`
+        ? `<label class="field-row"><span>Dificultad</span><select data-ai-difficulty>
+            <option value="recruit">Fácil</option>
+            <option value="tactical" selected>Media</option>
+            <option value="commander">Difícil</option>
+            <option value="expert">Experto</option>
+          </select></label>`
         : ''
     }
     <div class="match-options">
       <span class="eyebrow">OPCIONES DE PARTIDA</span>
-      <label class="field-row"><span>Confirmación</span><select data-match-confirmation>
-        <option value="always" ${preferences.confirmation === 'always' ? 'selected' : ''}>Siempre</option>
-        <option value="critical" ${preferences.confirmation === 'critical' ? 'selected' : ''}>Ataques y acciones críticas</option>
-        <option value="quick" ${preferences.confirmation === 'quick' ? 'selected' : ''}>Rápida</option>
+      <label class="field-row"><span>Puntos de vida de la Fortaleza</span><select data-fortress-hp>
+        <option value="1" selected>1 (recomendado)</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
       </select></label>
-      <div class="match-option-stack">
-        <label class="toggle-row"><span><strong>Consejos contextuales</strong><small>Aparecen en la barra sobre el tablero al seleccionar una unidad</small></span><input type="checkbox" data-match-hints ${preferences.contextualHints ? 'checked' : ''}/></label>
-        ${
-          modeToConfigure === 'local'
-            ? `<label class="toggle-row"><span><strong>Pantalla de entrega</strong><small>Oculta el tablero entre turnos</small></span><input type="checkbox" data-match-handoff ${preferences.handoffScreen ? 'checked' : ''}/></label>`
-            : ''
-        }
-      </div>
-      <label class="field-row"><span>Reloj opcional</span><select data-match-clock><option value="">Sin reloj</option><option value="300">5 minutos</option><option value="600">10 minutos</option><option value="1200">20 minutos</option></select></label>
+      <label class="field-row"><span>Tiempo</span><select data-match-clock>
+        <option value="" selected>Sin límite</option>
+        <option value="300">5 minutos</option>
+        <option value="600">10 minutos</option>
+        <option value="1200">20 minutos</option>
+      </select></label>
     </div>
     <div class="dialog-actions">
       <button type="button" class="secondary-button" data-back-menu>Volver</button>
-      <button type="button" class="confirm-button" data-start-free>Desplegar</button>
+      <button type="button" class="confirm-button" data-start-free>Crear partida</button>
     </div>`);
-  dialog
-    .querySelector('[data-back-menu]')
-    ?.addEventListener('click', () => showGameModeDialog(false));
+  dialog.querySelector('[data-back-menu]')?.addEventListener('click', () => {
+    if (isHomeScreenActive()) {
+      dialog.close();
+      showHomeNewGameMenu();
+    } else showGameModeDialog(false);
+  });
   dialog.querySelector('[data-start-free]')?.addEventListener('click', () => {
-    const confirmation = dialog.querySelector<HTMLSelectElement>('[data-match-confirmation]')
-      ?.value as GamePreferences['confirmation'];
-    preferences.confirmation = confirmation ?? 'always';
-    preferences.contextualHints =
-      dialog.querySelector<HTMLInputElement>('[data-match-hints]')?.checked ?? true;
-    preferences.handoffScreen =
-      dialog.querySelector<HTMLInputElement>('[data-match-handoff]')?.checked ?? false;
-    savePreferences();
     const clockValue = dialog.querySelector<HTMLSelectElement>('[data-match-clock]')?.value;
+    const fortressHpValue = Number(
+      dialog.querySelector<HTMLSelectElement>('[data-fortress-hp]')?.value,
+    );
+    const fortressHp = (fortressHpValue === 1 || fortressHpValue === 3 ? fortressHpValue : 2) as
+      1 | 2 | 3;
     matchConfig = createClassicConfig({
       mode: modeToConfigure,
       difficulty:
-        (dialog.querySelector<HTMLSelectElement>('[data-ai-difficulty]')?.value as
-          'recruit' | 'tactical' | 'commander') ?? 'recruit',
+        (dialog.querySelector<HTMLSelectElement>('[data-ai-difficulty]')?.value as AiDifficulty) ??
+        'tactical',
       confirmation: preferences.confirmation,
       contextualHints: preferences.contextualHints,
       fixedBoard: preferences.fixedBoard,
       handoffScreen: preferences.handoffScreen,
       clockSeconds: clockValue ? Number(clockValue) : null,
+      fortressHp,
     });
     gameMode = modeToConfigure;
     dialog.close();
+    leaveHomeScreen();
     resetGame();
   });
 }
@@ -1407,9 +1640,12 @@ function showAcademyDialog(): void {
       ).join('')}
     </div>
     <div class="dialog-actions"><button type="button" class="secondary-button" data-back-menu>Volver</button></div>`);
-  dialog
-    .querySelector('[data-back-menu]')
-    ?.addEventListener('click', () => showGameModeDialog(false));
+  dialog.querySelector('[data-back-menu]')?.addEventListener('click', () => {
+    if (isHomeScreenActive()) {
+      dialog.close();
+      showHomeMainMenu();
+    } else showGameModeDialog(false);
+  });
   dialog.querySelectorAll<HTMLButtonElement>('[data-scenario]').forEach((button) => {
     button.addEventListener('click', () => {
       const scenario = scenarioById(button.dataset.scenario ?? '');
@@ -1419,7 +1655,123 @@ function showAcademyDialog(): void {
   });
 }
 
+function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
+  const initial = RULE_SECTIONS.find((section) => section.id === initialId) ?? RULE_SECTIONS[0];
+  if (!initial) return;
+  openDialog(`
+    <div class="rules-shell">
+      <aside class="rules-sidebar">
+        <div class="rules-heading">
+          <div>
+            <span class="rules-kicker">MANUAL DE CAMPO</span>
+            <h2>Reglas</h2>
+          </div>
+          <button type="button" class="rules-close" data-dialog-close aria-label="Cerrar reglas">×</button>
+        </div>
+        <p>Selecciona una sección para consultar las reglas de Protocolo Hexagonal.</p>
+        <label class="rules-search">
+          <span class="sr-only">Buscar en las reglas</span>
+          <input type="search" data-rule-search placeholder="Buscar..." autocomplete="off" />
+        </label>
+        <div class="rules-navigation" role="tablist" aria-label="Secciones del reglamento">
+          ${RULE_SECTIONS.map(
+            (section) =>
+              `<button type="button" role="tab" data-rule-section="${escapeHtml(section.id)}" aria-selected="${section.id === initial.id}" aria-controls="rules-article" class="${section.id === initial.id ? 'active' : ''}">${escapeHtml(section.label)}</button>`,
+          ).join('')}
+        </div>
+      </aside>
+      <article id="rules-article" class="rules-article" role="tabpanel">
+        ${ruleSectionMarkup(initial)}
+      </article>
+    </div>`);
+  const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-rule-section]')];
+  const activate = (id: string, moveFocus = true): void => {
+    const section = RULE_SECTIONS.find((candidate) => candidate.id === id);
+    const article = dialog.querySelector<HTMLElement>('#rules-article');
+    if (!section || !article) return;
+    for (const tab of tabs) {
+      const active = tab.dataset.ruleSection === section.id;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+    }
+    article.innerHTML = ruleSectionMarkup(section);
+    article.scrollTop = 0;
+    if (moveFocus) article.querySelector<HTMLElement>('h3')?.focus();
+  };
+  dialog
+    .querySelector<HTMLInputElement>('[data-rule-search]')
+    ?.addEventListener('input', (event) => {
+      const query = (event.currentTarget as HTMLInputElement).value.trim().toLocaleLowerCase('es');
+      let firstVisible: HTMLButtonElement | undefined;
+      for (const tab of tabs) {
+        const section = RULE_SECTIONS.find((candidate) => candidate.id === tab.dataset.ruleSection);
+        const searchable = section
+          ? `${section.label} ${section.title} ${section.paragraphs.join(' ')}`.toLocaleLowerCase(
+              'es',
+            )
+          : '';
+        const visible = !query || searchable.includes(query);
+        tab.hidden = !visible;
+        if (visible && !firstVisible) firstVisible = tab;
+      }
+      const activeVisible = tabs.some(
+        (tab) => !tab.hidden && tab.getAttribute('aria-selected') === 'true',
+      );
+      if (!activeVisible && firstVisible) activate(firstVisible.dataset.ruleSection ?? '', false);
+    });
+  tabs.forEach((tab) => {
+    tab.tabIndex = tab.dataset.ruleSection === initial.id ? 0 : -1;
+    tab.addEventListener('click', () => activate(tab.dataset.ruleSection ?? ''));
+    tab.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      event.preventDefault();
+      const visibleTabs = tabs.filter((candidate) => !candidate.hidden);
+      const index = visibleTabs.indexOf(tab);
+      if (index < 0 || visibleTabs.length === 0) return;
+      const offset = event.key === 'ArrowDown' ? 1 : -1;
+      const next = visibleTabs[(index + offset + visibleTabs.length) % visibleTabs.length];
+      next.focus();
+      activate(next.dataset.ruleSection ?? '', false);
+    });
+  });
+}
+
+function ruleSectionMarkup(section: RuleSection): string {
+  const media = section.media?.length
+    ? `<figure class="rule-media ${section.media.length > 1 ? 'sequence' : ''}" aria-label="Ilustración de ${escapeHtml(section.title)}">
+        <div class="rule-media-stage">
+          <div class="rule-media-track" style="--frame-count:${section.media.length}">
+            ${section.media
+              .map(
+                (item) =>
+                  `<img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}" loading="lazy" />`,
+              )
+              .join('')}
+          </div>
+        </div>
+        ${section.media.length > 1 ? '<figcaption>Secuencia ilustrativa de la acción</figcaption>' : ''}
+      </figure>`
+    : '';
+  return `
+    <div class="rules-copy">
+      <span class="rules-kicker">PROTOCOLO HEXAGONAL</span>
+      <h3 tabindex="-1">${escapeHtml(section.title)}</h3>
+      ${section.paragraphs.map(ruleParagraphMarkup).join('')}
+    </div>
+    ${media}`;
+}
+
+function ruleParagraphMarkup(paragraph: string): string {
+  if (paragraph === 'Escudo antiaéreo') return `<h4>${escapeHtml(paragraph)}</h4>`;
+  const labeled = /^(Desplazamiento|Disparo|Captura):\s*(.*)$/u.exec(paragraph);
+  if (labeled)
+    return `<p><strong>${escapeHtml(labeled[1])}:</strong> ${escapeHtml(labeled[2])}</p>`;
+  return `<p>${escapeHtml(paragraph)}</p>`;
+}
+
 function showHelpDialog(): void {
+  const fortressHp = fortressMaximumHp(0);
   openDialog(`
     <span class="eyebrow">MANUAL DE CAMPO</span>
     <h2>${activeScenario ? escapeHtml(activeScenario.title) : 'Destruye la Fortaleza rival'}</h2>
@@ -1432,10 +1784,11 @@ function showHelpDialog(): void {
       <section><strong>1 · Selecciona</strong><p>Elige una unidad propia. Menta indica movimiento, rosa ataque, una red sobre el objetivo indica conversión y naranja intercepción.</p></section>
       <section><strong>2 · Prepara</strong><p>Toca destino. En casillas apiladas podrás elegir aire o suelo. Revisa consecuencia antes de confirmar.</p></section>
       <section><strong>3 · Confirma</strong><p>Cada turno exige una acción. Girar Soldado y orientar cañón también consumen turno.</p></section>
-      <section><strong>Victoria</strong><p>Fortaleza tiene 2 HP. Soldado y Capturador causan 1 HP y se sacrifican; resto causa 2 HP.</p></section>
+      <section><strong>Victoria</strong><p>La Fortaleza tiene ${fortressHp} HP. Cada ataque causa 1 HP; Soldado y Embestidor se sacrifican.</p></section>
     </div>
     <details><summary>Reglas tácticas esenciales</summary>
       <p>El Lanzamisiles dispara a todo el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
+      <p>Las unidades terrestres pueden pasar y detenerse bajo un Avión enemigo sin atacarlo. Un Dron enemigo sigue bloqueando ese movimiento.</p>
       <p>El Avión vuela hasta dos casillas por su frente o dispara a su cono ofensivo. Su kamikaze destruye objetivo y Avión. El Escudo antiaéreo es inmóvil: pulveriza aeronaves enemigas y bloquea sus disparos.</p>
       <p>Tanque, Lanzamisiles y Embestidor pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
     </details>
@@ -1628,11 +1981,7 @@ async function acceptBlockade(): Promise<void> {
 }
 
 function blockadePreview(): string {
-  const fortresses = state.pieces.filter((piece) => piece.type === 'fortress');
-  if (fortresses.every((piece) => piece.type === 'fortress' && piece.hp === 2)) return 'tablas';
-  return state.firstFortressDamageBy === null
-    ? 'tablas'
-    : `victoria de ${PLAYER_NAMES[state.firstFortressDamageBy]}`;
+  return 'tablas';
 }
 
 function showOutcomeDialog(): void {
@@ -1664,7 +2013,7 @@ function showOutcomeDialog(): void {
   dialog.querySelectorAll('[data-new-game]').forEach((button) => {
     button.addEventListener('click', () => {
       dialog.close();
-      showGameModeDialog(false);
+      showHomeScreen('new');
     });
   });
   dialog.querySelector('[data-rematch]')?.addEventListener('click', () => {
@@ -1705,6 +2054,7 @@ function unlockPageScroll(): void {
 }
 
 function resetGame(): void {
+  if (isHomeScreenActive()) leaveHomeScreen();
   aiAbortController?.abort();
   activeScenario = null;
   matchConfig ??= createClassicConfig({
@@ -1742,6 +2092,7 @@ function resetGame(): void {
 }
 
 function startScenario(scenario: ScenarioDefinition): void {
+  if (isHomeScreenActive()) leaveHomeScreen();
   aiAbortController?.abort();
   activeScenario = scenario;
   gameMode = 'academy';
@@ -1775,6 +2126,7 @@ function startScenario(scenario: ScenarioDefinition): void {
 }
 
 function loadRecordIntoMatch(record: MatchRecord): void {
+  if (isHomeScreenActive()) leaveHomeScreen();
   aiAbortController?.abort();
   activeScenario = record.config.definitionId.startsWith('scenario:')
     ? (scenarioById(record.config.definitionId.slice('scenario:'.length)) ?? null)
@@ -1993,7 +2345,7 @@ function showScenarioEditorDialog(): void {
       fixedBoard: true,
     });
   const template: CustomScenario = {
-    version: 1,
+    version: 2,
     id: `custom-${Date.now()}`,
     title: 'Escenario personalizado',
     config: {
@@ -2123,4 +2475,10 @@ function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Falta el elemento #${id}`);
   return element as T;
+}
+
+function requireElementBySelector<T extends HTMLElement>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) throw new Error(`Falta el elemento ${selector}`);
+  return element;
 }

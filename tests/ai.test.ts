@@ -140,7 +140,7 @@ describe('machine player', () => {
     });
   });
 
-  it('sacrifices the Avión para destruir inmediatamente la Fortaleza', () => {
+  it('sacrifices the Avión para causar 1 HP a la Fortaleza', () => {
     const state = createGameState(
       [
         { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: 1 }, hp: 2 },
@@ -158,6 +158,8 @@ describe('machine player', () => {
       kamikaze: true,
     });
     const result = action ? applyAction(state, action) : null;
-    expect(result?.state.outcome).toEqual({ type: 'win', winner: 1, reason: 'fortress' });
+    expect(result?.state.pieces.find((piece) => piece.id === 'f0')).toMatchObject({ hp: 1 });
+    expect(result?.state.pieces.some((piece) => piece.id === 'machine-airplane')).toBe(false);
+    expect(result?.state.outcome).toBeNull();
   });
 });

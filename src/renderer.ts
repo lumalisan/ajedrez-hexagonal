@@ -49,6 +49,7 @@ const DEPTH_TRANSITION_DURATION = 420;
 
 export interface RenderModel {
   state: GameState;
+  fortressMaxHp: [1 | 2 | 3, 1 | 2 | 3];
   selectedId: string | null;
   actions: GameAction[];
   pending: GameAction | null;
@@ -675,11 +676,23 @@ export class BoardRenderer {
     const selected = model.selectedId ? getPiece(model.state, model.selectedId) : undefined;
     const inspectionAlpha = selected && selected.owner !== model.state.activePlayer ? 0.46 : 1;
     for (const marker of actionMarkers(model).values()) {
+      const occupancy = occupancyAt(model.state, marker.hex);
+      const moveOntoAlly =
+        marker.kind === 'move' &&
+        marker.canMove &&
+        Boolean(
+          selected &&
+          isAirPiece(selected) &&
+          [occupancy.ground, occupancy.air].some(
+            (piece) => piece && piece.id !== selected.id && piece.owner === selected.owner,
+          ),
+        );
       if (
         marker.kind !== 'capture' &&
         marker.kind !== 'shoot' &&
         marker.kind !== 'convert' &&
-        !(marker.hasRange && marker.canMove && marker.canAttack)
+        !(marker.hasRange && marker.canMove && marker.canAttack) &&
+        !moveOntoAlly
       )
         continue;
       const { x, y } = projectHex(marker.hex, orientation, this.renderedDepth);
@@ -691,7 +704,8 @@ export class BoardRenderer {
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 4;
       ctx.globalAlpha = inspectionAlpha;
-      if (marker.kind === 'shoot' || (marker.hasRange && marker.canMove && marker.canAttack))
+      if (moveOntoAlly) drawMoveMarker(ctx, 5.2 + pulse * 1.2);
+      else if (marker.kind === 'shoot' || (marker.hasRange && marker.canMove && marker.canAttack))
         drawShootMarker(ctx, 11.5 + pulse);
       else if (marker.kind === 'convert') {
         drawConvertMarker(ctx, 12 + pulse);
@@ -731,6 +745,7 @@ export class BoardRenderer {
         alpha: 1,
         isStacked,
         orientation,
+        fortressMaxHp: model.fortressMaxHp[piece.owner],
       });
     }
     for (const hex of stackedHexes) {
@@ -793,6 +808,7 @@ export class BoardRenderer {
       alpha: number;
       isStacked?: boolean;
       orientation: number;
+      fortressMaxHp?: 1 | 2 | 3;
     },
   ): void {
     const color = piece.owner === 0 ? COLORS.blue : COLORS.amber;
@@ -893,7 +909,7 @@ export class BoardRenderer {
     ctx.shadowColor = 'transparent';
 
     if (piece.type === 'fortress') {
-      drawFortressHealth(ctx, piece.hp, color);
+      drawFortressHealth(ctx, piece.hp, options.fortressMaxHp ?? 2, color);
     } else {
       drawOwnerMark(ctx, piece.owner, color);
     }
@@ -946,6 +962,7 @@ export class BoardRenderer {
           highContrast: this.model?.highContrast ?? false,
           alpha: survives ? 1 : Math.max(0, 1 - raw * 0.9),
           orientation,
+          fortressMaxHp: this.model?.fortressMaxHp[piece.owner],
         });
       }
 
@@ -1057,7 +1074,7 @@ function markerColor(marker: ActionMarker): string {
   return COLORS[marker.kind];
 }
 
-function markerKind(state: GameState, action: GameAction): MarkerKind {
+export function markerKind(state: GameState, action: GameAction): MarkerKind {
   const piece = getPiece(state, action.pieceId);
   if (!piece) return 'move';
   if (action.kind === 'shoot') return 'shoot';
@@ -1069,7 +1086,7 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
     const occupancy = occupancyAt(state, action.to);
     if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
       return 'capture';
-    if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'capture';
+    if (occupancy.air?.type === 'drone' && occupancy.air.owner !== piece.owner) return 'capture';
     return 'move';
   }
   if (action.kind === 'rotate' || action.kind === 'orient') return 'convert';
@@ -1082,7 +1099,12 @@ function markerKind(state: GameState, action: GameAction): MarkerKind {
   const occupancy = occupancyAt(state, action.to);
   if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
     return 'capture';
-  if (occupancy.air?.owner !== undefined && occupancy.air.owner !== piece.owner) return 'capture';
+  if (
+    occupancy.air?.owner !== undefined &&
+    occupancy.air.owner !== piece.owner &&
+    (isAirPiece(piece) || occupancy.air.type === 'drone')
+  )
+    return 'capture';
   return 'move';
 }
 
@@ -1500,11 +1522,19 @@ function drawMissileLauncherGlyph(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
-function drawFortressHealth(ctx: CanvasRenderingContext2D, hp: number, color: string): void {
+function drawFortressHealth(
+  ctx: CanvasRenderingContext2D,
+  hp: number,
+  maxHp: number,
+  color: string,
+): void {
   ctx.fillStyle = color;
-  for (let index = 0; index < 2; index += 1) {
+  const width = 6;
+  const gap = 2;
+  const totalWidth = maxHp * width + (maxHp - 1) * gap;
+  for (let index = 0; index < maxHp; index += 1) {
     ctx.globalAlpha = index < hp ? 1 : 0.18;
-    ctx.fillRect(-7 + index * 8, 12, 6, 2.5);
+    ctx.fillRect(-totalWidth / 2 + index * (width + gap), 12, width, 2.5);
   }
   ctx.globalAlpha = 1;
 }
