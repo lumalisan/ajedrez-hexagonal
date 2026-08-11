@@ -96,6 +96,42 @@ try {
       (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
     ),
   );
+  assert(
+    await desktop.locator('.rule-media.sequence').evaluate((figure) => {
+      const stage = figure.querySelector('.rule-media-stage');
+      const track = figure.querySelector('.rule-media-track');
+      const images = [...figure.querySelectorAll('.rule-media-track img')];
+      const animation = track?.getAnimations()[0];
+      if (!(stage instanceof HTMLElement) || !(track instanceof HTMLElement) || !animation)
+        return false;
+      const frameCount = Number(track.style.getPropertyValue('--frame-count'));
+      const duration = Number(animation.effect?.getTiming().duration);
+      const loopFrame = images.at(-1);
+      if (
+        !Number.isFinite(duration) ||
+        images.length !== frameCount + 1 ||
+        loopFrame?.getAttribute('aria-hidden') !== 'true' ||
+        loopFrame?.getAttribute('src') !== images[0]?.getAttribute('src')
+      )
+        return false;
+
+      animation.pause();
+      const stageRect = stage.getBoundingClientRect();
+      const expectedLeft = stageRect.left + stage.clientLeft;
+      const expectedWidth = stage.clientWidth;
+      const framesAlign = images.slice(0, frameCount).every((image, index) => {
+        animation.currentTime = ((index + 0.25) / frameCount) * duration;
+        const imageRect = image.getBoundingClientRect();
+        return (
+          Math.abs(imageRect.left - expectedLeft) < 1.5 &&
+          Math.abs(imageRect.width - expectedWidth) < 1.5
+        );
+      });
+      animation.play();
+      return framesAlign;
+    }),
+    'Rule sequences must advance by one complete illustration without clipped transitions.',
+  );
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-rules.png` });
   await desktop.locator('.rules-close').click();

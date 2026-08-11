@@ -1738,19 +1738,27 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
 }
 
 function ruleSectionMarkup(section: RuleSection): string {
-  const media = section.media?.length
-    ? `<figure class="rule-media ${section.media.length > 1 ? 'sequence' : ''}" aria-label="Ilustración de ${escapeHtml(section.title)}">
+  const mediaItems = section.media ?? [];
+  const frameCount = mediaItems.length;
+  const isSequence = frameCount > 1;
+  const media = frameCount
+    ? `<figure class="rule-media ${isSequence ? 'sequence' : ''}" aria-label="Ilustración de ${escapeHtml(section.title)}">
         <div class="rule-media-stage">
-          <div class="rule-media-track" style="--frame-count:${section.media.length}">
-            ${section.media
+          <div class="rule-media-track" style="--frame-count:${frameCount};--track-count:${isSequence ? frameCount + 1 : frameCount}">
+            ${mediaItems
               .map(
                 (item) =>
                   `<img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}" loading="lazy" />`,
               )
               .join('')}
+            ${
+              isSequence
+                ? `<img src="${escapeHtml(mediaItems[0].src)}" alt="" aria-hidden="true" loading="lazy" />`
+                : ''
+            }
           </div>
         </div>
-        ${section.media.length > 1 ? '<figcaption>Secuencia ilustrativa de la acción</figcaption>' : ''}
+        ${isSequence ? '<figcaption>Secuencia ilustrativa de la acción</figcaption>' : ''}
       </figure>`
     : '';
   return `

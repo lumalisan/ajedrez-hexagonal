@@ -2984,14 +2984,15 @@ button:disabled {
 
 .rule-media-track {
   display: flex;
-  width: calc(var(--frame-count) * 100%);
+  width: calc(var(--track-count) * 100%);
   height: 100%;
+  justify-self: start;
 }
 
 .rule-media-track img {
-  width: calc(100% / var(--frame-count));
+  width: calc(100% / var(--track-count));
   height: 100%;
-  flex: 0 0 calc(100% / var(--frame-count));
+  flex: 0 0 calc(100% / var(--track-count));
   padding: 12px;
   object-fit: contain;
 }
@@ -3022,12 +3023,20 @@ button:disabled {
 
 @keyframes rule-track {
   to {
-    transform: translateX(calc(-100% + (100% / var(--frame-count))));
+    transform: translateX(calc(-100% + (100% / var(--track-count))));
   }
 }
 
 .reduced-motion .rule-media.sequence .rule-media-track {
   animation: none !important;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rule-media.sequence .rule-media-track {
+    animation: none !important;
+    transform: none;
+  }
 }
 
 @media (max-width: 760px) {
