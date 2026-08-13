@@ -45,7 +45,7 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     participants,
     board: { kind: 'hex-set', cells: allBoardHexes() },
     setup: pieces.map((piece) => ({ id: piece.id, piece })),
-    victory: { kind: 'classic-fortress', repetition: 3, blockade: true },
+    victory: { kind: 'classic-fortress', repetition: 0, blockade: true },
     options,
   };
 }

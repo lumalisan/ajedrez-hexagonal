@@ -677,22 +677,21 @@ export class BoardRenderer {
     const inspectionAlpha = selected && selected.owner !== model.state.activePlayer ? 0.46 : 1;
     for (const marker of actionMarkers(model).values()) {
       const occupancy = occupancyAt(model.state, marker.hex);
-      const moveOntoAlly =
-        marker.kind === 'move' &&
+      const moveOntoOccupiedLayer =
         marker.canMove &&
         Boolean(
           selected &&
-          isAirPiece(selected) &&
-          [occupancy.ground, occupancy.air].some(
-            (piece) => piece && piece.id !== selected.id && piece.owner === selected.owner,
-          ),
+          (isAirPiece(selected)
+            ? occupancy.ground && occupancy.ground.owner === selected.owner
+            : occupancy.air &&
+              (occupancy.air.owner === selected.owner || occupancy.air.type === 'airplane')),
         );
       if (
         marker.kind !== 'capture' &&
         marker.kind !== 'shoot' &&
         marker.kind !== 'convert' &&
         !(marker.hasRange && marker.canMove && marker.canAttack) &&
-        !moveOntoAlly
+        !moveOntoOccupiedLayer
       )
         continue;
       const { x, y } = projectHex(marker.hex, orientation, this.renderedDepth);
@@ -704,7 +703,7 @@ export class BoardRenderer {
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 4;
       ctx.globalAlpha = inspectionAlpha;
-      if (moveOntoAlly) drawMoveMarker(ctx, 5.2 + pulse * 1.2);
+      if (moveOntoOccupiedLayer && marker.kind === 'move') drawMoveMarker(ctx, 5.2 + pulse * 1.2);
       else if (marker.kind === 'shoot' || (marker.hasRange && marker.canMove && marker.canAttack))
         drawShootMarker(ctx, 11.5 + pulse);
       else if (marker.kind === 'convert') {
@@ -1096,6 +1095,7 @@ export function markerKind(state: GameState, action: GameAction): MarkerKind {
   if (piece.type === 'airplane' && action.kind === 'move') {
     return action.kamikaze ? 'capture' : 'move';
   }
+  if (action.kind === 'move' && action.targetId) return 'capture';
   const occupancy = occupancyAt(state, action.to);
   if (occupancy.ground?.owner !== undefined && occupancy.ground.owner !== piece.owner)
     return 'capture';

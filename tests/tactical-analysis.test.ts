@@ -91,7 +91,7 @@ describe('análisis de amenazas inmediatas', () => {
     expect(analyzeImmediateThreats(state).threatenedPieceIds).not.toContain('blue-soldier');
   });
 
-  it('no considera que un Capturador amenace la Fortaleza', () => {
+  it('considera que un Capturador adyacente amenaza la Fortaleza', () => {
     const state = createGameState(
       [
         { id: 'fort-blue', type: 'fortress', owner: 0, position: { q: 0, r: 0 }, hp: 2 },
@@ -101,9 +101,9 @@ describe('análisis de amenazas inmediatas', () => {
       0,
     );
 
-    expect(analyzeImmediateThreats(state).threatenedPieceIds).not.toContain('fort-blue');
+    expect(analyzeImmediateThreats(state).threatenedPieceIds).toContain('fort-blue');
     expect(
       analyzeImmediateThreats(state).threats.some((threat) => threat.targetId === 'fort-blue'),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

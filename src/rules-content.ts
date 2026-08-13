@@ -75,7 +75,7 @@ export const RULE_SECTIONS: RuleSection[] = [
       'El capturador puede desplazarse a cualquiera de las seis casillas situadas a su alrededor.',
       'El capturador puede capturar a cualquier unidad enemiga situada dentro de su área de desplazamiento. Al hacerlo, la unidad enemiga se convierte automáticamente en aliada. El capturador y la unidad capturada permanecen en sus respectivas casillas.',
       'Si una unidad está en contacto simultáneamente con un capturador aliado y uno enemigo, no puede ser capturada.',
-      'El capturador no puede capturar ni atacar la fortaleza.',
+      'El capturador no puede capturar la fortaleza, pero sí puede atacarla desplazándose hasta ella.',
     ],
     media: [
       {
@@ -203,7 +203,7 @@ export const RULE_SECTIONS: RuleSection[] = [
       'El jugador de color cian realiza el primer turno. Durante su turno, debe seleccionar una de sus unidades y realizar una acción, como desplazarse, atacar, disparar o cambiar su orientación, según las características de la unidad. A continuación, comienza el turno del jugador de color ámbar.',
       'Los jugadores se turnan de forma alterna hasta que uno de ellos consigue destruir la fortaleza rival. Si se alcanza una situación en la que ninguno de los dos jugadores puede destruir por completo la fortaleza rival, la partida termina en tablas, aunque una de las fortalezas tenga menos puntos de vida que la otra. Los jugadores también pueden acordar tablas durante el desarrollo de la partida.',
       'Cada ataque que impacta contra la fortaleza reduce en un punto sus puntos de vida.',
-      'El soldado y el embestidor son eliminados inmediatamente después de atacar la fortaleza, independientemente del número de puntos de vida que le queden. La partida continúa hasta que una de las fortalezas se queda sin puntos de vida.',
+      'El soldado, el embestidor y el capturador son eliminados inmediatamente después de atacar la fortaleza, independientemente del número de puntos de vida que le queden. La partida continúa hasta que una de las fortalezas se queda sin puntos de vida.',
     ],
     media: [
       {
@@ -221,8 +221,8 @@ export const RULE_SECTIONS: RuleSection[] = [
       'Las unidades terrestres cuyo ataque implica ocupar la casilla enemiga —soldado y embestidor— solo pueden atacar a la unidad terrestre situada debajo de un dron o avión enemigo. Tras el ataque, la unidad atacante queda situada debajo del dron o avión. Si queda debajo de un dron, este podrá atacarla en el siguiente turno.',
       'Del mismo modo, el capturador solo puede capturar a la unidad terrestre situada debajo de un dron o avión enemigo. El capturador permanece en su casilla y la unidad capturada, que pasa a ser aliada, permanece debajo del dron o avión enemigo.',
       'En cambio, las unidades que realizan sus ataques a distancia —tanque, lanzamisiles y avión— pueden elegir cuál de las dos unidades enemigas atacar, pero no pueden atacar a ambas en el mismo turno. El avión también puede realizar un ataque kamikaze contra cualquiera de las dos unidades.',
-      'Por último, cuando el ataque lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre. Tras el ataque, el dron queda situado sobre la unidad terrestre enemiga. Si la unidad terrestre situada debajo del dron es un soldado o un embestidor, podrán atacarlo. Del mismo modo, si se trata de un capturador, podrá capturarlo. En cambio, el tanque y el lanzamisiles no pueden atacar a un dron situado sobre ellos.',
-      'Cuando un dron enemigo se encuentra sobre un tanque, lanzamisiles o embestidor, el vehículo puede abandonarse y el soldado resultante puede atacar al dron en ese mismo turno.',
+      'Por último, cuando el ataque lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre. Tras el ataque, el dron queda situado sobre la unidad terrestre enemiga. Si la unidad terrestre situada debajo de un dron o avión enemigo es un soldado o un embestidor, podrá atacarlo. Del mismo modo, si se trata de un capturador, podrá capturarlo. En cambio, el tanque y el lanzamisiles no pueden atacar a una aeronave situada sobre ellos.',
+      'Cuando un dron o avión enemigo se encuentra sobre un tanque, lanzamisiles o embestidor, el vehículo puede abandonarse y el soldado resultante puede atacar a la aeronave en ese mismo turno.',
     ],
     media: [
       {

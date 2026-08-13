@@ -160,6 +160,6 @@ describe('machine player', () => {
     const result = action ? applyAction(state, action) : null;
     expect(result?.state.pieces.find((piece) => piece.id === 'f0')).toMatchObject({ hp: 1 });
     expect(result?.state.pieces.some((piece) => piece.id === 'machine-airplane')).toBe(false);
-    expect(result?.state.outcome).toBeNull();
+    expect(result?.state.outcome).toEqual({ type: 'draw', reason: 'blockade' });
   });
 });

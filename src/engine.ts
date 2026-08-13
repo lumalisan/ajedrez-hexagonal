@@ -272,13 +272,18 @@ function soldierActions(
     const to = stepHex(piece.position, direction);
     if (isOnBoard(to) && canSoldierEnter(state, piece, to)) {
       actions.push({ kind: 'move', pieceId: piece.id, to });
+      const occupancy = occupancyAt(state, to);
+      const air = occupancy.air;
+      if (!occupancy.ground && air?.type === 'airplane' && air.owner !== piece.owner) {
+        actions.push({ kind: 'move', pieceId: piece.id, to, targetId: air.id });
+      }
     }
   }
   for (const facing of ALL_DIRECTIONS) {
     if (facing !== piece.facing) actions.push({ kind: 'rotate', pieceId: piece.id, facing });
   }
   const air = occupancyAt(state, piece.position).air;
-  if (air?.type === 'drone' && air.owner !== piece.owner) {
+  if (air && air.owner !== piece.owner) {
     actions.push({ kind: 'attackAbove', pieceId: piece.id, targetId: air.id });
   }
   return actions;
@@ -302,15 +307,15 @@ function capturerActions(
     if (canQuietGroundEnter(state, piece, to)) {
       actions.push({ kind: 'move', pieceId: piece.id, to });
     }
+    const ground = occupancyAt(state, to).ground;
+    if (ground?.type === 'fortress' && ground.owner !== piece.owner) {
+      actions.push({ kind: 'move', pieceId: piece.id, to, targetId: ground.id });
+    }
     actions.push(...captureActionsAt(state, piece, to));
   }
 
   const airAbove = occupancyAt(state, piece.position).air;
-  if (
-    airAbove?.type === 'drone' &&
-    airAbove.owner !== piece.owner &&
-    !isProtectedFromCapture(state, airAbove)
-  ) {
+  if (airAbove && airAbove.owner !== piece.owner && !isProtectedFromCapture(state, airAbove)) {
     actions.push({ kind: 'convert', pieceId: piece.id, targetId: airAbove.id });
   }
   return actions;
@@ -466,10 +471,13 @@ function fastActions(state: GameState, piece: Extract<Piece, { type: 'fast' }>):
       }
 
       actions.push({ kind: 'move', pieceId: piece.id, to });
+      if (occupancy.air?.type === 'airplane' && occupancy.air.owner !== piece.owner) {
+        actions.push({ kind: 'move', pieceId: piece.id, to, targetId: occupancy.air.id });
+      }
     }
   }
   const air = occupancyAt(state, piece.position).air;
-  if (air?.type === 'drone' && air.owner !== piece.owner) {
+  if (air && air.owner !== piece.owner) {
     actions.push({ kind: 'attackAbove', pieceId: piece.id, targetId: air.id });
   }
   actions.push(...transformActions(state, piece));
@@ -610,7 +618,7 @@ function transformActions(
   const airAbove = occupancyAt(state, piece.position).air;
   for (const facing of ALL_DIRECTIONS) {
     actions.push({ kind: 'transform', pieceId: piece.id, facing });
-    if (airAbove?.type === 'drone' && airAbove.owner !== piece.owner) {
+    if (airAbove && airAbove.owner !== piece.owner) {
       actions.push({
         kind: 'transform',
         pieceId: piece.id,
@@ -629,6 +637,17 @@ function transformActions(
       const to = stepHex(piece.position, direction);
       if (isOnBoard(to) && canSoldierEnter(state, soldier, to)) {
         actions.push({ kind: 'transform', pieceId: piece.id, facing, to });
+        const occupancy = occupancyAt(state, to);
+        const air = occupancy.air;
+        if (!occupancy.ground && air?.type === 'airplane' && air.owner !== piece.owner) {
+          actions.push({
+            kind: 'transform',
+            pieceId: piece.id,
+            facing,
+            to,
+            attackAboveId: air.id,
+          });
+        }
       }
     }
   }
@@ -681,13 +700,34 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
 
   next.activePlayer = otherPlayer(next.activePlayer);
   passTurnIfBlocked(next, events);
+  if (!canEitherPlayerDestroyEnemyFortress(next)) {
+    finishByBlockade(next, 'blockade', events);
+    return { ok: true, state: next, events };
+  }
   const hash = positionHash(next);
   const repetitions = (next.positionCounts[hash] ?? 0) + 1;
   next.positionCounts[hash] = repetitions;
 
-  if (repetitions >= 3) finishByBlockade(next, 'repetition', events);
-
   return { ok: true, state: next, events };
+}
+
+function canEitherPlayerDestroyEnemyFortress(state: GameState): boolean {
+  return ([0, 1] as const).some((player) => canPlayerDestroyEnemyFortress(state, player));
+}
+
+function canPlayerDestroyEnemyFortress(state: GameState, player: Player): boolean {
+  const enemy = otherPlayer(player);
+  const fortress = state.pieces.find((piece) => piece.type === 'fortress' && piece.owner === enemy);
+  if (!fortress) return true;
+
+  const fortressHasAirProtection = isProtectedByPlayer(state, fortress.position, enemy);
+  return state.pieces.some(
+    (piece) =>
+      piece.owner === player &&
+      piece.type !== 'fortress' &&
+      piece.type !== 'antiAir' &&
+      (!fortressHasAirProtection || !isAirPiece(piece)),
+  );
 }
 
 function passTurnIfBlocked(state: GameState, events: GameEvent[]): void {
@@ -767,8 +807,11 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
         owner: soldier.owner,
         at: { ...soldier.position },
       });
-      if (action.attackAboveId) resolveHit(state, soldier.id, action.attackAboveId, events);
-      else if (action.to) resolveGroundCombatMove(state, soldier, action.to, events);
+      if (action.to) {
+        resolveGroundCombatMove(state, soldier, action.to, action.attackAboveId, events);
+      } else if (action.attackAboveId) {
+        resolveHit(state, soldier.id, action.attackAboveId, events);
+      }
       return;
     }
     case 'move':
@@ -783,7 +826,9 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
           events,
         );
       else if (piece.type === 'soldier' || piece.type === 'fast') {
-        resolveGroundCombatMove(state, piece, action.to, events);
+        resolveGroundCombatMove(state, piece, action.to, action.targetId, events);
+      } else if (piece.type === 'capturer') {
+        resolveCapturerMove(state, piece, action.to, action.targetId, events);
       } else if (piece.type === 'antiAir') {
         resolveAntiAirMove(state, piece, action.to, events);
       } else {
@@ -862,6 +907,7 @@ function resolveGroundCombatMove(
   state: GameState,
   piece: Extract<Piece, { type: 'soldier' | 'fast' }>,
   to: Hex,
+  targetId: string | undefined,
   events: GameEvent[],
 ): void {
   const from = { ...piece.position };
@@ -869,11 +915,13 @@ function resolveGroundCombatMove(
   const occupancy = occupancyAt(state, to);
   const enemyGround =
     occupancy.ground && occupancy.ground.owner !== piece.owner ? occupancy.ground : undefined;
-  const enemyAir =
-    occupancy.air?.type === 'drone' && occupancy.air.owner !== piece.owner
-      ? occupancy.air
-      : undefined;
-  const target = enemyGround ?? (!occupancy.ground ? enemyAir : undefined);
+  const enemyAir = occupancy.air && occupancy.air.owner !== piece.owner ? occupancy.air : undefined;
+  const requestedAir = targetId && enemyAir?.id === targetId ? enemyAir : undefined;
+  const target =
+    enemyGround ??
+    (!occupancy.ground
+      ? (requestedAir ?? (enemyAir?.type === 'drone' ? enemyAir : undefined))
+      : undefined);
   if (target) resolveHit(state, piece.id, target.id, events);
 
   const survivor = getPiece(state, piece.id);
@@ -883,6 +931,24 @@ function resolveGroundCombatMove(
       const direction = directionBetween(from, to);
       if (direction !== null) survivor.facing = direction;
     }
+  }
+}
+
+function resolveCapturerMove(
+  state: GameState,
+  piece: Extract<Piece, { type: 'capturer' }>,
+  to: Hex,
+  targetId: string | undefined,
+  events: GameEvent[],
+): void {
+  resolveQuietMove(piece, to, events);
+  const target = targetId ? getPiece(state, targetId) : undefined;
+  if (
+    target?.type === 'fortress' &&
+    target.owner !== piece.owner &&
+    equalHex(target.position, to)
+  ) {
+    resolveHit(state, piece.id, target.id, events);
   }
 }
 
@@ -949,7 +1015,8 @@ function resolveHit(
   if (!attacker || !target) return;
 
   if (target.type === 'fortress') {
-    const sacrifice = attacker.type === 'soldier' || attacker.type === 'fast';
+    const sacrifice =
+      attacker.type === 'soldier' || attacker.type === 'fast' || attacker.type === 'capturer';
     const damage = 1;
     const targetAt = { ...target.position };
     const previousHp = target.hp;
@@ -1116,9 +1183,8 @@ export function describeAction(state: GameState, action: GameAction): string {
         destination.air && destination.air.owner !== piece.owner ? destination.air : undefined;
       const requestedTarget = action.targetId ? getPiece(state, action.targetId) : undefined;
       const target =
-        piece.type === 'airplane' &&
-        action.kamikaze &&
         requestedTarget &&
+        requestedTarget.owner !== piece.owner &&
         equalHex(requestedTarget.position, action.to)
           ? requestedTarget
           : isAirPiece(piece)

@@ -1220,6 +1220,9 @@ function targetChoiceMarkup(action: GameAction, index: number): string {
     destinationOccupancy?.air?.type === 'airplane' &&
     destinationOccupancy.air.owner !== actor.owner
   ) {
+    if (target?.id === destinationOccupancy.air.id) {
+      return `<button type="button" data-action-choice="${index}"><span>ATAQUE</span><strong>Destruir Avión</strong></button>`;
+    }
     return `<button type="button" data-action-choice="${index}"><span>MOVIMIENTO</span><strong>Quedar bajo Avión</strong></button>`;
   }
   if (action.kind === 'shoot') {

@@ -87,7 +87,7 @@ try {
   );
   assert(
     (await desktop.locator('#rules-article').textContent())?.includes(
-      'no puede capturar ni atacar la fortaleza',
+      'no puede capturar la fortaleza, pero sí puede atacarla desplazándose hasta ella',
     ),
     'Updated Capturer rule is missing.',
   );

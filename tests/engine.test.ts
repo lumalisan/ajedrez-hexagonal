@@ -219,25 +219,35 @@ describe('Soldado y apilamientos terrestres', () => {
     expect(getPiece(next, 'soldier')?.position).toEqual(hex(0, -1));
   });
 
-  it('avanza bajo un Avión enemigo sin destruirlo', () => {
+  it('puede elegir entre avanzar bajo un Avión enemigo o atacarlo', () => {
     const state = base([
       soldier('soldier', 0, hex(0, 0), 0),
       { id: 'enemy-airplane', type: 'airplane', owner: 1, position: hex(0, -1), facing: 3 },
     ]);
-    const action = findAction(state, 'soldier', 'move', (candidate) =>
-      equal(candidate.to, hex(0, -1)),
+    const actions = getLegalActionsForPiece(state, 'soldier').filter(
+      (candidate) => candidate.kind === 'move' && equal(candidate.to, hex(0, -1)),
     );
-    expect(describeAction(state, action)).toContain('se moverá');
-    expect(markerKind(state, action)).toBe('move');
-    const next = perform(state, action);
-    const occupancy = occupancyAt(next, hex(0, -1));
+    expect(actions).toHaveLength(2);
+    const quietMove = actions.find((action) => action.kind === 'move' && !action.targetId);
+    const attack = actions.find((action) => action.kind === 'move' && action.targetId);
+    expect(quietMove && describeAction(state, quietMove)).toContain('se moverá');
+    expect(quietMove && markerKind(state, quietMove)).toBe('move');
+    expect(attack && describeAction(state, attack)).toContain('atacará Avión');
+    expect(attack && markerKind(state, attack)).toBe('capture');
+
+    const moved = perform(state, quietMove!);
+    const occupancy = occupancyAt(moved, hex(0, -1));
     expect(occupancy.ground?.id).toBe('soldier');
     expect(occupancy.air?.id).toBe('enemy-airplane');
     expect(
-      getLegalActionsForPiece({ ...next, activePlayer: 0 }, 'soldier').some(
+      getLegalActionsForPiece({ ...moved, activePlayer: 0 }, 'soldier').some(
         (action) => action.kind === 'attackAbove',
       ),
-    ).toBe(false);
+    ).toBe(true);
+
+    const attacked = perform(state, attack!);
+    expect(getPiece(attacked, 'enemy-airplane')).toBeUndefined();
+    expect(getPiece(attacked, 'soldier')?.position).toEqual(hex(0, -1));
   });
 });
 
@@ -274,6 +284,20 @@ describe('Paso terrestre bajo aeronaves', () => {
     ).toBe(false);
   });
 
+  it.each([{ type: 'drone' as const }, { type: 'airplane' as const, facing: 3 as Direction }])(
+    'marca como movimiento el paso terrestre bajo $type aliado',
+    (air) => {
+      const state = base([
+        { id: 'ground', type: 'capturer', owner: 0, position: hex(0, 0) },
+        { id: 'air', owner: 0, position: hex(1, 0), ...air } as Piece,
+      ]);
+      const action = findAction(state, 'ground', 'move', (candidate) =>
+        equal(candidate.to, hex(1, 0)),
+      );
+      expect(markerKind(state, action)).toBe('move');
+    },
+  );
+
   it('el Embestidor atraviesa un Avión enemigo sin dañarlo', () => {
     const state = base([
       { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
@@ -285,6 +309,16 @@ describe('Paso terrestre bajo aeronaves', () => {
     );
     expect(getPiece(next, 'airplane')?.position).toEqual(hex(1, 0));
     expect(getPiece(next, 'fast')?.position).toEqual(hex(2, 0));
+
+    const attack = findAction(
+      state,
+      'fast',
+      'move',
+      (action) => equal(action.to, hex(1, 0)) && action.targetId === 'airplane',
+    );
+    const attacked = perform(state, attack);
+    expect(getPiece(attacked, 'airplane')).toBeUndefined();
+    expect(getPiece(attacked, 'fast')?.position).toEqual(hex(1, 0));
   });
 });
 
@@ -335,7 +369,7 @@ describe('Capturador', () => {
     );
   });
 
-  it('puede convertir un Dron enemigo situado encima, pero no un Avión', () => {
+  it('puede convertir un Dron o un Avión enemigo situado encima', () => {
     const droneState = base([
       { id: 'capturer', type: 'capturer', owner: 0, position: hex(0, 0) },
       { id: 'air', type: 'drone', owner: 1, position: hex(0, 0) },
@@ -354,7 +388,7 @@ describe('Capturador', () => {
       getLegalActionsForPiece(airplaneState, 'capturer').some(
         (action) => action.kind === 'convert' && action.targetId === 'air',
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
@@ -507,7 +541,7 @@ describe('Embestidor y Dron', () => {
     expect(getPiece(next, 'friendly-air')).toBeDefined();
   });
 
-  it('puede atacar un Dron enemigo situado encima, pero no un Avión', () => {
+  it('puede atacar un Dron o un Avión enemigo situado encima', () => {
     const droneState = base([
       { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
       { id: 'air', type: 'drone', owner: 1, position: hex(0, 0) },
@@ -526,7 +560,7 @@ describe('Embestidor y Dron', () => {
       getLegalActionsForPiece(airplaneState, 'fast').some(
         (action) => action.kind === 'attackAbove' && action.targetId === 'air',
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('Dron sobrevuela suelo, pero otro Dron corta la trayectoria', () => {
@@ -891,7 +925,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(getPiece(next, 'fast')).toBeUndefined();
   });
 
-  it('Capturador no puede capturar ni atacar la Fortaleza', () => {
+  it('Capturador no convierte la Fortaleza, pero la ataca por ocupación y se sacrifica', () => {
     const state = base([
       fortress('fort-amber-close', 1, hex(0, -1)),
       { id: 'capturer', type: 'capturer', owner: 0, position: hex(0, 0) },
@@ -902,15 +936,15 @@ describe('Fortaleza, transformación y finales', () => {
         (action) => action.kind === 'convert' && action.targetId === 'fort-amber-close',
       ),
     ).toBe(false);
-
-    const result = applyAction(state, {
-      kind: 'convert',
-      pieceId: 'capturer',
-      targetId: 'fort-amber-close',
-    });
-    expect(result.ok).toBe(false);
-    expect(getPiece(result.state, 'fort-amber-close')).toMatchObject({ type: 'fortress', hp: 2 });
-    expect(getPiece(result.state, 'capturer')).toBeDefined();
+    const attack = findAction(
+      state,
+      'capturer',
+      'move',
+      (action) => action.targetId === 'fort-amber-close',
+    );
+    const next = perform(state, attack);
+    expect(getPiece(next, 'fort-amber-close')).toMatchObject({ type: 'fortress', hp: 1 });
+    expect(getPiece(next, 'capturer')).toBeUndefined();
   });
 
   it('rechaza un targetId ajeno en un kamikaze', () => {
@@ -1034,7 +1068,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(getPiece(next, 'fast')?.type).toBe('soldier');
   });
 
-  it('tercera repetición declara tablas aunque las Fortalezas tengan distinta vida', () => {
+  it('la tercera repetición no declara tablas automáticamente', () => {
     let state = base([
       soldier('blue-soldier', 0, hex(0, -2), 0),
       soldier('amber-soldier', 1, hex(0, 2), 3),
@@ -1059,7 +1093,7 @@ describe('Fortaleza, transformación y finales', () => {
       rotate('blue-soldier', 0);
       rotate('amber-soldier', 3);
     }
-    expect(state.outcome).toEqual({ type: 'draw', reason: 'repetition' });
+    expect(state.outcome).toBeNull();
   });
 
   it('bloqueo acordado siempre termina en tablas aunque la vida sea distinta', () => {
@@ -1074,7 +1108,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(result.events).toContainEqual({ type: 'draw' });
   });
 
-  it('pasa automáticamente el turno de un jugador sin acciones legales', () => {
+  it('declara tablas si, tras pasar un jugador, ninguno puede destruir la Fortaleza rival', () => {
     const state = base([
       { id: 'blue-drone', type: 'drone', owner: 0, position: hex(0, 0) },
       { id: 'amber-aa', type: 'antiAir', owner: 1, position: hex(4, 0) },
@@ -1083,9 +1117,24 @@ describe('Fortaleza, transformación y finales', () => {
       state,
       findAction(state, 'blue-drone', 'move', (action) => equal(action.to, hex(0, -1))),
     );
-    expect(result.state.outcome).toBeNull();
+    expect(result.state.outcome).toEqual({ type: 'draw', reason: 'blockade' });
     expect(result.state.activePlayer).toBe(0);
     expect(result.events).toContainEqual({ type: 'pass', owner: 1 });
+  });
+
+  it('declara tablas automáticamente cuando solo quedan aeronaves ante escudos vivos', () => {
+    const state = base([
+      { id: 'blue-drone', type: 'drone', owner: 0, position: hex(0, 0) },
+      { id: 'amber-airplane', type: 'airplane', owner: 1, position: hex(0, 2), facing: 3 },
+      { id: 'blue-aa', type: 'antiAir', owner: 0, position: hex(-4, 0) },
+      { id: 'amber-aa', type: 'antiAir', owner: 1, position: hex(4, 0) },
+    ]);
+    const result = applyAction(
+      state,
+      findAction(state, 'blue-drone', 'move', (action) => equal(action.to, hex(0, -1))),
+    );
+    expect(result.state.outcome).toEqual({ type: 'draw', reason: 'blockade' });
+    expect(result.events).toContainEqual({ type: 'draw' });
   });
 });
 
