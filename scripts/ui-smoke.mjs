@@ -91,46 +91,61 @@ try {
     ),
     'Updated Capturer rule is missing.',
   );
-  await desktop.waitForFunction(() =>
-    [...document.querySelectorAll('.rule-media img')].every(
-      (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
-    ),
-  );
   assert(
-    await desktop.locator('.rule-media.sequence').evaluate((figure) => {
-      const stage = figure.querySelector('.rule-media-stage');
-      const track = figure.querySelector('.rule-media-track');
-      const images = [...figure.querySelectorAll('.rule-media-track img')];
-      const animation = track?.getAnimations()[0];
-      if (!(stage instanceof HTMLElement) || !(track instanceof HTMLElement) || !animation)
-        return false;
-      const frameCount = Number(track.style.getPropertyValue('--frame-count'));
-      const duration = Number(animation.effect?.getTiming().duration);
-      const loopFrame = images.at(-1);
-      if (
-        !Number.isFinite(duration) ||
-        images.length !== frameCount + 1 ||
-        loopFrame?.getAttribute('aria-hidden') !== 'true' ||
-        loopFrame?.getAttribute('src') !== images[0]?.getAttribute('src')
-      )
-        return false;
-
-      animation.pause();
-      const stageRect = stage.getBoundingClientRect();
-      const expectedLeft = stageRect.left + stage.clientLeft;
-      const expectedWidth = stage.clientWidth;
-      const framesAlign = images.slice(0, frameCount).every((image, index) => {
-        animation.currentTime = ((index + 0.25) / frameCount) * duration;
-        const imageRect = image.getBoundingClientRect();
+    await desktop
+      .locator('.rule-demo-canvas[data-rule-demo-id="capturador"]')
+      .evaluate((canvas) => {
+        const rect = canvas.getBoundingClientRect();
         return (
-          Math.abs(imageRect.left - expectedLeft) < 1.5 &&
-          Math.abs(imageRect.width - expectedWidth) < 1.5
+          canvas.getAttribute('role') === 'img' &&
+          Boolean(canvas.getAttribute('aria-label')) &&
+          rect.width > 0 &&
+          rect.height > 0
         );
-      });
-      animation.play();
-      return framesAlign;
+      }),
+    'Capturer rules must mount a visible, accessible game-board demonstration.',
+  );
+  await desktop
+    .locator('.rule-demo-canvas[data-rule-demo-scene="2/3"]')
+    .waitFor({ timeout: 6_000 });
+  assert(
+    (await desktop.locator('#rules-article strong').allTextContents()).some(
+      (text) => text === 'capturar',
+    ) &&
+      (await desktop
+        .locator('#rules-article p')
+        .first()
+        .evaluate((paragraph) => getComputedStyle(paragraph).textAlign)) === 'justify',
+    'Rules must preserve the document emphasis and justified alignment.',
+  );
+
+  await desktop.locator('[data-rule-section="fortaleza"]').click();
+  assert(
+    await desktop.locator('#rules-article').evaluate((article) => {
+      const headings = [...article.querySelectorAll('.rules-copy h3')];
+      if (headings.length !== 2) return false;
+      const primary = getComputedStyle(headings[0]);
+      const shield = getComputedStyle(headings[1]);
+      return primary.fontFamily === shield.fontFamily && primary.fontSize === shield.fontSize;
     }),
-    'Rule sequences must advance by one complete illustration without clipped transitions.',
+    'Fortaleza and Escudo antiaéreo must share the same title role.',
+  );
+
+  await desktop.locator('[data-rule-section="desarrollo"]').click();
+  assert(
+    (await desktop.locator('#rules-article').textContent())?.includes(
+      'La disposición inicial de los ejércitos sobre el tablero es la que aparece en la imagen de la derecha.',
+    ),
+    'Updated initial-deployment wording is missing.',
+  );
+  await desktop.locator('.rule-media img').waitFor();
+
+  await desktop.locator('[data-rule-section="casillas-compartidas"]').click();
+  assert(
+    (await desktop.locator('#rules-article').textContent())?.includes(
+      'tanto el tanque como el lanzamisiles pueden ser abandonados para convertirse en soldados',
+    ),
+    'Updated shared-cell attack wording is missing.',
   );
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-rules.png` });

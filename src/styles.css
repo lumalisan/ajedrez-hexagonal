@@ -1,7 +1,9 @@
 :root {
   color-scheme: dark;
-  font-family: 'Segoe UI Variable', 'Aptos', 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   font-synthesis: none;
+  --font-body: 'Segoe UI Variable', 'Aptos', 'Segoe UI', sans-serif;
+  --font-display: 'Bahnschrift', 'Aptos', 'Segoe UI Variable', 'Segoe UI', sans-serif;
   --bg: #07131a;
   --surface: #0d2029;
   --surface-2: #112a34;
@@ -2479,7 +2481,7 @@ button:disabled {
 .rules-kicker {
   display: block;
   color: var(--move);
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
+  font-family: var(--font-display);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -2825,8 +2827,9 @@ button:disabled {
 
 .rules-heading h2 {
   margin: 4px 0 0;
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
+  font-family: var(--font-display);
   font-size: 30px;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -2930,17 +2933,22 @@ button:disabled {
 }
 
 .rules-copy {
-  max-width: 72ch;
+  max-width: 70ch;
 }
 
 .rules-copy h3 {
   margin: 8px 0 24px;
   color: var(--text);
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
-  font-size: clamp(27px, 3vw, 40px);
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.04;
   text-wrap: balance;
+}
+
+.rules-copy .rules-peer-heading {
+  margin-top: 42px;
 }
 
 .rules-copy h3:focus-visible {
@@ -2949,18 +2957,20 @@ button:disabled {
   outline-offset: 8px;
 }
 
-.rules-copy h4 {
-  margin: 30px 0 12px;
-  color: #ffe0aa;
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
-  font-size: 19px;
-}
-
 .rules-copy p {
   margin: 0 0 16px;
   color: #d5dfdc;
-  font-size: 15px;
-  line-height: 1.68;
+  font-size: 1rem;
+  hyphens: auto;
+  line-height: 1.65;
+  text-align: justify;
+  text-align-last: left;
+  text-wrap: pretty;
+}
+
+.rules-copy p strong {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .rule-media {
@@ -2983,29 +2993,59 @@ button:disabled {
 }
 
 .rule-media-track {
-  display: flex;
-  width: calc(var(--track-count) * 100%);
+  display: grid;
+  width: 100%;
   height: 100%;
-  justify-self: start;
 }
 
 .rule-media-track img {
-  width: calc(100% / var(--track-count));
+  width: 100%;
   height: 100%;
-  flex: 0 0 calc(100% / var(--track-count));
   padding: 12px;
   object-fit: contain;
 }
 
-.rule-media.sequence .rule-media-track {
-  animation: rule-track calc(var(--frame-count) * 1.8s) steps(var(--frame-count), end) infinite;
+.rule-demo-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rule-demo-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid rgba(181, 205, 205, 0.26);
+  border-radius: 999px;
+  background: rgba(7, 24, 32, 0.9);
+  color: #c9d8d5;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rule-demo-badge i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--move);
+  box-shadow: 0 3px 9px rgba(85, 224, 193, 0.48);
+  animation: status-pulse 1.4s ease-in-out infinite;
 }
 
 .rule-media figcaption {
   margin-top: 10px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.45;
   text-align: center;
+  text-wrap: balance;
 }
 
 @keyframes home-deploy {
@@ -3021,21 +3061,18 @@ button:disabled {
   }
 }
 
-@keyframes rule-track {
-  to {
-    transform: translateX(calc(-100% + (100% / var(--track-count))));
+@media (max-width: 1080px) {
+  .rules-article:has(.rule-media) {
+    grid-template-columns: minmax(0, 1fr);
   }
-}
 
-.reduced-motion .rule-media.sequence .rule-media-track {
-  animation: none !important;
-  transform: none;
-}
+  .rule-media {
+    position: static;
+    width: min(100%, 620px);
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .rule-media.sequence .rule-media-track {
-    animation: none !important;
-    transform: none;
+  .rule-media-stage {
+    height: clamp(320px, 44vh, 460px);
   }
 }
 

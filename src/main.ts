@@ -56,7 +56,9 @@ import {
   validateCustomScenario,
   type CustomScenario,
 } from './scenario-catalog';
-import { RULE_SECTIONS, type RuleSection } from './rules-content';
+import { mountRuleDemo } from './rules-demo';
+import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from './rules-content';
+import { captureAboveCommandLabel } from './ui-copy';
 import type {
   AiDifficulty,
   Direction,
@@ -1045,11 +1047,14 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   const canTransform = legalActions.some((action) => action.kind === 'transform');
   const above = legalActions.find((action) => action.kind === 'attackAbove');
   const below = legalActions.find((action) => action.kind === 'attackBelow');
-  const captureAbove = legalActions.find((action) => {
-    if (action.kind !== 'convert') return false;
-    const target = getPiece(state, action.targetId);
-    return Boolean(target && equalHex(target.position, piece.position) && isAirPiece(target));
-  });
+  const captureAbove = legalActions.find(
+    (action): action is Extract<GameAction, { kind: 'convert' }> => {
+      if (action.kind !== 'convert') return false;
+      const target = getPiece(state, action.targetId);
+      return Boolean(target && equalHex(target.position, piece.position) && isAirPiece(target));
+    },
+  );
+  const captureAboveTarget = captureAbove ? getPiece(state, captureAbove.targetId) : undefined;
 
   actionControls.innerHTML = `
     <div class="control-section">
@@ -1063,7 +1068,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
         ${canOrient ? '<button type="button" data-command="orient">Orientar cañón</button>' : ''}
         ${above ? '<button type="button" data-command="above">Atacar aeronave superior</button>' : ''}
         ${below ? '<button type="button" data-command="below">Atacar unidad inferior</button>' : ''}
-        ${captureAbove ? '<button type="button" data-command="capture-above">Capturar Dron superior</button>' : ''}
+        ${captureAboveTarget ? `<button type="button" data-command="capture-above">${escapeHtml(captureAboveCommandLabel(captureAboveTarget.type))}</button>` : ''}
         ${canTransform ? '<button type="button" class="danger-command" data-command="transform">Abandonar vehículo</button>' : ''}
       </div>
     </div>`;
@@ -1688,6 +1693,7 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
       </article>
     </div>`);
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-rule-section]')];
+  let activeDemo = mountRuleDemoInArticle(initial);
   const activate = (id: string, moveFocus = true): void => {
     const section = RULE_SECTIONS.find((candidate) => candidate.id === id);
     const article = dialog.querySelector<HTMLElement>('#rules-article');
@@ -1698,8 +1704,10 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
       tab.setAttribute('aria-selected', String(active));
       tab.tabIndex = active ? 0 : -1;
     }
+    activeDemo?.destroy();
     article.innerHTML = ruleSectionMarkup(section);
     article.scrollTop = 0;
+    activeDemo = mountRuleDemoInArticle(section);
     if (moveFocus) article.querySelector<HTMLElement>('h3')?.focus();
   };
   dialog
@@ -1710,7 +1718,7 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
       for (const tab of tabs) {
         const section = RULE_SECTIONS.find((candidate) => candidate.id === tab.dataset.ruleSection);
         const searchable = section
-          ? `${section.label} ${section.title} ${section.paragraphs.join(' ')}`.toLocaleLowerCase(
+          ? `${section.label} ${section.title} ${section.paragraphs.map(ruleParagraphText).join(' ')}`.toLocaleLowerCase(
               'es',
             )
           : '';
@@ -1738,32 +1746,40 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
       activate(next.dataset.ruleSection ?? '', false);
     });
   });
+  dialog.addEventListener(
+    'close',
+    () => {
+      activeDemo?.destroy();
+      activeDemo = null;
+    },
+    { once: true },
+  );
 }
 
 function ruleSectionMarkup(section: RuleSection): string {
   const mediaItems = section.media ?? [];
-  const frameCount = mediaItems.length;
-  const isSequence = frameCount > 1;
-  const media = frameCount
-    ? `<figure class="rule-media ${isSequence ? 'sequence' : ''}" aria-label="Ilustración de ${escapeHtml(section.title)}">
+  const media = section.demo
+    ? `<figure class="rule-media rule-demo" aria-label="Demostración de ${escapeHtml(section.title)}">
         <div class="rule-media-stage">
-          <div class="rule-media-track" style="--frame-count:${frameCount};--track-count:${isSequence ? frameCount + 1 : frameCount}">
+          <canvas class="rule-demo-canvas"></canvas>
+          <span class="rule-demo-badge" aria-hidden="true"><i></i> Demostración real</span>
+        </div>
+        <figcaption data-rule-demo-caption>Preparando la demostración…</figcaption>
+      </figure>`
+    : mediaItems.length
+      ? `<figure class="rule-media" aria-label="Ilustración de ${escapeHtml(section.title)}">
+        <div class="rule-media-stage">
+          <div class="rule-media-track">
             ${mediaItems
               .map(
                 (item) =>
                   `<img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt)}" loading="lazy" />`,
               )
               .join('')}
-            ${
-              isSequence
-                ? `<img src="${escapeHtml(mediaItems[0].src)}" alt="" aria-hidden="true" loading="lazy" />`
-                : ''
-            }
           </div>
         </div>
-        ${isSequence ? '<figcaption>Secuencia ilustrativa de la acción</figcaption>' : ''}
       </figure>`
-    : '';
+      : '';
   return `
     <div class="rules-copy">
       <span class="rules-kicker">PROTOCOLO HEXAGONAL</span>
@@ -1773,12 +1789,45 @@ function ruleSectionMarkup(section: RuleSection): string {
     ${media}`;
 }
 
-function ruleParagraphMarkup(paragraph: string): string {
-  if (paragraph === 'Escudo antiaéreo') return `<h4>${escapeHtml(paragraph)}</h4>`;
-  const labeled = /^(Desplazamiento|Disparo|Captura):\s*(.*)$/u.exec(paragraph);
-  if (labeled)
-    return `<p><strong>${escapeHtml(labeled[1])}:</strong> ${escapeHtml(labeled[2])}</p>`;
-  return `<p>${escapeHtml(paragraph)}</p>`;
+function mountRuleDemoInArticle(section: RuleSection): { destroy(): void } | null {
+  if (!section.demo) return null;
+  const article = dialog.querySelector<HTMLElement>('#rules-article');
+  const canvas = article?.querySelector<HTMLCanvasElement>('.rule-demo-canvas');
+  const caption = article?.querySelector<HTMLElement>('[data-rule-demo-caption]');
+  if (!canvas) return null;
+  return mountRuleDemo(canvas, section.demo, {
+    reducedMotion: preferences.reducedMotion,
+    highContrast: preferences.highContrast,
+    onSceneChange: (label, index, total) => {
+      if (caption) caption.textContent = `${index + 1}/${total} · ${label}`;
+    },
+  });
+}
+
+function ruleParagraphText(paragraph: string | RuleParagraph): string {
+  return typeof paragraph === 'string' ? paragraph : paragraph.text;
+}
+
+function ruleParagraphMarkup(paragraph: string | RuleParagraph): string {
+  if (typeof paragraph !== 'string' && paragraph.kind === 'heading') {
+    return `<h3 class="rules-peer-heading">${escapeHtml(paragraph.text)}</h3>`;
+  }
+  const text = ruleParagraphText(paragraph);
+  const strong = typeof paragraph === 'string' ? [] : (paragraph.strong ?? []);
+  return `<p>${ruleEmphasisMarkup(text, strong)}</p>`;
+}
+
+function ruleEmphasisMarkup(text: string, strong: string[]): string {
+  let cursor = 0;
+  let markup = '';
+  for (const phrase of strong) {
+    const index = text.indexOf(phrase, cursor);
+    if (index < 0) continue;
+    markup += escapeHtml(text.slice(cursor, index));
+    markup += `<strong>${escapeHtml(phrase)}</strong>`;
+    cursor = index + phrase.length;
+  }
+  return markup + escapeHtml(text.slice(cursor));
 }
 
 function showHelpDialog(): void {
