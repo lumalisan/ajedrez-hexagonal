@@ -367,7 +367,11 @@ export class BoardRenderer {
     this.fitScale = this.fitScaleFor(depth);
     const tilt = boardTilt(depth);
     ctx.save();
-    ctx.translate(this.width / 2 + this.pan.x, this.height / 2 + this.pan.y);
+    const impulse = this.cameraImpulseAt(time, model.reducedMotion);
+    ctx.translate(
+      this.width / 2 + this.pan.x + impulse.x,
+      this.height / 2 + this.pan.y + impulse.y,
+    );
     ctx.scale(this.fitScale * this.zoom, this.fitScale * this.zoom);
     const orientation = this.orientationAt(time);
     ctx.save();
@@ -385,6 +389,20 @@ export class BoardRenderer {
     this.drawTargetOverlays(ctx, model, time, orientation);
     if (this.animation) this.drawAnimation(ctx, this.animation, time, orientation);
     ctx.restore();
+  }
+
+  private cameraImpulseAt(time: number, reducedMotion: boolean): { x: number; y: number } {
+    if (!this.animation || reducedMotion) return { x: 0, y: 0 };
+    const hasFortressImpact = this.animation.events.some(
+      (event) => event.type === 'fortressDamage' || event.type === 'victory',
+    );
+    if (!hasFortressImpact) return { x: 0, y: 0 };
+    const progress = Math.min(1, Math.max(0, (time - this.animation.startedAt) / 280));
+    const strength = (1 - progress) * 5.5;
+    return {
+      x: Math.sin(progress * Math.PI * 10) * strength,
+      y: Math.cos(progress * Math.PI * 8) * strength * 0.55,
+    };
   }
 
   private depthAt(time: number): number {
@@ -1019,6 +1037,18 @@ export class BoardRenderer {
         ctx.rotate(raw * Math.PI * 0.6);
         hexPath(ctx, 18 + eased * 10);
         ctx.stroke();
+        if (event.type === 'fortressDamage') {
+          ctx.globalAlpha = Math.sin(raw * Math.PI) * 0.62;
+          ctx.strokeStyle = COLORS.amber;
+          ctx.lineWidth = 1.35;
+          ctx.rotate(-raw * Math.PI * 1.15);
+          hexPath(ctx, 27 + eased * 24);
+          ctx.stroke();
+          ctx.setLineDash([3, 5]);
+          ctx.rotate(raw * Math.PI * 2.4);
+          hexPath(ctx, 38 + eased * 35);
+          ctx.stroke();
+        }
         ctx.restore();
       }
     }
@@ -1113,8 +1143,8 @@ function markerPriority(kind: MarkerKind): number {
 }
 
 function eventDuration(events: GameEvent[]): number {
-  if (events.some((event) => event.type === 'fortressDamage' || event.type === 'victory'))
-    return 520;
+  if (events.some((event) => event.type === 'victory')) return 900;
+  if (events.some((event) => event.type === 'fortressDamage')) return 720;
   if (events.some((event) => event.type === 'convert' || event.type === 'transform')) return 390;
   if (events.some((event) => event.type === 'shoot' || event.type === 'intercept')) return 330;
   return 260;

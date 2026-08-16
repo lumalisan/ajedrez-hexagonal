@@ -104,6 +104,14 @@
         <div class="match-status" aria-live="polite">
           <div class="fortress-status player-blue" id="blue-fortress"></div>
           <div class="turn-chip" id="turn-chip"></div>
+          <output
+            class="match-clock"
+            id="match-clock"
+            role="timer"
+            aria-label="Reloj de partida"
+            aria-live="off"
+            >--:--</output
+          >
           <div class="fortress-status player-amber" id="amber-fortress"></div>
         </div>
 
@@ -200,6 +208,18 @@
         </section>
 
         <aside class="command-panel" id="command-panel" aria-label="Panel de mando">
+          <button
+            class="command-sheet-toggle"
+            id="command-sheet-toggle"
+            type="button"
+            aria-controls="command-panel"
+            aria-expanded="true"
+            aria-label="Contraer panel de mando"
+          >
+            <span class="command-sheet-grip" aria-hidden="true"></span>
+            <span class="command-sheet-label">Órdenes</span>
+            <span class="command-sheet-chevron" aria-hidden="true">⌄</span>
+          </button>
           <div class="panel-heading">
             <span class="eyebrow">PANEL DE MANDO</span>
             <span class="keyboard-hint">ESC para cancelar</span>

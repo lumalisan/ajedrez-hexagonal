@@ -12,6 +12,12 @@ import {
   stepHex,
 } from './hex';
 import { actionKey } from './action-identity';
+import {
+  CLASSIC_NO_PROGRESS_LIMIT,
+  CLASSIC_REPETITION_LIMIT,
+  FORTRESS_DAMAGE_PER_HIT,
+  FORTRESS_SACRIFICE_ATTACKERS,
+} from './classic-rules';
 import { createInitialPieces } from './setup';
 import type {
   ActionResult,
@@ -58,6 +64,18 @@ export const PLAYER_NAMES: Record<Player, string> = {
   1: 'Ámbar',
 };
 
+export interface ActionResolutionRules {
+  /** Number of identical positions that produces a draw; null disables it. */
+  repetition: number | null;
+  /** Consecutive plies without capture or Fortress damage; null disables it. */
+  noProgressPlyLimit: number | null;
+}
+
+export const DEFAULT_ACTION_RESOLUTION_RULES: Readonly<ActionResolutionRules> = {
+  repetition: CLASSIC_REPETITION_LIMIT,
+  noProgressPlyLimit: CLASSIC_NO_PROGRESS_LIMIT,
+};
+
 export function createInitialState(): GameState {
   return createGameState(createInitialPieces(), 0);
 }
@@ -70,6 +88,7 @@ export function createGameState(pieces: Piece[], activePlayer: Player = 0): Game
     ply: 0,
     firstFortressDamageBy: null,
     positionCounts: {},
+    noProgressPlyCount: 0,
     outcome: null,
     history: [],
   };
@@ -151,6 +170,11 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
     errors.push('El jugador activo no es válido.');
   if (!Number.isInteger(state.ply) || state.ply < 0)
     errors.push('El contador de turnos no es válido.');
+  if (
+    state.noProgressPlyCount !== undefined &&
+    (!Number.isInteger(state.noProgressPlyCount) || state.noProgressPlyCount < 0)
+  )
+    errors.push('El contador de órdenes sin progreso no es válido.');
   return errors;
 }
 
@@ -654,7 +678,11 @@ function transformActions(
   return actions;
 }
 
-export function applyAction(state: GameState, action: GameAction): ActionResult {
+export function applyAction(
+  state: GameState,
+  action: GameAction,
+  rules: Readonly<ActionResolutionRules> = DEFAULT_ACTION_RESOLUTION_RULES,
+): ActionResult {
   if (state.outcome) return failure(state, 'La partida ya ha terminado.');
   const legal = getLegalActionsForPiece(state, action.pieceId);
   const canonical = actionKey(action);
@@ -683,6 +711,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
 
   executeAction(next, action, events);
   purgeAirUnitsInEnemyZones(next, events);
+  next.noProgressPlyCount = madeProgress(events) ? 0 : (state.noProgressPlyCount ?? 0) + 1;
   next.ply += 1;
   next.history.push({
     id: next.ply,
@@ -701,14 +730,32 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   next.activePlayer = otherPlayer(next.activePlayer);
   passTurnIfBlocked(next, events);
   if (!canEitherPlayerDestroyEnemyFortress(next)) {
-    finishByBlockade(next, 'blockade', events);
+    finishDraw(next, 'blockade', events);
     return { ok: true, state: next, events };
   }
   const hash = positionHash(next);
   const repetitions = (next.positionCounts[hash] ?? 0) + 1;
   next.positionCounts[hash] = repetitions;
+  if (rules.repetition !== null && repetitions >= rules.repetition) {
+    finishDraw(next, 'repetition', events);
+    return { ok: true, state: next, events };
+  }
+  if (
+    rules.noProgressPlyLimit !== null &&
+    (next.noProgressPlyCount ?? 0) >= rules.noProgressPlyLimit
+  ) {
+    finishDraw(next, 'no-progress', events);
+    return { ok: true, state: next, events };
+  }
 
   return { ok: true, state: next, events };
+}
+
+function madeProgress(events: GameEvent[]): boolean {
+  return events.some(
+    (event) =>
+      event.type === 'destroy' || event.type === 'intercept' || event.type === 'fortressDamage',
+  );
 }
 
 function canEitherPlayerDestroyEnemyFortress(state: GameState): boolean {
@@ -1015,9 +1062,8 @@ function resolveHit(
   if (!attacker || !target) return;
 
   if (target.type === 'fortress') {
-    const sacrifice =
-      attacker.type === 'soldier' || attacker.type === 'fast' || attacker.type === 'capturer';
-    const damage = 1;
+    const sacrifice = FORTRESS_SACRIFICE_ATTACKERS.includes(attacker.type);
+    const damage = FORTRESS_DAMAGE_PER_HIT;
     const targetAt = { ...target.position };
     const previousHp = target.hp;
     if (state.firstFortressDamageBy === null) {
@@ -1114,9 +1160,9 @@ function findDefeatedPlayer(state: GameState): Player | null {
   return null;
 }
 
-function finishByBlockade(
+function finishDraw(
   state: GameState,
-  reason: 'blockade' | 'repetition',
+  reason: Extract<Outcome, { type: 'draw' }>['reason'],
   events: GameEvent[],
 ): void {
   state.outcome = { type: 'draw', reason };
@@ -1124,7 +1170,12 @@ function finishByBlockade(
   state.history.push({
     id: state.ply + 1,
     player: state.activePlayer,
-    text: reason === 'repetition' ? 'Triple repetición: tablas.' : 'Bloqueo confirmado: tablas.',
+    text:
+      reason === 'repetition'
+        ? 'Triple repetición: tablas.'
+        : reason === 'no-progress'
+          ? 'Límite de órdenes sin progreso: tablas.'
+          : 'Bloqueo confirmado: tablas.',
   });
 }
 
@@ -1132,7 +1183,7 @@ export function declareBlockade(state: GameState): ActionResult {
   if (state.outcome) return failure(state, 'La partida ya ha terminado.');
   const next = cloneState(state);
   const events: GameEvent[] = [];
-  finishByBlockade(next, 'blockade', events);
+  finishDraw(next, 'blockade', events);
   return { ok: true, state: next, events };
 }
 
@@ -1312,9 +1363,17 @@ function failure(state: GameState, error: string): ActionResult {
 
 export function outcomeText(outcome: Outcome): string {
   if (outcome.type === 'draw') {
-    return outcome.reason === 'repetition' ? 'Tablas por triple repetición' : 'Tablas por bloqueo';
+    if (outcome.reason === 'repetition') return 'Tablas por triple repetición';
+    if (outcome.reason === 'no-progress') return 'Tablas por falta de progreso';
+    return 'Tablas por bloqueo';
   }
-  return `${PLAYER_NAMES[outcome.winner]} vence · Fortaleza destruida`;
+  const reason =
+    outcome.reason === 'timeout'
+      ? 'tiempo agotado'
+      : outcome.reason === 'resignation'
+        ? 'rendición rival'
+        : 'Fortaleza destruida';
+  return `${PLAYER_NAMES[outcome.winner]} vence · ${reason}`;
 }
 
 export function battleLogEntry(state: GameState, indexFromEnd = 0): BattleLogEntry | undefined {

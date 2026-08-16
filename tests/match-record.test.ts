@@ -1,20 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyAction, getAllLegalActions, validateState } from '../src/engine';
+import {
+  applyAction,
+  createGameState,
+  getAllLegalActions,
+  getLegalActionsForPiece,
+  validateState,
+} from '../src/engine';
 import { createClassicConfig, validateMatchConfig } from '../src/game-config';
+import { clockOutcome, resumeMatchClock, tickMatchClock } from '../src/match-clock';
 import {
   ReplayError,
   appendAction,
+  calculateStatistics,
+  concludeMatch,
   createMatchRecord,
   parseRecord,
   replayRecord,
   serializeRecord,
+  setMatchClock,
 } from '../src/match-record';
 import { SCENARIOS, evaluateScenario } from '../src/scenarios';
 
 describe('configuración, invariantes y diario', () => {
   it('valida classic-v2 y todos los escenarios', () => {
     const config = createClassicConfig({ mode: 'local' });
+    expect(config.victory.repetition).toBe(3);
+    expect(config.options.noProgressPlyLimit).toBe(120);
     expect(validateMatchConfig(config)).toEqual([]);
     expect(validateState(createMatchRecord(config).initialState, config)).toEqual([]);
     for (const scenario of SCENARIOS) {
@@ -26,12 +38,30 @@ describe('configuración, invariantes y diario', () => {
       expect(validateMatchConfig(scenarioConfig), scenario.id).toEqual([]);
       expect(validateState(scenario.initialState, scenarioConfig), scenario.id).toEqual([]);
       expect(getAllLegalActions(scenario.initialState).length, scenario.id).toBeGreaterThan(0);
-      const solves = getAllLegalActions(scenario.initialState).some((action) => {
-        const result = applyAction(scenario.initialState, action);
-        return result.ok && evaluateScenario(scenario, scenario.initialState, result.state, action);
-      });
-      expect(solves, `${scenario.id} debe tener una solución legal inmediata`).toBe(true);
+      if (scenario.category === 'basic') {
+        const solves = getAllLegalActions(scenario.initialState).some((action) => {
+          const result = applyAction(scenario.initialState, action);
+          return (
+            result.ok && evaluateScenario(scenario, scenario.initialState, result.state, action)
+          );
+        });
+        expect(solves, `${scenario.id} debe tener una solución legal inmediata`).toBe(true);
+      }
     }
+  });
+
+  it('permite reducir o desactivar explícitamente el límite sin progreso', () => {
+    expect(
+      createClassicConfig({ mode: 'local', noProgressPlyLimit: 40 }).options.noProgressPlyLimit,
+    ).toBe(40);
+    expect(
+      createClassicConfig({ mode: 'local', noProgressPlyLimit: null }).options.noProgressPlyLimit,
+    ).toBeNull();
+    const invalid = createClassicConfig({ mode: 'local' });
+    invalid.options.noProgressPlyLimit = 0;
+    expect(validateMatchConfig(invalid)).toContain(
+      'El límite de órdenes sin progreso debe ser un entero positivo.',
+    );
   });
 
   it('configura ambas Fortalezas con entre 1 y 3 HP', () => {
@@ -109,5 +139,145 @@ describe('configuración, invariantes y diario', () => {
       currentAction: 1,
     };
     expect(() => parseRecord(JSON.stringify(tampered))).toThrow(/Acción ilegal/);
+  });
+
+  it('atribuye capturas y daño a Fortaleza al jugador acreditado por cada evento', () => {
+    const config = createClassicConfig({ mode: 'local', noProgressPlyLimit: null });
+    const captureState = createGameState([
+      { id: 'fort-blue', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+      { id: 'fort-amber', type: 'fortress', owner: 1, position: { q: 5, r: 0 }, hp: 2 },
+      {
+        id: 'blue-soldier',
+        type: 'soldier',
+        owner: 0,
+        position: { q: 0, r: 0 },
+        facing: 0,
+      },
+      {
+        id: 'amber-soldier',
+        type: 'soldier',
+        owner: 1,
+        position: { q: 0, r: -1 },
+        facing: 3,
+      },
+    ]);
+    const captureAction = getLegalActionsForPiece(captureState, 'blue-soldier').find(
+      (action) => action.kind === 'move' && action.to.q === 0 && action.to.r === -1,
+    );
+    expect(captureAction).toBeDefined();
+    const captureRecord = appendAction(createMatchRecord(config, captureState), captureAction!);
+    expect(calculateStatistics(captureRecord).captures).toEqual([1, 0]);
+
+    const damageState = createGameState([
+      { id: 'fort-blue', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+      { id: 'fort-amber', type: 'fortress', owner: 1, position: { q: 0, r: -1 }, hp: 2 },
+      {
+        id: 'blue-soldier',
+        type: 'soldier',
+        owner: 0,
+        position: { q: 0, r: 0 },
+        facing: 0,
+      },
+      {
+        id: 'amber-mobile',
+        type: 'soldier',
+        owner: 1,
+        position: { q: 2, r: 0 },
+        facing: 3,
+      },
+    ]);
+    const damageAction = getLegalActionsForPiece(damageState, 'blue-soldier').find(
+      (action) => action.kind === 'move' && action.to.q === 0 && action.to.r === -1,
+    );
+    expect(damageAction).toBeDefined();
+    const damageRecord = appendAction(createMatchRecord(config, damageState), damageAction!);
+    const damageStats = calculateStatistics(damageRecord);
+    expect(damageStats.fortressDamage).toEqual([1, 0]);
+    expect(damageStats.captures).toEqual([0, 1]);
+  });
+
+  it('persiste rendición, tablas externas y timeout sin inventar GameActions', () => {
+    const baseRecord = createMatchRecord(createClassicConfig({ mode: 'local' }));
+    const resignation = concludeMatch(baseRecord, {
+      type: 'win',
+      winner: 1,
+      reason: 'resignation',
+    });
+    expect(resignation.actions).toEqual([]);
+    expect(replayRecord(resignation).outcome).toEqual({
+      type: 'win',
+      winner: 1,
+      reason: 'resignation',
+    });
+    expect(parseRecord(serializeRecord(resignation)).conclusion).toEqual(resignation.conclusion);
+
+    const blockade = concludeMatch(baseRecord, { type: 'draw', reason: 'blockade' });
+    expect(replayRecord(blockade).outcome).toEqual({ type: 'draw', reason: 'blockade' });
+
+    let timed = createMatchRecord(createClassicConfig({ mode: 'local', clockSeconds: 1 }));
+    const running = resumeMatchClock(timed.clock!, 100);
+    const expired = tickMatchClock(running, 1_100);
+    timed = setMatchClock(timed, expired);
+    const timeout = clockOutcome(expired);
+    expect(timeout).not.toBeNull();
+    timed = concludeMatch(timed, timeout!);
+    expect(replayRecord(parseRecord(serializeRecord(timed))).outcome).toEqual({
+      type: 'win',
+      winner: 1,
+      reason: 'timeout',
+    });
+  });
+
+  it('mantiene compatibles los guardados v2 anteriores a conclusión, reloj y no-progreso', () => {
+    const modern = createMatchRecord(createClassicConfig({ mode: 'local' }));
+    const legacyInitialState = structuredClone(modern.initialState);
+    delete legacyInitialState.noProgressPlyCount;
+    const { noProgressPlyLimit: _noProgress, ...legacyOptions } = modern.config.options;
+    void _noProgress;
+    const { conclusion: _conclusion, clock: _clock, ...legacyRecord } = modern;
+    void _conclusion;
+    void _clock;
+    const legacy = {
+      ...legacyRecord,
+      config: {
+        ...modern.config,
+        victory: { ...modern.config.victory, repetition: 0 },
+        options: legacyOptions,
+      },
+      initialState: legacyInitialState,
+    };
+    const parsed = parseRecord(JSON.stringify(legacy));
+    expect(parsed.version).toBe(2);
+    expect(parsed.conclusion).toBeUndefined();
+    expect(parsed.clock).toBeUndefined();
+    expect(parsed.config.options.noProgressPlyLimit).toBeUndefined();
+    expect(replayRecord(parsed).outcome).toBeNull();
+  });
+
+  it('rechaza conclusiones de tablero fabricadas o metadatos incoherentes', () => {
+    const record = createMatchRecord(createClassicConfig({ mode: 'local' }));
+    expect(() => concludeMatch(record, { type: 'draw', reason: 'repetition' })).toThrow(
+      /debe proceder de una orden legal/u,
+    );
+    expect(() =>
+      parseRecord(
+        JSON.stringify({
+          ...record,
+          conclusion: {
+            outcome: { type: 'draw', reason: 'blockade' },
+            atAction: 2,
+            recordedAt: new Date().toISOString(),
+          },
+        }),
+      ),
+    ).toThrow(/conclusión no coincide/u);
+    const timed = createMatchRecord(createClassicConfig({ mode: 'local', clockSeconds: 10 }));
+    expect(() =>
+      setMatchClock(timed, {
+        ...timed.clock!,
+        initialMs: 20_000,
+        remainingMs: [20_000, 20_000],
+      }),
+    ).toThrow(/no coincide con la duración/u);
   });
 });

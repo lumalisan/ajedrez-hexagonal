@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  CLASSIC_NO_PROGRESS_LIMIT,
+  CLASSIC_REPETITION_LIMIT,
+  FORTRESS_DAMAGE_PER_HIT,
+  FORTRESS_SACRIFICE_ATTACKERS,
+} from '../src/classic-rules';
 import { RULE_SECTIONS, type RuleParagraph } from '../src/rules-content';
 
 const paragraphText = (paragraph: string | RuleParagraph): string =>
@@ -46,6 +52,42 @@ describe('contenido del reglamento', () => {
       'tanto el tanque como el lanzamisiles pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
     );
     expect(sharedText).not.toContain('El vehículo puede abandonarse');
+  });
+
+  it('explica sin divergencias el daño y los sacrificios contra la Fortaleza', () => {
+    const fortress = RULE_SECTIONS.find(({ id }) => id === 'fortaleza');
+    const text = fortress?.paragraphs.map(paragraphText).join('\n') ?? '';
+
+    expect(FORTRESS_DAMAGE_PER_HIT).toBe(1);
+    expect(FORTRESS_SACRIFICE_ATTACKERS).toEqual(['soldier', 'capturer', 'fast']);
+    expect(text).toContain(`Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto`);
+    expect(text).toContain('Soldado, Capturador y Embestidor se sacrifican');
+    expect(text).toContain('1, 2 o 3 puntos de vida');
+  });
+
+  it('documenta todos los finales de classic-v2 y su persistencia', () => {
+    const development = RULE_SECTIONS.find(({ id }) => id === 'desarrollo');
+    const text = development?.paragraphs.map(paragraphText).join('\n') ?? '';
+
+    expect(CLASSIC_REPETITION_LIMIT).toBe(3);
+    expect(CLASSIC_NO_PROGRESS_LIMIT).toBe(120);
+    expect(text).toContain('tercera aparición');
+    expect(text).toContain(`${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies)`);
+    expect(text).toContain('tablas por bloqueo');
+    expect(text).toContain('acordar ese desenlace');
+    expect(text).toContain('tiempo agotado');
+    expect(text).toContain('rendición');
+    expect(text).toContain('se conservan al continuar, exportar, importar o reproducir');
+  });
+
+  it('distingue las capas y describe la transformación como una sola orden', () => {
+    const shared = RULE_SECTIONS.find(({ id }) => id === 'casillas-compartidas');
+    const text = shared?.paragraphs.map(paragraphText).join('\n') ?? '';
+
+    expect(text).toContain('dos capas: suelo y aire');
+    expect(text).toContain('máximo una unidad terrestre y una unidad aérea');
+    expect(text).toContain('Tanque, Lanzamisiles y Embestidor pueden ser abandonados');
+    expect(text).toContain('no concede un segundo turno independiente');
   });
 
   it('sustituye las secuencias de imágenes por demostraciones reales salvo la disposición inicial', () => {

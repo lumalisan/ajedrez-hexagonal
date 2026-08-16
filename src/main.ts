@@ -1,8 +1,11 @@
 import './styles.css';
 
 import { chooseMachineAction } from './ai';
+import type { SearchMetadata } from './ai';
 import { WorkerAiStrategy, difficultyBudget } from './ai-strategy';
+import { analyzeActionConsequences, consequenceTone } from './action-consequences';
 import { AudioDirector } from './audio';
+import { CLASSIC_RULES_NOTE, fortressAttackSummary } from './classic-rules';
 import { createClassicConfig } from './game-config';
 import {
   ALL_DIRECTIONS,
@@ -35,21 +38,47 @@ import {
   createMatchRecord,
   parseRecord,
   replayRecord,
+  resolutionRulesForConfig,
   serializeRecord,
+  setAcademySession,
 } from './match-record';
 import { MatchController } from './match-controller';
+import { analyzeMatchMoments } from './match-insights';
+import { MATCH_PRESETS, createPresetConfig, type MatchPresetId } from './match-presets';
 import {
+  appendMatchHistory,
   clearActiveMatch,
-  completeScenario,
+  loadAcademyRecords,
   loadAcademyProgress,
   loadActiveMatch,
+  loadMatchHistory,
   loadPreferences,
+  recordScenarioAttempt,
+  resetAcademyProgress,
   saveActiveMatch,
   savePreferences as persistPreferences,
+  type AcademyRecord,
 } from './match-storage';
+import {
+  clearTelemetry,
+  loadTelemetry,
+  recordTelemetry,
+  serializeTelemetry,
+  telemetrySummary,
+} from './playtest-telemetry';
 import { BoardRenderer, actionsAtHex, pieceAccessibleLabel, type RenderModel } from './renderer';
 import { analyzeImmediateThreats } from './tactical-analysis';
-import { SCENARIOS, evaluateScenario, scenarioById } from './scenarios';
+import {
+  SCENARIOS,
+  dailyScenarioForDate,
+  evaluateScenarioProgress,
+  nextScenarioHint,
+  revealedScenarioHints,
+  scenarioById,
+  scenarioLessonAt,
+  scenariosByCategory,
+  type ScenarioProgress,
+} from './scenarios';
 import {
   loadScenarioCatalog,
   saveCustomScenario,
@@ -61,6 +90,7 @@ import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from './rules-con
 import { captureAboveCommandLabel } from './ui-copy';
 import type {
   AiDifficulty,
+  AiPersonality,
   Direction,
   GameAction,
   GameEvent,
@@ -71,6 +101,7 @@ import type {
   MatchRecord,
   Piece,
   ScenarioDefinition,
+  ScenarioObjective,
 } from './types';
 
 type UiMode =
@@ -118,11 +149,19 @@ let matchController: MatchController | null = null;
 let activeScenario: ScenarioDefinition | null = null;
 let aiAbortController: AbortController | null = null;
 let replayDock: HTMLElement | null = null;
+let replayClockWasRunning = false;
 let machineThinking = false;
+let machineSearch: SearchMetadata | null = null;
 let logOpen = false;
 let renderedStatusKey = '';
 let homeDemoTimer: number | null = null;
 let homeDemoBusy = false;
+let scenarioProgress: ScenarioProgress | null = null;
+let scenarioHintsRevealed = 0;
+let scenarioAttemptsRecorded = false;
+let outcomePresentedFor = '';
+let commandSheetExpanded = false;
+let lastClockPersistSecond = -1;
 
 const pointers = new Map<number, PointerState>();
 let previousPinchDistance = 0;
@@ -148,16 +187,22 @@ const dialog = requireElement<HTMLDialogElement>('game-dialog');
 const toastRegion = requireElement<HTMLElement>('toast-region');
 const announcer = requireElement<HTMLElement>('announcer');
 const srBoard = requireElement<HTMLElement>('sr-board');
+const matchClockDisplay = document.getElementById('match-clock');
 
 applyPreferences();
 bindControls();
 showHomeScreen();
+window.setInterval(tickActiveClock, 250);
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js'));
 }
 
 function bindControls(): void {
   homeMenuContent.addEventListener('click', onHomeMenuClick);
+  document.getElementById('command-sheet-toggle')?.addEventListener('click', () => {
+    commandSheetExpanded = !commandSheetExpanded;
+    renderCommandSheetState();
+  });
   threatToggle.addEventListener('click', () => {
     preferences.tacticalThreats = !preferences.tacticalThreats;
     savePreferences();
@@ -487,6 +532,7 @@ function selectPiece(pieceId: string): void {
   focusedHex = { ...piece.position };
   pendingAction = null;
   mode = { kind: 'default' };
+  if (window.innerWidth <= 760) commandSheetExpanded = true;
   audio.playSelect();
   render();
   announce(
@@ -498,10 +544,19 @@ function clearSelection(): void {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
+  if (window.innerWidth <= 760) commandSheetExpanded = false;
+  if (window.innerWidth <= 760) commandSheetExpanded = false;
   render();
 }
 
 function cancelDraft(): void {
+  if (pendingAction) {
+    recordTelemetry('action-cancelled', {
+      kind: pendingAction.kind,
+      ply: state.ply,
+      mode: gameMode ?? 'none',
+    });
+  }
   pendingAction = null;
   mode = { kind: 'default' };
   render();
@@ -510,6 +565,12 @@ function cancelDraft(): void {
 
 function setPending(action: GameAction): void {
   pendingAction = action;
+  if (window.innerWidth <= 760) commandSheetExpanded = true;
+  recordTelemetry('action-prepared', {
+    kind: action.kind,
+    ply: state.ply,
+    mode: gameMode ?? 'none',
+  });
   if (mode.kind === 'actionChoice') mode = { kind: 'default' };
   render();
   const requiresConfirmation = shouldConfirmAction(action);
@@ -541,6 +602,17 @@ async function commitPending(): Promise<void> {
 
 async function executeTurn(action: GameAction): Promise<void> {
   if (animating) return;
+  if (matchController?.record.clock && !state.outcome) {
+    matchController.tickClock(Date.now());
+    matchRecord = matchController.record;
+    state = matchController.store.getState().game;
+    if (state.outcome) {
+      persistCurrentMatch();
+      render();
+      presentOutcome();
+      return;
+    }
+  }
   const before = state;
   const result = matchController ? matchController.commit(action) : applyAction(state, action);
   if (!result.ok) {
@@ -550,19 +622,21 @@ async function executeTurn(action: GameAction): Promise<void> {
   }
 
   state = result.state;
-  const scenarioCompleted = activeScenario
-    ? evaluateScenario(activeScenario, before, state, action)
-    : false;
+  scenarioProgress = activeScenario
+    ? evaluateScenarioProgress(activeScenario, before, state, action)
+    : null;
   if (activeScenario) state = { ...state, outcome: null };
-  if (matchController) matchRecord = matchController.record;
-  else if (matchRecord) matchRecord = appendAction(matchRecord, action);
-  if (matchRecord) {
-    try {
-      saveActiveMatch(matchRecord);
-    } catch {
-      showToast('No se pudo guardar la partida en este navegador.');
-    }
-  }
+  if (matchController) {
+    if (matchController.record.clock) matchController.pauseClock(Date.now());
+    matchRecord = matchController.record;
+  } else if (matchRecord) matchRecord = appendAction(matchRecord, action);
+  persistCurrentMatch();
+  recordTelemetry('action-committed', {
+    kind: action.kind,
+    ply: state.ply,
+    mode: gameMode ?? 'none',
+    events: result.events.length,
+  });
   lastEvents = activeScenario
     ? result.events.filter((event) => event.type !== 'draw' && event.type !== 'victory')
     : result.events;
@@ -581,14 +655,19 @@ async function executeTurn(action: GameAction): Promise<void> {
     render();
   }
 
-  if (activeScenario && scenarioCompleted) {
-    completeScenario(activeScenario.id);
+  if (activeScenario && scenarioProgress?.status === 'success') {
+    recordActiveScenarioAttempt(true);
     showScenarioSuccess(activeScenario);
+  } else if (activeScenario && scenarioProgress?.status === 'failure') {
+    recordActiveScenarioAttempt(false);
+    showScenarioRetry(activeScenario, scenarioProgress.feedback);
   } else if (activeScenario) {
-    showScenarioRetry(activeScenario);
+    announce(scenarioProgress?.feedback ?? scenarioLessonAt(activeScenario, state.ply));
+    if (scenarioProgress?.feedback) showToast(scenarioProgress.feedback);
+    startActiveTurnClock();
+    if (isMachineTurn()) void runMachineTurn();
   } else if (state.outcome) {
-    announce(outcomeText(state.outcome));
-    showOutcomeDialog();
+    presentOutcome();
   } else {
     audio.playTurn();
     const passedPlayer = result.events.find((event) => event.type === 'pass')?.owner;
@@ -598,20 +677,24 @@ async function executeTurn(action: GameAction): Promise<void> {
       announce(message);
     } else announce(`Turno de ${PLAYER_NAMES[state.activePlayer]}.`);
     if (gameMode === 'local' && preferences.handoffScreen) showHandoffDialog();
-    else if (isMachineTurn()) void runMachineTurn();
+    else {
+      startActiveTurnClock();
+      if (isMachineTurn()) void runMachineTurn();
+    }
   }
 }
 
 async function runMachineTurn(): Promise<void> {
   if (!isMachineTurn() || state.outcome || animating) return;
   machineThinking = true;
+  machineSearch = null;
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
   render();
   announce('Turno de la máquina. Pensando jugada.');
   await new Promise<void>((resolve) =>
-    window.setTimeout(resolve, preferences.reducedMotion ? 80 : 550),
+    window.setTimeout(resolve, preferences.reducedMotion ? 60 : 220),
   );
   if (!isMachineTurn() || state.outcome) {
     machineThinking = false;
@@ -620,11 +703,17 @@ async function runMachineTurn(): Promise<void> {
   }
   aiAbortController?.abort();
   aiAbortController = new AbortController();
-  const difficulty = matchConfig?.participants[1].difficulty ?? 'recruit';
+  const participant = matchConfig?.participants[state.activePlayer];
+  const difficulty = participant?.difficulty ?? 'recruit';
   const action = matchConfig
     ? await aiStrategy.chooseAction(state, matchConfig, {
         maxMs: difficultyBudget(difficulty, window.innerWidth < 700),
         signal: aiAbortController.signal,
+        onProgress: (metadata) => {
+          machineSearch = { ...metadata };
+          renderedStatusKey = '';
+          render();
+        },
       })
     : null;
   machineThinking = false;
@@ -636,7 +725,123 @@ async function runMachineTurn(): Promise<void> {
 }
 
 function isMachineTurn(): boolean {
-  return gameMode === 'machine' && state.activePlayer === 1;
+  if (gameMode === 'academy' && activeScenario) {
+    return state.activePlayer !== activeScenario.controlledPlayer;
+  }
+  return gameMode === 'machine' && matchConfig?.participants[state.activePlayer].kind === 'machine';
+}
+
+function persistCurrentMatch(): void {
+  if (!matchRecord) return;
+  try {
+    if (!saveActiveMatch(matchRecord))
+      showToast('No se pudo guardar la partida en este navegador.');
+  } catch {
+    showToast('No se pudo guardar la partida en este navegador.');
+  }
+}
+
+function startActiveTurnClock(): void {
+  if (!matchController?.record.clock || state.outcome || replayDock || isHomeScreenActive()) return;
+  const now = Date.now();
+  matchController.switchClock(state.activePlayer, now);
+  matchController.resumeClock(now);
+  matchRecord = matchController.record;
+  state = matchController.store.getState().game;
+  persistCurrentMatch();
+  renderClockDisplay();
+}
+
+function tickActiveClock(): void {
+  if (!matchController?.record.clock || isHomeScreenActive() || state.outcome || replayDock) return;
+  const clock = matchController.tickClock(Date.now());
+  if (!clock) return;
+  matchRecord = matchController.record;
+  state = matchController.store.getState().game;
+  const currentSecond = Math.ceil(clock.remainingMs[clock.activePlayer] / 1_000);
+  if (currentSecond !== lastClockPersistSecond || state.outcome) {
+    lastClockPersistSecond = currentSecond;
+    persistCurrentMatch();
+  }
+  renderClockDisplay();
+  if (state.outcome) {
+    renderedStatusKey = '';
+    render();
+    presentOutcome();
+  }
+}
+
+function presentOutcome(): void {
+  if (!state.outcome || !matchRecord) return;
+  const key = `${matchRecord.createdAt}:${state.outcome.type}:${state.outcome.reason}`;
+  if (outcomePresentedFor === key) return;
+  if (matchController?.record.clock) {
+    matchController.pauseClock(Date.now());
+    matchRecord = matchController.record;
+  }
+  persistCurrentMatch();
+  const completedAt = new Date().toISOString();
+  appendMatchHistory({
+    id: matchRecord.createdAt,
+    definitionId: matchRecord.config.definitionId,
+    participants: [
+      matchRecord.config.participants[0].name,
+      matchRecord.config.participants[1].name,
+    ],
+    outcome: state.outcome,
+    plies: matchRecord.currentAction,
+    durationSeconds: Math.max(
+      0,
+      Math.round((Date.parse(completedAt) - Date.parse(matchRecord.createdAt)) / 1_000),
+    ),
+    completedAt,
+  });
+  clearActiveMatch();
+  recordTelemetry('match-finished', {
+    mode: gameMode ?? 'none',
+    plies: matchRecord.currentAction,
+    result: `${state.outcome.type}:${state.outcome.reason}`,
+  });
+  outcomePresentedFor = key;
+  if (!preferences.reducedMotion) {
+    navigator.vibrate?.([60, 40, 120]);
+    document.body.classList.add('match-climax');
+    window.setTimeout(() => document.body.classList.remove('match-climax'), 1_400);
+  }
+  announce(outcomeText(state.outcome));
+  showOutcomeDialog();
+}
+
+function recordActiveScenarioAttempt(completed: boolean): void {
+  if (!activeScenario || scenarioAttemptsRecorded) return;
+  const elapsed = Math.max(0, state.ply - activeScenario.initialState.ply);
+  recordScenarioAttempt(activeScenario.id, {
+    completed,
+    plies: elapsed,
+    hintsUsed: scenarioHintsRevealed,
+    parPlies: activeScenario.maxPlies,
+  });
+  recordTelemetry('academy-finished', {
+    scenario: activeScenario.id,
+    completed,
+    plies: elapsed,
+    hints: scenarioHintsRevealed,
+  });
+  clearActiveMatch();
+  scenarioAttemptsRecorded = true;
+}
+
+function renderCommandSheetState(): void {
+  const expanded = commandSheetExpanded || Boolean(pendingAction) || mode.kind !== 'default';
+  document.body.classList.toggle('command-sheet-expanded', expanded);
+  document.body.classList.toggle('command-sheet-collapsed', !expanded);
+  const toggle = document.getElementById('command-sheet-toggle');
+  toggle?.setAttribute('aria-expanded', String(expanded));
+  if (toggle)
+    toggle.setAttribute(
+      'aria-label',
+      expanded ? 'Contraer panel de mando' : 'Abrir panel de mando',
+    );
 }
 
 function render(): void {
@@ -671,6 +876,7 @@ function render(): void {
   renderBattleLog();
   renderSoundButton();
   renderThreatToggle();
+  renderCommandSheetState();
   renderScreenReaderBoard();
   syncCanvas();
   if (restoreDynamicFocus) {
@@ -760,14 +966,20 @@ function filterVisibleActions(actions: GameAction[], selected?: Piece): GameActi
 }
 
 function renderStatus(): void {
-  blockadeButton.disabled = Boolean(state.outcome) || animating || gameMode === 'machine';
-  blockadeButton.hidden = gameMode === 'machine';
+  blockadeButton.disabled =
+    Boolean(state.outcome) || animating || gameMode === 'machine' || Boolean(activeScenario);
+  blockadeButton.hidden = gameMode === 'machine' || Boolean(activeScenario);
+  renderClockDisplay();
   const fortressState = state.pieces
     .filter((piece) => piece.type === 'fortress')
     .map((piece) => `${piece.owner}:${piece.hp}`)
     .sort()
     .join('|');
-  const statusKey = `${state.activePlayer}:${state.ply}:${fortressState}:${JSON.stringify(state.outcome)}:${gameMode}:${machineThinking}`;
+  const criticalFortress = state.pieces.some(
+    (piece) => piece.type === 'fortress' && piece.hp === 1 && fortressMaximumHp(piece.owner) > 1,
+  );
+  document.body.classList.toggle('fortress-critical', criticalFortress && !state.outcome);
+  const statusKey = `${state.activePlayer}:${state.ply}:${fortressState}:${JSON.stringify(state.outcome)}:${gameMode}:${machineThinking}:${machineSearch?.completedDepth ?? 0}:${scenarioProgress?.remainingPlies ?? ''}`;
   if (statusKey === renderedStatusKey) return;
   renderedStatusKey = statusKey;
   renderFortressStatus(0, blueFortress);
@@ -780,11 +992,52 @@ function renderStatus(): void {
     turnChip.className = `turn-chip ${playerClass}`;
     const commander = isMachineTurn()
       ? machineThinking
-        ? 'Máquina pensando…'
+        ? machineSearch
+          ? `IA · profundidad ${machineSearch.completedDepth}/${machineSearch.requestedDepth}`
+          : 'Máquina pensando…'
         : 'Máquina en mando'
       : `${PLAYER_NAMES[state.activePlayer]} en mando`;
-    turnChip.innerHTML = `<span>TURNO ${Math.floor(state.ply / 2) + 1}</span><strong>${commander}</strong>`;
+    const mission = activeScenario
+      ? `<small>${escapeHtml(
+          scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply),
+        )}${
+          scenarioProgress?.remainingPlies === null ||
+          scenarioProgress?.remainingPlies === undefined
+            ? ''
+            : ` · quedan ${scenarioProgress.remainingPlies}`
+        }</small>`
+      : '';
+    turnChip.innerHTML = `<span>TURNO ${Math.floor(state.ply / 2) + 1}</span><strong>${commander}</strong>${mission}`;
   }
+}
+
+function renderClockDisplay(): void {
+  if (!matchClockDisplay) return;
+  const clock = matchRecord?.clock;
+  matchClockDisplay.hidden = !clock;
+  if (!clock) {
+    matchClockDisplay.innerHTML = '';
+    return;
+  }
+  const activeRemaining = clock.remainingMs[clock.activePlayer];
+  const urgency =
+    activeRemaining <= 20_000 ? 'critical' : activeRemaining <= 60_000 ? 'warning' : '';
+  matchClockDisplay.className = `match-clock ${clock.status} ${urgency}`.trim();
+  matchClockDisplay.innerHTML = ([0, 1] as const)
+    .map(
+      (player) =>
+        `<span class="clock-side ${clock.activePlayer === player && clock.status === 'running' ? 'active' : ''}"><small>${PLAYER_NAMES[player]}</small><strong>${formatClock(clock.remainingMs[player])}</strong></span>`,
+    )
+    .join('');
+  matchClockDisplay.setAttribute(
+    'aria-label',
+    `Reloj: Cian ${formatClock(clock.remainingMs[0])}, Ámbar ${formatClock(clock.remainingMs[1])}`,
+  );
+}
+
+function formatClock(milliseconds: number): string {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1_000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 function renderFortressStatus(player: 0 | 1, element: HTMLElement): void {
@@ -839,7 +1092,7 @@ function renderPieceCard(piece?: Piece): void {
       <p>Toca una unidad. Destinos legales aparecerán directamente sobre el tablero.</p>
       <span class="key-map">Teclado: W A S D · Enter</span>`;
     selectionSummary.textContent = activeScenario
-      ? `Objetivo: ${activeScenario.summary} · ${activeScenario.hints[0]}`
+      ? `Objetivo: ${activeScenario.summary} · ${scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}`
       : state.outcome
         ? outcomeText(state.outcome)
         : isMachineTurn()
@@ -875,7 +1128,7 @@ function renderPieceCard(piece?: Piece): void {
     <div class="piece-stats"><span>Coordenadas <strong>${q}, ${r}</strong></span>${facing}</div>`;
   selectionSummary.textContent =
     activeScenario && ownTurn
-      ? `Objetivo: ${activeScenario.summary} · ${activeScenario.hints.join(' ')}`
+      ? `Objetivo: ${activeScenario.summary} · ${scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}`
       : ownTurn
         ? preferences.contextualHints
           ? contextualHint(piece)
@@ -932,7 +1185,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   }
   if (!piece) {
     actionControls.innerHTML = isMachineTurn()
-      ? '<div class="control-section machine-wait"><span class="thinking-pulse" aria-hidden="true"></span><strong>Máquina pensando</strong><p>Ámbar está evaluando sus órdenes.</p></div>'
+      ? `<div class="control-section machine-wait"><span class="thinking-pulse" aria-hidden="true"></span><strong>Máquina pensando</strong><p>${machineSearch ? `Profundidad ${machineSearch.completedDepth}/${machineSearch.requestedDepth} · ${machineSearch.nodes.toLocaleString('es-ES')} posiciones` : 'Evaluando el frente, la seguridad y las amenazas tácticas.'}</p><div class="ai-progress" role="progressbar" aria-label="Progreso de cálculo" aria-valuemin="0" aria-valuemax="${machineSearch?.requestedDepth ?? 1}" aria-valuenow="${machineSearch?.completedDepth ?? 0}"><i style="--ai-progress:${machineSearch ? machineSearch.completedDepth / machineSearch.requestedDepth : 0}"></i></div></div>`
       : '';
     return;
   }
@@ -1106,6 +1359,18 @@ function renderPendingCard(piece: Piece | undefined, legalActions: GameAction[])
     return;
   }
   pendingCard.hidden = false;
+  const consequences = analyzeActionConsequences(
+    state,
+    action,
+    matchConfig ? resolutionRulesForConfig(matchConfig) : undefined,
+  );
+  const tone = consequenceTone(consequences);
+  const toneClass =
+    tone === 'warning'
+      ? 'tone-danger'
+      : tone === 'favorable' || tone === 'decisive'
+        ? 'tone-positive'
+        : 'tone-neutral';
   const mediumMove = piece?.type === 'medium' && action.kind === 'move';
   const cannon =
     piece?.type === 'medium' && action.kind === 'move' ? (action.cannon ?? piece.cannon) : null;
@@ -1113,6 +1378,11 @@ function renderPendingCard(piece: Piece | undefined, legalActions: GameAction[])
     <div class="pending-label"><span>ORDEN PREPARADA</span><i></i></div>
     <strong>${escapeHtml(describeAction(state, action))}</strong>
     ${mediumMove ? `<div class="inline-direction"><span>Cañón tras mover</span>${directionButtons(cannon, 'pending-cannon')}</div>` : ''}
+    <div class="consequence-lens ${toneClass}">
+      <span class="eyebrow">CONSECUENCIA INMEDIATA</span>
+      ${consequences.summaries.map((summary) => `<span class="consequence-item ${toneClass}">${escapeHtml(summary)}</span>`).join('')}
+      ${consequences.outcomeLabel ? `<strong>${escapeHtml(consequences.outcomeLabel)}</strong>` : ''}
+    </div>
     <div class="pending-actions">
       <button type="button" class="secondary-button cancel-pending">Cancelar</button>
       <button type="button" class="confirm-button" ${animating ? 'disabled' : ''}>Confirmar acción</button>
@@ -1192,7 +1462,14 @@ function directionNameForView(direction: Direction): string {
 }
 
 function viewPlayer(): 0 | 1 {
-  return gameMode === 'machine' || preferences.fixedBoard ? 0 : state.activePlayer;
+  if (gameMode === 'academy' && activeScenario) return activeScenario.controlledPlayer;
+  if (gameMode === 'machine') {
+    const human = matchConfig?.participants.findIndex(
+      (participant) => participant.kind === 'human',
+    );
+    return human === 1 ? 1 : 0;
+  }
+  return preferences.fixedBoard ? 0 : state.activePlayer;
 }
 
 function targetChoiceMarkup(action: GameAction, index: number): string {
@@ -1353,8 +1630,13 @@ function announce(message: string): void {
 
 function showHomeScreen(view: 'main' | 'new' = 'main'): void {
   aiAbortController?.abort();
+  if (matchController?.record.clock && !state.outcome) {
+    matchController.pauseClock(Date.now());
+    matchRecord = matchController.record;
+    persistCurrentMatch();
+  }
   stopHomeDemo();
-  closeReplay();
+  closeReplay({ resumeClock: false });
   if (dialog.open) dialog.close();
   gameMode = null;
   matchConfig = null;
@@ -1368,9 +1650,16 @@ function showHomeScreen(view: 'main' | 'new' = 'main'): void {
   state = createInitialState();
   focusedHex = { q: 0, r: 0 };
   machineThinking = false;
+  machineSearch = null;
+  scenarioProgress = null;
+  scenarioHintsRevealed = 0;
+  scenarioAttemptsRecorded = false;
+  commandSheetExpanded = false;
+  lastClockPersistSecond = -1;
   homeDemoBusy = false;
   renderedStatusKey = '';
   app.classList.add('home-active');
+  document.body.classList.remove('fortress-critical', 'match-climax');
   homeScreen.hidden = false;
   homeScreen.inert = false;
   topbar.inert = true;
@@ -1390,15 +1679,23 @@ function leaveHomeScreen(): void {
   homeScreen.inert = true;
   topbar.inert = false;
   gameLayout.inert = false;
+  commandSheetExpanded = window.innerWidth > 760;
+  renderCommandSheetState();
 }
 
 function isHomeScreenActive(): boolean {
   return app.classList.contains('home-active');
 }
 
+function fixedAcademyCompletedCount(): number {
+  const fixedScenarioIds = new Set(SCENARIOS.map((scenario) => scenario.id));
+  return new Set(loadAcademyProgress().filter((id) => fixedScenarioIds.has(id))).size;
+}
+
 function showHomeMainMenu(): void {
   const saved = loadActiveMatch();
-  const completed = loadAcademyProgress();
+  const completed = fixedAcademyCompletedCount();
+  const history = loadMatchHistory();
   const continueDetail = saved.record
     ? `${saved.record.currentAction} órdenes guardadas · ${saved.record.config.participants[0].name} vs. ${saved.record.config.participants[1].name}`
     : saved.error
@@ -1417,7 +1714,13 @@ function showHomeMainMenu(): void {
         <span>Reglas</span><small>Consulta unidades, acciones y victoria</small>
       </button>
       <button type="button" class="home-nav-button" data-home-action="tutorial">
-        <span>Tutorial</span><small>${completed.length} de ${SCENARIOS.length} desafíos completados</small>
+        <span>Tutorial</span><small>${completed} de ${SCENARIOS.length} desafíos completados</small>
+      </button>
+      <button type="button" class="home-nav-button" data-home-action="lab">
+        <span>Laboratorio</span><small>Crea, valida y juega tus propias misiones</small>
+      </button>
+      <button type="button" class="home-nav-button" data-home-action="history">
+        <span>Historial</span><small>${history.length ? `${history.length} batallas concluidas` : 'Tus resultados aparecerán aquí'}</small>
       </button>
     </nav>`;
 }
@@ -1433,8 +1736,8 @@ function showHomeNewGameMenu(): void {
       <button type="button" class="home-nav-button" data-home-mode="local">
         <span>Dos jugadores</span><small>Juega contra otra persona en el mismo ordenador</small>
       </button>
-      <button type="button" class="home-nav-button unavailable" disabled>
-        <span>En línea</span><small>Próximamente</small>
+      <button type="button" class="home-nav-button" data-home-mode="academy">
+        <span>Academia táctica</span><small>Aprende, practica y afronta el reto diario</small>
       </button>
     </nav>`;
 }
@@ -1449,9 +1752,16 @@ function onHomeMenuClick(event: MouseEvent): void {
     showFreeMatchConfig(requestedMode);
     return;
   }
+  if (requestedMode === 'academy') {
+    gameMode = 'academy';
+    showAcademyDialog();
+    return;
+  }
   if (action === 'new') showHomeNewGameMenu();
   else if (action === 'back') showHomeMainMenu();
   else if (action === 'rules') showRulesDialog();
+  else if (action === 'lab') showScenarioEditorDialog();
+  else if (action === 'history') showHistoryDialog();
   else if (action === 'tutorial') {
     gameMode = 'academy';
     showAcademyDialog();
@@ -1520,7 +1830,7 @@ function showNewGameDialog(): void {
 
 function showGameModeDialog(initial: boolean): void {
   const saved = loadActiveMatch();
-  const completed = loadAcademyProgress();
+  const completed = fixedAcademyCompletedCount();
   openDialog(`
     <div class="dialog-icon">♟</div>
     <span class="eyebrow">${initial ? 'CENTRO DE MANDO' : 'NUEVA PARTIDA'}</span>
@@ -1548,7 +1858,7 @@ function showGameModeDialog(initial: boolean): void {
       <button type="button" class="mode-card academy-card" data-game-mode="academy">
         <span class="mode-icon" aria-hidden="true">◎</span>
         <strong>Academia táctica</strong>
-        <small>${completed.length} de ${SCENARIOS.length} desafíos completados.</small>
+        <small>${completed} de ${SCENARIOS.length} desafíos completados.</small>
       </button>
     </div>
     ${initial ? '' : '<div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>Cancelar</button></div>'}`);
@@ -1567,43 +1877,95 @@ function showGameModeDialog(initial: boolean): void {
 }
 
 function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
+  let selectedPreset: MatchPresetId = 'tactical';
+  let selectedDoctrine: AiPersonality = 'balanced';
   openDialog(`
     <button type="button" class="config-close" data-dialog-close aria-label="Cerrar configuración">×</button>
     <span class="eyebrow">NUEVA PARTIDA</span>
     <h2>${modeToConfigure === 'machine' ? 'Individual vs. IA' : 'Dos jugadores'}</h2>
-    <p>Configura el enfrentamiento antes de desplegar los ejércitos.</p>
+    <p>Elige el ritmo primero. Siempre podrás afinar los detalles con la opción personalizada.</p>
+    <div class="preset-grid" role="radiogroup" aria-label="Ritmo de partida">
+      ${MATCH_PRESETS.map(
+        (
+          preset,
+        ) => `<button type="button" class="preset-card ${preset.id === selectedPreset ? 'selected' : ''}" role="radio" aria-checked="${preset.id === selectedPreset}" data-preset="${preset.id}">
+          <span class="preset-badge">${escapeHtml(preset.duration)}</span>
+          <strong>${escapeHtml(preset.name)}</strong>
+          <small>${escapeHtml(preset.description)}</small>
+        </button>`,
+      ).join('')}
+    </div>
     ${
       modeToConfigure === 'machine'
-        ? `<label class="field-row"><span>Dificultad</span><select data-ai-difficulty>
+        ? `<div class="match-options"><span class="eyebrow">MANDO RIVAL</span>
+          <label class="field-row"><span>Dificultad</span><select data-ai-difficulty>
             <option value="recruit">Fácil</option>
             <option value="tactical" selected>Media</option>
             <option value="commander">Difícil</option>
             <option value="expert">Experto</option>
-          </select></label>`
+          </select></label>
+          <div class="doctrine-grid" role="radiogroup" aria-label="Doctrina de la IA">
+            ${aiDoctrineCards(selectedDoctrine)}
+          </div>
+          <p class="dialog-note" data-doctrine-description>${aiDoctrineDescription(selectedDoctrine)}</p>
+        </div>`
         : ''
     }
-    <div class="match-options">
-      <span class="eyebrow">OPCIONES DE PARTIDA</span>
+    <div class="match-options" data-custom-options hidden>
+      <span class="eyebrow">AJUSTES PERSONALIZADOS</span>
       <label class="field-row"><span>Puntos de vida de la Fortaleza</span><select data-fortress-hp>
-        <option value="1" selected>1 (recomendado)</option>
-        <option value="2">2</option>
+        <option value="1">1 · partida explosiva</option>
+        <option value="2" selected>2 · equilibrio recomendado</option>
         <option value="3">3</option>
       </select></label>
       <label class="field-row"><span>Disposición inicial</span><select data-initial-layout>
-        <option value="1" selected>1</option>
-        <option value="2">2</option>
+        <option value="1" selected>Frente clásico</option>
+        <option value="2">Columnas de asedio</option>
       </select></label>
+    </div>
+    <div class="match-options">
+      <span class="eyebrow">RELOJ POR JUGADOR</span>
       <label class="field-row"><span>Tiempo</span><select data-match-clock>
         <option value="" selected>Sin límite</option>
         <option value="300">5 minutos</option>
         <option value="600">10 minutos</option>
         <option value="1200">20 minutos</option>
       </select></label>
+      <p class="dialog-note">El reloj es real, se guarda con la partida y la derrota por tiempo queda registrada.</p>
     </div>
     <div class="dialog-actions">
       <button type="button" class="secondary-button" data-back-menu>Volver</button>
       <button type="button" class="confirm-button" data-start-free>Crear partida</button>
     </div>`);
+  const refreshPreset = (): void => {
+    dialog.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((button) => {
+      const selected = button.dataset.preset === selectedPreset;
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-checked', String(selected));
+    });
+    const custom = dialog.querySelector<HTMLElement>('[data-custom-options]');
+    if (custom) custom.hidden = selectedPreset !== 'custom';
+    const clock = dialog.querySelector<HTMLSelectElement>('[data-match-clock]');
+    if (clock && selectedPreset === 'skirmish' && !clock.value) clock.value = '600';
+  };
+  dialog.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedPreset = (button.dataset.preset as MatchPresetId) ?? 'tactical';
+      refreshPreset();
+    });
+  });
+  dialog.querySelectorAll<HTMLButtonElement>('[data-ai-doctrine]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedDoctrine = (button.dataset.aiDoctrine as AiPersonality) ?? 'balanced';
+      dialog.querySelectorAll<HTMLButtonElement>('[data-ai-doctrine]').forEach((candidate) => {
+        const selected = candidate.dataset.aiDoctrine === selectedDoctrine;
+        candidate.classList.toggle('selected', selected);
+        candidate.setAttribute('aria-checked', String(selected));
+      });
+      const description = dialog.querySelector<HTMLElement>('[data-doctrine-description]');
+      if (description) description.textContent = aiDoctrineDescription(selectedDoctrine);
+    });
+  });
   dialog.querySelector('[data-back-menu]')?.addEventListener('click', () => {
     if (isHomeScreenActive()) {
       dialog.close();
@@ -1619,11 +1981,13 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       1 | 2 | 3;
     const initialLayout =
       dialog.querySelector<HTMLSelectElement>('[data-initial-layout]')?.value === '2' ? 2 : 1;
-    matchConfig = createClassicConfig({
+    matchConfig = createPresetConfig(selectedPreset, {
       mode: modeToConfigure,
       difficulty:
         (dialog.querySelector<HTMLSelectElement>('[data-ai-difficulty]')?.value as AiDifficulty) ??
         'tactical',
+      personality: selectedDoctrine,
+      seed: createMatchSeed(),
       confirmation: preferences.confirmation,
       contextualHints: preferences.contextualHints,
       fixedBoard: preferences.fixedBoard,
@@ -1633,6 +1997,12 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       initialLayout,
     });
     gameMode = modeToConfigure;
+    recordTelemetry('match-start', {
+      mode: modeToConfigure,
+      preset: selectedPreset,
+      difficulty: matchConfig.participants[1].difficulty ?? 'human',
+      personality: matchConfig.participants[1].personality ?? 'human',
+    });
     dialog.close();
     leaveHomeScreen();
     resetGame();
@@ -1641,33 +2011,154 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
 
 function showAcademyDialog(): void {
   const completed = new Set(loadAcademyProgress());
+  const records = new Map(loadAcademyRecords().map((record) => [record.id, record]));
+  const fixedCompleted = SCENARIOS.filter(
+    (scenario) => records.get(scenario.id)?.completed ?? completed.has(scenario.id),
+  ).length;
+  const daily = dailyScenarioForDate();
+  const groups: Array<{
+    id: NonNullable<ScenarioDefinition['category']>;
+    title: string;
+    description: string;
+    scenarios: ScenarioDefinition[];
+  }> = [
+    {
+      id: 'daily',
+      title: 'Reto diario',
+      description: 'La misma misión local para todo el día; vuelve mañana para una nueva semilla.',
+      scenarios: [daily],
+    },
+    {
+      id: 'basic',
+      title: 'Fundamentos',
+      description: 'Una mecánica, una decisión clara.',
+      scenarios: scenariosByCategory('basic'),
+    },
+    {
+      id: 'guided',
+      title: 'Batalla guiada',
+      description: 'Combina piezas durante varios turnos con instrucciones por etapas.',
+      scenarios: scenariosByCategory('guided'),
+    },
+    {
+      id: 'strategic',
+      title: 'Desafíos estratégicos',
+      description: 'Objetivos abiertos para practicar tempo, defensa, protección y rutas.',
+      scenarios: scenariosByCategory('strategic'),
+    },
+  ];
+  const availableScenarios = groups.flatMap((group) => group.scenarios);
   openDialog(`
-    <span class="eyebrow">ACADEMIA TÁCTICA</span>
-    <h2>Entrenamiento por mecanismos</h2>
-    <p>Escenarios cortos que usan exactamente las mismas reglas de Partida libre.</p>
-    <div class="scenario-list">
-      ${SCENARIOS.map(
-        (scenario) => `<button type="button" data-scenario="${scenario.id}">
-          <span>${completed.has(scenario.id) ? '✓' : '○'}</span>
-          <strong>${escapeHtml(scenario.title)}</strong>
-          <small>${escapeHtml(scenario.summary)}</small>
-        </button>`,
-      ).join('')}
-    </div>
-    <div class="dialog-actions"><button type="button" class="secondary-button" data-back-menu>Volver</button></div>`);
-  dialog.querySelector('[data-back-menu]')?.addEventListener('click', () => {
-    if (isHomeScreenActive()) {
-      dialog.close();
-      showHomeMainMenu();
-    } else showGameModeDialog(false);
+    <div class="academy-shell">
+      <header class="academy-hero">
+        <button type="button" class="academy-close" data-back-menu aria-label="Cerrar Academia">×</button>
+        <div class="academy-intro">
+          <span class="eyebrow">ACADEMIA TÁCTICA</span>
+          <h2>Aprende, combina y domina</h2>
+          <p>Practica una idea cada vez. Las pistas aparecen solo cuando las necesitas y una orden distinta no reinicia el ejercicio.</p>
+        </div>
+        <div class="academy-progress" aria-label="${fixedCompleted} de ${SCENARIOS.length} desafíos base completados">
+          <div><span>PROGRESO BASE</span><strong>${fixedCompleted} / ${SCENARIOS.length}</strong></div>
+          <progress max="${SCENARIOS.length}" value="${fixedCompleted}">${fixedCompleted} de ${SCENARIOS.length}</progress>
+          <small>${fixedCompleted === SCENARIOS.length ? 'Entrenamiento base completado' : 'El reto diario cuenta por separado'}</small>
+        </div>
+      </header>
+      <div class="academy-catalog">
+        ${groups
+          .map(
+            (group) => `<section class="academy-section" data-academy-category="${group.id}">
+              <div class="academy-header"><div><strong>${escapeHtml(group.title)}</strong><small>${escapeHtml(group.description)}</small></div><span class="academy-count" aria-label="${group.scenarios.length} ${group.scenarios.length === 1 ? 'misión' : 'misiones'}">${group.scenarios.length}</span></div>
+              <div class="scenario-list">
+                ${group.scenarios.map((scenario) => academyScenarioCard(scenario, records.get(scenario.id), completed.has(scenario.id))).join('')}
+              </div>
+            </section>`,
+          )
+          .join('')}
+        <div class="dialog-actions academy-actions"><button type="button" class="secondary-button" data-back-menu>Volver al menú</button></div>
+      </div>
+    </div>`);
+  dialog.querySelectorAll('[data-back-menu]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (isHomeScreenActive()) {
+        dialog.close();
+        showHomeMainMenu();
+      } else showGameModeDialog(false);
+    });
   });
   dialog.querySelectorAll<HTMLButtonElement>('[data-scenario]').forEach((button) => {
     button.addEventListener('click', () => {
-      const scenario = scenarioById(button.dataset.scenario ?? '');
+      const scenario = availableScenarios.find(
+        (candidate) => candidate.id === button.dataset.scenario,
+      );
       if (!scenario) return;
       startScenario(scenario);
     });
   });
+}
+
+function academyScenarioCard(
+  scenario: ScenarioDefinition,
+  record: AcademyRecord | undefined,
+  legacyCompleted: boolean,
+): string {
+  const completed = record?.completed ?? legacyCompleted;
+  const medal = record?.medal ?? null;
+  const difficulty = '◆'.repeat(scenario.difficulty ?? 1);
+  return `<button type="button" class="scenario-card" data-scenario="${escapeHtml(scenario.id)}">
+    <span class="medal ${medal ?? (completed ? 'bronze' : '')}" aria-hidden="true">${medal === 'gold' ? '◆' : medal === 'silver' ? '◇' : completed ? '✓' : '○'}</span>
+    <span class="scenario-card-copy">
+      <strong>${escapeHtml(scenario.title)}</strong>
+      <small>${escapeHtml(scenario.summary)}</small>
+      <span class="scenario-meta"><span aria-label="Dificultad ${scenario.difficulty ?? 1} de 3">Nivel ${difficulty}</span>${record?.bestPlies ? `<span>Mejor marca: ${record.bestPlies}</span>` : `<span>${completed ? 'Completado' : 'Sin completar'}</span>`}</span>
+    </span>
+  </button>`;
+}
+
+function academyMedalLabel(medal: AcademyRecord['medal']): string {
+  return medal === 'gold'
+    ? 'Medalla de oro · sin pistas y ruta directa'
+    : medal === 'silver'
+      ? 'Medalla de plata · una pista'
+      : medal === 'bronze'
+        ? 'Medalla de bronce · objetivo cumplido'
+        : 'Objetivo cumplido';
+}
+
+function revealOneScenarioHint(scenario: ScenarioDefinition, container: ParentNode): void {
+  const reveal = nextScenarioHint(scenario, scenarioHintsRevealed);
+  if (!reveal.hint) {
+    showToast('Ya has revelado todas las pistas de esta misión.');
+    return;
+  }
+  scenarioHintsRevealed = reveal.revealedCount;
+  persistScenarioHints(scenario);
+  recordTelemetry('academy-hint', {
+    scenario: scenario.id,
+    revealed: scenarioHintsRevealed,
+  });
+  const list = container.querySelector<HTMLOListElement>('[data-hint-list]');
+  if (list) {
+    list.innerHTML = revealedScenarioHints(scenario, scenarioHintsRevealed)
+      .map((hint) => `<li>${escapeHtml(hint)}</li>`)
+      .join('');
+  }
+  const button = container.querySelector<HTMLButtonElement>('[data-reveal-scenario-hint]');
+  if (button) {
+    button.textContent = reveal.exhausted ? 'Todas las pistas reveladas' : 'Revelar otra pista';
+    button.disabled = reveal.exhausted;
+  }
+  announce(`Pista ${scenarioHintsRevealed} de ${reveal.total}: ${reveal.hint}`);
+}
+
+function persistScenarioHints(scenario: ScenarioDefinition): void {
+  if (!matchRecord) return;
+  const updated = setAcademySession(matchRecord, {
+    scenarioId: scenario.id,
+    hintsRevealed: scenarioHintsRevealed,
+  });
+  matchRecord = updated;
+  if (matchController) matchController.record = updated;
+  persistCurrentMatch();
 }
 
 function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
@@ -1844,16 +2335,24 @@ function showHelpDialog(): void {
     <h2>${activeScenario ? escapeHtml(activeScenario.title) : 'Destruye la Fortaleza rival'}</h2>
     ${
       activeScenario
-        ? `<div class="scenario-hints"><strong>Objetivo</strong><p>${escapeHtml(activeScenario.summary)}</p><ol>${activeScenario.hints.map((hint) => `<li>${escapeHtml(hint)}</li>`).join('')}</ol></div>`
+        ? `<div class="scenario-hints"><strong>Objetivo</strong><p>${escapeHtml(activeScenario.summary)}</p><p>${escapeHtml(scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply))}</p><ol data-hint-list>${revealedScenarioHints(
+            activeScenario,
+            scenarioHintsRevealed,
+          )
+            .map((hint) => `<li>${escapeHtml(hint)}</li>`)
+            .join(
+              '',
+            )}</ol><button type="button" class="text-button" data-reveal-scenario-hint>${scenarioHintsRevealed ? 'Revelar otra pista' : 'Revelar una pista'}</button></div>`
         : ''
     }
     <div class="help-grid">
       <section><strong>1 · Selecciona</strong><p>Elige una unidad propia. Menta indica movimiento, rosa ataque, una red sobre el objetivo indica conversión y naranja intercepción.</p></section>
       <section><strong>2 · Prepara</strong><p>Toca destino. En casillas apiladas podrás elegir aire o suelo. Revisa consecuencia antes de confirmar.</p></section>
       <section><strong>3 · Confirma</strong><p>Cada turno exige una acción. Girar Soldado y orientar cañón también consumen turno.</p></section>
-      <section><strong>Victoria</strong><p>La Fortaleza tiene ${fortressHp} HP. Cada ataque causa 1 HP; Soldado y Embestidor se sacrifican.</p></section>
+      <section><strong>Victoria</strong><p>${escapeHtml(fortressAttackSummary(fortressHp))}</p></section>
     </div>
     <details><summary>Reglas tácticas esenciales</summary>
+      <p>${escapeHtml(CLASSIC_RULES_NOTE)}</p>
       <p>El Lanzamisiles dispara a todo el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
       <p>Las unidades terrestres pueden pasar y detenerse bajo un Avión enemigo sin atacarlo. Un Dron enemigo sigue bloqueando ese movimiento.</p>
       <p>El Avión vuela hasta dos casillas por su frente o dispara a su cono ofensivo. Su kamikaze destruye objetivo y Avión. El Escudo antiaéreo es inmóvil: pulveriza aeronaves enemigas y bloquea sus disparos.</p>
@@ -1866,6 +2365,11 @@ function showHelpDialog(): void {
       <span>Programado por <a href="https://lisandrorocha.vercel.app/" target="_blank" rel="noopener noreferrer">Lisandro Rocha Tau</a>.</span>
     </p>
     <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Entendido</button></div>`);
+  if (activeScenario) {
+    dialog
+      .querySelector('[data-reveal-scenario-hint]')
+      ?.addEventListener('click', () => revealOneScenarioHint(activeScenario!, dialog));
+  }
 }
 
 function showSettingsDialog(): void {
@@ -1893,15 +2397,12 @@ function showSettingsDialog(): void {
       <label class="toggle-row"><span><strong>Reducir movimiento</strong><small>Limita animaciones y transiciones</small></span><input type="checkbox" data-pref="motion" ${preferences.reducedMotion ? 'checked' : ''}/></label>
     </div>
     <div class="board-settings">
-      <div><span class="eyebrow">DATOS DE PARTIDA</span><p>Las repeticiones se validan antes de cargarse.</p></div>
+      <div><span class="eyebrow">PARTIDA ACTUAL</span><p>Las herramientas avanzadas y los datos viven en un centro independiente.</p></div>
       <div class="inline-actions">
-        <button type="button" class="secondary-button" data-export-match ${matchRecord ? '' : 'disabled'}>Exportar repetición</button>
-        <button type="button" class="secondary-button" data-import-match>Importar JSON</button>
-        <button type="button" class="text-button" data-open-replay ${matchRecord ? '' : 'disabled'}>Ver historial</button>
-        <button type="button" class="text-button" data-undo-match ${matchController?.record.config.options.allowUndo && matchController.record.currentAction > 0 ? '' : 'disabled'}>Deshacer última orden</button>
-        <button type="button" class="text-button" data-scenario-editor>Editor de escenarios</button>
+        <button type="button" class="secondary-button" data-data-center>Partidas y datos</button>
+        <button type="button" class="text-button" data-scenario-editor>Laboratorio</button>
+        <button type="button" class="text-button data-danger" data-resign-match ${matchRecord && !state.outcome && !activeScenario ? '' : 'disabled'}>Rendirse</button>
       </div>
-      <input type="file" accept="application/json,.json" data-import-file hidden/>
     </div>
     <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Listo</button></div>`);
 
@@ -1977,12 +2478,46 @@ function showSettingsDialog(): void {
       if (key === 'tacticalThreats') render();
     });
   }
-  dialog.querySelector('[data-export-match]')?.addEventListener('click', exportCurrentMatch);
-  dialog.querySelector('[data-open-replay]')?.addEventListener('click', showReplayDialog);
-  dialog.querySelector('[data-undo-match]')?.addEventListener('click', undoLastAction);
+  dialog.querySelector('[data-data-center]')?.addEventListener('click', showDataCenterDialog);
+  dialog.querySelector('[data-resign-match]')?.addEventListener('click', showResignDialog);
   dialog
     .querySelector('[data-scenario-editor]')
     ?.addEventListener('click', showScenarioEditorDialog);
+}
+
+function showDataCenterDialog(): void {
+  const events = loadTelemetry();
+  const summary = telemetrySummary(events);
+  const telemetryTotal = events.length;
+  openDialog(`
+    <span class="eyebrow">PARTIDAS Y DATOS</span>
+    <h2>Archivo local</h2>
+    <p>Todo se guarda únicamente en este navegador. No se transmite ninguna partida ni diagnóstico.</p>
+    <section class="board-settings">
+      <div><span class="eyebrow">REPETICIONES</span><p>Los archivos se validan antes de cargarse.</p></div>
+      <div class="inline-actions">
+        <button type="button" class="secondary-button" data-export-match ${matchRecord ? '' : 'disabled'}>Exportar partida</button>
+        <button type="button" class="secondary-button" data-import-match>Importar JSON</button>
+        <button type="button" class="text-button" data-open-replay ${matchRecord ? '' : 'disabled'}>Analizar tablero</button>
+        <button type="button" class="text-button" data-undo-match ${matchController?.record.config.options.allowUndo && matchController.record.currentAction > 0 && !state.outcome ? '' : 'disabled'}>Deshacer última orden</button>
+        <button type="button" class="text-button" data-history>Historial de resultados</button>
+      </div>
+      <input type="file" accept="application/json,.json" data-import-file hidden/>
+    </section>
+    <section class="telemetry-summary">
+      <div><span class="eyebrow">DIAGNÓSTICO DE PLAYTEST</span><p>${telemetryTotal} eventos locales · ${summary['match-start'] ?? 0} partidas iniciadas · ${summary['action-cancelled'] ?? 0} órdenes canceladas · ${summary['academy-hint'] ?? 0} pistas usadas.</p></div>
+      <div class="inline-actions">
+        <button type="button" class="secondary-button" data-export-telemetry ${telemetryTotal ? '' : 'disabled'}>Exportar diagnóstico</button>
+        <button type="button" class="text-button data-danger" data-clear-telemetry ${telemetryTotal ? '' : 'disabled'}>Borrar diagnóstico</button>
+        <button type="button" class="text-button data-danger" data-reset-academy>Reiniciar Academia</button>
+      </div>
+    </section>
+    <div class="dialog-actions"><button type="button" class="secondary-button" data-back-settings>Volver a opciones</button><button type="button" class="confirm-button" data-dialog-close>Listo</button></div>`);
+  dialog.querySelector('[data-back-settings]')?.addEventListener('click', showSettingsDialog);
+  dialog.querySelector('[data-export-match]')?.addEventListener('click', exportCurrentMatch);
+  dialog.querySelector('[data-open-replay]')?.addEventListener('click', () => showReplayDialog());
+  dialog.querySelector('[data-undo-match]')?.addEventListener('click', undoLastAction);
+  dialog.querySelector('[data-history]')?.addEventListener('click', showHistoryDialog);
   const importInput = dialog.querySelector<HTMLInputElement>('[data-import-file]');
   dialog
     .querySelector('[data-import-match]')
@@ -1990,6 +2525,91 @@ function showSettingsDialog(): void {
   importInput?.addEventListener('change', () => {
     const file = importInput.files?.[0];
     if (file) void importMatchFile(file);
+  });
+  dialog.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
+    downloadText('protocolo-hexagonal-playtest.json', serializeTelemetry());
+  });
+  bindTwoStepDestructive('[data-clear-telemetry]', 'Confirmar borrado', () => {
+    clearTelemetry();
+    showToast('Diagnóstico local borrado.');
+    showDataCenterDialog();
+  });
+  bindTwoStepDestructive('[data-reset-academy]', 'Confirmar reinicio', () => {
+    resetAcademyProgress();
+    showToast('Progreso de Academia reiniciado.');
+    showDataCenterDialog();
+  });
+}
+
+function showResignDialog(): void {
+  if (!matchController || state.outcome || activeScenario) return;
+  openDialog(`
+    <span class="eyebrow">CONFIRMAR RENDICIÓN</span>
+    <h2>${PLAYER_NAMES[state.activePlayer]} abandona la batalla</h2>
+    <p>La victoria del rival quedará registrada y podrá revisarse en el análisis.</p>
+    <div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>Seguir jugando</button><button type="button" class="confirm-button data-danger" data-confirm-resign>Rendirse</button></div>`);
+  dialog.querySelector('[data-confirm-resign]')?.addEventListener('click', () => {
+    if (!matchController) return;
+    if (matchController.record.clock) matchController.pauseClock(Date.now());
+    matchController.resign(state.activePlayer);
+    matchRecord = matchController.record;
+    state = matchController.store.getState().game;
+    persistCurrentMatch();
+    dialog.close();
+    renderedStatusKey = '';
+    render();
+    presentOutcome();
+  });
+}
+
+function showHistoryDialog(): void {
+  const history = loadMatchHistory();
+  openDialog(`
+    <span class="eyebrow">HISTORIAL LOCAL</span>
+    <h2>Batallas concluidas</h2>
+    <p>Un registro breve de resultados; las repeticiones completas se exportan por separado.</p>
+    <div class="history-list">
+      ${
+        history.length
+          ? history
+              .map(
+                (entry) =>
+                  `<article class="history-card"><span>${new Date(entry.completedAt).toLocaleDateString('es-ES')}</span><strong>${escapeHtml(outcomeText(entry.outcome))}</strong><small>${escapeHtml(entry.participants.join(' vs. '))} · ${entry.plies} órdenes · ${formatDuration(entry.durationSeconds)}</small></article>`,
+              )
+              .join('')
+          : '<div class="empty-state"><strong>Aún no hay resultados</strong><p>Termina una partida libre para inaugurar el archivo.</p></div>'
+      }
+    </div>
+    <div class="dialog-actions"><button type="button" class="secondary-button" data-history-back>Volver</button><button type="button" class="confirm-button" data-dialog-close>Listo</button></div>`);
+  dialog.querySelector('[data-history-back]')?.addEventListener('click', () => {
+    if (isHomeScreenActive()) {
+      dialog.close();
+      showHomeMainMenu();
+    } else showDataCenterDialog();
+  });
+}
+
+function bindTwoStepDestructive(
+  selector: string,
+  confirmationLabel: string,
+  action: () => void,
+): void {
+  const button = dialog.querySelector<HTMLButtonElement>(selector);
+  if (!button) return;
+  button.addEventListener('click', () => {
+    if (button.dataset.confirmed === 'true') {
+      action();
+      return;
+    }
+    button.dataset.confirmed = 'true';
+    button.textContent = confirmationLabel;
+    window.setTimeout(() => {
+      if (!button.isConnected) return;
+      button.dataset.confirmed = 'false';
+      button.textContent = selector.includes('academy')
+        ? 'Reiniciar Academia'
+        : 'Borrar diagnóstico';
+    }, 4_000);
   });
 }
 
@@ -2030,7 +2650,15 @@ async function acceptBlockade(): Promise<void> {
   const before = state;
   const result = declareBlockade(state);
   if (!result.ok) return;
-  state = result.state;
+  if (matchController && result.state.outcome) {
+    if (matchController.record.clock) matchController.pauseClock(Date.now());
+    matchController.conclude(result.state.outcome);
+    matchRecord = matchController.record;
+    state = matchController.store.getState().game;
+    persistCurrentMatch();
+  } else {
+    state = result.state;
+  }
   lastEvents = result.events;
   selectedId = null;
   pendingAction = null;
@@ -2044,7 +2672,7 @@ async function acceptBlockade(): Promise<void> {
     animating = false;
     render();
   }
-  showOutcomeDialog();
+  presentOutcome();
 }
 
 function blockadePreview(): string {
@@ -2058,6 +2686,7 @@ function showOutcomeDialog(): void {
   const remainingBlue = state.pieces.filter((piece) => piece.owner === 0).length;
   const remainingAmber = state.pieces.filter((piece) => piece.owner === 1).length;
   const statistics = matchRecord ? calculateStatistics(matchRecord) : null;
+  const moments = matchRecord ? analyzeMatchMoments(matchRecord) : [];
   openDialog(`
     <div class="outcome-seal ${winnerClass}"><i></i></div>
     <span class="eyebrow">BATALLA CONCLUIDA</span>
@@ -2070,6 +2699,16 @@ function showOutcomeDialog(): void {
     ${
       statistics
         ? `<p class="result-detail">Capturas ${statistics.captures[0]}–${statistics.captures[1]} · Daño a Fortaleza ${statistics.fortressDamage[0]}–${statistics.fortressDamage[1]} · Transformaciones ${statistics.transformations[0]}–${statistics.transformations[1]}</p>`
+        : ''
+    }
+    ${
+      moments.length
+        ? `<section class="key-moments"><div><span class="eyebrow">TRES MOMENTOS CLAVE</span><p>Salta directamente a los giros que más cambiaron la batalla.</p></div>${moments
+            .map(
+              (moment) =>
+                `<button type="button" class="moment-card" data-moment-jump="${moment.actionIndex}"><span>Orden ${moment.actionIndex}</span><strong>${escapeHtml(moment.title)}</strong><small>${escapeHtml(moment.detail)}</small></button>`,
+            )
+            .join('')}</section>`
         : ''
     }
     <div class="dialog-actions triple">
@@ -2087,7 +2726,10 @@ function showOutcomeDialog(): void {
     dialog.close();
     resetGame();
   });
-  dialog.querySelector('[data-analyze]')?.addEventListener('click', showReplayDialog);
+  dialog.querySelector('[data-analyze]')?.addEventListener('click', () => showReplayDialog());
+  dialog.querySelectorAll<HTMLButtonElement>('[data-moment-jump]').forEach((button) => {
+    button.addEventListener('click', () => showReplayDialog(Number(button.dataset.momentJump)));
+  });
 }
 
 function openDialog(markup: string): void {
@@ -2133,7 +2775,9 @@ function resetGame(): void {
   });
   matchRecord = createMatchRecord(matchConfig);
   matchController = new MatchController(matchRecord);
-  state = replayRecord(matchRecord);
+  if (matchRecord.clock) matchController.resumeClock(Date.now());
+  matchRecord = matchController.record;
+  state = matchController.store.getState().game;
   clearActiveMatch();
   saveActiveMatch(matchRecord);
   selectedId = null;
@@ -2145,6 +2789,12 @@ function resetGame(): void {
   renderer.snapToPlayer(viewPlayer());
   renderedStatusKey = '';
   machineThinking = false;
+  machineSearch = null;
+  scenarioProgress = null;
+  scenarioHintsRevealed = 0;
+  scenarioAttemptsRecorded = false;
+  outcomePresentedFor = '';
+  lastClockPersistSecond = -1;
   render();
   announce(
     gameMode === 'machine'
@@ -2164,29 +2814,61 @@ function startScenario(scenario: ScenarioDefinition): void {
   activeScenario = scenario;
   gameMode = 'academy';
   matchConfig = createClassicConfig({
-    mode: 'local',
+    mode: 'machine',
+    difficulty: scenario.difficulty === 3 ? 'commander' : 'tactical',
+    personality: scenario.objective.kind === 'survive' ? 'aggressive' : 'balanced',
+    seed: createMatchSeed(),
     confirmation: preferences.confirmation,
     contextualHints: true,
     fixedBoard: true,
     handoffScreen: false,
+    noProgressPlyLimit: null,
   });
+  if (scenario.controlledPlayer === 1) {
+    matchConfig = {
+      ...matchConfig,
+      participants: [
+        { ...matchConfig.participants[1], name: 'Mando automático Cian' },
+        { kind: 'human', name: 'Comando Ámbar' },
+      ],
+    };
+  }
   matchConfig = {
     ...matchConfig,
     definitionId: `scenario:${scenario.id}`,
     setup: scenario.initialState.pieces.map((piece) => ({ id: piece.id, piece })),
-    options: { ...matchConfig.options, allowUndo: true },
+    options: { ...matchConfig.options, allowUndo: true, clockSeconds: null },
   };
-  matchRecord = createMatchRecord(matchConfig, scenario.initialState);
+  matchRecord = setAcademySession(createMatchRecord(matchConfig, scenario.initialState), {
+    scenarioId: scenario.id,
+    hintsRevealed: 0,
+  });
   matchController = new MatchController(matchRecord);
   state = replayRecord(matchRecord);
+  persistCurrentMatch();
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
   lastEvents = [];
+  scenarioProgress = {
+    status: 'in-progress',
+    elapsedPlies: 0,
+    remainingPlies: scenario.maxPlies ?? null,
+    feedback: scenarioLessonAt(scenario, 0),
+  };
+  scenarioHintsRevealed = 0;
+  scenarioAttemptsRecorded = false;
+  machineSearch = null;
+  outcomePresentedFor = '';
   focusedHex = { q: 0, r: 0 };
   renderer.resetView();
-  renderer.snapToPlayer(0);
+  renderer.snapToPlayer(scenario.controlledPlayer);
   renderedStatusKey = '';
+  recordTelemetry('match-start', {
+    mode: 'academy',
+    scenario: scenario.id,
+    difficulty: scenario.difficulty ?? 1,
+  });
   render();
   announce(`${scenario.title}. ${scenario.summary}`);
   showScenarioBriefing(scenario);
@@ -2195,8 +2877,20 @@ function startScenario(scenario: ScenarioDefinition): void {
 function loadRecordIntoMatch(record: MatchRecord): void {
   if (isHomeScreenActive()) leaveHomeScreen();
   aiAbortController?.abort();
-  activeScenario = record.config.definitionId.startsWith('scenario:')
-    ? (scenarioById(record.config.definitionId.slice('scenario:'.length)) ?? null)
+  const scenarioId = record.config.definitionId.startsWith('scenario:')
+    ? record.config.definitionId.slice('scenario:'.length)
+    : '';
+  const dailyDate = scenarioId.startsWith('daily:') ? scenarioId.split(':')[1] : '';
+  const restoredDaily = dailyDate ? dailyScenarioForDate(dailyDate) : null;
+  const customId = scenarioId.startsWith('custom:') ? scenarioId.slice('custom:'.length) : '';
+  const customScenario = customId
+    ? loadScenarioCatalog().find((candidate) => candidate.id === customId)
+    : undefined;
+  const restoredCustom = customScenario ? customScenarioDefinition(customScenario) : null;
+  activeScenario = scenarioId
+    ? (scenarioById(scenarioId) ??
+      (restoredDaily?.id === scenarioId ? restoredDaily : null) ??
+      (restoredCustom?.id === scenarioId ? restoredCustom : null))
     : null;
   matchRecord = record;
   matchController = new MatchController(record);
@@ -2211,23 +2905,57 @@ function loadRecordIntoMatch(record: MatchRecord): void {
   pendingAction = null;
   mode = { kind: 'default' };
   lastEvents = [];
+  scenarioHintsRevealed =
+    activeScenario && record.academySession?.scenarioId === activeScenario.id
+      ? record.academySession.hintsRevealed
+      : 0;
+  scenarioAttemptsRecorded = false;
+  const restoredScenarioPlies = activeScenario
+    ? Math.max(0, state.ply - activeScenario.initialState.ply)
+    : 0;
+  scenarioProgress = activeScenario
+    ? {
+        status: 'in-progress',
+        elapsedPlies: restoredScenarioPlies,
+        remainingPlies:
+          activeScenario.maxPlies === undefined
+            ? null
+            : Math.max(0, activeScenario.maxPlies - restoredScenarioPlies),
+        feedback: scenarioLessonAt(activeScenario, restoredScenarioPlies),
+      }
+    : null;
   renderer.resetView();
   renderer.snapToPlayer(viewPlayer());
   renderedStatusKey = '';
+  outcomePresentedFor = '';
+  machineSearch = null;
+  lastClockPersistSecond = -1;
+  if (matchController.record.clock && !state.outcome) {
+    matchController.resumeClock(Date.now());
+    matchRecord = matchController.record;
+    state = matchController.store.getState().game;
+  }
   render();
+  if (state.outcome) {
+    persistCurrentMatch();
+    presentOutcome();
+    return;
+  }
   showToast(`Partida recuperada en la orden ${record.currentAction}.`);
   if (isMachineTurn()) void runMachineTurn();
 }
 
 function showScenarioSuccess(scenario: ScenarioDefinition): void {
+  const record = loadAcademyRecords().find((candidate) => candidate.id === scenario.id);
   openDialog(`
-    <div class="dialog-icon">✓</div>
+    <div class="dialog-icon">${record?.medal === 'gold' ? '◆' : record?.medal === 'silver' ? '◇' : '✓'}</div>
     <span class="eyebrow">OBJETIVO COMPLETADO</span>
     <h2>${escapeHtml(scenario.title)}</h2>
     <p>${escapeHtml(scenario.successText)}</p>
+    <div class="scenario-progress"><strong>${academyMedalLabel(record?.medal ?? null)}</strong><span>${record?.bestPlies ?? state.ply} órdenes · ${scenarioHintsRevealed} pistas usadas</span></div>
     <div class="dialog-actions">
       <button type="button" class="secondary-button" data-retry-scenario>Repetir</button>
-      <button type="button" class="confirm-button" data-academy-menu>Siguiente desafío</button>
+      <button type="button" class="confirm-button" data-academy-menu>Seguir entrenando</button>
     </div>`);
   dialog.querySelector('[data-retry-scenario]')?.addEventListener('click', () => {
     startScenario(scenario);
@@ -2240,24 +2968,33 @@ function showScenarioBriefing(scenario: ScenarioDefinition): void {
     <span class="eyebrow">INSTRUCCIÓN TÁCTICA</span>
     <h2>${escapeHtml(scenario.title)}</h2>
     <p class="scenario-objective"><strong>Objetivo:</strong> ${escapeHtml(scenario.summary)}</p>
-    <ol class="scenario-steps">
-      ${scenario.hints.map((hint) => `<li>${escapeHtml(hint)}</li>`).join('')}
-    </ol>
-    <p class="dialog-note">El objetivo y el siguiente paso seguirán visibles en la barra superior del tablero. También puedes abrir Ayuda en cualquier momento.</p>
+    <div class="scenario-progress"><strong>${escapeHtml(scenarioLessonAt(scenario, 0))}</strong><span>${scenario.maxPlies ? `Límite: ${scenario.maxPlies} órdenes` : 'Sin límite estricto'}</span></div>
+    <div class="scenario-hint">
+      <p>Intenta leer la posición primero. Si te atascas, revela las pistas de una en una.</p>
+      <ol class="scenario-steps" data-hint-list></ol>
+      <button type="button" class="text-button" data-reveal-scenario-hint>Revelar primera pista</button>
+    </div>
+    <p class="dialog-note">El objetivo y la etapa vigente seguirán visibles sobre el tablero. Una orden alternativa ya no reinicia la misión.</p>
     <div class="dialog-actions">
       <button type="button" class="secondary-button" data-academy-menu>Volver</button>
       <button type="button" class="confirm-button" data-dialog-close>Empezar ejercicio</button>
     </div>`);
   dialog.querySelector('[data-academy-menu]')?.addEventListener('click', showAcademyDialog);
+  dialog
+    .querySelector('[data-reveal-scenario-hint]')
+    ?.addEventListener('click', () => revealOneScenarioHint(scenario, dialog));
 }
 
-function showScenarioRetry(scenario: ScenarioDefinition): void {
+function showScenarioRetry(scenario: ScenarioDefinition, feedback: string): void {
   openDialog(`
     <span class="eyebrow">REVISIÓN DEL EJERCICIO</span>
-    <h2>Esta orden no completa el objetivo</h2>
-    <p>${escapeHtml(scenario.summary)}</p>
+    <h2>La secuencia ha terminado</h2>
+    <p>${escapeHtml(feedback)}</p>
+    <p class="dialog-note"><strong>Objetivo:</strong> ${escapeHtml(scenario.summary)}</p>
     <ol class="scenario-steps">
-      ${scenario.hints.map((hint) => `<li>${escapeHtml(hint)}</li>`).join('')}
+      ${revealedScenarioHints(scenario, Math.max(1, scenarioHintsRevealed))
+        .map((hint) => `<li>${escapeHtml(hint)}</li>`)
+        .join('')}
     </ol>
     <div class="dialog-actions">
       <button type="button" class="secondary-button" data-academy-menu>Elegir otro</button>
@@ -2276,14 +3013,35 @@ function showHandoffDialog(): void {
     <h2>Entrega el dispositivo</h2>
     <p>Turno de <strong>${escapeHtml(matchConfig?.participants[state.activePlayer].name ?? PLAYER_NAMES[state.activePlayer])}</strong>. La posición queda oculta hasta continuar.</p>
     <div class="dialog-actions"><button type="button" class="confirm-button" data-handoff-ready>Estoy listo</button></div>`);
-  dialog.querySelector('[data-handoff-ready]')?.addEventListener('click', () => dialog.close());
+  const preventDismiss = (event: Event): void => event.preventDefault();
+  const cleanup = (): void => {
+    dialog.removeEventListener('cancel', preventDismiss);
+    dialog.removeEventListener('close', cleanup);
+  };
+  dialog.addEventListener('cancel', preventDismiss);
+  dialog.addEventListener('close', cleanup);
+  dialog.querySelector('[data-handoff-ready]')?.addEventListener('click', () => {
+    startActiveTurnClock();
+    dialog.close();
+  });
 }
 
-function showReplayDialog(): void {
+function showReplayDialog(initialAction?: number): void {
   if (!matchRecord) return;
   if (dialog.open) dialog.close();
   closeReplay();
+  replayClockWasRunning = matchController?.record.clock?.status === 'running';
+  if (replayClockWasRunning && matchController) {
+    matchController.pauseClock(Date.now());
+    matchRecord = matchController.record;
+    persistCurrentMatch();
+  }
   const record = matchRecord;
+  const moments = analyzeMatchMoments(record);
+  const startingAction = Math.max(
+    0,
+    Math.min(record.actions.length, initialAction ?? record.currentAction),
+  );
   const boardStage = document.querySelector<HTMLElement>('.board-stage');
   if (!boardStage) return;
   replayDock = document.createElement('section');
@@ -2297,10 +3055,15 @@ function showReplayDialog(): void {
     <p class="replay-description" data-replay-description></p>
     <div class="replay-controls">
       <button type="button" class="secondary-button" data-replay-step="-1" aria-label="Posición anterior">←</button>
-      <input type="range" min="0" max="${record.actions.length}" value="${record.currentAction}" data-replay-slider aria-label="Posición de la repetición"/>
+      <input type="range" min="0" max="${record.actions.length}" value="${startingAction}" data-replay-slider aria-label="Posición de la repetición"/>
       <button type="button" class="secondary-button" data-replay-step="1" aria-label="Posición siguiente">→</button>
     </div>
-    <button type="button" class="text-button replay-export" data-export-match>Exportar JSON</button>`;
+    ${
+      moments.length
+        ? `<div class="key-moments">${moments.map((moment) => `<button type="button" class="moment-jump" data-replay-moment="${moment.actionIndex}"><span>${moment.actionIndex}</span><strong>${escapeHtml(moment.title)}</strong><small>${moment.suggestedAlternativeLabel ? `Alternativa: ${escapeHtml(moment.suggestedAlternativeLabel)}` : escapeHtml(moment.detail)}</small></button>`).join('')}</div>`
+        : ''
+    }
+    <div class="inline-actions"><button type="button" class="text-button replay-export" data-export-match>Exportar JSON</button><button type="button" class="secondary-button" data-branch-match>Explorar desde aquí</button></div>`;
   boardStage.append(replayDock);
   const slider = replayDock.querySelector<HTMLInputElement>('[data-replay-slider]');
   const updateReplay = (value: number): void => {
@@ -2327,19 +3090,70 @@ function showReplayDialog(): void {
       ),
     );
   });
+  replayDock.querySelectorAll<HTMLButtonElement>('[data-replay-moment]').forEach((button) => {
+    button.addEventListener('click', () => updateReplay(Number(button.dataset.replayMoment)));
+  });
   replayDock.querySelector('[data-export-match]')?.addEventListener('click', exportCurrentMatch);
+  replayDock.querySelector('[data-branch-match]')?.addEventListener('click', () => {
+    branchFromReplay(record, Number(slider?.value ?? startingAction));
+  });
   replayDock.querySelector('[data-replay-close]')?.addEventListener('click', () => closeReplay());
-  updateReplay(record.currentAction);
+  updateReplay(startingAction);
+  recordTelemetry('analysis-opened', { actions: record.currentAction, moments: moments.length });
   announce('Modo análisis abierto. El tablero permanece visible.');
 }
 
-function closeReplay(): void {
+function closeReplay({ resumeClock = true }: { resumeClock?: boolean } = {}): void {
   if (!replayDock) return;
   if (matchRecord) state = replayForDisplay(matchRecord);
   replayDock.remove();
   replayDock = null;
+  if (resumeClock && replayClockWasRunning && matchController && !state.outcome) {
+    matchController.resumeClock(Date.now());
+    matchRecord = matchController.record;
+    state = matchController.store.getState().game;
+    persistCurrentMatch();
+  }
+  replayClockWasRunning = false;
   renderedStatusKey = '';
   render();
+}
+
+function branchFromReplay(record: MatchRecord, actionCount: number): void {
+  let cursor = Math.max(0, Math.min(record.actions.length, Math.floor(actionCount)));
+  const boardOnlyRecord = { ...record, conclusion: null };
+  if (cursor > 0 && replayRecord(boardOnlyRecord, cursor).outcome) cursor -= 1;
+  const now = new Date().toISOString();
+  const branched: MatchRecord = {
+    ...structuredClone(record),
+    config: {
+      ...structuredClone(record.config),
+      definitionId: `analysis-branch-${Date.now()}`,
+      participants: [
+        { kind: 'human', name: 'Análisis Cian' },
+        { kind: 'human', name: 'Análisis Ámbar' },
+      ],
+      options: {
+        ...record.config.options,
+        clockSeconds: null,
+        handoffScreen: false,
+        allowUndo: true,
+      },
+    },
+    actions: structuredClone(record.actions.slice(0, cursor)),
+    currentAction: cursor,
+    conclusion: null,
+    clock: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  replayRecord(branched);
+  replayClockWasRunning = false;
+  closeReplay();
+  saveActiveMatch(branched);
+  loadRecordIntoMatch(branched);
+  recordTelemetry('analysis-branched', { fromAction: cursor });
+  showToast('Rama de análisis creada. Ahora puedes probar otra orden.');
 }
 
 function replayForDisplay(
@@ -2353,6 +3167,10 @@ function replayForDisplay(
 }
 
 function undoLastAction(): void {
+  if (state.outcome) {
+    showToast('Usa Análisis para explorar una variante desde una partida concluida.');
+    return;
+  }
   aiAbortController?.abort();
   aiStrategy.dispose();
   aiAbortController = null;
@@ -2365,13 +3183,21 @@ function undoLastAction(): void {
 
   // In a solo match, return to the human's previous decision instead of
   // leaving the restored position on the machine's turn.
-  if (gameMode === 'machine' && matchController.store.getState().game.activePlayer === 1) {
+  if (
+    (gameMode === 'machine' || gameMode === 'academy') &&
+    matchController.record.config.participants[matchController.store.getState().game.activePlayer]
+      .kind === 'machine'
+  ) {
     matchController.undo();
+  }
+
+  if (matchController.record.clock) {
+    matchController.switchClock(matchController.store.getState().game.activePlayer, Date.now());
   }
 
   matchRecord = matchController.record;
   state = matchController.store.getState().game;
-  saveActiveMatch(matchRecord);
+  persistCurrentMatch();
   selectedId = null;
   pendingAction = null;
   lastEvents = [];
@@ -2383,13 +3209,8 @@ function undoLastAction(): void {
 
 function exportCurrentMatch(): void {
   if (!matchRecord) return;
-  const blob = new Blob([serializeRecord(matchRecord)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `protocolo-hexagonal-${matchRecord.config.definitionId}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  const id = matchRecord.config.definitionId.replace(/[^a-z0-9_-]+/gi, '-');
+  downloadText(`protocolo-hexagonal-${id}.json`, serializeRecord(matchRecord));
 }
 
 async function importMatchFile(file: File): Promise<void> {
@@ -2404,6 +3225,8 @@ async function importMatchFile(file: File): Promise<void> {
 }
 
 function showScenarioEditorDialog(): void {
+  const scenarioId = `custom-${Date.now()}`;
+  const editorState = isHomeScreenActive() ? createInitialState() : state;
   const baseConfig =
     matchConfig ??
     createClassicConfig({
@@ -2413,21 +3236,45 @@ function showScenarioEditorDialog(): void {
     });
   const template: CustomScenario = {
     version: 2,
-    id: `custom-${Date.now()}`,
+    id: scenarioId,
     title: 'Escenario personalizado',
+    summary: 'Destruye la Fortaleza rival antes de agotar el límite.',
     config: {
       ...baseConfig,
-      definitionId: `custom-${Date.now()}`,
-      setup: state.pieces.map((piece) => ({ id: piece.id, piece })),
+      definitionId: scenarioId,
+      setup: editorState.pieces.map((piece) => ({ id: piece.id, piece })),
     },
-    initialState: state,
+    initialState: editorState,
+    objective: { kind: 'win-in', maxPlies: 80 },
+    maxPlies: 80,
+    hints: ['Estudia las líneas de ataque antes de comprometer tus piezas.'],
+    successText: 'Misión de laboratorio completada.',
   };
   const catalog = loadScenarioCatalog();
   openDialog(`
     <span class="eyebrow">LABORATORIO</span>
-    <h2>Editor de escenarios</h2>
-    <p>Edita la posición como JSON. Al guardar se comprueban tablero, capas, Fortalezas, identificadores y ruleset.</p>
-    <textarea class="scenario-editor" data-scenario-json spellcheck="false">${escapeHtml(JSON.stringify(template, null, 2))}</textarea>
+    <h2>Forja una misión</h2>
+    <p>Define qué hace interesante la posición. El JSON avanzado conserva control total sobre cada unidad.</p>
+    <div class="forge-form">
+      <label><span>Título</span><input type="text" data-forge-title value="${escapeHtml(template.title)}" maxlength="80"/></label>
+      <label><span>Bando controlado</span><select data-forge-player>
+        <option value="0" ${template.initialState.activePlayer === 0 ? 'selected' : ''}>Cian</option>
+        <option value="1" ${template.initialState.activePlayer === 1 ? 'selected' : ''}>Ámbar</option>
+      </select></label>
+      <label><span>Objetivo del bando controlado</span><select data-forge-objective>
+        <option value="win">Ganar la batalla</option>
+        <option value="win-in" selected>Ganar dentro del límite</option>
+        <option value="survive">Sobrevivir hasta el límite</option>
+        <option value="protect-piece">Proteger una unidad</option>
+        <option value="reach">Alcanzar una coordenada</option>
+      </select></label>
+      <label><span>Límite de órdenes</span><input type="number" data-forge-limit value="80" min="1" max="300"/></label>
+      <label><span>Unidad del objetivo</span><input type="text" data-forge-piece placeholder="id de la unidad"/></label>
+      <div class="inline-actions"><label><span>Destino q</span><input type="number" data-forge-q value="0" min="-5" max="5"/></label><label><span>Destino r</span><input type="number" data-forge-r value="0" min="-5" max="5"/></label></div>
+      <label><span>Descripción</span><textarea data-forge-summary rows="2">${escapeHtml(template.summary ?? '')}</textarea></label>
+      <label><span>Pistas · una por línea</span><textarea data-forge-hints rows="3">${escapeHtml(template.hints?.join('\n') ?? '')}</textarea></label>
+    </div>
+    <details><summary>Posición y reglas · JSON avanzado</summary><p class="dialog-note">Se validan tablero, capas, Fortalezas, identificadores y ruleset antes de jugar.</p><textarea class="scenario-editor" data-scenario-json spellcheck="false">${escapeHtml(JSON.stringify(template, null, 2))}</textarea></details>
     ${
       catalog.length
         ? `<label class="field-row"><span>Catálogo local</span><select data-catalog-choice><option value="">Seleccionar…</option>${catalog.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.title)}</option>`).join('')}</select></label>`
@@ -2444,21 +3291,118 @@ function showScenarioEditorDialog(): void {
       const selected = catalog.find(
         (entry) => entry.id === (event.currentTarget as HTMLSelectElement).value,
       );
-      if (selected && editor) editor.value = JSON.stringify(selected, null, 2);
+      if (selected && editor) {
+        editor.value = JSON.stringify(selected, null, 2);
+        populateForgeFields(selected);
+      }
     });
   dialog.querySelector('[data-save-scenario]')?.addEventListener('click', () => {
     try {
-      const scenario = validateCustomScenario(JSON.parse(editor?.value ?? '') as CustomScenario);
+      const candidate = JSON.parse(editor?.value ?? '') as CustomScenario;
+      const limit = Math.max(
+        1,
+        Math.min(
+          300,
+          Number(dialog.querySelector<HTMLInputElement>('[data-forge-limit]')?.value) || 1,
+        ),
+      );
+      candidate.title =
+        dialog.querySelector<HTMLInputElement>('[data-forge-title]')?.value.trim() ||
+        candidate.title;
+      candidate.summary =
+        dialog.querySelector<HTMLTextAreaElement>('[data-forge-summary]')?.value.trim() ||
+        candidate.summary;
+      candidate.maxPlies = limit;
+      candidate.hints = (
+        dialog.querySelector<HTMLTextAreaElement>('[data-forge-hints]')?.value ?? ''
+      )
+        .split('\n')
+        .map((hint) => hint.trim())
+        .filter(Boolean);
+      const controlledPlayer =
+        dialog.querySelector<HTMLSelectElement>('[data-forge-player]')?.value === '1' ? 1 : 0;
+      candidate.initialState = { ...candidate.initialState, activePlayer: controlledPlayer };
+      candidate.successText ||= 'Misión de laboratorio completada.';
+      candidate.objective = forgeObjective(
+        dialog.querySelector<HTMLSelectElement>('[data-forge-objective]')?.value ?? 'win',
+        limit,
+        dialog.querySelector<HTMLInputElement>('[data-forge-piece]')?.value.trim() ?? '',
+        Number(dialog.querySelector<HTMLInputElement>('[data-forge-q]')?.value) || 0,
+        Number(dialog.querySelector<HTMLInputElement>('[data-forge-r]')?.value) || 0,
+        controlledPlayer,
+      );
+      const scenario = validateCustomScenario(candidate);
       saveCustomScenario(scenario);
-      const record = createMatchRecord(scenario.config, scenario.initialState);
-      saveActiveMatch(record);
-      loadRecordIntoMatch(record);
       dialog.close();
-      showToast(`Escenario “${scenario.title}” guardado en el catálogo.`);
+      startScenario(customScenarioDefinition(scenario));
+      showToast(`Misión “${scenario.title}” guardada en el catálogo local.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'El escenario no es válido.');
     }
   });
+}
+
+function populateForgeFields(scenario: CustomScenario): void {
+  const objective = scenario.objective;
+  const setValue = (selector: string, value: string): void => {
+    const field = dialog.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      selector,
+    );
+    if (field) field.value = value;
+  };
+  setValue('[data-forge-title]', scenario.title);
+  setValue('[data-forge-player]', String(scenario.initialState.activePlayer));
+  setValue('[data-forge-summary]', scenario.summary ?? '');
+  setValue('[data-forge-limit]', String(scenario.maxPlies ?? 20));
+  setValue('[data-forge-hints]', scenario.hints?.join('\n') ?? '');
+  if (
+    objective &&
+    ['win', 'win-in', 'survive', 'protect-piece', 'reach'].includes(objective.kind)
+  ) {
+    setValue('[data-forge-objective]', objective.kind);
+  }
+  if (objective?.kind === 'protect-piece' || objective?.kind === 'reach') {
+    setValue('[data-forge-piece]', objective.pieceId);
+  }
+  if (objective?.kind === 'reach') {
+    setValue('[data-forge-q]', String(objective.target.q));
+    setValue('[data-forge-r]', String(objective.target.r));
+  }
+}
+
+function forgeObjective(
+  kind: string,
+  limit: number,
+  pieceId: string,
+  q: number,
+  r: number,
+  controlledPlayer: 0 | 1,
+): ScenarioObjective {
+  if ((kind === 'protect-piece' || kind === 'reach') && !pieceId) {
+    throw new Error('Ese objetivo necesita el identificador de una unidad.');
+  }
+  if (kind === 'win-in') return { kind, maxPlies: limit };
+  if (kind === 'survive') return { kind, plies: limit, owner: controlledPlayer };
+  if (kind === 'protect-piece') return { kind, pieceId, plies: limit };
+  if (kind === 'reach') return { kind, pieceId, target: { q, r } };
+  return { kind: 'win' };
+}
+
+function customScenarioDefinition(scenario: CustomScenario): ScenarioDefinition {
+  return {
+    id: `custom:${scenario.id}`,
+    title: scenario.title,
+    summary: scenario.summary ?? 'Completa el objetivo creado en el Laboratorio.',
+    controlledPlayer: scenario.initialState.activePlayer,
+    initialState: structuredClone(scenario.initialState),
+    objective: scenario.objective ?? { kind: 'win' },
+    maxPlies: scenario.maxPlies,
+    category: 'strategic',
+    difficulty: 2,
+    lesson: 'Misión creada localmente en el Laboratorio.',
+    hints: scenario.hints ?? [],
+    successText: scenario.successText ?? 'Misión de laboratorio completada.',
+  };
 }
 
 function showToast(message: string): void {
@@ -2480,6 +3424,51 @@ function applyPreferences(): void {
 
 function savePreferences(): void {
   persistPreferences(preferences);
+}
+
+function aiDoctrineCards(selected: AiPersonality): string {
+  return (['balanced', 'aggressive', 'guardian', 'ambush'] as const)
+    .map((personality) => {
+      const labels: Record<AiPersonality, string> = {
+        balanced: 'Equilibrada',
+        aggressive: 'Asaltante',
+        guardian: 'Guardián',
+        ambush: 'Emboscada',
+      };
+      return `<button type="button" class="doctrine-card ${personality === selected ? 'selected' : ''}" role="radio" aria-checked="${personality === selected}" data-ai-doctrine="${personality}"><strong>${labels[personality]}</strong><small>${escapeHtml(aiDoctrineDescription(personality))}</small></button>`;
+    })
+    .join('');
+}
+
+function aiDoctrineDescription(personality: AiPersonality): string {
+  return {
+    balanced: 'Combina material, seguridad y presión sin forzar un único plan.',
+    aggressive: 'Avanza, acepta intercambios y prioriza la Fortaleza rival.',
+    guardian: 'Refuerza su retaguardia y castiga ataques mal preparados.',
+    ambush: 'Busca líneas aéreas, geometrías ocultas y respuestas tácticas.',
+  }[personality];
+}
+
+function createMatchSeed(): number {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return values[0];
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return minutes ? `${minutes} min ${remainder ? `${remainder} s` : ''}`.trim() : `${remainder} s`;
+}
+
+function downloadText(filename: string, contents: string): void {
+  const blob = new Blob([contents], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function accessibleCellId(hex: Hex): string {

@@ -90,8 +90,8 @@ export interface GameEvent {
 }
 
 export type Outcome =
-  | { type: 'win'; winner: Player; reason: 'fortress' }
-  | { type: 'draw'; reason: 'blockade' | 'repetition' };
+  | { type: 'win'; winner: Player; reason: 'fortress' | 'resignation' | 'timeout' }
+  | { type: 'draw'; reason: 'blockade' | 'repetition' | 'no-progress' };
 
 export interface BattleLogEntry {
   id: number;
@@ -105,6 +105,11 @@ export interface GameState {
   ply: number;
   firstFortressDamageBy: Player | null;
   positionCounts: Record<string, number>;
+  /**
+   * Consecutive plies without a capture, interception, or Fortress damage.
+   * Optional so version 2 saves created before the no-progress rule still load.
+   */
+  noProgressPlyCount?: number;
   outcome: Outcome | null;
   history: BattleLogEntry[];
 }
@@ -142,10 +147,14 @@ export type GameMode = 'local' | 'machine' | 'academy';
 
 export type AiDifficulty = 'recruit' | 'tactical' | 'commander' | 'expert';
 
+export type AiPersonality = 'balanced' | 'aggressive' | 'guardian' | 'ambush';
+
 export interface Participant {
   kind: 'human' | 'machine';
   name: string;
   difficulty?: AiDifficulty;
+  personality?: AiPersonality;
+  seed?: number;
 }
 
 export interface BoardDefinition {
@@ -170,6 +179,8 @@ export interface MatchOptions {
   fixedBoard: boolean;
   handoffScreen: boolean;
   clockSeconds: number | null;
+  /** Null disables the automatic draw. Defaults to 120 in classic games. */
+  noProgressPlyLimit?: number | null;
   allowUndo: boolean;
 }
 
@@ -183,12 +194,43 @@ export interface MatchConfig {
   options: MatchOptions;
 }
 
+export type MatchClockStatus = 'paused' | 'running' | 'timeout';
+
+/** Serializable state for a deterministic two-player countdown clock. */
+export interface MatchClockSnapshot {
+  initialMs: number;
+  remainingMs: [number, number];
+  activePlayer: Player;
+  status: MatchClockStatus;
+  lastTickAt: number | null;
+  timedOutPlayer: Player | null;
+}
+
+/** A terminal result that was not encoded as a board action. */
+export interface MatchConclusion {
+  outcome: Outcome;
+  atAction: number;
+  recordedAt: string;
+}
+
+/** Portable Academy UI state that belongs to this replay, not to local progress. */
+export interface AcademySessionMetadata {
+  scenarioId: string;
+  hintsRevealed: number;
+}
+
 export interface MatchRecord {
   version: 2;
   config: MatchConfig;
   initialState: GameState;
   actions: GameAction[];
   currentAction: number;
+  /** Optional for compatibility with existing version 2 saves. */
+  conclusion?: MatchConclusion | null;
+  /** Optional for compatibility with existing version 2 saves. */
+  clock?: MatchClockSnapshot | null;
+  /** Optional for compatibility with existing version 2 saves and non-Academy matches. */
+  academySession?: AcademySessionMetadata | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -197,7 +239,16 @@ export type ScenarioObjective =
   | { kind: 'perform-action'; actionKind: GameAction['kind']; pieceId?: string }
   | { kind: 'capture'; targetId: string }
   | { kind: 'damage-fortress'; owner: Player }
-  | { kind: 'win' };
+  | { kind: 'win' }
+  | { kind: 'win-in'; maxPlies: number }
+  | { kind: 'survive'; plies: number; owner?: Player }
+  | { kind: 'protect-piece'; pieceId: string; plies: number }
+  | { kind: 'reach'; pieceId: string; target: Hex };
+
+export interface ScenarioStage {
+  atPly: number;
+  text: string;
+}
 
 export interface ScenarioDefinition {
   id: string;
@@ -207,6 +258,10 @@ export interface ScenarioDefinition {
   initialState: GameState;
   objective: ScenarioObjective;
   maxPlies?: number;
+  category?: 'basic' | 'guided' | 'strategic' | 'daily';
+  difficulty?: 1 | 2 | 3;
+  lesson?: string;
+  stages?: ScenarioStage[];
   hints: string[];
   successText: string;
 }

@@ -38,8 +38,8 @@ try {
     'The new home screen must be visible on first load.',
   );
   assert(
-    (await desktop.locator('[data-home-action]').count()) === 4,
-    'Home must expose New game, Continue, Rules and Tutorial.',
+    (await desktop.locator('[data-home-action]').count()) >= 6,
+    'Home must expose New game, Continue, Rules, Tutorial, Laboratory and History.',
   );
   assert(
     (await desktop.locator('#home-settings-button, #home-sound-button').count()) === 2,
@@ -153,9 +153,9 @@ try {
 
   await desktop.locator('[data-home-action="new"]').click();
   assert(
-    (await desktop.locator('[data-home-mode]').count()) === 2 &&
-      (await desktop.locator('.home-nav-button.unavailable').isDisabled()),
-    'New game menu must expose two playable modes and disabled online play.',
+    (await desktop.locator('[data-home-mode]').count()) === 3 &&
+      (await desktop.locator('.home-nav-button.unavailable').count()) === 0,
+    'New game menu must expose local, machine and Academy as playable modes.',
   );
   await desktop.locator('[data-home-mode="local"]').click();
   assert(
@@ -166,9 +166,10 @@ try {
     ),
     'Opening a modal must lock background scrolling.',
   );
+  await desktop.locator('[data-preset="custom"]').click();
   assert(
-    (await desktop.locator('[data-fortress-hp]').inputValue()) === '1',
-    'Fortress health must default to the recommended 1 HP.',
+    (await desktop.locator('[data-fortress-hp]').inputValue()) === '2',
+    'Fortress health must default to the balanced 2 HP.',
   );
   const initialLayout = desktop.locator('[data-initial-layout]');
   assert((await initialLayout.inputValue()) === '1', 'Initial layout must default to option 1.');
@@ -211,9 +212,9 @@ try {
     'Accessible cell labels contain stray template characters.',
   );
   const healthBars = await desktop.locator('.hp i').all();
-  assert(healthBars.length === 2, 'The default 1 HP match must expose two health indicators.');
+  assert(healthBars.length === 4, 'The default 2 HP match must expose four health indicators.');
   assert(
-    (await desktop.locator('.hp svg path').count()) === 2,
+    (await desktop.locator('.hp svg path').count()) === 4,
     'Fortress health must use heart icons.',
   );
   for (const bar of healthBars) {
@@ -464,6 +465,67 @@ try {
   );
   await narrow.close();
 
+  const clocked = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(clocked, runtimeErrors);
+  await clocked.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await clocked.locator('#home-settings-button').click();
+  await clocked.locator('[data-pref="handoff"]').check();
+  await clocked.locator('[data-dialog-close]').click();
+  await clocked.locator('[data-home-action="new"]').click();
+  await clocked.locator('[data-home-mode="local"]').click();
+  await clocked.locator('[data-match-clock]').selectOption('600');
+  await clocked.locator('[data-start-free]').click();
+  await clickHex(clocked, 0, -2);
+  await doubleClickHex(clocked, 0, -1);
+  await clocked.locator('[data-handoff-ready]').waitFor({ timeout: 10_000 });
+  const pausedClock = await clocked.evaluate(
+    () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock,
+  );
+  await clocked.waitForTimeout(800);
+  const pausedClockAfterWait = await clocked.evaluate(
+    () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock,
+  );
+  assert(
+    pausedClock.status === 'paused' &&
+      pausedClockAfterWait.remainingMs[1] === pausedClock.remainingMs[1],
+    'The next player clock must stay paused while animation or handoff blocks interaction.',
+  );
+  await clocked.locator('[data-handoff-ready]').click();
+  await clocked.waitForTimeout(1_200);
+  const runningClock = await clocked.evaluate(
+    () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock,
+  );
+  assert(
+    runningClock.status === 'running' &&
+      runningClock.activePlayer === 1 &&
+      runningClock.remainingMs[1] < pausedClock.remainingMs[1],
+    'The next player clock must start only after accepting the handoff.',
+  );
+  await clocked.evaluate(() => {
+    const key = 'atlas-match-classic-v2';
+    const record = JSON.parse(localStorage.getItem(key));
+    record.clock.remainingMs[record.clock.activePlayer] = 1;
+    record.clock.status = 'running';
+    record.clock.lastTickAt = Date.now() - 1_000;
+    record.clock.timedOutPlayer = null;
+    localStorage.setItem(key, JSON.stringify(record));
+  });
+  await clocked.reload({ waitUntil: 'networkidle' });
+  await clocked.locator('[data-home-action="continue"]').click();
+  await clocked
+    .locator('#game-dialog h2')
+    .filter({ hasText: /tiempo/i })
+    .waitFor();
+  assert(
+    await clocked.evaluate(() => {
+      const active = localStorage.getItem('atlas-match-classic-v2');
+      const history = JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]');
+      return active === null && history[0]?.outcome?.reason === 'timeout';
+    }),
+    'A timeout discovered on resume must be presented, archived and removed from active saves.',
+  );
+  await clocked.close();
+
   const academy = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(academy, runtimeErrors);
   await academy.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
@@ -490,8 +552,23 @@ try {
   );
   await academy.locator('[data-scenario="movement"]').click();
   assert(
-    (await academy.locator('.scenario-steps li').count()) >= 3,
-    'Academy briefing must explain the exercise step by step.',
+    (await academy.locator('.scenario-steps li').count()) === 0,
+    'Academy briefing should not expose the solution before asking for help.',
+  );
+  await academy.locator('[data-reveal-scenario-hint]').click();
+  assert(
+    (await academy.locator('.scenario-steps li').count()) === 1,
+    'Academy must reveal hints progressively.',
+  );
+  assert(
+    await academy.evaluate(() => {
+      const record = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
+      return (
+        record.academySession?.scenarioId === 'movement' &&
+        record.academySession?.hintsRevealed === 1
+      );
+    }),
+    'Academy hint usage must persist with the active match.',
   );
   await academy.locator('[data-dialog-close]').click();
   await academy.locator('#game-canvas').focus();
@@ -507,6 +584,7 @@ try {
   await academy.locator('[data-academy-menu]').click();
   await academy.keyboard.press('Escape');
   await academy.locator('#settings-button').click();
+  await academy.locator('[data-data-center]').click();
   await academy.locator('[data-open-replay]').click();
   assert(
     await academy.locator('.replay-dock').isVisible(),
@@ -528,10 +606,14 @@ try {
   await academy.locator('[data-replay-close]').click();
   await academy.reload({ waitUntil: 'networkidle' });
   assert(
+    await academy.locator('[data-home-action="continue"]').isDisabled(),
+    'A completed Academy mission must not remain as an active saved match.',
+  );
+  assert(
     await academy
-      .locator('[data-home-action="continue"]')
+      .locator('[data-home-action="history"]')
       .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
-    'Continue card must expose a pointer cursor.',
+    'Completed matches must remain available through History.',
   );
   await academy.close();
 
@@ -556,6 +638,7 @@ try {
     'Solo mode must keep the board viewed from the human side.',
   );
   await solo.locator('#settings-button').click();
+  await solo.locator('[data-data-center]').click();
   await solo.locator('[data-undo-match]').click();
   await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
   assert(
@@ -576,6 +659,7 @@ try {
   await doubleClickHex(solo, 0, -1);
   await solo.locator('#turn-chip').getByText('Máquina pensando…').waitFor();
   await solo.locator('#settings-button').click();
+  await solo.locator('[data-data-center]').click();
   await solo.locator('[data-undo-match]').click();
   await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
   await solo.waitForTimeout(1_000);

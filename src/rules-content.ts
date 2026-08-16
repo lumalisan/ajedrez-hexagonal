@@ -1,4 +1,9 @@
 import type { RuleDemoId } from './rules-demo';
+import {
+  CLASSIC_NO_PROGRESS_LIMIT,
+  CLASSIC_REPETITION_LIMIT,
+  FORTRESS_DAMAGE_PER_HIT,
+} from './classic-rules';
 
 export interface RuleMedia {
   src: string;
@@ -48,19 +53,26 @@ export const RULE_SECTIONS: RuleSection[] = [
         'El objetivo del juego es destruir la fortaleza rival.',
         'destruir la fortaleza rival.',
       ),
-      'La fortaleza no puede desplazarse, atacar ni defenderse.',
-      'Puede tener 1, 2 o 3 puntos de vida, según la configuración de la partida. Cuando sus puntos de vida llegan a cero, la fortaleza es destruida y su propietario pierde la partida.',
+      'La fortaleza no se desplaza ni realiza acciones. Puede comenzar con 1, 2 o 3 puntos de vida, según el preset o la configuración de la partida.',
+      emphasize(
+        `Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto de daño, con independencia de sus puntos de vida iniciales. Cuando estos llegan a cero, la fortaleza es destruida y su propietario pierde la partida.`,
+        `Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto de daño`,
+      ),
+      emphasize(
+        'Soldado, Capturador y Embestidor se sacrifican después de impactar contra la fortaleza. Tanque, Lanzamisiles, Dron y Avión sobreviven cuando usan un ataque que no sea kamikaze; el Avión que elige un kamikaze se destruye como de costumbre.',
+        'Soldado, Capturador y Embestidor se sacrifican',
+      ),
       peerHeading('Escudo antiaéreo'),
       emphasize(
-        'El escudo antiaéreo, situado justo detrás de la fortaleza, protege las seis casillas que lo rodean y la propia casilla que ocupa frente a cualquier ataque aéreo.',
-        'protege las seis casillas que lo rodean y la propia casilla que ocupa',
+        'El escudo antiaéreo protege su propia casilla y las seis casillas adyacentes. La protección depende de su posición actual, no de que permanezca detrás de la fortaleza.',
+        'protege su propia casilla y las seis casillas adyacentes',
       ),
       emphasize(
-        'Los drones y aviones no pueden desplazarse sobre ninguna de las casillas protegidas por el escudo antiaéreo. Si lo hacen, son destruidos inmediatamente.',
-        'son destruidos inmediatamente',
+        'Cuando un dron o un avión entra o intenta cruzar una zona protegida enemiga, es interceptado y destruido en la primera casilla protegida de su recorrido.',
+        'interceptado y destruido en la primera casilla protegida',
       ),
-      'El tanque, el lanzamisiles y el avión no pueden realizar ataques a distancia contra ninguna de las casillas protegidas por el escudo antiaéreo. Éste solo puede ser destruido por un soldado o un embestidor, o capturado por un capturador.',
-      'El escudo antiaéreo no puede desplazarse.',
+      'El tanque y el lanzamisiles no pueden disparar si la trayectoria entra en una casilla protegida; el avión no puede disparar contra una casilla protegida. El propio escudo solo puede ser destruido mediante un ataque terrestre de Soldado o Embestidor, o convertido por un Capturador.',
+      'El escudo antiaéreo no se desplaza ni realiza acciones.',
     ],
     demo: 'fortaleza',
   },
@@ -212,24 +224,33 @@ export const RULE_SECTIONS: RuleSection[] = [
     title: 'Desarrollo de la partida',
     paragraphs: [
       emphasize(
-        'Cada jugador comienza la partida con un ejército compuesto por 5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones, además de una fortaleza y un escudo antiaéreo. La disposición inicial de los ejércitos sobre el tablero es la que aparece en la imagen de la derecha.',
+        'En el despliegue clásico completo, cada jugador comienza con 5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones, además de una fortaleza y un escudo antiaéreo. La disposición inicial de los ejércitos sobre el tablero es la que aparece en la imagen de la derecha.',
         '5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones',
       ),
+      'Los presets pueden variar el número y la disposición de las unidades, así como los puntos de vida iniciales de las fortalezas. No cambian el movimiento, el combate, las capas ni el daño de un impacto salvo que la configuración lo indique expresamente.',
       emphasize(
         'El jugador de color cian realiza el primer turno. Durante su turno, debe seleccionar una de sus unidades y realizar una acción, como desplazarse, atacar, disparar o cambiar su orientación, según las características de la unidad. A continuación, comienza el turno del jugador de color ámbar.',
         'cian',
         'ámbar',
       ),
+      peerHeading('Final de la partida'),
       emphasize(
-        'Los jugadores se turnan de forma alterna hasta que uno de ellos consigue destruir la fortaleza rival. Si se alcanza una situación en la que ninguno de los dos jugadores puede destruir por completo la fortaleza rival, la partida termina en tablas, aunque una de las fortalezas tenga menos puntos de vida que la otra. Los jugadores también pueden acordar tablas durante el desarrollo de la partida.',
+        'Los jugadores se turnan hasta que uno destruye la fortaleza rival. Si un jugador no dispone de ninguna acción legal, su turno pasa automáticamente. Si ninguno de los dos bandos conserva una forma de destruir la fortaleza enemiga, la partida termina en tablas por bloqueo, aunque una fortaleza tenga menos puntos de vida que la otra. Los jugadores también pueden acordar ese desenlace.',
         'tablas',
-        'acordar tablas',
+        'acordar ese desenlace',
       ),
       emphasize(
-        'Cada ataque que impacta contra la fortaleza reduce en un punto sus puntos de vida.',
-        'reduce en un punto sus puntos de vida',
+        `La tercera aparición de una misma posición, con el mismo jugador al turno, produce tablas por repetición. El umbral de classic-v2 es ${CLASSIC_REPETITION_LIMIT}.`,
+        'tercera aparición',
+        'tablas por repetición',
       ),
-      'El soldado, el embestidor y el capturador son eliminados inmediatamente después de atacar la fortaleza, independientemente del número de puntos de vida que le queden. La partida continúa hasta que una de las fortalezas se queda sin puntos de vida.',
+      emphasize(
+        `La configuración estándar declara tablas tras ${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies) consecutivas sin una baja, una intercepción ni daño a una fortaleza. Una conversión del Capturador cambia de bando a la unidad, pero no reinicia este contador.`,
+        `${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies)`,
+      ),
+      'Si la partida utiliza reloj, agotar el tiempo concede la victoria al rival. Una rendición también concede la victoria al otro bando.',
+      peerHeading('Registro y continuidad'),
+      'Cada orden confirmada y el desenlace quedan guardados en el registro de partida. La destrucción de una fortaleza, las tablas, el tiempo agotado y la rendición se conservan al continuar, exportar, importar o reproducir la partida; una partida concluida no vuelve a abrirse como si siguiera activa.',
     ],
     media: [
       {
@@ -243,6 +264,11 @@ export const RULE_SECTIONS: RuleSection[] = [
     label: 'ATAQUES SOBRE CASILLAS COMPARTIDAS',
     title: 'Ataques sobre casillas compartidas',
     paragraphs: [
+      emphasize(
+        'Cada casilla tiene dos capas: suelo y aire. Puede contener como máximo una unidad terrestre y una unidad aérea; nunca dos unidades en la misma capa. Compartir coordenadas no fusiona las unidades: cada una conserva propietario, estado y objetivo por separado.',
+        'dos capas: suelo y aire',
+        'máximo una unidad terrestre y una unidad aérea',
+      ),
       emphasize(
         'Cuando dos unidades enemigas comparten una misma casilla y esta puede ser atacada por una unidad aliada, solo puede ser atacada una de las dos unidades en cada acción. En ningún caso un mismo ataque puede destruir o afectar a ambas unidades.',
         'solo puede ser atacada una de las dos unidades en cada acción',
@@ -267,6 +293,8 @@ export const RULE_SECTIONS: RuleSection[] = [
         'En cambio, el tanque y el lanzamisiles no pueden atacar directamente a un dron situado sobre ellos. Sin embargo, tanto el tanque como el lanzamisiles pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
         'tanque y el lanzamisiles',
       ),
+      peerHeading('Abandono y transformación'),
+      'Tanque, Lanzamisiles y Embestidor pueden ser abandonados. La transformación parte de la misma casilla y conserva el propietario de la unidad, pero el vehículo desaparece y queda un Soldado con la orientación elegida. Esa misma orden puede incluir el avance o ataque legal del nuevo Soldado, incluso contra una aeronave enemiga situada encima; no concede un segundo turno independiente.',
     ],
     demo: 'casillas-compartidas',
   },

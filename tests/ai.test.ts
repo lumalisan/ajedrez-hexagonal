@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
-import { chooseMachineAction, searchMachineAction } from '../src/ai';
+import {
+  chooseMachineAction,
+  searchMachineAction,
+  searchMachineActionWithMetadata,
+} from '../src/ai';
+import { actionKey } from '../src/action-identity';
 import { applyAction, createGameState, getAllLegalActions } from '../src/engine';
 import { stepHex } from '../src/hex';
-import type { Piece } from '../src/types';
+import type { AiPersonality, GameAction, Piece } from '../src/types';
+
+function createChoiceState() {
+  return createGameState(
+    [
+      { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+      { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+      { id: 'machine-long', type: 'long', owner: 1, position: { q: 0, r: 2 } },
+    ],
+    1,
+  );
+}
+
+function keyOf(action: GameAction | null): string {
+  return action ? actionKey(action) : 'null';
+}
 
 describe('machine player', () => {
   it('always returns a legal action without mutating the position', () => {
@@ -161,5 +181,143 @@ describe('machine player', () => {
     expect(result?.state.pieces.find((piece) => piece.id === 'f0')).toMatchObject({ hp: 1 });
     expect(result?.state.pieces.some((piece) => piece.id === 'machine-airplane')).toBe(false);
     expect(result?.state.outcome).toEqual({ type: 'draw', reason: 'blockade' });
+  });
+
+  it('repeats the same controlled choice for the same seed', () => {
+    const state = createChoiceState();
+    const options = { personality: 'balanced', difficulty: 'recruit', seed: 37 } as const;
+    const expected = chooseMachineAction(state, options);
+    const expectedSearch = searchMachineAction(state, {
+      ...options,
+      difficulty: 'tactical',
+      depth: 1,
+      budgetMs: 500,
+    });
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      expect(chooseMachineAction(state, options)).toEqual(expected);
+      expect(
+        searchMachineAction(state, {
+          ...options,
+          difficulty: 'tactical',
+          depth: 1,
+          budgetMs: 500,
+        }),
+      ).toEqual(expectedSearch);
+    }
+  });
+
+  it('varies near-equivalent Recruit and Tactical orders while Expert stays exact', () => {
+    const state = createChoiceState();
+    const seeds = Array.from({ length: 24 }, (_, seed) => seed);
+    const recruitChoices = new Set(
+      seeds.map((seed) =>
+        keyOf(
+          chooseMachineAction(state, {
+            personality: 'balanced',
+            difficulty: 'recruit',
+            seed,
+          }),
+        ),
+      ),
+    );
+    const tacticalChoices = new Set(
+      seeds.map((seed) =>
+        keyOf(
+          searchMachineAction(state, {
+            depth: 1,
+            budgetMs: 500,
+            personality: 'balanced',
+            difficulty: 'tactical',
+            seed,
+          }),
+        ),
+      ),
+    );
+    const expertChoices = new Set(
+      seeds.map((seed) =>
+        keyOf(
+          chooseMachineAction(state, {
+            personality: 'balanced',
+            difficulty: 'expert',
+            seed,
+          }),
+        ),
+      ),
+    );
+    const commanderChoices = new Set(
+      seeds.map((seed) =>
+        keyOf(
+          chooseMachineAction(state, {
+            personality: 'balanced',
+            difficulty: 'commander',
+            seed,
+          }),
+        ),
+      ),
+    );
+
+    expect(recruitChoices.size).toBeGreaterThan(1);
+    expect(tacticalChoices.size).toBeGreaterThan(1);
+    expect(commanderChoices.size).toBeLessThanOrEqual(2);
+    expect(expertChoices.size).toBe(1);
+  });
+
+  it('keeps every personality choice legal', () => {
+    const state = createChoiceState();
+    const personalities: AiPersonality[] = ['balanced', 'aggressive', 'guardian', 'ambush'];
+    const legal = getAllLegalActions(state);
+
+    for (const personality of personalities) {
+      const action = searchMachineAction(state, {
+        depth: 1,
+        budgetMs: 500,
+        difficulty: 'tactical',
+        personality,
+        seed: 12,
+      });
+      expect(legal, personality).toContainEqual(action);
+    }
+  });
+
+  it('makes the aggressive profile advance while the guardian covers home', () => {
+    const state = createChoiceState();
+    const aggressive = chooseMachineAction(state, {
+      personality: 'aggressive',
+      difficulty: 'expert',
+      seed: 1,
+    });
+    const guardian = chooseMachineAction(state, {
+      personality: 'guardian',
+      difficulty: 'expert',
+      seed: 1,
+    });
+
+    expect(aggressive).toMatchObject({ kind: 'move', to: { q: 0, r: 1 } });
+    expect(guardian).toMatchObject({ kind: 'move', to: { q: 0, r: 3 } });
+  });
+
+  it('reports completed depth, nodes and elapsed search time', () => {
+    const state = createChoiceState();
+    const progress: number[] = [];
+    const result = searchMachineActionWithMetadata(state, {
+      depth: 2,
+      budgetMs: 1_000,
+      difficulty: 'expert',
+      personality: 'balanced',
+      seed: 4,
+      onProgress: ({ completedDepth }) => progress.push(completedDepth),
+    });
+
+    expect(getAllLegalActions(state)).toContainEqual(result.action);
+    expect(result.metadata).toMatchObject({
+      requestedDepth: 2,
+      completedDepth: 2,
+      timedOut: false,
+    });
+    expect(result.metadata.nodes).toBeGreaterThan(0);
+    expect(result.metadata.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(result.metadata.candidatesConsidered).toBeGreaterThan(0);
+    expect(progress).toEqual([1, 2]);
   });
 });

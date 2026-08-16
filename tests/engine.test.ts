@@ -1068,7 +1068,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(getPiece(next, 'fast')?.type).toBe('soldier');
   });
 
-  it('la tercera repetición no declara tablas automáticamente', () => {
+  it('la tercera repetición declara tablas automáticamente', () => {
     let state = base([
       soldier('blue-soldier', 0, hex(0, -2), 0),
       soldier('amber-soldier', 1, hex(0, 2), 3),
@@ -1093,7 +1093,59 @@ describe('Fortaleza, transformación y finales', () => {
       rotate('blue-soldier', 0);
       rotate('amber-soldier', 3);
     }
-    expect(state.outcome).toBeNull();
+    expect(state.outcome).toEqual({ type: 'draw', reason: 'repetition' });
+    expect(state.history.at(-1)?.text).toContain('Triple repetición');
+  });
+
+  it('declara tablas al alcanzar el límite configurable sin progreso', () => {
+    let state = base([
+      soldier('blue-soldier', 0, hex(0, -2), 0),
+      soldier('amber-soldier', 1, hex(0, 2), 3),
+    ]);
+    const first = applyAction(
+      state,
+      findAction(state, 'blue-soldier', 'rotate', (action) => action.facing === 1),
+      { repetition: null, noProgressPlyLimit: 2 },
+    );
+    expect(first.state.noProgressPlyCount).toBe(1);
+    state = first.state;
+    const second = applyAction(
+      state,
+      findAction(state, 'amber-soldier', 'rotate', (action) => action.facing === 4),
+      { repetition: null, noProgressPlyLimit: 2 },
+    );
+    expect(second.state.noProgressPlyCount).toBe(2);
+    expect(second.state.outcome).toEqual({ type: 'draw', reason: 'no-progress' });
+    expect(second.events).toContainEqual({ type: 'draw' });
+  });
+
+  it('reinicia el contador sin progreso después de una captura o daño a Fortaleza', () => {
+    const captureState = base([
+      soldier('blue-soldier', 0, hex(0, 0), 0),
+      soldier('amber-soldier', 1, hex(0, -1), 3),
+    ]);
+    captureState.noProgressPlyCount = 9;
+    const capture = applyAction(
+      captureState,
+      findAction(captureState, 'blue-soldier', 'move', (action) => equal(action.to, hex(0, -1))),
+      { repetition: null, noProgressPlyLimit: 10 },
+    );
+    expect(capture.state.noProgressPlyCount).toBe(0);
+    expect(capture.state.outcome).toBeNull();
+
+    const damageState = base([
+      fortress('fort-amber-close', 1, hex(0, -1), 2),
+      soldier('attacker', 0, hex(0, 0), 0),
+      soldier('amber-mobile', 1, hex(2, 0), 3),
+    ]);
+    damageState.noProgressPlyCount = 9;
+    const damage = applyAction(
+      damageState,
+      findAction(damageState, 'attacker', 'move', (action) => equal(action.to, hex(0, -1))),
+      { repetition: null, noProgressPlyLimit: 10 },
+    );
+    expect(damage.state.noProgressPlyCount).toBe(0);
+    expect(damage.state.outcome).toBeNull();
   });
 
   it('bloqueo acordado siempre termina en tablas aunque la vida sea distinta', () => {

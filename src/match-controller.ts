@@ -1,8 +1,29 @@
 import { applyAction, getLegalActionsForPiece } from './engine';
 import { sameAction } from './action-identity';
-import { appendAction, replayRecord, setReplayCursor } from './match-record';
+import {
+  appendAction,
+  concludeMatch,
+  replayRecord,
+  resolutionRulesForConfig,
+  setMatchClock,
+  setReplayCursor,
+} from './match-record';
+import {
+  clockOutcome,
+  pauseMatchClock,
+  resumeMatchClock,
+  switchMatchClock,
+  tickMatchClock,
+} from './match-clock';
 import { MatchStore } from './match-store';
-import type { ActionResult, GameAction, MatchRecord } from './types';
+import type {
+  ActionResult,
+  GameAction,
+  MatchClockSnapshot,
+  MatchRecord,
+  Outcome,
+  Player,
+} from './types';
 
 export class MatchController {
   record: MatchRecord;
@@ -28,7 +49,11 @@ export class MatchController {
   }
 
   commit(action: GameAction): ActionResult {
-    const result = applyAction(this.store.getState().game, action);
+    const result = applyAction(
+      this.store.getState().game,
+      action,
+      resolutionRulesForConfig(this.record.config),
+    );
     if (!result.ok) return result;
     this.record = appendAction(this.record, action);
     this.store.update((current) => ({
@@ -53,5 +78,49 @@ export class MatchController {
     if (!this.record.config.options.allowUndo || this.record.currentAction === 0) return false;
     this.jumpTo(this.record.currentAction - 1);
     return true;
+  }
+
+  conclude(outcome: Outcome): void {
+    this.record = concludeMatch(this.record, outcome);
+    this.store.replaceGame(replayRecord(this.record));
+  }
+
+  resign(player: Player): void {
+    this.conclude({
+      type: 'win',
+      winner: player === 0 ? 1 : 0,
+      reason: 'resignation',
+    });
+  }
+
+  resumeClock(nowMs: number): MatchClockSnapshot | null {
+    return this.updateClock((clock) => resumeMatchClock(clock, nowMs));
+  }
+
+  pauseClock(nowMs: number): MatchClockSnapshot | null {
+    return this.updateClock((clock) => pauseMatchClock(clock, nowMs));
+  }
+
+  tickClock(nowMs: number): MatchClockSnapshot | null {
+    const clock = this.updateClock((current) => tickMatchClock(current, nowMs));
+    const outcome = clock ? clockOutcome(clock) : null;
+    if (outcome && !this.store.getState().game.outcome) this.conclude(outcome);
+    return clock;
+  }
+
+  switchClock(activePlayer: Player, nowMs: number): MatchClockSnapshot | null {
+    const clock = this.updateClock((current) => switchMatchClock(current, activePlayer, nowMs));
+    const outcome = clock ? clockOutcome(clock) : null;
+    if (outcome && !this.store.getState().game.outcome) this.conclude(outcome);
+    return clock;
+  }
+
+  private updateClock(
+    update: (clock: Readonly<MatchClockSnapshot>) => MatchClockSnapshot,
+  ): MatchClockSnapshot | null {
+    if (!this.record.clock) return null;
+    const clock = update(this.record.clock);
+    this.record = setMatchClock(this.record, clock);
+    return clock;
   }
 }
