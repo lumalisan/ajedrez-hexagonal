@@ -120,12 +120,23 @@ interface PointerState {
   moved: boolean;
 }
 
+interface CommandSheetDragState {
+  pointerId: number;
+  startY: number;
+  startTranslateY: number;
+  maxTranslateY: number;
+  currentTranslateY: number;
+  moved: boolean;
+}
+
 const canvas = requireElement<HTMLCanvasElement>('game-canvas');
 const app = requireElement<HTMLElement>('app');
 const homeScreen = requireElement<HTMLElement>('home-screen');
 const homeMenuContent = requireElement<HTMLElement>('home-menu-content');
 const topbar = requireElementBySelector<HTMLElement>('.topbar');
 const gameLayout = requireElementBySelector<HTMLElement>('.game-layout');
+const commandPanel = requireElement<HTMLElement>('command-panel');
+const commandSheetToggle = requireElement<HTMLButtonElement>('command-sheet-toggle');
 const renderer = new BoardRenderer(canvas);
 const preferences = loadPreferences();
 renderer.setDepthMode(preferences.boardDepth, true);
@@ -150,6 +161,7 @@ let activeScenario: ScenarioDefinition | null = null;
 let aiAbortController: AbortController | null = null;
 let replayDock: HTMLElement | null = null;
 let replayClockWasRunning = false;
+let replayFocusReturn: HTMLElement | null = null;
 let machineThinking = false;
 let machineSearch: SearchMetadata | null = null;
 let logOpen = false;
@@ -161,6 +173,8 @@ let scenarioHintsRevealed = 0;
 let scenarioAttemptsRecorded = false;
 let outcomePresentedFor = '';
 let commandSheetExpanded = false;
+let commandSheetDrag: CommandSheetDragState | null = null;
+let suppressCommandSheetClick = false;
 let lastClockPersistSecond = -1;
 
 const pointers = new Map<number, PointerState>();
@@ -199,10 +213,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 function bindControls(): void {
   homeMenuContent.addEventListener('click', onHomeMenuClick);
-  document.getElementById('command-sheet-toggle')?.addEventListener('click', () => {
-    commandSheetExpanded = !commandSheetExpanded;
-    renderCommandSheetState();
-  });
+  bindCommandSheetControls();
   threatToggle.addEventListener('click', () => {
     preferences.tacticalThreats = !preferences.tacticalThreats;
     savePreferences();
@@ -532,7 +543,6 @@ function selectPiece(pieceId: string): void {
   focusedHex = { ...piece.position };
   pendingAction = null;
   mode = { kind: 'default' };
-  if (window.innerWidth <= 760) commandSheetExpanded = true;
   audio.playSelect();
   render();
   announce(
@@ -544,7 +554,6 @@ function clearSelection(): void {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
-  if (window.innerWidth <= 760) commandSheetExpanded = false;
   if (window.innerWidth <= 760) commandSheetExpanded = false;
   render();
 }
@@ -573,6 +582,7 @@ function setPending(action: GameAction): void {
   });
   if (mode.kind === 'actionChoice') mode = { kind: 'default' };
   render();
+  if (window.innerWidth <= 760) commandPanel.scrollTop = 0;
   const requiresConfirmation = shouldConfirmAction(action);
   announce(
     `${describeAction(state, action)}.${requiresConfirmation ? ' Pulsa confirmar para ejecutar.' : ' Ejecutando orden.'}`,
@@ -643,6 +653,7 @@ async function executeTurn(action: GameAction): Promise<void> {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
+  if (window.innerWidth <= 760) commandSheetExpanded = false;
   animating = true;
   audio.playEvents(result.events, before);
   render();
@@ -835,13 +846,99 @@ function renderCommandSheetState(): void {
   const expanded = commandSheetExpanded || Boolean(pendingAction) || mode.kind !== 'default';
   document.body.classList.toggle('command-sheet-expanded', expanded);
   document.body.classList.toggle('command-sheet-collapsed', !expanded);
-  const toggle = document.getElementById('command-sheet-toggle');
-  toggle?.setAttribute('aria-expanded', String(expanded));
-  if (toggle)
-    toggle.setAttribute(
-      'aria-label',
-      expanded ? 'Contraer panel de mando' : 'Abrir panel de mando',
-    );
+  document.body.classList.toggle('command-sheet-pending', Boolean(pendingAction));
+  commandSheetToggle.setAttribute('aria-expanded', String(expanded));
+  commandSheetToggle.setAttribute(
+    'aria-label',
+    expanded ? 'Contraer panel de mando' : 'Abrir panel de mando',
+  );
+}
+
+function bindCommandSheetControls(): void {
+  commandSheetToggle.addEventListener('click', (event) => {
+    if (suppressCommandSheetClick) {
+      event.preventDefault();
+      suppressCommandSheetClick = false;
+      return;
+    }
+    commandSheetExpanded = !commandSheetExpanded;
+    renderCommandSheetState();
+  });
+  commandSheetToggle.addEventListener('pointerdown', onCommandSheetPointerDown);
+  commandSheetToggle.addEventListener('pointermove', onCommandSheetPointerMove);
+  commandSheetToggle.addEventListener('pointerup', onCommandSheetPointerUp);
+  commandSheetToggle.addEventListener('pointercancel', onCommandSheetPointerCancel);
+}
+
+function onCommandSheetPointerDown(event: PointerEvent): void {
+  if (window.innerWidth > 760 || !event.isPrimary || event.button !== 0) return;
+  const maxTranslateY = commandSheetMaxTranslate();
+  commandSheetDrag = {
+    pointerId: event.pointerId,
+    startY: event.clientY,
+    startTranslateY: commandSheetTranslateY(),
+    maxTranslateY,
+    currentTranslateY: commandSheetTranslateY(),
+    moved: false,
+  };
+  commandSheetToggle.setPointerCapture(event.pointerId);
+  document.body.classList.add('command-sheet-dragging');
+}
+
+function onCommandSheetPointerMove(event: PointerEvent): void {
+  if (!commandSheetDrag || commandSheetDrag.pointerId !== event.pointerId) return;
+  const deltaY = event.clientY - commandSheetDrag.startY;
+  if (Math.abs(deltaY) > 5) commandSheetDrag.moved = true;
+  commandSheetDrag.currentTranslateY = Math.max(
+    0,
+    Math.min(commandSheetDrag.maxTranslateY, commandSheetDrag.startTranslateY + deltaY),
+  );
+  commandPanel.style.transform = `translateY(${commandSheetDrag.currentTranslateY}px)`;
+  if (commandSheetDrag.moved) event.preventDefault();
+}
+
+function onCommandSheetPointerUp(event: PointerEvent): void {
+  if (!commandSheetDrag || commandSheetDrag.pointerId !== event.pointerId) return;
+  const drag = commandSheetDrag;
+  const deltaY = event.clientY - drag.startY;
+  if (drag.moved) {
+    commandSheetExpanded =
+      Math.abs(deltaY) >= 28 ? deltaY < 0 : drag.currentTranslateY < drag.maxTranslateY / 2;
+    suppressCommandSheetClick = true;
+    window.setTimeout(() => {
+      suppressCommandSheetClick = false;
+    }, 0);
+  }
+  finishCommandSheetDrag();
+}
+
+function onCommandSheetPointerCancel(event: PointerEvent): void {
+  if (!commandSheetDrag || commandSheetDrag.pointerId !== event.pointerId) return;
+  finishCommandSheetDrag();
+}
+
+function finishCommandSheetDrag(): void {
+  if (commandSheetDrag && commandSheetToggle.hasPointerCapture(commandSheetDrag.pointerId)) {
+    commandSheetToggle.releasePointerCapture(commandSheetDrag.pointerId);
+  }
+  commandSheetDrag = null;
+  commandPanel.style.removeProperty('transform');
+  document.body.classList.remove('command-sheet-dragging');
+  renderCommandSheetState();
+}
+
+function commandSheetTranslateY(): number {
+  const transform = getComputedStyle(commandPanel).transform;
+  if (transform === 'none') return 0;
+  return new DOMMatrixReadOnly(transform).m42;
+}
+
+function commandSheetMaxTranslate(): number {
+  const rootStyles = getComputedStyle(document.documentElement);
+  const panelStyles = getComputedStyle(commandPanel);
+  const peek = Number.parseFloat(rootStyles.getPropertyValue('--command-sheet-peek')) || 66;
+  const safeArea = Math.max(0, (Number.parseFloat(panelStyles.paddingBottom) || 14) - 14);
+  return Math.max(0, commandPanel.getBoundingClientRect().height - peek - safeArea);
 }
 
 function render(): void {
@@ -1742,6 +1839,12 @@ function showHomeNewGameMenu(): void {
     </nav>`;
 }
 
+function focusHomeControl(selector: string): void {
+  window.requestAnimationFrame(() => {
+    homeMenuContent.querySelector<HTMLButtonElement>(selector)?.focus();
+  });
+}
+
 function onHomeMenuClick(event: MouseEvent): void {
   const target = event.target instanceof Element ? event.target : null;
   const button = target?.closest<HTMLButtonElement>('button');
@@ -1895,6 +1998,18 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
         </button>`,
       ).join('')}
     </div>
+    <div class="match-options" data-custom-options hidden>
+      <span class="eyebrow">AJUSTES PERSONALIZADOS</span>
+      <label class="field-row"><span>Puntos de vida de la Fortaleza</span><select data-fortress-hp>
+        <option value="1">1 · partida explosiva</option>
+        <option value="2" selected>2 · equilibrio recomendado</option>
+        <option value="3">3</option>
+      </select></label>
+      <label class="field-row"><span>Disposición inicial</span><select data-initial-layout>
+        <option value="1" selected>Frente clásico</option>
+        <option value="2">Columnas de asedio</option>
+      </select></label>
+    </div>
     ${
       modeToConfigure === 'machine'
         ? `<div class="match-options"><span class="eyebrow">MANDO RIVAL</span>
@@ -1911,18 +2026,6 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
         </div>`
         : ''
     }
-    <div class="match-options" data-custom-options hidden>
-      <span class="eyebrow">AJUSTES PERSONALIZADOS</span>
-      <label class="field-row"><span>Puntos de vida de la Fortaleza</span><select data-fortress-hp>
-        <option value="1">1 · partida explosiva</option>
-        <option value="2" selected>2 · equilibrio recomendado</option>
-        <option value="3">3</option>
-      </select></label>
-      <label class="field-row"><span>Disposición inicial</span><select data-initial-layout>
-        <option value="1" selected>Frente clásico</option>
-        <option value="2">Columnas de asedio</option>
-      </select></label>
-    </div>
     <div class="match-options">
       <span class="eyebrow">RELOJ POR JUGADOR</span>
       <label class="field-row"><span>Tiempo</span><select data-match-clock>
@@ -1952,6 +2055,13 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
     button.addEventListener('click', () => {
       selectedPreset = (button.dataset.preset as MatchPresetId) ?? 'tactical';
       refreshPreset();
+      if (selectedPreset === 'custom') {
+        window.requestAnimationFrame(() => {
+          dialog
+            .querySelector<HTMLElement>('[data-custom-options]')
+            ?.scrollIntoView({ behavior: preferences.reducedMotion ? 'auto' : 'smooth' });
+        });
+      }
     });
   });
   dialog.querySelectorAll<HTMLButtonElement>('[data-ai-doctrine]').forEach((button) => {
@@ -1970,6 +2080,7 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
     if (isHomeScreenActive()) {
       dialog.close();
       showHomeNewGameMenu();
+      focusHomeControl(`[data-home-mode="${modeToConfigure}"]`);
     } else showGameModeDialog(false);
   });
   dialog.querySelector('[data-start-free]')?.addEventListener('click', () => {
@@ -2082,6 +2193,7 @@ function showAcademyDialog(): void {
       if (isHomeScreenActive()) {
         dialog.close();
         showHomeMainMenu();
+        focusHomeControl('[data-home-action="tutorial"]');
       } else showGameModeDialog(false);
     });
   });
@@ -2191,7 +2303,18 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
       </article>
     </div>`);
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-rule-section]')];
+  const navigation = dialog.querySelector<HTMLElement>('.rules-navigation');
+  const horizontalRuleTabs = window.matchMedia('(max-width: 760px) and (orientation: portrait)');
+  const syncRuleTabOrientation = (): void => {
+    navigation?.setAttribute(
+      'aria-orientation',
+      horizontalRuleTabs.matches ? 'horizontal' : 'vertical',
+    );
+  };
+  syncRuleTabOrientation();
+  horizontalRuleTabs.addEventListener('change', syncRuleTabOrientation);
   let activeDemo = mountRuleDemoInArticle(initial);
+  let showingEmptySearch = false;
   const activate = (id: string, moveFocus = true): void => {
     const section = RULE_SECTIONS.find((candidate) => candidate.id === id);
     const article = dialog.querySelector<HTMLElement>('#rules-article');
@@ -2227,19 +2350,45 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
       const activeVisible = tabs.some(
         (tab) => !tab.hidden && tab.getAttribute('aria-selected') === 'true',
       );
-      if (!activeVisible && firstVisible) activate(firstVisible.dataset.ruleSection ?? '', false);
+      const article = dialog.querySelector<HTMLElement>('#rules-article');
+      if (!firstVisible && article) {
+        activeDemo?.destroy();
+        activeDemo = null;
+        showingEmptySearch = true;
+        article.innerHTML = `<div class="rules-empty" role="status"><strong>Sin coincidencias</strong><p>Prueba con el nombre de una unidad, acción o condición de victoria.</p></div>`;
+        return;
+      }
+      if (showingEmptySearch && firstVisible) {
+        showingEmptySearch = false;
+        const selected = tabs.find(
+          (tab) => !tab.hidden && tab.getAttribute('aria-selected') === 'true',
+        );
+        activate((selected ?? firstVisible).dataset.ruleSection ?? '', false);
+      } else if (!activeVisible && firstVisible) {
+        activate(firstVisible.dataset.ruleSection ?? '', false);
+      }
     });
   tabs.forEach((tab) => {
     tab.tabIndex = tab.dataset.ruleSection === initial.id ? 0 : -1;
     tab.addEventListener('click', () => activate(tab.dataset.ruleSection ?? ''));
     tab.addEventListener('keydown', (event) => {
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key))
+        return;
       event.preventDefault();
       const visibleTabs = tabs.filter((candidate) => !candidate.hidden);
       const index = visibleTabs.indexOf(tab);
       if (index < 0 || visibleTabs.length === 0) return;
-      const offset = event.key === 'ArrowDown' ? 1 : -1;
-      const next = visibleTabs[(index + offset + visibleTabs.length) % visibleTabs.length];
+      const next =
+        event.key === 'Home'
+          ? visibleTabs[0]
+          : event.key === 'End'
+            ? visibleTabs.at(-1)!
+            : visibleTabs[
+                (index +
+                  (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1) +
+                  visibleTabs.length) %
+                  visibleTabs.length
+              ];
       next.focus();
       activate(next.dataset.ruleSection ?? '', false);
     });
@@ -2249,6 +2398,7 @@ function showRulesDialog(initialId = RULE_SECTIONS[0]?.id): void {
     () => {
       activeDemo?.destroy();
       activeDemo = null;
+      horizontalRuleTabs.removeEventListener('change', syncRuleTabOrientation);
     },
     { once: true },
   );
@@ -2331,6 +2481,7 @@ function ruleEmphasisMarkup(text: string, strong: string[]): string {
 function showHelpDialog(): void {
   const fortressHp = fortressMaximumHp(0);
   openDialog(`
+    <button type="button" class="dialog-dismiss" data-dialog-close aria-label="Cerrar ayuda">×</button>
     <span class="eyebrow">MANUAL DE CAMPO</span>
     <h2>${activeScenario ? escapeHtml(activeScenario.title) : 'Destruye la Fortaleza rival'}</h2>
     ${
@@ -3044,6 +3195,9 @@ function showReplayDialog(initialAction?: number): void {
   );
   const boardStage = document.querySelector<HTMLElement>('.board-stage');
   if (!boardStage) return;
+  replayFocusReturn = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  document.body.classList.add('replay-active');
+  commandSheetExpanded = false;
   replayDock = document.createElement('section');
   replayDock.className = 'replay-dock';
   replayDock.setAttribute('aria-label', 'Controles de análisis de partida');
@@ -3099,15 +3253,19 @@ function showReplayDialog(initialAction?: number): void {
   });
   replayDock.querySelector('[data-replay-close]')?.addEventListener('click', () => closeReplay());
   updateReplay(startingAction);
+  replayDock.querySelector<HTMLButtonElement>('[data-replay-close]')?.focus();
   recordTelemetry('analysis-opened', { actions: record.currentAction, moments: moments.length });
   announce('Modo análisis abierto. El tablero permanece visible.');
 }
 
 function closeReplay({ resumeClock = true }: { resumeClock?: boolean } = {}): void {
   if (!replayDock) return;
+  const focusReturn = replayFocusReturn;
   if (matchRecord) state = replayForDisplay(matchRecord);
   replayDock.remove();
   replayDock = null;
+  replayFocusReturn = null;
+  document.body.classList.remove('replay-active');
   if (resumeClock && replayClockWasRunning && matchController && !state.outcome) {
     matchController.resumeClock(Date.now());
     matchRecord = matchController.record;
@@ -3117,6 +3275,7 @@ function closeReplay({ resumeClock = true }: { resumeClock?: boolean } = {}): vo
   replayClockWasRunning = false;
   renderedStatusKey = '';
   render();
+  if (focusReturn?.isConnected) window.requestAnimationFrame(() => focusReturn.focus());
 }
 
 function branchFromReplay(record: MatchRecord, actionCount: number): void {
@@ -3220,7 +3379,10 @@ async function importMatchFile(file: File): Promise<void> {
     loadRecordIntoMatch(record);
     dialog.close();
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'No se pudo importar la partida.');
+    showDialogError(
+      error instanceof Error ? error.message : 'No se pudo importar la partida.',
+      dialog.querySelector<HTMLElement>('[data-import-match]'),
+    );
   }
 }
 
@@ -3255,6 +3417,7 @@ function showScenarioEditorDialog(): void {
     <span class="eyebrow">LABORATORIO</span>
     <h2>Forja una misión</h2>
     <p>Define qué hace interesante la posición. El JSON avanzado conserva control total sobre cada unidad.</p>
+    <form data-forge-form>
     <div class="forge-form">
       <label><span>Título</span><input type="text" data-forge-title value="${escapeHtml(template.title)}" maxlength="80"/></label>
       <label><span>Bando controlado</span><select data-forge-player>
@@ -3280,11 +3443,14 @@ function showScenarioEditorDialog(): void {
         ? `<label class="field-row"><span>Catálogo local</span><select data-catalog-choice><option value="">Seleccionar…</option>${catalog.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.title)}</option>`).join('')}</select></label>`
         : '<p class="muted-copy">El catálogo local está vacío.</p>'
     }
+    <div class="dialog-error" data-dialog-error role="alert" hidden></div>
     <div class="dialog-actions">
       <button type="button" class="secondary-button" data-dialog-close>Cancelar</button>
-      <button type="button" class="confirm-button" data-save-scenario>Validar y jugar</button>
-    </div>`);
+      <button type="submit" class="confirm-button" data-save-scenario>Validar y jugar</button>
+    </div>
+    </form>`);
   const editor = dialog.querySelector<HTMLTextAreaElement>('[data-scenario-json]');
+  const forgeForm = dialog.querySelector<HTMLFormElement>('[data-forge-form]');
   dialog
     .querySelector<HTMLSelectElement>('[data-catalog-choice]')
     ?.addEventListener('change', (event) => {
@@ -3296,7 +3462,14 @@ function showScenarioEditorDialog(): void {
         populateForgeFields(selected);
       }
     });
-  dialog.querySelector('[data-save-scenario]')?.addEventListener('click', () => {
+  forgeForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const errorRegion = dialog.querySelector<HTMLElement>('[data-dialog-error]');
+    if (errorRegion) {
+      errorRegion.hidden = true;
+      errorRegion.textContent = '';
+    }
+    editor?.removeAttribute('aria-invalid');
     try {
       const candidate = JSON.parse(editor?.value ?? '') as CustomScenario;
       const limit = Math.max(
@@ -3337,7 +3510,10 @@ function showScenarioEditorDialog(): void {
       startScenario(customScenarioDefinition(scenario));
       showToast(`Misión “${scenario.title}” guardada en el catálogo local.`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'El escenario no es válido.');
+      showDialogError(
+        error instanceof Error ? error.message : 'El escenario no es válido.',
+        editor,
+      );
     }
   });
 }
@@ -3403,6 +3579,30 @@ function customScenarioDefinition(scenario: CustomScenario): ScenarioDefinition 
     hints: scenario.hints ?? [],
     successText: scenario.successText ?? 'Misión de laboratorio completada.',
   };
+}
+
+function showDialogError(message: string, focusTarget?: HTMLElement | null): void {
+  let errorRegion = dialog.querySelector<HTMLElement>('[data-dialog-error]');
+  if (!errorRegion) {
+    errorRegion = document.createElement('div');
+    errorRegion.className = 'dialog-error';
+    errorRegion.dataset.dialogError = '';
+    errorRegion.setAttribute('role', 'alert');
+    const actions = dialog.querySelector('.dialog-actions');
+    if (actions) actions.before(errorRegion);
+    else dialog.querySelector('.dialog-body')?.append(errorRegion);
+  }
+  errorRegion.hidden = false;
+  errorRegion.textContent = message;
+  if (
+    focusTarget instanceof HTMLInputElement ||
+    focusTarget instanceof HTMLTextAreaElement ||
+    focusTarget instanceof HTMLSelectElement
+  ) {
+    focusTarget.setAttribute('aria-invalid', 'true');
+  }
+  errorRegion.scrollIntoView({ block: 'nearest' });
+  focusTarget?.focus();
 }
 
 function showToast(message: string): void {

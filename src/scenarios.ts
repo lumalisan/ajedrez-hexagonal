@@ -627,7 +627,7 @@ export function dailyScenarioForDate(
     ...daily,
     id: `daily:${dateKey}:${hash.toString(36)}`,
     title: `Reto diario · ${template.title.replace(/^Desafío · /, '')}`,
-    summary: `${template.summary} Semilla local ${hash.toString(36).toUpperCase()}.`,
+    summary: `${template.summary} Disponible hasta medianoche.`,
     category: 'daily',
   };
 }

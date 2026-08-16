@@ -277,7 +277,7 @@ try {
     .locator('.game-dialog details + .keyboard-card')
     .evaluate((element) => Number.parseFloat(getComputedStyle(element).marginTop));
   assert(keyboardGap >= 16, 'Help keyboard section needs separation from tactical rules.');
-  await desktop.locator('[data-dialog-close]').click();
+  await desktop.getByRole('button', { name: 'Entendido' }).click();
 
   await clickHex(desktop, 0, -2);
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
@@ -460,10 +460,269 @@ try {
   await selectMode(narrow, 'local');
   await assertTopActionsDoNotOverlap(narrow);
   assert(
+    await narrow
+      .locator('body')
+      .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
+    'The mobile command sheet must start collapsed.',
+  );
+  await clickHex(narrow, 0, -2);
+  assert(
+    await narrow
+      .locator('body')
+      .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
+    'Selecting a piece must keep the mobile command sheet collapsed.',
+  );
+  await dragCommandSheet(narrow, -150);
+  assert(
+    await narrow
+      .locator('body')
+      .evaluate((body) => body.classList.contains('command-sheet-expanded')),
+    'Dragging the command sheet upward must expand it.',
+  );
+  await dragCommandSheet(narrow, 150);
+  assert(
+    await narrow
+      .locator('body')
+      .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
+    'Dragging the command sheet downward must collapse it.',
+  );
+  await clickHex(narrow, 0, -1);
+  assert(
+    await narrow
+      .locator('body')
+      .evaluate((body) => body.classList.contains('command-sheet-expanded')),
+    'Preparing an order must reveal its confirmation controls.',
+  );
+  assert(
+    (await narrow.locator('.command-sheet-chevron').count()) === 0,
+    'The command sheet must not render a redundant chevron.',
+  );
+  const pendingSheetLayout = await narrow.evaluate(() => {
+    const panel = document.querySelector('#command-panel')?.getBoundingClientRect();
+    const toggle = document.querySelector('#command-sheet-toggle')?.getBoundingClientRect();
+    const pending = document.querySelector('#pending-card')?.getBoundingClientRect();
+    const piece = document.querySelector('#piece-card');
+    const controls = document.querySelector('#action-controls');
+    return {
+      panel: panel ? { top: panel.top, bottom: panel.bottom } : null,
+      toggle: toggle ? { top: toggle.top, bottom: toggle.bottom } : null,
+      pending: pending ? { top: pending.top, bottom: pending.bottom } : null,
+      pieceDisplay: piece ? getComputedStyle(piece).display : null,
+      controlsDisplay: controls ? getComputedStyle(controls).display : null,
+      pendingPosition: document.querySelector('#pending-card')
+        ? getComputedStyle(document.querySelector('#pending-card')).position
+        : null,
+    };
+  });
+  assert(
+    pendingSheetLayout.pieceDisplay === 'none' && pendingSheetLayout.controlsDisplay === 'none',
+    'Prepared-order mode must replace, not cover, the selection controls.',
+  );
+  assert(
+    pendingSheetLayout.pendingPosition === 'static' &&
+      pendingSheetLayout.panel &&
+      pendingSheetLayout.toggle &&
+      pendingSheetLayout.pending &&
+      pendingSheetLayout.pending.top >= pendingSheetLayout.toggle.bottom - 1 &&
+      pendingSheetLayout.pending.bottom <= pendingSheetLayout.panel.bottom + 1,
+    'Prepared-order controls must flow inside the command sheet without overlap.',
+  );
+  if (process.env.UI_SCREENSHOT)
+    await narrow.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-pending.png` });
+  assert(
     await narrow.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     'Narrow mobile header causes horizontal overflow.',
   );
   await narrow.close();
+
+  const compactPortrait = await browser.newPage({
+    viewport: { width: 320, height: 568 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  watchErrors(compactPortrait, runtimeErrors);
+  await compactPortrait.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await compactPortrait.locator('[data-home-action="tutorial"]').waitFor();
+  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait home');
+
+  await compactPortrait.locator('[data-home-action="new"]').click();
+  await compactPortrait.locator('[data-home-mode="local"]').click();
+  await compactPortrait.locator('[data-preset="custom"]').click();
+  await assertNoHorizontalOverflow(
+    compactPortrait,
+    'Compact portrait configuration',
+    '#game-dialog',
+  );
+  await assertVisibleFormFontSize(compactPortrait, '#game-dialog', 16);
+  await compactPortrait.locator('#game-dialog').evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  const stickyCtaAtTop = await compactPortrait.evaluate(() => {
+    const dialog = document.querySelector('#game-dialog');
+    const actions = dialog?.querySelector('.dialog-actions');
+    const cta = dialog?.querySelector('[data-start-free]');
+    if (!dialog || !actions || !cta) return null;
+    const dialogRect = dialog.getBoundingClientRect();
+    const ctaRect = cta.getBoundingClientRect();
+    return {
+      position: getComputedStyle(actions).position,
+      visible:
+        ctaRect.top >= Math.max(0, dialogRect.top) &&
+        ctaRect.bottom <= Math.min(window.innerHeight, dialogRect.bottom),
+    };
+  });
+  assert(
+    stickyCtaAtTop?.position === 'sticky' && stickyCtaAtTop.visible,
+    'The compact configuration CTA must remain sticky and visible at the top of the scroll.',
+  );
+  await compactPortrait.locator('#game-dialog').evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  assert(
+    await compactPortrait.locator('[data-start-free]').evaluate((cta) => {
+      const rect = cta.getBoundingClientRect();
+      return rect.top >= 0 && rect.bottom <= window.innerHeight;
+    }),
+    'The compact configuration CTA must remain visible after scrolling.',
+  );
+  await compactPortrait.locator('.config-close').click();
+  await compactPortrait.locator('#game-dialog').waitFor({ state: 'hidden' });
+  await compactPortrait.locator('[data-home-action="back"]').click();
+
+  const tutorialControl = compactPortrait.locator('[data-home-action="tutorial"]');
+  await tutorialControl.click();
+  await compactPortrait.locator('.academy-shell').waitFor();
+  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait Academy', '#game-dialog');
+  const academyViewport = await compactPortrait.evaluate(() => {
+    const dialog = document.querySelector('#game-dialog')?.getBoundingClientRect();
+    const catalog = document.querySelector('.academy-catalog')?.getBoundingClientRect();
+    return {
+      dialog: dialog ? { width: dialog.width, height: dialog.height } : null,
+      catalog: catalog ? { width: catalog.width, height: catalog.height } : null,
+    };
+  });
+  assert(
+    academyViewport.dialog?.width >= 300 &&
+      academyViewport.dialog.height >= 500 &&
+      academyViewport.catalog?.width >= 270 &&
+      academyViewport.catalog.height >= 200,
+    'Academy must retain a useful catalog area at 320x568.',
+  );
+  await compactPortrait.locator('.academy-close').click();
+  await compactPortrait.locator('#game-dialog').waitFor({ state: 'hidden' });
+  await compactPortrait.waitForFunction(
+    () => document.activeElement?.matches('[data-home-action="tutorial"]'),
+    undefined,
+    { timeout: 2_000 },
+  );
+
+  await compactPortrait.locator('[data-home-action="rules"]').click();
+  await compactPortrait.locator('[data-rule-search]').waitFor();
+  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait rules', '#game-dialog');
+  await assertVisibleFormFontSize(compactPortrait, '#game-dialog', 16);
+  await compactPortrait.locator('[data-rule-search]').fill('unidad completamente inexistente');
+  await compactPortrait.locator('.rules-empty').waitFor();
+  assert(
+    (await compactPortrait.locator('.rules-empty').getAttribute('role')) === 'status' &&
+      (await compactPortrait.locator('.rules-empty').textContent())?.includes(
+        'Sin coincidencias',
+      ) &&
+      (await compactPortrait.locator('[data-rule-section]:not([hidden])').count()) === 0,
+    'Rules search must present an accessible empty state when there are no results.',
+  );
+  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait empty rules', '#game-dialog');
+  await compactPortrait.locator('.rules-close').click();
+  await compactPortrait.close();
+
+  const compactLandscape = await browser.newPage({
+    viewport: { width: 568, height: 320 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  watchErrors(compactLandscape, runtimeErrors);
+  await compactLandscape.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(compactLandscape, 'local');
+  await assertNoHorizontalOverflow(compactLandscape, 'Compact landscape match');
+  const landscapeGameLayout = await compactLandscape.evaluate(() => {
+    const canvas = document.querySelector('#game-canvas')?.getBoundingClientRect();
+    const board = document.querySelector('.board-stage')?.getBoundingClientRect();
+    const panel = document.querySelector('#command-panel')?.getBoundingClientRect();
+    const panelElement = document.querySelector('#command-panel');
+    const toggle = document.querySelector('#command-sheet-toggle');
+    return {
+      canvasHeight: canvas?.height ?? 0,
+      panelWidth: panel?.width ?? 0,
+      panelStartsAfterBoard: Boolean(panel && board && panel.left >= board.right - 1),
+      panelPosition: panelElement ? getComputedStyle(panelElement).position : null,
+      toggleDisplay: toggle ? getComputedStyle(toggle).display : null,
+    };
+  });
+  assert(
+    landscapeGameLayout.canvasHeight >= 180,
+    `Compact landscape canvas is only ${landscapeGameLayout.canvasHeight}px tall.`,
+  );
+  assert(
+    landscapeGameLayout.panelWidth >= 240 &&
+      landscapeGameLayout.panelStartsAfterBoard &&
+      landscapeGameLayout.panelPosition === 'relative' &&
+      landscapeGameLayout.toggleDisplay === 'none',
+    'Compact landscape must use a visible side panel without the mobile sheet toggle.',
+  );
+
+  await clickHex(compactLandscape, 0, -2);
+  await doubleClickHex(compactLandscape, 0, -1);
+  await compactLandscape.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  await compactLandscape.locator('#settings-button').click();
+  await compactLandscape.locator('[data-data-center]').click();
+  await compactLandscape.locator('[data-open-replay]').click();
+  await compactLandscape.locator('.replay-dock').waitFor();
+  assert(
+    await compactLandscape.evaluate(() => {
+      const panel = document.querySelector('#command-panel');
+      return (
+        document.body.classList.contains('replay-active') &&
+        Boolean(panel && getComputedStyle(panel).display === 'none')
+      );
+    }),
+    'Compact landscape replay must hide the side command panel.',
+  );
+  const replayControlSizes = await compactLandscape
+    .locator('.replay-dock button, .replay-dock input')
+    .evaluateAll((controls) =>
+      controls
+        .filter((control) => {
+          const style = getComputedStyle(control);
+          const rect = control.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0;
+        })
+        .map((control) => {
+          const rect = control.getBoundingClientRect();
+          return {
+            width: rect.width,
+            height: rect.height,
+            label: control.getAttribute('aria-label'),
+          };
+        }),
+    );
+  assert(
+    replayControlSizes.length >= 5 &&
+      replayControlSizes.every(({ width, height }) => width >= 44 && height >= 44),
+    `Replay controls below 44px: ${JSON.stringify(replayControlSizes)}`,
+  );
+  assert(
+    await compactLandscape.locator('.replay-dock').evaluate((dock) => {
+      const rect = dock.getBoundingClientRect();
+      return (
+        rect.top >= 0 &&
+        rect.left >= 0 &&
+        rect.right <= window.innerWidth &&
+        rect.bottom <= window.innerHeight
+      );
+    }),
+    'Compact landscape replay dock must remain inside the viewport.',
+  );
+  await compactLandscape.locator('[data-replay-close]').click();
+  await compactLandscape.close();
 
   const clocked = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(clocked, runtimeErrors);
@@ -670,7 +929,9 @@ try {
   await solo.close();
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
-  console.log('UI smoke passed: desktop action flow, mobile 390px layout, keyboard navigation.');
+  console.log(
+    'UI smoke passed: desktop flow, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
+  );
 } finally {
   await browser.close();
   await server.close();
@@ -679,6 +940,19 @@ try {
 async function clickHex(page, q, r) {
   const point = await pointForHex(page, q, r);
   await page.mouse.click(point.x, point.y);
+}
+
+async function dragCommandSheet(page, deltaY) {
+  const toggle = page.locator('#command-sheet-toggle');
+  const box = await toggle.boundingBox();
+  assert(box, 'Command sheet toggle has no layout box.');
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + deltaY, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
 }
 
 async function selectMode(page, mode) {
@@ -732,6 +1006,49 @@ async function assertTopActionsDoNotOverlap(page) {
   for (let index = 1; index < boxes.length; index += 1) {
     assert(boxes[index - 1].right <= boxes[index].left, 'Mobile header icon controls overlap.');
   }
+}
+
+async function assertNoHorizontalOverflow(page, label, targetSelector) {
+  const metrics = await page.evaluate((selector) => {
+    const target = selector ? document.querySelector(selector) : null;
+    return {
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      targetClientWidth: target?.clientWidth ?? null,
+      targetScrollWidth: target?.scrollWidth ?? null,
+    };
+  }, targetSelector);
+  assert(
+    metrics.documentWidth <= metrics.viewportWidth + 1,
+    `${label} overflows horizontally: ${metrics.documentWidth}px > ${metrics.viewportWidth}px.`,
+  );
+  if (metrics.targetClientWidth !== null && metrics.targetScrollWidth !== null) {
+    assert(
+      metrics.targetScrollWidth <= metrics.targetClientWidth + 1,
+      `${label} target overflows horizontally: ${metrics.targetScrollWidth}px > ${metrics.targetClientWidth}px.`,
+    );
+  }
+}
+
+async function assertVisibleFormFontSize(page, containerSelector, minimumPixels) {
+  const sizes = await page
+    .locator(
+      `${containerSelector} input:not([type="hidden"]):not([type="range"]):not([type="checkbox"]):not([type="file"]), ${containerSelector} select, ${containerSelector} textarea`,
+    )
+    .evaluateAll((controls) =>
+      controls
+        .filter((control) => {
+          const rect = control.getBoundingClientRect();
+          const style = getComputedStyle(control);
+          return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
+        })
+        .map((control) => Number.parseFloat(getComputedStyle(control).fontSize)),
+    );
+  assert(sizes.length > 0, `No visible form controls found inside ${containerSelector}.`);
+  assert(
+    sizes.every((size) => size >= minimumPixels),
+    `Visible form controls inside ${containerSelector} use font sizes below ${minimumPixels}px: ${sizes.join(', ')}.`,
+  );
 }
 
 async function selectedHex(page) {
