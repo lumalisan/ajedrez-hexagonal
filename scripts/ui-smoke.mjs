@@ -170,6 +170,9 @@ try {
     (await desktop.locator('[data-fortress-hp]').inputValue()) === '1',
     'Fortress health must default to the recommended 1 HP.',
   );
+  const initialLayout = desktop.locator('[data-initial-layout]');
+  assert((await initialLayout.inputValue()) === '1', 'Initial layout must default to option 1.');
+  await initialLayout.selectOption('2');
   await desktop.locator('[data-start-free]').click();
   await desktop.locator('#game-dialog').waitFor({ state: 'hidden' });
   assert(
@@ -194,6 +197,12 @@ try {
   assert(
     (await desktop.locator('#sr-board [role="gridcell"]').count()) === 91,
     'Accessible board must expose 91 cells.',
+  );
+  assert(
+    (await desktop.locator('#sr-board [data-hex="3,-4"]').textContent())?.startsWith('CAP,') &&
+      (await desktop.locator('#sr-board [data-hex="-3,-1"]').textContent())?.startsWith('CAP,') &&
+      (await desktop.locator('#sr-board [data-hex="0,-3"]').textContent())?.startsWith('LMS,'),
+    'Initial layout option 2 did not swap Capturadores and Lanzamisiles.',
   );
   assert(
     !(await desktop.locator('#sr-board [role="gridcell"]').allTextContents()).some((label) =>

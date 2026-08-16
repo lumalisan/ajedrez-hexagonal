@@ -46,6 +46,33 @@ describe('configuración, invariantes y diario', () => {
     }
   });
 
+  it('permite alternar entre las dos disposiciones iniciales', () => {
+    for (const initialLayout of [1, 2] as const) {
+      const config = createClassicConfig({ mode: 'local', initialLayout });
+      const typeAt = (owner: 0 | 1, q: number, r: number) =>
+        config.setup.find(
+          ({ piece }) => piece.owner === owner && piece.position.q === q && piece.position.r === r,
+        )?.piece.type;
+
+      expect(typeAt(0, 3, -4)).toBe(initialLayout === 1 ? 'long' : 'capturer');
+      expect(typeAt(0, -3, -1)).toBe(initialLayout === 1 ? 'long' : 'capturer');
+      expect(typeAt(0, 0, -3)).toBe(initialLayout === 1 ? 'capturer' : 'long');
+      expect(typeAt(1, -3, 4)).toBe(initialLayout === 1 ? 'long' : 'capturer');
+      expect(typeAt(1, 3, 1)).toBe(initialLayout === 1 ? 'long' : 'capturer');
+      expect(typeAt(1, 0, 3)).toBe(initialLayout === 1 ? 'capturer' : 'long');
+      expect(
+        config.setup.filter(({ piece }) => piece.owner === 0 && piece.type === 'capturer'),
+      ).toHaveLength(initialLayout === 1 ? 1 : 2);
+      expect(
+        config.setup.filter(({ piece }) => piece.owner === 0 && piece.type === 'long'),
+      ).toHaveLength(initialLayout === 1 ? 2 : 1);
+      expect(validateMatchConfig(config)).toEqual([]);
+      const record = createMatchRecord(config);
+      expect(validateState(record.initialState, config)).toEqual([]);
+      expect(parseRecord(serializeRecord(record))).toEqual(record);
+    }
+  });
+
   it('reproduce la misma secuencia y conserva el estado inicial', () => {
     const record = createMatchRecord(createClassicConfig({ mode: 'local' }));
     let expected = structuredClone(record.initialState);

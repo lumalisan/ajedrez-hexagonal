@@ -7,7 +7,9 @@ interface SetupPiece {
   cannon?: Direction;
 }
 
-const BLUE_SETUP: SetupPiece[] = [
+export type InitialLayout = 1 | 2;
+
+const CLASSIC_BLUE_SETUP: SetupPiece[] = [
   { type: 'soldier', position: { q: 4, r: -4 }, facing: 3 },
   { type: 'soldier', position: { q: 2, r: -3 }, facing: 3 },
   { type: 'soldier', position: { q: 0, r: -2 }, facing: 3 },
@@ -27,6 +29,16 @@ const BLUE_SETUP: SetupPiece[] = [
   { type: 'airplane', position: { q: -1, r: -4 }, facing: 3 },
   { type: 'antiAir', position: { q: 0, r: -5 } },
 ];
+
+function setupForLayout(initialLayout: InitialLayout): SetupPiece[] {
+  if (initialLayout === 1) return CLASSIC_BLUE_SETUP;
+
+  return CLASSIC_BLUE_SETUP.map((piece) => {
+    if (piece.type === 'long') return { ...piece, type: 'capturer' };
+    if (piece.type === 'capturer') return { ...piece, type: 'long' };
+    return piece;
+  });
+}
 
 function makePiece(spec: SetupPiece, owner: Player, index: number, fortressHp: FortressHp): Piece {
   const id = `${owner === 0 ? 'azul' : 'ambar'}-${spec.type}-${index + 1}`;
@@ -56,8 +68,12 @@ function makePiece(spec: SetupPiece, owner: Player, index: number, fortressHp: F
   }
 }
 
-export function createInitialPieces(fortressHp: FortressHp = 2): Piece[] {
+export function createInitialPieces(
+  fortressHp: FortressHp = 2,
+  initialLayout: InitialLayout = 1,
+): Piece[] {
+  const setup = setupForLayout(initialLayout);
   return ([0, 1] as const).flatMap((owner) =>
-    BLUE_SETUP.map((piece, index) => makePiece(piece, owner, index, fortressHp)),
+    setup.map((piece, index) => makePiece(piece, owner, index, fortressHp)),
   );
 }

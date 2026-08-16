@@ -1589,6 +1589,10 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
         <option value="2">2</option>
         <option value="3">3</option>
       </select></label>
+      <label class="field-row"><span>Disposición inicial</span><select data-initial-layout>
+        <option value="1" selected>1</option>
+        <option value="2">2</option>
+      </select></label>
       <label class="field-row"><span>Tiempo</span><select data-match-clock>
         <option value="" selected>Sin límite</option>
         <option value="300">5 minutos</option>
@@ -1613,6 +1617,8 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
     );
     const fortressHp = (fortressHpValue === 1 || fortressHpValue === 3 ? fortressHpValue : 2) as
       1 | 2 | 3;
+    const initialLayout =
+      dialog.querySelector<HTMLSelectElement>('[data-initial-layout]')?.value === '2' ? 2 : 1;
     matchConfig = createClassicConfig({
       mode: modeToConfigure,
       difficulty:
@@ -1624,6 +1630,7 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       handoffScreen: preferences.handoffScreen,
       clockSeconds: clockValue ? Number(clockValue) : null,
       fortressHp,
+      initialLayout,
     });
     gameMode = modeToConfigure;
     dialog.close();

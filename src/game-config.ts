@@ -1,5 +1,5 @@
 import { allBoardHexes, hexKey } from './hex';
-import { createInitialPieces } from './setup';
+import { createInitialPieces, type InitialLayout } from './setup';
 import type {
   AiDifficulty,
   ConfirmationMode,
@@ -20,6 +20,7 @@ export interface MatchConfigInput {
   clockSeconds?: number | null;
   playerNames?: [string, string];
   fortressHp?: FortressHp;
+  initialLayout?: InitialLayout;
 }
 
 export function createClassicConfig(input: MatchConfigInput): MatchConfig {
@@ -38,7 +39,7 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     clockSeconds: input.clockSeconds ?? null,
     allowUndo: input.mode === 'machine',
   };
-  const pieces = createInitialPieces(input.fortressHp ?? 2);
+  const pieces = createInitialPieces(input.fortressHp ?? 2, input.initialLayout ?? 1);
   return {
     definitionId: 'classic',
     rulesetId: 'classic-v2',
