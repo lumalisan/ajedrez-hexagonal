@@ -30,7 +30,7 @@ export type Piece =
   | (BasePiece & { type: 'soldier'; facing: Direction })
   | (BasePiece & { type: 'capturer' })
   | (BasePiece & { type: 'medium'; cannon: Direction })
-  | (BasePiece & { type: 'long' })
+  | (BasePiece & { type: 'long'; missilesRemaining?: 0 | 1 | 2 })
   | (BasePiece & { type: 'fast' })
   | (BasePiece & { type: 'drone' })
   | (BasePiece & { type: 'airplane'; facing: Direction })

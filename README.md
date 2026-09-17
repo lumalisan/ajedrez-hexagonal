@@ -19,11 +19,14 @@ pnpm preview
 ## Verificar
 
 ```bash
+pnpm test:types
 pnpm test
 pnpm test:coverage
 pnpm test:ui
 pnpm test:a11y
 ```
+
+`pnpm test:types` comprueba todos los archivos TypeScript del proyecto, incluidos el código, las pruebas y la configuración, sin generar archivos. También se ejecuta al hacer el build.
 
 `pnpm test` valida geometría, reglas, configuración, invariantes y replay. La cobertura tiene umbrales específicos del dominio. Las pruebas de UI y Axe usan Edge o Chrome; puede indicarse otro navegador con `PLAYWRIGHT_BROWSER_PATH`.
 
