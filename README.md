@@ -4,6 +4,8 @@ Juego táctico 2D para dos jugadores en tablero hexagonal. Implementado con Type
 
 ## Ejecutar
 
+El gestor de paquetes del proyecto es **pnpm**. La versión está fijada en el campo `packageManager` de `package.json`; las instrucciones para trabajar en el repositorio están en [AGENTS.md](AGENTS.md).
+
 ```bash
 pnpm install
 pnpm dev

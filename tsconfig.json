@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  "exclude": ["node_modules", ".pnpm-store", "dist", "coverage"]
 }
