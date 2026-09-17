@@ -19,13 +19,6 @@
     "test:watch": "vitest",
     "prepare": "husky"
   },
-  "lint-staged": {
-    "*.{js,mjs,cjs,ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{css,html,json,md,yaml,yml}": "prettier --write"
-  },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
