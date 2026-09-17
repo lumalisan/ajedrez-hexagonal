@@ -2413,6 +2413,11 @@ function ruleSectionMarkup(section: RuleSection): string {
           <span class="rule-demo-badge" aria-hidden="true"><i></i> Demostración real</span>
         </div>
         <figcaption data-rule-demo-caption>Preparando la demostración…</figcaption>
+        <div class="rule-demo-controls" aria-label="Controles de la demostración">
+          <button type="button" data-demo-toggle>Pausar</button>
+          <button type="button" data-demo-step>Paso a paso</button>
+          <button type="button" data-demo-restart>Reiniciar</button>
+        </div>
       </figure>`
     : mediaItems.length
       ? `<figure class="rule-media" aria-label="Ilustración de ${escapeHtml(section.title)}">

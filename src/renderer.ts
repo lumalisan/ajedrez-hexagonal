@@ -108,6 +108,7 @@ export class BoardRenderer {
   private fitScale = 1;
   private zoom = 1;
   private pan = { x: 0, y: 0 };
+  private frameBounds: { x: number; y: number; width: number; height: number } | null = null;
   private animation: AnimationState | null = null;
   private orientation = Math.PI;
   private rotation: RotationState | null = null;
@@ -138,6 +139,23 @@ export class BoardRenderer {
 
   setModel(model: RenderModel): void {
     this.model = model;
+    this.requestFrame();
+  }
+
+  /** Stable close-up for instructional sequences, with one cell of context. */
+  setFrame(positions: readonly Hex[]): void {
+    if (!positions.length) return;
+    const points = positions.map((position) => projectHex(position, this.orientation, 0));
+    const minX = Math.min(...points.map((point) => point.x)) - 65;
+    const maxX = Math.max(...points.map((point) => point.x)) + 65;
+    const minY = Math.min(...points.map((point) => point.y)) - 65;
+    const maxY = Math.max(...points.map((point) => point.y)) + 65;
+    this.frameBounds = {
+      x: (minX + maxX) / 2,
+      y: (minY + maxY) / 2,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
     this.requestFrame();
   }
 
@@ -278,7 +296,12 @@ export class BoardRenderer {
     });
   }
 
-  playEvents(events: GameEvent[], before: GameState, reducedMotion: boolean): Promise<void> {
+  playEvents(
+    events: GameEvent[],
+    before: GameState,
+    reducedMotion: boolean,
+    durationScale = 1,
+  ): Promise<void> {
     if (this.animation) {
       this.animation.resolve();
       this.animation = null;
@@ -292,7 +315,7 @@ export class BoardRenderer {
         events,
         before,
         startedAt: performance.now(),
-        duration: eventDuration(events),
+        duration: eventDuration(events) * durationScale,
         resolve,
       };
       this.requestFrame();
@@ -369,10 +392,21 @@ export class BoardRenderer {
     ctx.save();
     const impulse = this.cameraImpulseAt(time, model.reducedMotion);
     ctx.translate(
-      this.width / 2 + this.pan.x + impulse.x,
-      this.height / 2 + this.pan.y + impulse.y,
+      this.width / 2 + this.pan.x + impulse.x - (this.frameBounds?.x ?? 0) * this.fitScale,
+      this.height / 2 + this.pan.y + impulse.y - (this.frameBounds?.y ?? 0) * this.fitScale,
     );
     ctx.scale(this.fitScale * this.zoom, this.fitScale * this.zoom);
+    if (this.frameBounds) {
+      const bounds = this.frameBounds;
+      ctx.beginPath();
+      ctx.rect(
+        bounds.x - bounds.width / 2,
+        bounds.y - bounds.height / 2,
+        bounds.width,
+        bounds.height,
+      );
+      ctx.clip();
+    }
     const orientation = this.orientationAt(time);
     ctx.save();
     ctx.scale(1, tilt);
@@ -418,6 +452,15 @@ export class BoardRenderer {
   }
 
   private fitScaleFor(depth: number): number {
+    if (this.frameBounds) {
+      return Math.max(
+        0.1,
+        Math.min(
+          (this.width - 20) / this.frameBounds.width,
+          (this.height - 20) / this.frameBounds.height,
+        ),
+      );
+    }
     const verticalExtent = 610 + (500 - 610) * depth;
     return Math.max(0.38, Math.min((this.width - 34) / 560, (this.height - 42) / verticalExtent));
   }
@@ -1330,7 +1373,9 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       break;
     }
     case 'capturer': {
-      // An open mechanical claw: this unit captures by occupying its target.
+      ctx.save();
+      ctx.rotate(piece.owner === 0 ? Math.PI / 2 : -Math.PI / 2);
+      // An open mechanical claw facing the opposing army.
       ctx.beginPath();
       ctx.arc(-1, 0, 7.5, Math.PI * 0.25, Math.PI * 1.75);
       ctx.stroke();
@@ -1345,15 +1390,18 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.beginPath();
       ctx.arc(-1, 0, 2.2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
       break;
     }
     case 'medium':
       drawTankGlyph(ctx, piece.cannon, 10, 1);
       break;
     case 'long':
-      drawMissileLauncherGlyph(ctx);
+      drawMissileLauncherGlyph(ctx, piece);
       break;
     case 'fast': {
+      ctx.save();
+      ctx.rotate(piece.owner === 0 ? Math.PI / 2 : -Math.PI / 2);
       // Low-profile assault vehicle with a pointed nose and visible tracks.
       ctx.beginPath();
       ctx.moveTo(10, 0);
@@ -1375,6 +1423,7 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
         ctx.lineTo(3, y);
         ctx.stroke();
       }
+      ctx.restore();
       break;
     }
     case 'drone': {
@@ -1517,9 +1566,12 @@ function drawTankGlyph(
   ctx.restore();
 }
 
-function drawMissileLauncherGlyph(ctx: CanvasRenderingContext2D): void {
+function drawMissileLauncherGlyph(
+  ctx: CanvasRenderingContext2D,
+  piece: Extract<Piece, { type: 'long' }>,
+): void {
   ctx.save();
-  ctx.rotate(-Math.PI / 2);
+  ctx.rotate(piece.owner === 0 ? Math.PI / 2 : -Math.PI / 2);
   // Twin guided missiles on a compact tracked launch platform.
   ctx.strokeRect(-8, -8, 5, 16);
   ctx.beginPath();
@@ -1530,7 +1582,7 @@ function drawMissileLauncherGlyph(ctx: CanvasRenderingContext2D): void {
   ctx.moveTo(-2, -8);
   ctx.lineTo(-2, 8);
   ctx.stroke();
-  for (const y of [-4, 4]) {
+  for (const y of [-4, 4].slice(0, piece.missilesRemaining ?? 2)) {
     ctx.beginPath();
     ctx.moveTo(-6.5, y - 1.8);
     ctx.lineTo(5.5, y - 1.8);

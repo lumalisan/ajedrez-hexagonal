@@ -107,7 +107,19 @@ try {
   );
   await desktop
     .locator('.rule-demo-canvas[data-rule-demo-scene="2/3"]')
-    .waitFor({ timeout: 6_000 });
+    .waitFor({ timeout: 8_000 });
+  assert(
+    (await desktop.locator('.rule-demo-canvas').getAttribute('data-perspective')) === '2d',
+    'Rules demonstrations must use the flat board.',
+  );
+  await desktop.locator('[data-demo-toggle]').click();
+  await desktop.locator('[data-demo-restart]').click();
+  await desktop.locator('[data-demo-step]').click();
+  await desktop.locator('[data-demo-step]').click();
+  assert(
+    (await desktop.locator('.rule-demo-canvas').getAttribute('data-rule-demo-scene')) === '2/3',
+    'Rules demonstrations must support pausing, restarting and manual steps.',
+  );
   assert(
     (await desktop.locator('#rules-article strong').allTextContents()).some(
       (text) => text === 'capturar',
