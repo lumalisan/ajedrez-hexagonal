@@ -46,15 +46,6 @@ export interface RuleDemoScene {
   sequence: number;
 }
 
-interface RuleDemoSceneDefinition {
-  label: string;
-  actorId: string;
-  createState: () => GameState;
-  selectAction: (actions: readonly GameAction[]) => GameAction | undefined;
-}
-
-type MoveAction = Extract<GameAction, { kind: 'move' }>;
-
 const MARKER_PAUSE_MS = 1_700;
 const DESTINATION_PAUSE_MS = 900;
 const RESULT_PAUSE_MS = 1_400;
@@ -85,59 +76,13 @@ function createSceneState(extra: Piece[], activePlayer: Player = 0): GameState {
   );
 }
 
-function selectKind<K extends GameAction['kind']>(
-  kind: K,
-  predicate: (action: Extract<GameAction, { kind: K }>) => boolean = () => true,
-): (actions: readonly GameAction[]) => GameAction | undefined {
-  return (actions) =>
-    actions.find(
-      (action) => action.kind === kind && predicate(action as Extract<GameAction, { kind: K }>),
-    );
-}
-
-function moveTo(
-  to: Hex,
-  predicate: (action: MoveAction) => boolean = () => true,
-): (actions: readonly GameAction[]) => GameAction | undefined {
-  return selectKind('move', (action) => equalHex(action.to, to) && predicate(action));
-}
-
-const RULE_DEMO_DEFINITIONS: Record<'fortaleza', readonly RuleDemoSceneDefinition[]> = {
-  fortaleza: [
-    {
-      label: 'Un impacto resta 1 PV a la Fortaleza y el Soldado se sacrifica.',
-      actorId: 'actor',
-      createState: () =>
-        createSceneState([
-          fortress('fort-amber', 1, hex(0, -1), 3),
-          soldier('actor', 0, hex(0, 0), 0),
-        ]),
-      selectAction: moveTo(hex(0, -1)),
-    },
-    {
-      label: 'El escudo antiaéreo intercepta una aeronave al entrar en su zona.',
-      actorId: 'actor',
-      createState: () =>
-        createSceneState([
-          { id: 'actor', type: 'drone', owner: 0, position: hex(0, 0) },
-          { id: 'anti-air', type: 'antiAir', owner: 1, position: hex(2, 0) },
-        ]),
-      selectAction: moveTo(hex(1, 0)),
-    },
-  ],
-};
-
 export const RULE_DEMO_SCENE_LABELS: Readonly<Record<RuleDemoId, readonly string[]>> =
   Object.freeze(
     Object.fromEntries(
       RULE_DEMO_IDS.map((demoId) => [
         demoId,
         Object.freeze(
-          demoId === 'fortaleza'
-            ? RULE_DEMO_DEFINITIONS.fortaleza.map((scene) => scene.label)
-            : RULE_SEQUENCES[demoId].flatMap((sequence) =>
-                sequence.steps.map((step) => step.label),
-              ),
+          RULE_SEQUENCES[demoId].flatMap((sequence) => sequence.steps.map((step) => step.label)),
         ),
       ]),
     ) as Record<RuleDemoId, readonly string[]>,
@@ -145,52 +90,34 @@ export const RULE_DEMO_SCENE_LABELS: Readonly<Record<RuleDemoId, readonly string
 
 /** Creates fresh deterministic states and resolves each planned action through the real engine. */
 export function createRuleDemoScenes(demoId: RuleDemoId): RuleDemoScene[] {
-  if (demoId !== 'fortaleza') {
-    return RULE_SEQUENCES[demoId].flatMap((sequence, sequenceIndex) => {
-      let state = createSceneState(sequence.pieces);
-      return sequence.steps.map((step) => {
-        const actor = state.pieces.find((piece) => piece.id === step.actorId)!;
-        state = { ...state, activePlayer: actor.owner, outcome: null };
-        const action = getLegalActionsForPiece(state, step.actorId).find(
-          (candidate) =>
-            candidate.kind === step.kind &&
-            (!step.to || ('to' in candidate && candidate.to && equalHex(candidate.to, step.to))) &&
-            (!step.targetId || ('targetId' in candidate && candidate.targetId === step.targetId)) &&
-            (step.cannon === undefined ||
-              ('cannon' in candidate && candidate.cannon === step.cannon)) &&
-            (step.kamikaze === undefined ||
-              ('kamikaze' in candidate && candidate.kamikaze === step.kamikaze)),
-        );
-        if (!action) throw new Error('No existe una acción legal para: ' + step.label);
-        const scene = {
-          label: step.label,
-          actorId: step.actorId,
-          state,
-          action,
-          sequence: sequenceIndex,
-        };
-        const result = applyAction(state, action);
-        if (!result.ok) throw new Error(result.error);
-        state = result.state;
-        return scene;
-      });
-    });
-  }
-  return RULE_DEMO_DEFINITIONS.fortaleza.map((definition, sequence) => {
-    const state = definition.createState();
-    const action = definition.selectAction(getLegalActionsForPiece(state, definition.actorId));
-    if (!action) {
-      throw new Error(
-        `La escena «${definition.label}» no pudo resolver una acción legal para ${definition.actorId}.`,
+  return RULE_SEQUENCES[demoId].flatMap((sequence, sequenceIndex) => {
+    let state = createSceneState(sequence.pieces);
+    return sequence.steps.map((step) => {
+      const actor = state.pieces.find((piece) => piece.id === step.actorId)!;
+      state = { ...state, activePlayer: actor.owner, outcome: null };
+      const action = getLegalActionsForPiece(state, step.actorId).find(
+        (candidate) =>
+          candidate.kind === step.kind &&
+          (!step.to || ('to' in candidate && candidate.to && equalHex(candidate.to, step.to))) &&
+          (!step.targetId || ('targetId' in candidate && candidate.targetId === step.targetId)) &&
+          (step.cannon === undefined ||
+            ('cannon' in candidate && candidate.cannon === step.cannon)) &&
+          (step.kamikaze === undefined ||
+            ('kamikaze' in candidate && candidate.kamikaze === step.kamikaze)),
       );
-    }
-    return {
-      label: definition.label,
-      actorId: definition.actorId,
-      state,
-      action,
-      sequence,
-    };
+      if (!action) throw new Error('No existe una acción legal para: ' + step.label);
+      const scene = {
+        label: step.label,
+        actorId: step.actorId,
+        state,
+        action,
+        sequence: sequenceIndex,
+      };
+      const result = applyAction(state, action);
+      if (!result.ok) throw new Error(result.error);
+      state = result.state;
+      return scene;
+    });
   });
 }
 

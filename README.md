@@ -46,6 +46,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 
 ## Reglas canónicas (`classic-v2`)
 
+- El Lanzamisiles dispone de dos misiles por partida. Cada disparo consume uno; cambiar de bando no repone la munición. Agotados los misiles, conserva el movimiento y la transformación en Soldado.
 - La Fortaleza puede comenzar con 1, 2 o 3 puntos de vida, según el preset o la configuración. Cada impacto siempre causa exactamente 1 punto de daño.
 - Soldado, Capturador y Embestidor se sacrifican después de impactar contra la Fortaleza. Tanque, Lanzamisiles, Dron y Avión sobreviven si no usan un ataque kamikaze; el Avión kamikaze se destruye por su propia regla.
 - Cada casilla admite una capa terrestre y una aérea, con una unidad como máximo en cada capa. Al atacar una casilla compartida se elige un único objetivo.

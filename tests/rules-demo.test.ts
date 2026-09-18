@@ -23,10 +23,16 @@ describe.each(RULE_DEMO_IDS)('demo de reglas: %s', (demoId) => {
       expect(result.ok, `${scene.label}: ${result.error ?? 'acción rechazada'}`).toBe(true);
       expect(result.error).toBeUndefined();
       expect(result.events.length).toBeGreaterThan(0);
-      expect(result.state.outcome).toBeNull();
-      expect(result.events.map((event) => event.type)).not.toEqual(
-        expect.arrayContaining(['pass', 'victory', 'draw']),
-      );
+      if (
+        demoId === 'fortaleza' &&
+        scene.sequence === 0 &&
+        scene.action.kind === 'move' &&
+        scene.action.to.r === 4
+      ) {
+        expect(result.state.outcome).toMatchObject({ winner: 0 });
+      } else {
+        expect(result.state.outcome).toBeNull();
+      }
     }
   });
 

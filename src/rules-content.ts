@@ -147,7 +147,7 @@ export const RULE_SECTIONS: RuleSection[] = [
         'desplazarse',
       ),
       emphasize(
-        'El lanzamisiles puede disparar a cualquier casilla situada exactamente a tres casillas de su posición, en cualquier dirección. Debe elegir entre desplazarse o disparar, por lo que no puede realizar ambas acciones en el mismo turno.',
+        'El lanzamisiles dispone de dos misiles para toda la partida y puede disparar a cualquier casilla situada exactamente a tres casillas de su posición, en cualquier dirección. Cada disparo consume un misil y no se recargan, tampoco al cambiar de bando. Debe elegir entre desplazarse o disparar, por lo que no puede realizar ambas acciones en el mismo turno. Sin misiles, puede seguir desplazándose o convertirse en soldado.',
         'disparar',
       ),
       emphasize(

@@ -1222,7 +1222,7 @@ function renderPieceCard(piece?: Piece): void {
     </div>
     <p>${pieceDescription(piece)}</p>
     ${threatNote}
-    <div class="piece-stats"><span>Coordenadas <strong>${q}, ${r}</strong></span>${facing}</div>`;
+    <div class="piece-stats"><span>Coordenadas <strong>${q}, ${r}</strong></span>${facing}${piece.type === 'long' ? `<span>Misiles <strong>${piece.missilesRemaining ?? 2}/2</strong></span>` : ''}</div>`;
   selectionSummary.textContent =
     activeScenario && ownTurn
       ? `Objetivo: ${activeScenario.summary} · ${scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}`
@@ -1255,7 +1255,7 @@ function contextualHint(piece: Piece): string {
     soldier: 'Consejo · El Soldado avanza por su arco frontal; girarlo también consume el turno.',
     capturer: 'Consejo · El Capturador convierte una unidad adyacente sin desplazarse.',
     medium: 'Consejo · El Tanque puede mover y elegir la orientación final del cañón.',
-    long: 'Consejo · El Lanzamisiles dispara únicamente a tres hexágonos exactos.',
+    long: 'Consejo · El Lanzamisiles tiene dos misiles para toda la partida y dispara a tres hexágonos exactos.',
     fast: 'Consejo · El Embestidor recorre una línea libre y captura ocupando el destino.',
     drone: 'Consejo · El Dron puede volar y compartir casilla con una unidad terrestre.',
     airplane: 'Consejo · El Avión elige entre volar y disparar; entrar en un escudo lo destruye.',
@@ -2509,7 +2509,7 @@ function showHelpDialog(): void {
     </div>
     <details><summary>Reglas tácticas esenciales</summary>
       <p>${escapeHtml(CLASSIC_RULES_NOTE)}</p>
-      <p>El Lanzamisiles dispara a todo el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
+      <p>El Lanzamisiles tiene dos disparos por partida y alcanza el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
       <p>Las unidades terrestres pueden pasar y detenerse bajo un Avión enemigo sin atacarlo. Un Dron enemigo sigue bloqueando ese movimiento.</p>
       <p>El Avión vuela hasta dos casillas por su frente o dispara a su cono ofensivo. Su kamikaze destruye objetivo y Avión. El Escudo antiaéreo es inmóvil: pulveriza aeronaves enemigas y bloquea sus disparos.</p>
       <p>Tanque, Lanzamisiles y Embestidor pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
@@ -3708,7 +3708,7 @@ function pieceDescription(piece: Piece): string {
     capturer:
       'Convierte una unidad rival adyacente sin desplazarse. Capturadores aliados protegen.',
     medium: 'Mueve una casilla o dispara a distancia 2 en el arco del cañón.',
-    long: 'Mueve una casilla o dispara exactamente a distancia 3 en cualquier dirección.',
+    long: `Mueve una casilla o dispara exactamente a distancia 3. ${piece.type === 'long' && (piece.missilesRemaining ?? 2) === 0 ? 'Sin misiles: puede seguir moviéndose o convertirse en Soldado.' : 'Dispone de dos misiles para toda la partida; no se recargan.'}`,
     fast: 'Recorre una línea libre sin límite y captura ocupando el destino.',
     drone: 'Vuela hasta tres casillas, sobrevuela suelo y puede compartir hexágono.',
     airplane:

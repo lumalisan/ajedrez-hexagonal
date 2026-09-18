@@ -153,6 +153,12 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
     layers.set(key, count);
     if (piece.type === 'fortress' && piece.hp !== 1 && piece.hp !== 2 && piece.hp !== 3)
       errors.push(`La Fortaleza ${piece.id} tiene puntos de vida inválidos.`);
+    if (
+      piece.type === 'long' &&
+      piece.missilesRemaining !== undefined &&
+      ![0, 1, 2].includes(piece.missilesRemaining)
+    )
+      errors.push(`El Lanzamisiles ${piece.id} tiene munición inválida.`);
   }
   for (const [key, count] of layers) {
     if (count.ground > 1) errors.push(`Hay más de una unidad terrestre en ${key}.`);
@@ -269,6 +275,7 @@ export function getFiringRangeCells(
 ): Hex[] {
   const piece = getPiece(state, pieceId);
   if (!piece || !['medium', 'long', 'airplane'].includes(piece.type)) return [];
+  if (piece.type === 'long' && (piece.missilesRemaining ?? 2) === 0) return [];
   const position = preview.position ?? piece.position;
   if (piece.type === 'medium') {
     const cannon = preview.cannon ?? piece.cannon;
@@ -810,6 +817,8 @@ function executeAction(state: GameState, action: GameAction, events: GameEvent[]
     case 'shoot': {
       const target = getPiece(state, action.targetId);
       if (!target) return;
+      if (piece.type === 'long')
+        piece.missilesRemaining = (piece.missilesRemaining ?? 2) === 2 ? 1 : 0;
       events.push({
         type: 'shoot',
         pieceId: piece.id,
@@ -1193,7 +1202,8 @@ function positionHash(state: GameState): string {
       const facing = piece.type === 'soldier' || piece.type === 'airplane' ? piece.facing : '-';
       const cannon = piece.type === 'medium' ? piece.cannon : '-';
       const hp = piece.type === 'fortress' ? piece.hp : '-';
-      return `${piece.owner}:${piece.type}:${piece.position.q}:${piece.position.r}:${facing}:${cannon}:${hp}`;
+      const ammunition = piece.type === 'long' ? `:${piece.missilesRemaining ?? 2}` : '';
+      return `${piece.owner}:${piece.type}:${piece.position.q}:${piece.position.r}:${facing}:${cannon}:${hp}${ammunition}`;
     })
     .sort()
     .join('|');

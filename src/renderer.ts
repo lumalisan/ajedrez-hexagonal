@@ -4,6 +4,7 @@ import {
   HEX_HEIGHT,
   HEX_WIDTH,
   allBoardHexes,
+  directionBetween,
   equalHex,
   hexDistance,
   hexKey,
@@ -868,6 +869,7 @@ export class BoardRenderer {
       alpha: number;
       isStacked?: boolean;
       orientation: number;
+      glyphRotation?: number;
       fortressMaxHp?: 1 | 2 | 3;
     },
   ): void {
@@ -963,7 +965,7 @@ export class BoardRenderer {
     ctx.shadowColor = color;
     ctx.shadowBlur = 3.5;
     ctx.save();
-    ctx.rotate(options.orientation);
+    ctx.rotate(options.orientation + (options.glyphRotation ?? 0));
     drawPieceGlyph(ctx, piece);
     ctx.restore();
     ctx.shadowColor = 'transparent';
@@ -1012,16 +1014,23 @@ export class BoardRenderer {
         const afterPiece = this.model ? getPiece(this.model.state, event.pieceId) : undefined;
         const piece = transformed && afterPiece ? afterPiece : beforePiece;
         if (!piece) continue;
+        const survives = this.model ? Boolean(getPiece(this.model.state, piece.id)) : true;
+        const motion = movementPose(
+          piece,
+          event.from,
+          event.to,
+          survives ? raw : Math.min(1, raw / 0.75),
+        );
         const from = projectHex(event.from, orientation, this.renderedDepth);
         const to = projectHex(event.to, orientation, this.renderedDepth);
-        const x = from.x + (to.x - from.x) * eased;
-        const y = from.y + (to.y - from.y) * eased - Math.sin(raw * Math.PI) * 4;
-        const survives = this.model ? Boolean(getPiece(this.model.state, piece.id)) : true;
+        const x = from.x + (to.x - from.x) * motion.travel;
+        const y = from.y + (to.y - from.y) * motion.travel - Math.sin(motion.travel * Math.PI) * 4;
         this.drawPiece(ctx, piece, x, y, {
           selected: false,
           highContrast: this.model?.highContrast ?? false,
-          alpha: survives ? 1 : Math.max(0, 1 - raw * 0.9),
+          alpha: survives ? 1 : 1 - Math.max(0, (raw - 0.75) / 0.25),
           orientation,
+          glyphRotation: motion.rotation,
           fortressMaxHp: this.model?.fortressMaxHp[piece.owner],
         });
       }
@@ -1046,10 +1055,13 @@ export class BoardRenderer {
       }
 
       if ((event.type === 'destroy' || event.type === 'intercept') && event.at) {
+        const impactProgress = animation.events.some((candidate) => candidate.type === 'move')
+          ? Math.max(0, (raw - 0.75) / 0.25)
+          : raw;
         const at = projectHex(event.at, orientation, this.renderedDepth);
         ctx.save();
         ctx.translate(at.x, at.y);
-        ctx.globalAlpha = Math.sin(raw * Math.PI);
+        ctx.globalAlpha = Math.sin(impactProgress * Math.PI);
         ctx.strokeStyle = event.type === 'intercept' ? COLORS.danger : COLORS.attack;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1098,7 +1110,31 @@ export class BoardRenderer {
   }
 }
 
-function actionMarkers(model: RenderModel): Map<string, ActionMarker> {
+/** Visual pose only: turn at the origin, then travel in the new direction. */
+export function movementPose(
+  piece: Piece,
+  from: Hex,
+  to: Hex,
+  progress: number,
+): {
+  travel: number;
+  rotation: number;
+} {
+  const direction = directionBetween(from, to);
+  const delta =
+    (piece.type === 'soldier' || piece.type === 'airplane') && direction !== null
+      ? ((direction - piece.facing + 9) % 6) - 3
+      : 0;
+  const turnFraction = delta === 0 ? 0 : 0.25;
+  const turn = turnFraction === 0 ? 1 : Math.min(1, progress / turnFraction);
+  const travel = Math.max(0, (progress - turnFraction) / (1 - turnFraction));
+  return {
+    travel: 1 - (1 - travel) ** 3,
+    rotation: delta * (Math.PI / 3) * (1 - (1 - turn) ** 3),
+  };
+}
+
+export function actionMarkers(model: RenderModel): Map<string, ActionMarker> {
   const byCell = new Map<string, ActionMarker>();
   for (const hex of model.firingRange) {
     byCell.set(hexKey(hex), {
@@ -1110,6 +1146,13 @@ function actionMarkers(model: RenderModel): Map<string, ActionMarker> {
     });
   }
   for (const action of model.actions) {
+    // In-place controls are not capture targets.
+    if (
+      action.kind === 'rotate' ||
+      action.kind === 'orient' ||
+      (action.kind === 'transform' && !action.to && !action.attackAboveId)
+    )
+      continue;
     const destination = actionDestination(model.state, action);
     if (!destination) continue;
     const kind = markerKind(model.state, action);
@@ -1653,7 +1696,9 @@ export function pieceAccessibleLabel(
           ? `, cañón ${directionNameForPlayer(piece.cannon, viewpoint)}`
           : piece.type === 'fortress'
             ? `, ${piece.hp} puntos de vida`
-            : '';
+            : piece.type === 'long'
+              ? `, ${piece.missilesRemaining ?? 2} de 2 misiles disponibles`
+              : '';
   const protectedByEnemy = isProtectedByPlayer(state, piece.position, otherPlayerOf(piece.owner))
     ? ', en zona antiaérea enemiga'
     : '';
