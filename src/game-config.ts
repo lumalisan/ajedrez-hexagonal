@@ -54,7 +54,7 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     clockSeconds: input.clockSeconds ?? null,
     noProgressPlyLimit:
       input.noProgressPlyLimit === undefined ? CLASSIC_NO_PROGRESS_LIMIT : input.noProgressPlyLimit,
-    allowUndo: input.mode === 'machine',
+    allowUndo: true,
   };
   const pieces = createInitialPieces(input.fortressHp ?? 2, input.initialLayout ?? 1);
   return {

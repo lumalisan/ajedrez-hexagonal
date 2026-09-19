@@ -36,6 +36,8 @@ pnpm test:a11y
 
 - **Partida libre:** local o contra IA en cuatro dificultades, con doctrinas Equilibrada, Agresiva, Guardiana y Emboscada.
 - **Presets:** Escaramuza, Táctica, Asedio y configuración Personalizada. Ajustan despliegue, ritmo e integridad inicial sin alterar el movimiento ni el combate de las unidades.
+- **Disposiciones iniciales:** en Nueva partida → Personalizada puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques) o Frente de infantería (7 soldados y 2 tanques). Las dos nuevas variantes tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando, y conservan 18 piezas por jugador. Disponibles en partida local y contra la IA.
+- Al elegir una disposición, la vista previa muestra el ejército de Cian con los símbolos del tablero, su composición y una breve descripción. Se actualiza también al cambiar la vida de la Fortaleza; Ámbar utiliza la formación reflejada.
 - **Academia táctica:** fundamentos, misión guiada de varios turnos, retos estratégicos y un reto diario determinista que usan `classic-v2`.
 - **Laboratorio:** editor JSON validado y catálogo local.
 - Autoguardado después de cada orden, continuar, importar/exportar y visor de repetición.
@@ -58,8 +60,10 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 ## Controles
 
 - Ratón o táctil: seleccionar unidad, elegir marcador y confirmar orden.
+- En móvil vertical, toca o desliza el tirador inferior para abrir las órdenes de la unidad seleccionada. Puedes contraer una orden pendiente para consultar el tablero y volver a abrirla sin perderla; en horizontal, las órdenes aparecen en un panel lateral.
 - Arrastrar: desplazar cámara.
 - Rueda o pinza: zoom.
+- Flechas de deshacer y rehacer junto al zoom: retroceder o recuperar órdenes en partidas locales de dos jugadores. Puedes volver varios pasos atrás; una orden nueva sustituye la continuación deshecha. El reloj conserva el tiempo consumido.
 - `Q W E` y `A S D`: las seis direcciones hexagonales.
 - `7 8 9 4 2 6`: alternativa con teclado numérico.
 - `Enter`: seleccionar casilla enfocada.

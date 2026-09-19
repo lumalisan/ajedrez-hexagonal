@@ -30,6 +30,126 @@ const browser = await chromium.launch({ executablePath, headless: true });
 const runtimeErrors = [];
 
 try {
+  for (const { layout, mode, viewport } of [
+    { layout: '3', mode: 'local', viewport: { width: 1440, height: 900 } },
+    { layout: '4', mode: 'machine', viewport: { width: 390, height: 844 } },
+  ]) {
+    const page = await browser.newPage({ viewport });
+    watchErrors(page, runtimeErrors);
+    await page.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+    await page.locator('[data-home-action="new"]').click();
+    await page.locator(`[data-home-mode="${mode}"]`).click();
+    await page.locator('[data-preset="custom"]').click();
+    const layoutSelect = page.getByLabel('Disposición inicial');
+    assert(
+      (await layoutSelect.locator('option').allTextContents()).join('|') ===
+        'Frente clásico|Columnas de asedio|Frente blindado|Frente de infantería',
+      'All four initial layouts must be available, preserving the existing options.',
+    );
+    const preview = page.locator('[data-layout-preview]');
+    const previewImages = new Set();
+    let previewSize;
+    for (const [value, soldiers, tanks, capturers, launchers, airplanes] of [
+      ['1', 5, 2, 1, 2, 2],
+      ['2', 5, 2, 2, 1, 2],
+      ['3', 5, 4, 1, 1, 1],
+      ['4', 7, 2, 1, 1, 1],
+    ]) {
+      await layoutSelect.selectOption(value);
+      await layoutSelect.focus();
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      const rendered = await preview.evaluate((canvas) => ({
+        image: canvas.toDataURL(),
+        width: canvas.getBoundingClientRect().width,
+        height: canvas.getBoundingClientRect().height,
+        layout: canvas.dataset.layout,
+      }));
+      assert(rendered.layout === value, 'The preview must follow the selected layout.');
+      assert(rendered.width > 200 && rendered.height > 100, 'Preview must remain readable.');
+      const size = `${rendered.width},${rendered.height}`;
+      previewSize ??= size;
+      assert(size === previewSize, 'Changing layouts must preserve the preview frame.');
+      previewImages.add(rendered.image);
+      const roster = await page
+        .locator('#layout-preview-roster > div')
+        .evaluateAll((rows) =>
+          Object.fromEntries(
+            rows.map((row) => [
+              row.querySelector('dt').textContent,
+              Number(row.querySelector('dd').textContent),
+            ]),
+          ),
+        );
+      assert(
+        roster.Soldado === soldiers &&
+          roster.Tanque === tanks &&
+          roster.Capturador === capturers &&
+          roster.Lanzamisiles === launchers &&
+          roster.Avión === airplanes &&
+          Object.values(roster).reduce((total, count) => total + count, 0) === 18,
+        `Layout ${value} must describe the actual army in text.`,
+      );
+      assert(
+        await layoutSelect.evaluate((select) => select === document.activeElement),
+        'Updating the preview must preserve keyboard focus.',
+      );
+    }
+    assert(previewImages.size === 4, 'Each layout must produce a different board preview.');
+    await layoutSelect.press('Home');
+    await layoutSelect.press('ArrowDown');
+    assert(
+      (await preview.getAttribute('data-layout')) === '2',
+      'Keyboard selection must update the preview.',
+    );
+    const beforeHealth = await preview.evaluate((canvas) => canvas.toDataURL());
+    await page.locator('[data-fortress-hp]').selectOption('3');
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    assert(
+      (await preview.evaluate((canvas) => canvas.toDataURL())) !== beforeHealth,
+      'Fortress health changes must be reflected in the preview.',
+    );
+    await page.locator('[data-fortress-hp]').selectOption('2');
+    await page.locator('[data-preset="tactical"]').click();
+    assert(await preview.isHidden(), 'The custom preview must hide when selecting another preset.');
+    await page.locator('[data-preset="custom"]').click();
+    assert(
+      (await preview.getAttribute('data-layout')) === '2',
+      'Returning to custom must preserve the chosen layout.',
+    );
+    await layoutSelect.selectOption(layout);
+    await layoutSelect.focus();
+    await page
+      .locator('.layout-picker')
+      .evaluate((picker) => picker.scrollIntoView({ block: 'start' }));
+    await assertNoHorizontalOverflow(page, `Layout ${layout} configuration`, '#game-dialog');
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-layout-${layout}-config.png` });
+    await page.locator('[data-start-free]').click();
+    await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+    await page.locator('#game-canvas[data-viewpoint="blue"]:not([data-rotating])').waitFor();
+    const frontLabel = layout === '3' ? 'TNQ,' : 'SOL,';
+    for (const [q, r, label] of [
+      [3, -4, frontLabel],
+      [-3, -1, frontLabel],
+      [1, -5, 'LMS,'],
+      [-1, -4, 'AVI,'],
+      [0, -3, 'CAP,'],
+    ]) {
+      for (const sign of [1, -1]) {
+        assert(
+          (
+            await page.locator(`#sr-board [data-hex="${q * sign},${r * sign}"]`).textContent()
+          )?.startsWith(label),
+          `Layout ${layout} must place ${label} at ${q * sign},${r * sign}.`,
+        );
+      }
+    }
+    await assertNoHorizontalOverflow(page, `Layout ${layout} match`);
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-layout-${layout}-board.png` });
+    await page.close();
+  }
+
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(desktop, runtimeErrors);
   await desktop.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
@@ -402,6 +522,143 @@ try {
     await cannonPage.screenshot({ path: `${process.env.UI_SCREENSHOT}-compact-compass.png` });
   await cannonPage.close();
 
+  const historyPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(historyPage, runtimeErrors);
+  await historyPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(historyPage, 'local');
+  const undoAction = historyPage.locator('#undo-action');
+  const redoAction = historyPage.locator('#redo-action');
+  assert(
+    (await undoAction.isVisible()) && (await redoAction.isVisible()),
+    'Local matches must expose undo and redo beside the board view controls.',
+  );
+  assert(
+    (await undoAction.isDisabled()) && (await redoAction.isDisabled()),
+    'A new match must disable both history controls.',
+  );
+  assert(
+    (await undoAction.getAttribute('aria-label'))?.includes('Deshacer') &&
+      (await redoAction.getAttribute('aria-label'))?.includes('Rehacer'),
+    'History arrow buttons must have accessible names.',
+  );
+  const initialBoard = await historyPage.locator('#sr-board').textContent();
+  await clickHex(historyPage, 0, -2);
+  await doubleClickHex(historyPage, 0, -1);
+  await historyPage.locator('#undo-action:not([disabled])').waitFor();
+  await assertActionHistory(historyPage, 1, 1);
+  const firstMoveBoard = await historyPage.locator('#sr-board').textContent();
+  const firstMoveLog = await historyPage.locator('#battle-log').textContent();
+  assert(firstMoveBoard !== initialBoard, 'A committed move must change the board.');
+  await undoAction.focus();
+  await undoAction.press('Enter');
+  await assertActionHistory(historyPage, 0, 1);
+  assert(
+    (await historyPage.locator('#sr-board').textContent()) === initialBoard &&
+      (await historyPage.locator('#battle-log li:not(.empty-log)').count()) === 0 &&
+      (await historyPage.locator('#turn-chip').textContent())?.includes('Cian en mando'),
+    'Undo must restore the board, turn and battle log before the move.',
+  );
+  assert(
+    (await undoAction.isDisabled()) && (await redoAction.isEnabled()),
+    'Undoing the first move must disable undo and enable redo.',
+  );
+  await redoAction.click();
+  await assertActionHistory(historyPage, 1, 1);
+  assert(
+    (await historyPage.locator('#sr-board').textContent()) === firstMoveBoard &&
+      (await historyPage.locator('#battle-log').textContent()) === firstMoveLog &&
+      (await historyPage.locator('#turn-chip').textContent())?.includes('Ámbar en mando') &&
+      (await redoAction.isDisabled()),
+    'Redo must restore the exact board, turn and battle log without duplicating the move.',
+  );
+  await clickHex(historyPage, 0, 2);
+  await doubleClickHex(historyPage, 0, 1);
+  assert(
+    (await undoAction.isDisabled()) && (await redoAction.isDisabled()),
+    'History controls must stay disabled while an order is animating.',
+  );
+  await historyPage.locator('#undo-action:not([disabled])').waitFor();
+  await assertActionHistory(historyPage, 2, 2);
+  await undoAction.click();
+  await assertActionHistory(historyPage, 1, 2);
+  await undoAction.click();
+  await assertActionHistory(historyPage, 0, 2);
+  assert(
+    (await historyPage.locator('#sr-board').textContent()) === initialBoard,
+    'Consecutive undo actions must restore the initial position.',
+  );
+  await historyPage.reload({ waitUntil: 'networkidle' });
+  await historyPage.locator('[data-home-action="continue"]').click();
+  await assertActionHistory(historyPage, 0, 2);
+  assert(
+    (await historyPage.locator('#sr-board').textContent()) === initialBoard &&
+      (await undoAction.isDisabled()) &&
+      (await redoAction.isEnabled()),
+    'Continuing after reload must preserve the undo cursor and redo history.',
+  );
+  await redoAction.click();
+  await assertActionHistory(historyPage, 1, 2);
+  assert(
+    (await historyPage.locator('#sr-board').textContent()) === firstMoveBoard,
+    'Redo must remain usable after a saved match is restored.',
+  );
+  await undoAction.click();
+  await clickHex(historyPage, 2, -3);
+  await doubleClickHex(historyPage, 2, -2);
+  await historyPage.locator('#undo-action:not([disabled])').waitFor();
+  await assertActionHistory(historyPage, 1, 1);
+  assert(
+    (await redoAction.isDisabled()) &&
+      (await historyPage.locator('#sr-board').textContent()) !== firstMoveBoard,
+    'A different move after undo must replace the discarded future and disable redo.',
+  );
+  await historyPage.evaluate(() => {
+    const key = 'atlas-match-classic-v2';
+    const record = JSON.parse(localStorage.getItem(key));
+    record.config.options.noProgressPlyLimit = 1;
+    record.actions = [];
+    record.currentAction = 0;
+    localStorage.setItem(key, JSON.stringify(record));
+  });
+  await historyPage.reload({ waitUntil: 'networkidle' });
+  await historyPage.locator('[data-home-action="continue"]').click();
+  await clickHex(historyPage, 0, -2);
+  await historyPage.locator('[data-command="rotate"]').click();
+  await historyPage.locator('[data-direction-order="0"]').click();
+  await historyPage.locator('#pending-card .confirm-button').click();
+  await historyPage.locator('#game-dialog [data-undo-match]').waitFor();
+  const finishedHeading = await historyPage.locator('#game-dialog h2').textContent();
+  assert(
+    await historyPage.evaluate(
+      () =>
+        localStorage.getItem('atlas-match-classic-v2') === null &&
+        JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]').length === 1,
+    ),
+    'A terminal order must archive the result and clear the active save.',
+  );
+  await historyPage.locator('#game-dialog [data-undo-match]').click();
+  await assertActionHistory(historyPage, 0, 1);
+  assert(
+    (await historyPage.locator('#game-dialog').isHidden()) &&
+      (await historyPage.locator('#sr-board').textContent()) === initialBoard &&
+      (await historyPage.evaluate(
+        () => JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]').length,
+      )) === 0,
+    'Undoing a terminal order must reopen the match and remove the obsolete archived result.',
+  );
+  await redoAction.click();
+  await historyPage.locator('#game-dialog [data-undo-match]').waitFor();
+  assert(
+    (await historyPage.locator('#game-dialog h2').textContent()) === finishedHeading &&
+      (await historyPage.evaluate(
+        () =>
+          localStorage.getItem('atlas-match-classic-v2') === null &&
+          JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]').length === 1,
+      )),
+    'Redoing a terminal order must restore its result and exactly one history entry.',
+  );
+  await historyPage.close();
+
   const mobile = await browser.newPage({
     viewport: { width: 390, height: 844 },
     isMobile: true,
@@ -433,6 +690,15 @@ try {
     'Mobile new-game control is hidden.',
   );
   await assertTopActionsDoNotOverlap(mobile);
+  await assertBoardHistoryControlsFit(mobile);
+  assert(
+    await mobile.locator('.panel-footer').evaluate((footer) => footer.inert),
+    'Collapsed command panel controls must be excluded from keyboard and assistive navigation.',
+  );
+  assert(
+    (await mobile.locator('.legend > span:visible').count()) === 6,
+    'Portrait mobile must retain every board legend entry.',
+  );
 
   await mobile.locator('#game-canvas').focus();
   await mobile.keyboard.press('e');
@@ -450,6 +716,10 @@ try {
   assert(
     (await mobile.locator('#piece-card h2').textContent())?.includes('Soldado'),
     'Keyboard hex navigation failed.',
+  );
+  assert(
+    (await mobile.locator('.command-sheet-label').textContent()) === 'Soldado',
+    'The collapsed panel must identify the selected unit.',
   );
   await mobile.keyboard.press('w');
   assert((await selectedHex(mobile)) === '0,-1', 'W must move focus onto the soldier destination.');
@@ -471,6 +741,7 @@ try {
   await narrow.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await selectMode(narrow, 'local');
   await assertTopActionsDoNotOverlap(narrow);
+  await assertBoardHistoryControlsFit(narrow);
   assert(
     await narrow
       .locator('body')
@@ -483,6 +754,17 @@ try {
       .locator('body')
       .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
     'Selecting a piece must keep the mobile command sheet collapsed.',
+  );
+  await narrow.setViewportSize({ width: 844, height: 390 });
+  await narrow.waitForFunction(() => !document.querySelector('.panel-footer').inert);
+  await assertBoardHistoryControlsFit(narrow);
+  await narrow.setViewportSize({ width: 320, height: 720 });
+  await narrow.waitForFunction(() => document.querySelector('.panel-footer').inert);
+  await narrow.locator('#command-sheet-toggle').focus();
+  await narrow.keyboard.press('Tab');
+  assert(
+    await narrow.evaluate(() => !document.activeElement.closest('#command-panel > [inert]')),
+    'Tab must not enter off-screen command panel controls.',
   );
   await dragCommandSheet(narrow, -150);
   assert(
@@ -541,6 +823,18 @@ try {
   );
   if (process.env.UI_SCREENSHOT)
     await narrow.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-pending.png` });
+  await narrow.locator('#command-sheet-toggle').click();
+  assert(
+    (await narrow.locator('#command-sheet-toggle').getAttribute('aria-expanded')) === 'false' &&
+      (await narrow.locator('#pending-card').evaluate((card) => card.inert && !card.hidden)),
+    'A pending order must be retained when its panel is collapsed to inspect the board.',
+  );
+  await narrow.locator('#command-sheet-toggle').click();
+  assert(
+    (await narrow.locator('#command-sheet-toggle').getAttribute('aria-expanded')) === 'true' &&
+      !(await narrow.locator('#pending-card').evaluate((card) => card.inert)),
+    'Reopening the panel must make the pending order confirmation accessible again.',
+  );
   assert(
     await narrow.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     'Narrow mobile header causes horizontal overflow.',
@@ -556,6 +850,15 @@ try {
   await compactPortrait.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await compactPortrait.locator('[data-home-action="tutorial"]').waitFor();
   await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait home');
+  const lastHomeAction = compactPortrait.locator('.home-navigation button').last();
+  await lastHomeAction.scrollIntoViewIfNeeded();
+  assert(
+    await lastHomeAction.evaluate((button) => {
+      const utility = document.querySelector('.home-utility-actions').getBoundingClientRect();
+      return button.getBoundingClientRect().bottom <= utility.top;
+    }),
+    'The last home action must scroll fully above the fixed utility area on short phones.',
+  );
 
   await compactPortrait.locator('[data-home-action="new"]').click();
   await compactPortrait.locator('[data-home-mode="local"]').click();
@@ -655,6 +958,7 @@ try {
   await compactLandscape.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await selectMode(compactLandscape, 'local');
   await assertNoHorizontalOverflow(compactLandscape, 'Compact landscape match');
+  await assertBoardHistoryControlsFit(compactLandscape);
   const landscapeGameLayout = await compactLandscape.evaluate(() => {
     const canvas = document.querySelector('#game-canvas')?.getBoundingClientRect();
     const board = document.querySelector('.board-stage')?.getBoundingClientRect();
@@ -682,12 +986,18 @@ try {
   );
 
   await clickHex(compactLandscape, 0, -2);
-  await doubleClickHex(compactLandscape, 0, -1);
+  await clickHex(compactLandscape, 0, -1);
+  await assertPendingActionsReachable(compactLandscape);
+  await compactLandscape.setViewportSize({ width: 844, height: 390 });
+  await assertPendingActionsReachable(compactLandscape);
+  await compactLandscape.setViewportSize({ width: 568, height: 320 });
+  await compactLandscape.locator('#pending-card .confirm-button').click();
   await compactLandscape.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   await compactLandscape.locator('#settings-button').click();
   await compactLandscape.locator('[data-data-center]').click();
   await compactLandscape.locator('[data-open-replay]').click();
   await compactLandscape.locator('.replay-dock').waitFor();
+  await assertHistoryControlsHidden(compactLandscape, 'Replay');
   assert(
     await compactLandscape.evaluate(() => {
       const panel = document.querySelector('#command-panel');
@@ -772,6 +1082,32 @@ try {
       runningClock.remainingMs[1] < pausedClock.remainingMs[1],
     'The next player clock must start only after accepting the handoff.',
   );
+  await clocked.locator('#undo-action').click();
+  await assertActionHistory(clocked, 0, 1);
+  const undoneClock = await clocked.evaluate(
+    () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock,
+  );
+  assert(
+    undoneClock.status === 'running' &&
+      undoneClock.activePlayer === 0 &&
+      undoneClock.remainingMs.every(
+        (remaining, player) => remaining <= runningClock.remainingMs[player],
+      ),
+    'Undo must run the restored player clock without refunding elapsed time.',
+  );
+  await clocked.locator('#redo-action').click();
+  await assertActionHistory(clocked, 1, 1);
+  const redoneClock = await clocked.evaluate(
+    () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock,
+  );
+  assert(
+    redoneClock.status === 'running' &&
+      redoneClock.activePlayer === 1 &&
+      redoneClock.remainingMs.every(
+        (remaining, player) => remaining <= undoneClock.remainingMs[player],
+      ),
+    'Redo must run the next player clock without refunding elapsed time.',
+  );
   await clocked.evaluate(() => {
     const key = 'atlas-match-classic-v2';
     const record = JSON.parse(localStorage.getItem(key));
@@ -842,6 +1178,7 @@ try {
     'Academy hint usage must persist with the active match.',
   );
   await academy.locator('[data-dialog-close]').click();
+  await assertHistoryControlsHidden(academy, 'Academy');
   await academy.locator('#game-canvas').focus();
   await academy.keyboard.press('Enter');
   await academy.keyboard.press('s');
@@ -892,6 +1229,7 @@ try {
   watchErrors(solo, runtimeErrors);
   await solo.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await selectMode(solo, 'machine');
+  await assertHistoryControlsHidden(solo, 'Machine matches');
   assert(
     await solo.locator('#blockade-button').isHidden(),
     'Draw proposals must be hidden when there is no second human player.',
@@ -942,7 +1280,7 @@ try {
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    'UI smoke passed: desktop flow, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
+    'UI smoke passed: desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
   );
 } finally {
   await browser.close();
@@ -956,6 +1294,7 @@ async function clickHex(page, q, r) {
 
 async function dragCommandSheet(page, deltaY) {
   const toggle = page.locator('#command-sheet-toggle');
+  await toggle.click({ trial: true });
   const box = await toggle.boundingBox();
   assert(box, 'Command sheet toggle has no layout box.');
   const x = box.x + box.width / 2;
@@ -1017,6 +1356,96 @@ async function assertTopActionsDoNotOverlap(page) {
   assert(boxes.length === 3, 'Mobile header must expose all three icon controls.');
   for (let index = 1; index < boxes.length; index += 1) {
     assert(boxes[index - 1].right <= boxes[index].left, 'Mobile header icon controls overlap.');
+  }
+}
+
+async function assertPendingActionsReachable(page) {
+  await page.locator('#pending-card .confirm-button').waitFor();
+  const controls = await page
+    .locator('#pending-card .pending-actions button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          label: button.textContent,
+          visible:
+            rect.top >= 0 &&
+            rect.bottom <= window.innerHeight &&
+            rect.left >= 0 &&
+            rect.right <= window.innerWidth,
+          width: rect.width,
+          height: rect.height,
+        };
+      }),
+    );
+  assert(
+    controls.length === 2 &&
+      controls.every(({ visible, width, height }) => visible && width >= 44 && height >= 44),
+    `Landscape confirmation controls must remain visible and touch accessible: ${JSON.stringify(controls)}.`,
+  );
+}
+
+async function assertActionHistory(page, currentAction, actionCount) {
+  await page.waitForFunction(
+    ({ cursor, count }) => {
+      const saved = JSON.parse(localStorage.getItem('atlas-match-classic-v2') ?? 'null');
+      return saved?.currentAction === cursor && saved?.actions.length === count;
+    },
+    { cursor: currentAction, count: actionCount },
+    { timeout: 5_000 },
+  );
+}
+
+async function assertHistoryControlsHidden(page, label) {
+  assert(
+    (await page.locator('#undo-action').isHidden()) &&
+      (await page.locator('#redo-action').isHidden()),
+    `${label} must hide the local match history controls.`,
+  );
+}
+
+async function assertBoardHistoryControlsFit(page) {
+  const layout = await page.locator('.zoom-controls').evaluate((toolbar) => ({
+    viewport: window.innerWidth,
+    buttons: [...toolbar.querySelectorAll('button')]
+      .filter((button) => button.getBoundingClientRect().width > 0)
+      .map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          id: button.id,
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+      }),
+  }));
+  assert(
+    layout.buttons.length === 6 &&
+      layout.buttons.some(({ id }) => id === 'undo-action') &&
+      layout.buttons.some(({ id }) => id === 'redo-action'),
+    'Mobile board toolbar must show undo, redo, threats and all three view controls.',
+  );
+  assert(
+    layout.buttons.every(
+      ({ left, right, width, height }) =>
+        left >= 0 && right <= layout.viewport && width >= 44 && height >= 44,
+    ),
+    `Mobile board controls must fit the viewport with 44px touch targets: ${JSON.stringify(layout)}.`,
+  );
+  for (let index = 0; index < layout.buttons.length; index += 1) {
+    const button = layout.buttons[index];
+    for (const other of layout.buttons.slice(index + 1)) {
+      assert(
+        button.right <= other.left ||
+          other.right <= button.left ||
+          button.bottom <= other.top ||
+          other.bottom <= button.top,
+        `Mobile board controls ${button.id} and ${other.id} overlap.`,
+      );
+    }
   }
 }
 

@@ -187,6 +187,11 @@ export function appendMatchHistory(entry: MatchHistoryEntry): MatchHistoryEntry 
   return entry;
 }
 
+export function removeMatchHistory(id: string): boolean {
+  const current = loadMatchHistory().filter((entry) => entry.id !== id);
+  return safeSetItem(HISTORY_KEY, JSON.stringify(current));
+}
+
 export function resetAcademyProgress(): void {
   safeRemoveItem(PROGRESS_KEY);
   safeRemoveItem(ACADEMY_RECORDS_KEY);

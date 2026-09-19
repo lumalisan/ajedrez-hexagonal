@@ -74,9 +74,23 @@ export class MatchController {
     this.store.replaceGame(replayRecord(this.record));
   }
 
+  canUndo(): boolean {
+    return this.canNavigateHistory() && this.record.currentAction > 0;
+  }
+
+  canRedo(): boolean {
+    return this.canNavigateHistory() && this.record.currentAction < this.record.actions.length;
+  }
+
   undo(): boolean {
-    if (!this.record.config.options.allowUndo || this.record.currentAction === 0) return false;
+    if (!this.canUndo()) return false;
     this.jumpTo(this.record.currentAction - 1);
+    return true;
+  }
+
+  redo(): boolean {
+    if (!this.canRedo()) return false;
+    this.jumpTo(this.record.currentAction + 1);
     return true;
   }
 
@@ -113,6 +127,12 @@ export class MatchController {
     const outcome = clock ? clockOutcome(clock) : null;
     if (outcome && !this.store.getState().game.outcome) this.conclude(outcome);
     return clock;
+  }
+
+  private canNavigateHistory(): boolean {
+    if (!this.record.config.options.allowUndo) return false;
+    const reason = this.record.conclusion?.outcome.reason;
+    return reason !== 'resignation' && reason !== 'timeout' && reason !== 'blockade';
   }
 
   private updateClock(

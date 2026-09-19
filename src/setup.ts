@@ -7,7 +7,34 @@ interface SetupPiece {
   cannon?: Direction;
 }
 
-export type InitialLayout = 1 | 2;
+export type InitialLayout = 1 | 2 | 3 | 4;
+
+export const INITIAL_LAYOUTS = [
+  {
+    id: 1,
+    name: 'Frente clásico',
+    description:
+      'Cinco soldados al frente, dos lanzamisiles en los flancos y dos aviones en retaguardia.',
+  },
+  {
+    id: 2,
+    name: 'Columnas de asedio',
+    description:
+      'Dos capturadores en los flancos y un lanzamisiles en el centro. Conserva los dos aviones.',
+  },
+  {
+    id: 3,
+    name: 'Frente blindado',
+    description:
+      'Cuatro tanques detrás de los cinco soldados. Un lanzamisiles y un avión en retaguardia.',
+  },
+  {
+    id: 4,
+    name: 'Frente de infantería',
+    description:
+      'Siete soldados y dos tanques centrales. Un lanzamisiles y un avión en retaguardia.',
+  },
+] as const satisfies ReadonlyArray<{ id: InitialLayout; name: string; description: string }>;
 
 const CLASSIC_BLUE_SETUP: SetupPiece[] = [
   { type: 'soldier', position: { q: 4, r: -4 }, facing: 3 },
@@ -33,9 +60,22 @@ const CLASSIC_BLUE_SETUP: SetupPiece[] = [
 function setupForLayout(initialLayout: InitialLayout): SetupPiece[] {
   if (initialLayout === 1) return CLASSIC_BLUE_SETUP;
 
+  if (initialLayout === 2) {
+    return CLASSIC_BLUE_SETUP.map((piece) => {
+      if (piece.type === 'long') return { ...piece, type: 'capturer' };
+      if (piece.type === 'capturer') return { ...piece, type: 'long' };
+      return piece;
+    });
+  }
+
   return CLASSIC_BLUE_SETUP.map((piece) => {
-    if (piece.type === 'long') return { ...piece, type: 'capturer' };
-    if (piece.type === 'capturer') return { ...piece, type: 'long' };
+    if (piece.type === 'long') {
+      return { type: initialLayout === 3 ? 'medium' : 'soldier', position: piece.position };
+    }
+    // Retaguardia izquierda vista desde Cian, cuya cámara gira media vuelta.
+    if (piece.type === 'airplane' && piece.position.q === 1) {
+      return { type: 'long', position: piece.position };
+    }
     return piece;
   });
 }

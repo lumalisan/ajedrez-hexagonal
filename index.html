@@ -65,6 +65,7 @@
               <circle cx="14" cy="7" r="2" />
               <circle cx="8" cy="17" r="2" />
             </svg>
+            <span class="home-utility-label">Ajustes</span>
           </button>
           <button
             class="icon-button"
@@ -79,6 +80,7 @@
               <path class="sound-wave sound-wave-2" d="M17.5 6.5a7.5 7.5 0 0 1 0 11" />
               <path class="sound-muted-mark" d="m16 9 5 6m0-6-5 6" />
             </svg>
+            <span class="home-utility-label">Sonido</span>
           </button>
         </div>
 
@@ -162,7 +164,37 @@
             <div id="selection-summary" class="selection-summary">
               Selecciona una unidad para desplegar sus órdenes.
             </div>
-            <div class="zoom-controls" aria-label="Controles de vista">
+            <div class="zoom-controls" aria-label="Controles del tablero">
+              <div
+                id="history-controls"
+                class="history-controls"
+                role="group"
+                aria-label="Historial de órdenes"
+                hidden
+              >
+                <button
+                  type="button"
+                  id="undo-action"
+                  aria-label="Deshacer última orden"
+                  title="Deshacer última orden"
+                  disabled
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12" transform="translate(0 -2)" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  id="redo-action"
+                  aria-label="Rehacer última orden"
+                  title="Rehacer última orden"
+                  disabled
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="m15 5 5 5-5 5m5-5H10a6 6 0 0 0 0 12" transform="translate(0 -2)" />
+                  </svg>
+                </button>
+              </div>
               <button
                 type="button"
                 id="threat-toggle"
@@ -215,9 +247,13 @@
             aria-controls="command-panel"
             aria-expanded="true"
             aria-label="Contraer panel de mando"
+            aria-describedby="command-sheet-detail"
           >
             <span class="command-sheet-grip" aria-hidden="true"></span>
             <span class="command-sheet-label">Órdenes</span>
+            <span class="command-sheet-detail" id="command-sheet-detail"
+              >Toca para ver opciones</span
+            >
           </button>
           <div class="panel-heading">
             <span class="eyebrow">PANEL DE MANDO</span>

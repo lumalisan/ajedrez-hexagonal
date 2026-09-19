@@ -23,22 +23,76 @@ await server.listen();
 const browser = await chromium.launch({ executablePath, headless: true });
 
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  const page = await context.newPage();
-  await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
-  const homeResults = await new AxeBuilder({ page }).analyze();
-  await page.locator('[data-home-action="new"]').click();
-  await page.locator('[data-home-mode="local"]').click();
-  await page.locator('[data-start-free]').click();
-  const results = await new AxeBuilder({ page }).analyze();
-  const serious = [...homeResults.violations, ...results.violations].filter(
-    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  const scans = [];
+  const profiles = [
+    { name: 'Desktop 1440×900', viewport: { width: 1440, height: 900 }, isMobile: false },
+    { name: 'Mobile 390×844', viewport: { width: 390, height: 844 }, isMobile: true },
+  ];
+
+  for (const profile of profiles) {
+    const context = await browser.newContext({
+      viewport: profile.viewport,
+      isMobile: profile.isMobile,
+      hasTouch: profile.isMobile,
+      reducedMotion: 'reduce',
+    });
+    try {
+      const page = await context.newPage();
+      const audit = async (surface) => {
+        const label = `${profile.name} / ${surface}`;
+        const results = await new AxeBuilder({ page }).analyze();
+        scans.push({ label, results });
+        console.log(`Axe scanned: ${label}, ${results.passes.length} passed rule checks.`);
+      };
+
+      await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
+      await audit('home');
+
+      await page.locator('[data-home-action="rules"]').click();
+      await page.locator('#rules-article').waitFor({ state: 'visible' });
+      await audit('rules manual');
+      await page.locator('.rules-close').click();
+
+      await page.locator('[data-home-action="new"]').click();
+      await page.locator('[data-home-mode="local"]').click();
+      await page.locator('[data-start-free]').waitFor({ state: 'visible' });
+      await audit('match configuration');
+      await page.locator('[data-preset="custom"]').click();
+      await page.locator('[data-initial-layout]').selectOption(profile.isMobile ? '4' : '3');
+      await page.locator('[data-layout-preview]').waitFor({ state: 'visible' });
+      await audit('custom match / initial layout preview');
+      await page.locator('[data-preset="tactical"]').click();
+      await page.locator('[data-start-free]').click();
+      await page.locator('#game-canvas').waitFor({ state: 'visible' });
+
+      if (profile.isMobile) {
+        await page.locator('#command-sheet-toggle[aria-expanded="false"]').waitFor();
+        await audit('match / command panel collapsed');
+        await page.locator('#command-sheet-toggle').click();
+        await page.locator('#command-sheet-toggle[aria-expanded="true"]').waitFor();
+        await audit('match / command panel expanded');
+      } else {
+        await audit('match / command panel visible');
+      }
+
+      await page.locator('#settings-button').click();
+      await page.locator('.accessibility-settings').waitFor({ state: 'visible' });
+      await audit('settings');
+    } finally {
+      await context.close();
+    }
+  }
+
+  const serious = scans.flatMap(({ label, results }) =>
+    results.violations
+      .filter((violation) => violation.impact === 'serious' || violation.impact === 'critical')
+      .map((violation) => ({ label, violation })),
   );
   if (serious.length) {
     const summary = serious
       .map(
-        (violation) =>
-          `${violation.id}: ${violation.help}\n${violation.nodes
+        ({ label, violation }) =>
+          `[${label}] ${violation.id}: ${violation.help}\n${violation.nodes
             .map((node) => `  ${node.target.join(' ')} — ${node.failureSummary}`)
             .join('\n')}`,
       )
@@ -46,7 +100,7 @@ try {
     throw new Error(`Accessibility violations:\n${summary}`);
   }
   console.log(
-    `Axe passed: home and match, ${homeResults.passes.length + results.passes.length} rule checks, no serious or critical violations.`,
+    `Axe passed: ${scans.length} surfaces across desktop and mobile, ${scans.reduce((total, scan) => total + scan.results.passes.length, 0)} rule checks, no serious or critical violations.`,
   );
 } finally {
   await browser.close();

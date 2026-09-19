@@ -6,6 +6,7 @@ import {
   loadAcademyRecords,
   loadMatchHistory,
   recordScenarioAttempt,
+  removeMatchHistory,
   resetAcademyProgress,
   type MatchHistoryEntry,
 } from '../src/match-storage';
@@ -135,6 +136,35 @@ describe('persistencia de Academia e historial', () => {
 
     expect(loadAcademyRecords()).toEqual([]);
     expect(loadMatchHistory()).toEqual([]);
+  });
+
+  it('retira una partida reabierta sin modificar las demás y permite registrar su nuevo final', () => {
+    const older = historyEntry(1);
+    const reopened = historyEntry(2);
+    const newer = historyEntry(3);
+    appendMatchHistory(older);
+    appendMatchHistory(reopened);
+    appendMatchHistory(newer);
+
+    expect(removeMatchHistory(reopened.id)).toBe(true);
+    expect(loadMatchHistory()).toEqual([newer, older]);
+    expect(removeMatchHistory('partida-inexistente')).toBe(true);
+    expect(loadMatchHistory()).toEqual([newer, older]);
+
+    const completedAgain = { ...reopened, plies: 10, durationSeconds: 120 };
+    appendMatchHistory(completedAgain);
+    expect(loadMatchHistory()).toEqual([completedAgain, newer, older]);
+  });
+
+  it('informa del fallo al retirar una partida sin perder el historial guardado', () => {
+    const entry = historyEntry(1);
+    appendMatchHistory(entry);
+    vi.spyOn(storage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Almacenamiento no disponible', 'SecurityError');
+    });
+
+    expect(removeMatchHistory(entry.id)).toBe(false);
+    expect(loadMatchHistory()).toEqual([entry]);
   });
 
   it('mantiene resultados útiles cuando la cuota impide escribir', () => {

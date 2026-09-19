@@ -7,6 +7,8 @@ import { analyzeActionConsequences, consequenceTone } from './action-consequence
 import { AudioDirector } from './audio';
 import { CLASSIC_RULES_NOTE, fortressAttackSummary } from './classic-rules';
 import { createClassicConfig } from './game-config';
+import { mountLayoutPreview, type LayoutPreview } from './layout-preview';
+import { INITIAL_LAYOUTS, createInitialPieces } from './setup';
 import {
   ALL_DIRECTIONS,
   DIRECTION_NAMES,
@@ -54,6 +56,7 @@ import {
   loadMatchHistory,
   loadPreferences,
   recordScenarioAttempt,
+  removeMatchHistory,
   resetAcademyProgress,
   saveActiveMatch,
   savePreferences as persistPreferences,
@@ -137,6 +140,10 @@ const topbar = requireElementBySelector<HTMLElement>('.topbar');
 const gameLayout = requireElementBySelector<HTMLElement>('.game-layout');
 const commandPanel = requireElement<HTMLElement>('command-panel');
 const commandSheetToggle = requireElement<HTMLButtonElement>('command-sheet-toggle');
+const commandSheetViewport = window.matchMedia('(max-width: 760px)');
+const commandSheetLandscape = window.matchMedia(
+  '(max-width: 900px) and (orientation: landscape) and (max-height: 650px)',
+);
 const renderer = new BoardRenderer(canvas);
 const preferences = loadPreferences();
 renderer.setDepthMode(preferences.boardDepth, true);
@@ -157,6 +164,7 @@ let gameMode: GameMode | null = null;
 let matchConfig: MatchConfig | null = null;
 let matchRecord: MatchRecord | null = null;
 let matchController: MatchController | null = null;
+let layoutPreview: LayoutPreview | null = null;
 let activeScenario: ScenarioDefinition | null = null;
 let aiAbortController: AbortController | null = null;
 let replayDock: HTMLElement | null = null;
@@ -197,6 +205,9 @@ const homeSettingsButton = requireElement<HTMLButtonElement>('home-settings-butt
 const blockadeButton = requireElement<HTMLButtonElement>('blockade-button');
 const mobileNewGameButton = requireElement<HTMLButtonElement>('mobile-new-game-button');
 const threatToggle = requireElement<HTMLButtonElement>('threat-toggle');
+const historyControls = requireElement<HTMLElement>('history-controls');
+const undoButton = requireElement<HTMLButtonElement>('undo-action');
+const redoButton = requireElement<HTMLButtonElement>('redo-action');
 const dialog = requireElement<HTMLDialogElement>('game-dialog');
 const toastRegion = requireElement<HTMLElement>('toast-region');
 const announcer = requireElement<HTMLElement>('announcer');
@@ -214,6 +225,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 function bindControls(): void {
   homeMenuContent.addEventListener('click', onHomeMenuClick);
   bindCommandSheetControls();
+  undoButton.addEventListener('click', undoLastAction);
+  redoButton.addEventListener('click', () => navigateLocalHistory('redo'));
   threatToggle.addEventListener('click', () => {
     preferences.tacticalThreats = !preferences.tacticalThreats;
     savePreferences();
@@ -303,7 +316,10 @@ function bindControls(): void {
     if (dialog.dataset.mandatory === 'true') event.preventDefault();
   });
   dialog.addEventListener('close', () => {
-    if (!dialog.open) unlockPageScroll();
+    if (!dialog.open) {
+      destroyLayoutPreview();
+      unlockPageScroll();
+    }
   });
   const preventBackgroundScroll = (event: Event): void => {
     if (dialog.open && event.target instanceof Node && !dialog.contains(event.target)) {
@@ -512,6 +528,7 @@ function handleCell(hex: Hex): void {
     }
     if (matching.length > 1) {
       mode = { kind: 'actionChoice', actions: matching };
+      commandSheetExpanded = true;
       pendingAction = null;
       render();
       announce('Hay varias maniobras en esa casilla. Elige la orden en el panel.');
@@ -530,6 +547,7 @@ function handleCell(hex: Hex): void {
   } else {
     selectedId = null;
     mode = { kind: 'pieceChoice', pieceIds: pieces.map((piece) => piece.id) };
+    commandSheetExpanded = true;
     pendingAction = null;
     render();
     announce('Casilla apilada. Elige unidad de aire o suelo.');
@@ -554,7 +572,7 @@ function clearSelection(): void {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
-  if (window.innerWidth <= 760) commandSheetExpanded = false;
+  if (isCommandSheetLayout()) commandSheetExpanded = false;
   render();
 }
 
@@ -574,7 +592,7 @@ function cancelDraft(): void {
 
 function setPending(action: GameAction): void {
   pendingAction = action;
-  if (window.innerWidth <= 760) commandSheetExpanded = true;
+  commandSheetExpanded = true;
   recordTelemetry('action-prepared', {
     kind: action.kind,
     ply: state.ply,
@@ -582,7 +600,7 @@ function setPending(action: GameAction): void {
   });
   if (mode.kind === 'actionChoice') mode = { kind: 'default' };
   render();
-  if (window.innerWidth <= 760) commandPanel.scrollTop = 0;
+  if (isCommandSheetLayout()) commandPanel.scrollTop = 0;
   const requiresConfirmation = shouldConfirmAction(action);
   announce(
     `${describeAction(state, action)}.${requiresConfirmation ? ' Pulsa confirmar para ejecutar.' : ' Ejecutando orden.'}`,
@@ -653,7 +671,7 @@ async function executeTurn(action: GameAction): Promise<void> {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
-  if (window.innerWidth <= 760) commandSheetExpanded = false;
+  if (isCommandSheetLayout()) commandSheetExpanded = false;
   animating = true;
   audio.playEvents(result.events, before);
   render();
@@ -842,16 +860,47 @@ function recordActiveScenarioAttempt(completed: boolean): void {
   scenarioAttemptsRecorded = true;
 }
 
+function isCommandSheetLayout(): boolean {
+  return commandSheetViewport.matches && !commandSheetLandscape.matches;
+}
+
 function renderCommandSheetState(): void {
-  const expanded = commandSheetExpanded || Boolean(pendingAction) || mode.kind !== 'default';
+  const expanded = !isCommandSheetLayout() || commandSheetExpanded;
+  if (
+    !expanded &&
+    document.activeElement instanceof HTMLElement &&
+    commandPanel.contains(document.activeElement) &&
+    !commandSheetToggle.contains(document.activeElement)
+  ) {
+    commandSheetToggle.focus({ preventScroll: true });
+  }
+  for (const child of commandPanel.children) {
+    if (child instanceof HTMLElement && child !== commandSheetToggle) child.inert = !expanded;
+  }
   document.body.classList.toggle('command-sheet-expanded', expanded);
   document.body.classList.toggle('command-sheet-collapsed', !expanded);
   document.body.classList.toggle('command-sheet-pending', Boolean(pendingAction));
   commandSheetToggle.setAttribute('aria-expanded', String(expanded));
+  const selected = selectedId ? getPiece(state, selectedId) : undefined;
+  const unitLabel = selected ? PIECE_NAMES[selected.type] : 'Órdenes';
   commandSheetToggle.setAttribute(
     'aria-label',
-    expanded ? 'Contraer panel de mando' : 'Abrir panel de mando',
+    `${unitLabel} · ${expanded ? 'Contraer panel de mando' : 'Abrir panel de mando'}`,
   );
+  const label = commandSheetToggle.querySelector<HTMLElement>('.command-sheet-label');
+  const detail = commandSheetToggle.querySelector<HTMLElement>('.command-sheet-detail');
+  if (label) label.textContent = unitLabel;
+  if (detail) {
+    detail.textContent = pendingAction
+      ? expanded
+        ? 'Toca para consultar el tablero'
+        : 'Orden pendiente · Toca para revisar'
+      : expanded
+        ? 'Toca para contraer'
+        : selected
+          ? 'Toca para ver sus órdenes'
+          : 'Toca para ver opciones';
+  }
 }
 
 function bindCommandSheetControls(): void {
@@ -868,10 +917,18 @@ function bindCommandSheetControls(): void {
   commandSheetToggle.addEventListener('pointermove', onCommandSheetPointerMove);
   commandSheetToggle.addEventListener('pointerup', onCommandSheetPointerUp);
   commandSheetToggle.addEventListener('pointercancel', onCommandSheetPointerCancel);
+  const updateLayout = (): void => {
+    finishCommandSheetDrag();
+    if (!isCommandSheetLayout() && document.activeElement === commandSheetToggle) {
+      canvas.focus({ preventScroll: true });
+    }
+  };
+  commandSheetViewport.addEventListener('change', updateLayout);
+  commandSheetLandscape.addEventListener('change', updateLayout);
 }
 
 function onCommandSheetPointerDown(event: PointerEvent): void {
-  if (window.innerWidth > 760 || !event.isPrimary || event.button !== 0) return;
+  if (!isCommandSheetLayout() || !event.isPrimary || event.button !== 0) return;
   const maxTranslateY = commandSheetMaxTranslate();
   commandSheetDrag = {
     pointerId: event.pointerId,
@@ -973,11 +1030,16 @@ function render(): void {
   renderBattleLog();
   renderSoundButton();
   renderThreatToggle();
+  renderHistoryControls();
   renderCommandSheetState();
   renderScreenReaderBoard();
   syncCanvas();
   if (restoreDynamicFocus) {
     queueMicrotask(() => {
+      if (isCommandSheetLayout() && !commandSheetExpanded) {
+        commandSheetToggle.focus({ preventScroll: true });
+        return;
+      }
       const selector =
         focusAttribute && typeof focusValue === 'string'
           ? `[${focusAttribute}="${CSS.escape(focusValue)}"]`
@@ -1424,11 +1486,13 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
     </div>`;
   actionControls.querySelector('[data-command="rotate"]')?.addEventListener('click', () => {
     mode = { kind: 'rotate' };
+    commandSheetExpanded = true;
     pendingAction = null;
     render();
   });
   actionControls.querySelector('[data-command="orient"]')?.addEventListener('click', () => {
     mode = { kind: 'orient' };
+    commandSheetExpanded = true;
     pendingAction = null;
     render();
   });
@@ -1443,6 +1507,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   });
   actionControls.querySelector('[data-command="transform"]')?.addEventListener('click', () => {
     mode = { kind: 'transform', facing: null };
+    commandSheetExpanded = true;
     pendingAction = null;
     render();
   });
@@ -1635,6 +1700,21 @@ function renderSoundButton(): void {
   }
 }
 
+function isLocalMatch(): boolean {
+  return (
+    gameMode === 'local' &&
+    !activeScenario &&
+    Boolean(matchConfig?.participants.every((participant) => participant.kind === 'human'))
+  );
+}
+
+function renderHistoryControls(): void {
+  const visible = isLocalMatch() && !replayDock && !isHomeScreenActive();
+  historyControls.hidden = !visible;
+  undoButton.disabled = !visible || animating || !matchController?.canUndo();
+  redoButton.disabled = !visible || animating || !matchController?.canRedo();
+}
+
 function renderThreatToggle(): void {
   const enabled = preferences.tacticalThreats;
   const count = enabled ? analyzeImmediateThreats(state).threatenedPieceIds.length : 0;
@@ -1776,7 +1856,7 @@ function leaveHomeScreen(): void {
   homeScreen.inert = true;
   topbar.inert = false;
   gameLayout.inert = false;
-  commandSheetExpanded = window.innerWidth > 760;
+  commandSheetExpanded = !isCommandSheetLayout();
   renderCommandSheetState();
 }
 
@@ -2005,10 +2085,23 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
         <option value="2" selected>2 · equilibrio recomendado</option>
         <option value="3">3</option>
       </select></label>
-      <label class="field-row"><span>Disposición inicial</span><select data-initial-layout>
-        <option value="1" selected>Frente clásico</option>
-        <option value="2">Columnas de asedio</option>
-      </select></label>
+      <div class="layout-picker">
+        <div class="layout-picker-choice">
+          <label class="layout-picker-label"><span>Disposición inicial</span><select data-initial-layout>
+            ${INITIAL_LAYOUTS.map((layout) => `<option value="${layout.id}">${escapeHtml(layout.name)}</option>`).join('')}
+          </select></label>
+          <p id="layout-description" class="layout-description" data-layout-description role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+        <figure class="layout-preview">
+          <figcaption id="layout-preview-title">Vista previa</figcaption>
+          <canvas data-layout-preview role="img" aria-labelledby="layout-preview-title" aria-describedby="layout-preview-orientation layout-description layout-preview-roster"></canvas>
+          <p id="layout-preview-orientation">Vista de Cian. Ámbar tiene la formación reflejada.</p>
+        </figure>
+        <div class="layout-composition">
+          <h3 data-layout-count></h3>
+          <dl id="layout-preview-roster" class="layout-roster"></dl>
+        </div>
+      </div>
     </div>
     ${
       modeToConfigure === 'machine'
@@ -2040,6 +2133,51 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       <button type="button" class="secondary-button" data-back-menu>Volver</button>
       <button type="button" class="confirm-button" data-start-free>Crear partida</button>
     </div>`);
+  const layoutSelect = dialog.querySelector<HTMLSelectElement>('[data-initial-layout]')!;
+  const fortressSelect = dialog.querySelector<HTMLSelectElement>('[data-fortress-hp]')!;
+  const selectedLayout = () =>
+    INITIAL_LAYOUTS.find((layout) => String(layout.id) === layoutSelect.value) ??
+    INITIAL_LAYOUTS[0];
+  const selectedFortressHp = (): 1 | 2 | 3 => {
+    const value = Number(fortressSelect.value);
+    return value === 1 || value === 3 ? value : 2;
+  };
+  const refreshLayoutPreview = (): void => {
+    if (selectedPreset !== 'custom') {
+      destroyLayoutPreview();
+      return;
+    }
+    const layout = selectedLayout();
+    const previewCanvas = dialog.querySelector<HTMLCanvasElement>('[data-layout-preview]')!;
+    const options = {
+      initialLayout: layout.id,
+      fortressHp: selectedFortressHp(),
+      highContrast: preferences.highContrast,
+    };
+    if (layoutPreview) layoutPreview.update(options);
+    else layoutPreview = mountLayoutPreview(previewCanvas, options);
+    previewCanvas.dataset.layout = String(layout.id);
+    const description = dialog.querySelector<HTMLElement>('[data-layout-description]')!;
+    if (description.textContent !== layout.description)
+      description.textContent = layout.description;
+    dialog.querySelector<HTMLElement>('#layout-preview-title')!.textContent =
+      `Vista previa · ${layout.name}`;
+    const pieces = createInitialPieces(options.fortressHp, layout.id).filter(
+      (piece) => piece.owner === 0,
+    );
+    dialog.querySelector<HTMLElement>('[data-layout-count]')!.textContent =
+      `${pieces.length} piezas por bando`;
+    dialog.querySelector<HTMLElement>('#layout-preview-roster')!.innerHTML = Object.entries(
+      PIECE_NAMES,
+    )
+      .map(([type, name]) => {
+        const count = pieces.filter((piece) => piece.type === type).length;
+        return `<div><dt>${escapeHtml(name)}</dt><dd>${count}</dd></div>`;
+      })
+      .join('');
+  };
+  layoutSelect.addEventListener('change', refreshLayoutPreview);
+  fortressSelect.addEventListener('change', refreshLayoutPreview);
   const refreshPreset = (): void => {
     dialog.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((button) => {
       const selected = button.dataset.preset === selectedPreset;
@@ -2048,6 +2186,7 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
     });
     const custom = dialog.querySelector<HTMLElement>('[data-custom-options]');
     if (custom) custom.hidden = selectedPreset !== 'custom';
+    refreshLayoutPreview();
     const clock = dialog.querySelector<HTMLSelectElement>('[data-match-clock]');
     if (clock && selectedPreset === 'skirmish' && !clock.value) clock.value = '600';
   };
@@ -2085,13 +2224,6 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
   });
   dialog.querySelector('[data-start-free]')?.addEventListener('click', () => {
     const clockValue = dialog.querySelector<HTMLSelectElement>('[data-match-clock]')?.value;
-    const fortressHpValue = Number(
-      dialog.querySelector<HTMLSelectElement>('[data-fortress-hp]')?.value,
-    );
-    const fortressHp = (fortressHpValue === 1 || fortressHpValue === 3 ? fortressHpValue : 2) as
-      1 | 2 | 3;
-    const initialLayout =
-      dialog.querySelector<HTMLSelectElement>('[data-initial-layout]')?.value === '2' ? 2 : 1;
     matchConfig = createPresetConfig(selectedPreset, {
       mode: modeToConfigure,
       difficulty:
@@ -2104,8 +2236,8 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       fixedBoard: preferences.fixedBoard,
       handoffScreen: preferences.handoffScreen,
       clockSeconds: clockValue ? Number(clockValue) : null,
-      fortressHp,
-      initialLayout,
+      fortressHp: selectedFortressHp(),
+      initialLayout: selectedLayout().id,
     });
     gameMode = modeToConfigure;
     recordTelemetry('match-start', {
@@ -2655,7 +2787,7 @@ function showDataCenterDialog(): void {
         <button type="button" class="secondary-button" data-export-match ${matchRecord ? '' : 'disabled'}>Exportar partida</button>
         <button type="button" class="secondary-button" data-import-match>Importar JSON</button>
         <button type="button" class="text-button" data-open-replay ${matchRecord ? '' : 'disabled'}>Analizar tablero</button>
-        <button type="button" class="text-button" data-undo-match ${matchController?.record.config.options.allowUndo && matchController.record.currentAction > 0 && !state.outcome ? '' : 'disabled'}>Deshacer última orden</button>
+        <button type="button" class="text-button" data-undo-match ${matchController?.canUndo() && !animating && (!state.outcome || isLocalMatch()) ? '' : 'disabled'}>Deshacer última orden</button>
         <button type="button" class="text-button" data-history>Historial de resultados</button>
       </div>
       <input type="file" accept="application/json,.json" data-import-file hidden/>
@@ -2867,6 +2999,7 @@ function showOutcomeDialog(): void {
             .join('')}</section>`
         : ''
     }
+    ${isLocalMatch() && matchController?.canUndo() ? '<div class="inline-actions"><button type="button" class="text-button" data-undo-match>Deshacer última orden</button></div>' : ''}
     <div class="dialog-actions triple">
       <button type="button" class="text-button" data-analyze>Analizar partida</button>
       <button type="button" class="secondary-button" data-rematch>Revancha</button>
@@ -2883,12 +3016,19 @@ function showOutcomeDialog(): void {
     resetGame();
   });
   dialog.querySelector('[data-analyze]')?.addEventListener('click', () => showReplayDialog());
+  dialog.querySelector('[data-undo-match]')?.addEventListener('click', undoLastAction);
   dialog.querySelectorAll<HTMLButtonElement>('[data-moment-jump]').forEach((button) => {
     button.addEventListener('click', () => showReplayDialog(Number(button.dataset.momentJump)));
   });
 }
 
+function destroyLayoutPreview(): void {
+  layoutPreview?.destroy();
+  layoutPreview = null;
+}
+
 function openDialog(markup: string): void {
+  destroyLayoutPreview();
   closeReplay();
   if (dialog.open) dialog.close();
   dialog.innerHTML = `<div class="dialog-body">${markup}</div>`;
@@ -3048,6 +3188,17 @@ function loadRecordIntoMatch(record: MatchRecord): void {
       (restoredDaily?.id === scenarioId ? restoredDaily : null) ??
       (restoredCustom?.id === scenarioId ? restoredCustom : null))
     : null;
+  // Older local saves disabled undo by default. Enable the new local controls
+  // without changing their actions or their portable record version.
+  if (
+    !scenarioId &&
+    record.config.participants.every((participant) => participant.kind === 'human')
+  ) {
+    record = {
+      ...record,
+      config: { ...record.config, options: { ...record.config.options, allowUndo: true } },
+    };
+  }
   matchRecord = record;
   matchController = new MatchController(record);
   matchConfig = record.config;
@@ -3331,6 +3482,11 @@ function replayForDisplay(
 }
 
 function undoLastAction(): void {
+  if (animating || replayDock) return;
+  if (isLocalMatch()) {
+    navigateLocalHistory('undo');
+    return;
+  }
   if (state.outcome) {
     showToast('Usa Análisis para explorar una variante desde una partida concluida.');
     return;
@@ -3364,11 +3520,56 @@ function undoLastAction(): void {
   persistCurrentMatch();
   selectedId = null;
   pendingAction = null;
+  mode = { kind: 'default' };
   lastEvents = [];
   renderedStatusKey = '';
   dialog.close();
+  renderer.snapToPlayer(viewPlayer());
   render();
   announce('Última orden deshecha.');
+}
+
+function navigateLocalHistory(direction: 'undo' | 'redo'): void {
+  if (!isLocalMatch() || !matchController || animating || replayDock) return;
+  if (direction === 'undo' ? !matchController.canUndo() : !matchController.canRedo()) return;
+
+  // Charge the current player before changing the cursor. Navigation preserves
+  // elapsed time and must never undo a timeout reached between clock ticks.
+  if (matchController.record.clock && !state.outcome) {
+    matchController.tickClock(Date.now());
+    matchRecord = matchController.record;
+    state = matchController.store.getState().game;
+    if (state.outcome) {
+      persistCurrentMatch();
+      render();
+      presentOutcome();
+      return;
+    }
+  }
+
+  const wasFinished = Boolean(state.outcome);
+  if (direction === 'undo' ? !matchController.undo() : !matchController.redo()) return;
+  matchRecord = matchController.record;
+  state = matchController.store.getState().game;
+  if (wasFinished) removeMatchHistory(matchRecord.createdAt);
+  outcomePresentedFor = '';
+  selectedId = null;
+  pendingAction = null;
+  mode = { kind: 'default' };
+  hoveredHex = null;
+  lastEvents = [];
+  renderedStatusKey = '';
+  if (dialog.open) dialog.close();
+  renderer.snapToPlayer(viewPlayer());
+  startActiveTurnClock();
+  persistCurrentMatch();
+  render();
+  if (state.outcome) presentOutcome();
+  else {
+    announce(
+      `${direction === 'undo' ? 'Última orden deshecha' : 'Última orden rehecha'}. Turno de ${PLAYER_NAMES[state.activePlayer]}.`,
+    );
+  }
 }
 
 function exportCurrentMatch(): void {
