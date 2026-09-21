@@ -6,7 +6,7 @@ Este archivo se aplica a todo el repositorio. Antes de editar, revisa `git statu
 
 **Protocolo Hexagonal** es un juego táctico por turnos, en español, sobre un tablero de 91 hexágonos de radio 5. Los jugadores se identifican como Cian y Ámbar. Incluye partida local, rival de IA, Academia, Laboratorio de escenarios, historial y reproducción de partidas.
 
-La aplicación es una SPA local con React, TypeScript estricto, Vite y Canvas 2D. React gestiona la interfaz; una sesión observable coordina el juego, y el motor de reglas permanece independiente del framework. Los controles comunes utilizan Tailwind CSS 4 y los selectores comparten React Select. No requiere un backend. Mantén esta arquitectura salvo que el trabajo solicitado justifique cambiarla.
+La aplicación es una SPA local con React, TypeScript estricto, Vite y PixiJS 8 (WebGL). React gestiona la interfaz; una sesión observable coordina el juego, y el motor de reglas permanece independiente del framework. Los controles comunes utilizan Tailwind CSS 4 y los selectores comparten React Select. No requiere un backend. Mantén esta arquitectura salvo que el trabajo solicitado justifique cambiarla.
 
 - `README.md`: instalación, comandos, controles y reglas resumidas.
 - `docs/especificacion_juego_hexagonal.md`: descripción de las reglas.
@@ -54,7 +54,7 @@ El hook `.husky/pre-commit` ejecuta `pnpm exec lint-staged`. La configuración v
 | Controles compartidos   | `src/app/components/game-select.tsx`                                                                            | React Select sin estilos predeterminados, con utilidades de Tailwind y accesibilidad común.   |
 | Tablero e interacción   | `src/app/board-canvas.tsx`, `src/renderer.ts`                                                                   | Ciclo de vida del Canvas, entrada de ratón, táctil y teclado, cámara y representación.        |
 | Estilos y textos        | `src/styles.css`, `src/styles/tokens.css`, `src/styles/game.css`, `src/ui-copy.ts`                              | Capas de Tailwind, tokens visuales, CSS específico del juego y textos de interfaz.            |
-| Representación y sonido | `src/renderer.ts`, `src/audio.ts`                                                                               | Canvas, cámara, glifos, animaciones y audio.                                                  |
+| Representación y sonido | `src/renderer.ts`, `src/rendering/`, `src/audio.ts`                                                             | Escena PixiJS, cámara, glifos, animaciones y audio.                                           |
 | Reglas y demostraciones | `src/rules-content.ts`, `src/rules-demo.ts`, `src/rules-sequences.ts`                                           | Texto de ayuda y secuencias animadas con acciones del motor.                                  |
 | Academia y Laboratorio  | `src/scenarios.ts`, `src/scenario-catalog.ts`                                                                   | Lecciones, objetivos y validación de escenarios personalizados.                               |
 | Recursos y PWA          | `public/`, `src/service-worker.js`, `vite.config.ts`                                                            | Recursos y plantilla del SW; Vite emite `sw.js` con precarga de todos los recursos del build. |
@@ -74,10 +74,11 @@ El hook `.husky/pre-commit` ejecuta `pnpm exec lint-staged`. La configuración v
 ## Interfaz y animaciones
 
 - Los componentes React leen el snapshot de `GameSession` mediante `useGame` y ejecutan sus comandos. Evita mantener copias del estado de partida en componentes o añadir una suscripción manual junto al hook; el estado local se reserva para formularios y presentación.
-- Usa JSX y eventos React para pantallas, paneles y diálogos; no reconstruyas la interfaz con `innerHTML` ni añadas listeners manuales a los controles que gestiona React. El renderer Canvas mantiene su ciclo de animación fuera del estado de React.
+- Usa JSX y eventos React para pantallas, paneles y diálogos; no reconstruyas la interfaz con `innerHTML` ni añadas listeners manuales a los controles que gestiona React. El renderer PixiJS mantiene su ciclo de animación fuera del estado de React.
 - Tailwind CSS 4 se integra mediante `@tailwindcss/vite`. `src/styles.css` es la entrada de estilos y organiza las capas y el mapeo `@theme inline` de los tokens de `src/styles/tokens.css`. No actives Preflight como efecto secundario: la aplicación conserva su base visual existente.
 - Utiliza Tailwind y los tokens compartidos para nuevos controles comunes. Mantén en `src/styles/game.css` el CSS específico del tablero, las animaciones y los estilos que requieran selectores propios; no es necesario convertir cada regla existente en utilidades.
 - Reutiliza `GameSelect` para listas de opciones comunes. Mantén `unstyled` y `classNames`, etiquetas y mensajes en español, foco visible y listas cortas sin búsqueda ni borrado. Los menús de un diálogo deben montarse dentro de él; un portal a `body` quedaría fuera de su ámbito modal. Evita que las reglas globales de `input` alteren los campos internos de React Select.
+- PixiJS usa objetos de escena persistentes y renderizado bajo demanda. Mantén los contratos visuales puros en `src/rendering/model.ts`, evita reconstruir la geometría estática por fotograma y libera los recursos GPU al desmontar.
 - Los efectos que conecten Canvas, audio, teclado u otros recursos deben limpiar sus listeners, observadores y tareas al desmontarse. Las operaciones asíncronas de una sesión anterior no deben modificar una nueva partida ni reiniciar bucles después de `dispose`.
 - Conserva el idioma español, la identidad cian/ámbar, los glifos distinguibles y la legibilidad de los indicadores. La información no debe depender únicamente del color.
 - Mantén navegación por teclado, foco visible, etiquetas accesibles y representación textual del tablero. Comprueba escritorio y móvil al modificar layout o interacción.

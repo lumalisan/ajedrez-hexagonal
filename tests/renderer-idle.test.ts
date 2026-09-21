@@ -1,6 +1,61 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGameState } from '../src/engine';
 import { BoardRenderer, type RenderModel } from '../src/renderer';
+import type { BoardAnimation } from '../src/rendering/pixi-board';
+
+interface SceneProbe {
+  render(): void;
+  update(idleTime: number | undefined, animation: BoardAnimation | null): void;
+}
+
+const rendering = vi.hoisted(() => ({
+  canvases: new WeakMap<HTMLCanvasElement, SceneProbe>(),
+  stages: new WeakMap<object, SceneProbe>(),
+}));
+
+// Exercise BoardRenderer's real timing/visibility/camera logic without creating a GPU context.
+// PixiSurface initialization and piece transforms have separate focused tests.
+vi.mock('../src/rendering/pixi-surface', () => ({
+  PixiSurface: class {
+    readonly stage = {};
+    readonly ready = Promise.resolve();
+    initialized = true;
+    private readonly probe: SceneProbe;
+    constructor(canvas: HTMLCanvasElement) {
+      const probe = rendering.canvases.get(canvas);
+      if (!probe) throw new Error('Missing render probe');
+      this.probe = probe;
+      rendering.stages.set(this.stage, probe);
+    }
+    resize(): void {}
+    render(): void {
+      this.probe.render();
+    }
+    destroy(): void {
+      this.initialized = false;
+    }
+  },
+}));
+
+vi.mock('../src/rendering/pixi-board', () => ({
+  PixiBoard: class {
+    private readonly probe: SceneProbe;
+    constructor(stage: object) {
+      const probe = rendering.stages.get(stage);
+      if (!probe) throw new Error('Missing scene probe');
+      this.probe = probe;
+    }
+    update(
+      _model: RenderModel | null,
+      _time: number,
+      view: { idleTime?: number },
+      animation: BoardAnimation | null,
+    ): void {
+      this.probe.update(view.idleTime, animation);
+    }
+    destroy(): void {}
+  },
+}));
 
 class FakeDocument extends EventTarget {
   visibilityState: DocumentVisibilityState = 'visible';
@@ -74,46 +129,26 @@ function idleModel(): RenderModel {
 }
 
 function createCanvasProbe() {
-  type Transform = { kind: 'translate'; x: number; y: number } | { kind: 'rotate'; angle: number };
-  const transforms: Transform[] = [];
-  const clearCanvas = vi.fn(() => {
-    transforms.length = 0;
-  });
-  const gradient = { addColorStop: vi.fn() };
-  const context = new Proxy(
-    {
-      clearRect: clearCanvas,
-      createLinearGradient: () => gradient,
-      createRadialGradient: () => gradient,
-      measureText: () => ({ width: 10 }),
-      translate: (x: number, y: number) => transforms.push({ kind: 'translate', x, y }),
-      rotate: (angle: number) => transforms.push({ kind: 'rotate', angle }),
-    },
-    {
-      get: (target, property) => Reflect.get(target, property) ?? vi.fn(),
-    },
-  );
+  const draw = vi.fn();
+  let idleTime: number | undefined;
+  let animation: BoardAnimation | null = null;
   const canvas = {
     dataset: {},
     isConnected: true,
-    getContext: () => context,
     getBoundingClientRect: () => ({ x: 0, y: 0, left: 0, top: 0, width: 900, height: 700 }),
   } as unknown as HTMLCanvasElement;
+  rendering.canvases.set(canvas, {
+    render: draw,
+    update(nextTime, nextAnimation) {
+      idleTime = nextTime;
+      animation = nextAnimation;
+    },
+  });
   return {
     canvas,
-    clearCanvas,
-    // Observe the four rotor blades in the public Canvas output. Their local angles
-    // remain comparable when the drone travels or the camera turns around the board.
-    rotorAngles: () =>
-      transforms.flatMap((transform, index) => {
-        const previous = transforms[index - 1];
-        return transform.kind === 'rotate' &&
-          previous?.kind === 'translate' &&
-          Math.abs(previous.x) === 7 &&
-          Math.abs(previous.y) === 7
-          ? [transform.angle]
-          : [];
-      }),
+    clearCanvas: draw,
+    idleTime: () => idleTime,
+    animation: () => animation,
   };
 }
 
@@ -204,8 +239,8 @@ describe('ciclo de vida de las animaciones idle', () => {
     const reference = idleReference();
     renderer.setModel(before);
     refresh();
-    const initialAngles = canvasProbe.rotorAngles();
-    expect(initialAngles).toHaveLength(4);
+    const initialPhase = canvasProbe.idleTime();
+    expect(initialPhase).toBe(time);
 
     renderer.setModel({
       ...before,
@@ -224,8 +259,9 @@ describe('ciclo de vida de las animaciones idle', () => {
 
     for (let frame = 0; frame < 3; frame += 1) {
       refresh();
-      expect(canvasProbe.rotorAngles()).toEqual(reference.rotorAngles());
-      expect(canvasProbe.rotorAngles()).not.toEqual(initialAngles);
+      expect(canvasProbe.animation()).not.toBeNull();
+      expect(canvasProbe.idleTime()).toBe(reference.idleTime());
+      expect(canvasProbe.idleTime()).not.toBe(initialPhase);
     }
   });
 
@@ -235,8 +271,8 @@ describe('ciclo de vida de las animaciones idle', () => {
     const to = { q: 1, r: 0 };
     const reference = idleReference();
     refresh();
-    const initialAngles = canvasProbe.rotorAngles();
-    expect(initialAngles).toHaveLength(4);
+    const initialPhase = canvasProbe.idleTime();
+    expect(initialPhase).toBe(time);
     renderer.setModel({
       ...before,
       state: {
@@ -252,11 +288,11 @@ describe('ciclo de vida de las animaciones idle', () => {
       .then(finished);
 
     refresh(0);
-    expect(canvasProbe.rotorAngles()).toEqual(initialAngles);
+    expect(canvasProbe.idleTime()).toBe(initialPhase);
     for (let frame = 0; frame < 10; frame += 1) {
       refresh();
-      expect(canvasProbe.rotorAngles()).toEqual(reference.rotorAngles());
-      expect(canvasProbe.rotorAngles()).not.toEqual(initialAngles);
+      expect(canvasProbe.idleTime()).toBe(reference.idleTime());
+      expect(canvasProbe.idleTime()).not.toBe(initialPhase);
       await Promise.resolve();
     }
     expect(finished).toHaveBeenCalledOnce();
@@ -266,17 +302,17 @@ describe('ciclo de vida de las animaciones idle', () => {
   it('conserva la fase idle durante y después del giro de cámara', async () => {
     const reference = idleReference();
     refresh();
-    const initialAngles = canvasProbe.rotorAngles();
-    expect(initialAngles).toHaveLength(4);
+    const initialPhase = canvasProbe.idleTime();
+    expect(initialPhase).toBe(time);
     const finished = vi.fn();
     void renderer.rotateToPlayer(1, false).then(finished);
 
     refresh(0);
-    expect(canvasProbe.rotorAngles()).toEqual(initialAngles);
+    expect(canvasProbe.idleTime()).toBe(initialPhase);
     for (let frame = 0; frame < 20; frame += 1) {
       refresh();
-      expect(canvasProbe.rotorAngles()).toEqual(reference.rotorAngles());
-      expect(canvasProbe.rotorAngles()).not.toEqual(initialAngles);
+      expect(canvasProbe.idleTime()).toBe(reference.idleTime());
+      expect(canvasProbe.idleTime()).not.toBe(initialPhase);
       await Promise.resolve();
     }
     expect(finished).toHaveBeenCalledOnce();
@@ -298,8 +334,7 @@ describe('ciclo de vida de las animaciones idle', () => {
     const to = { q: 1, r: 0 };
     renderer.setModel(before);
     refresh();
-    const staticAngles = canvasProbe.rotorAngles();
-    expect(staticAngles).toHaveLength(4);
+    expect(canvasProbe.idleTime()).toBeUndefined();
     expect(frames.size).toBe(0);
 
     renderer.setModel({
@@ -320,18 +355,19 @@ describe('ciclo de vida de las animaciones idle', () => {
 
     refresh();
     expect(frames.size).toBe(1);
-    expect(canvasProbe.rotorAngles()).toEqual(staticAngles);
+    expect(canvasProbe.idleTime()).toBeUndefined();
+    expect(canvasProbe.animation()).not.toBeNull();
     const draws = clearCanvas.mock.calls.length;
     refresh();
     expect(clearCanvas.mock.calls.length).toBeGreaterThan(draws);
-    expect(canvasProbe.rotorAngles()).toEqual(staticAngles);
+    expect(canvasProbe.idleTime()).toBeUndefined();
     expect(finished).not.toHaveBeenCalled();
 
     for (let frame = 0; frame < 20; frame += 1) refresh();
     await Promise.resolve();
     expect(finished).toHaveBeenCalledOnce();
     expect(frames.size).toBe(0);
-    expect(canvasProbe.rotorAngles()).toEqual(staticAngles);
+    expect(canvasProbe.idleTime()).toBeUndefined();
   });
 
   it('detiene el idle con la preferencia de movimiento reducido y vuelve al desactivarla', () => {

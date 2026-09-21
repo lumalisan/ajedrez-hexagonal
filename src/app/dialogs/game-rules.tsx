@@ -9,6 +9,7 @@ import {
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules-content';
 import { mountRuleDemo, type RuleDemoController, type RuleDemoId } from '../../rules-demo';
 import { useGame } from '../game-context';
+import { RendererStatus } from '../components/renderer-status';
 
 const HORIZONTAL_RULE_TABS = '(max-width: 760px) and (orientation: portrait)';
 
@@ -247,6 +248,7 @@ function RuleDemo({ demoId, title }: { demoId: RuleDemoId; title: string }) {
     <figure className="rule-media rule-demo" aria-label={`Demostración de ${title}`}>
       <div className="rule-media-stage">
         <canvas ref={canvasRef} className="rule-demo-canvas" />
+        <RendererStatus canvasRef={canvasRef} overlay />
         <span className="rule-demo-badge" aria-hidden="true">
           <i /> Demostración real
         </span>

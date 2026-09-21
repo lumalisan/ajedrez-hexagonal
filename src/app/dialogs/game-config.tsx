@@ -6,6 +6,7 @@ import { recordTelemetry } from '../../playtest-telemetry';
 import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
 import type { AiDifficulty, FortressHp } from '../../types';
 import { GameSelect } from '../components/game-select';
+import { RendererStatus } from '../components/renderer-status';
 import { useGame } from '../game-context';
 
 type MatchClockValue = '' | 300 | 600 | 1200;
@@ -263,13 +264,16 @@ function LayoutPreviewCanvas({
     [],
   );
   return (
-    <canvas
-      ref={canvasRef}
-      data-layout-preview
-      data-layout={initialLayout}
-      role="img"
-      aria-labelledby="layout-preview-title"
-      aria-describedby="layout-preview-orientation layout-description layout-preview-roster"
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        data-layout-preview
+        data-layout={initialLayout}
+        role="img"
+        aria-labelledby="layout-preview-title"
+        aria-describedby="layout-preview-orientation layout-description layout-preview-roster"
+      />
+      <RendererStatus canvasRef={canvasRef} />
+    </>
   );
 }

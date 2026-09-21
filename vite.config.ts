@@ -33,4 +33,15 @@ function offlinePrecache(): Plugin {
   };
 }
 
-export default defineConfig({ plugins: [react(), tailwindcss(), offlinePrecache()] });
+export default defineConfig({
+  plugins: [react(), tailwindcss(), offlinePrecache()],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: 'pixi', test: /node_modules[\\/]pixi\.js[\\/]/, entriesAware: true }],
+        },
+      },
+    },
+  },
+});

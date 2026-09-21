@@ -15,7 +15,7 @@ import {
   replayRecord,
   serializeRecord,
 } from '../src/match-record';
-import { pieceAccessibleLabel } from '../src/renderer';
+import { pieceAccessibleLabel } from '../src/rendering/model';
 import type { GameAction, GameState, Piece } from '../src/types';
 
 function initial(ammunition?: 0 | 1 | 2): GameState {

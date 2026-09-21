@@ -3,6 +3,7 @@ import { isOnBoard, stepHex } from '../hex';
 import { BoardRenderer } from '../renderer';
 import type { Direction } from '../types';
 import { useGame } from './game-context';
+import { RendererStatus } from './components/renderer-status';
 
 interface PointerState {
   x: number;
@@ -228,6 +229,7 @@ export function BoardCanvas() {
         aria-activedescendant={focused ? `hex-cell-${focused.q + 5}-${focused.r + 5}` : undefined}
       />
       <div className="canvas-hint" id="canvas-hint" aria-hidden="true" />
+      <RendererStatus canvasRef={canvasRef} overlay />
     </div>
   );
 }

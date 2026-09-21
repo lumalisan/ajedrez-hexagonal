@@ -151,6 +151,11 @@ try {
   await page.locator('[data-start-free]').click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
   await page.locator('#game-canvas').waitFor({ state: 'visible' });
+  await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
+  assert(
+    (await page.locator('#game-canvas').getAttribute('data-renderer'))?.startsWith('pixi-'),
+    'Pixi and its renderer modules must initialize offline.',
+  );
   assert(
     !(await page.locator('#app').evaluate((element) => element.classList.contains('home-active'))),
     'Starting the offline game must leave the home screen.',

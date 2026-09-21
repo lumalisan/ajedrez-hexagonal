@@ -13,7 +13,7 @@ import {
   protectedCells,
 } from '../src/engine';
 import { allBoardHexes, directionAtOffset, hexDistance, isOnBoard, stepHex } from '../src/hex';
-import { markerKind } from '../src/renderer';
+import { markerKind } from '../src/rendering/model';
 import type {
   Direction,
   FortressHp,

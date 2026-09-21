@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionMarkers, movementPose, type RenderModel } from '../src/renderer';
+import { actionMarkers, movementPose, type RenderModel } from '../src/rendering/model';
 import { createRuleDemoScenes } from '../src/rules-demo';
 import { applyAction, getLegalActionsForPiece } from '../src/engine';
 

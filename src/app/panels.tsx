@@ -12,7 +12,7 @@ import {
 } from '../engine';
 import { FloatingCommandPanel } from '../floating-command-panel';
 import { ALL_DIRECTIONS, DIRECTION_NAMES, equalHex, hexKey, isOnBoard } from '../hex';
-import { actionsAtHex, pieceAccessibleLabel } from '../renderer';
+import { actionsAtHex, pieceAccessibleLabel } from '../rendering/model';
 import { scenarioLessonAt } from '../scenarios';
 import type { Direction, GameAction, Piece, Player } from '../types';
 import { captureAboveCommandLabel, selectedUnitInstruction } from '../ui-copy';

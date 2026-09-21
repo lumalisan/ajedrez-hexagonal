@@ -1,6 +1,6 @@
 # Protocolo Hexagonal
 
-Juego táctico 2D para dos jugadores en tablero hexagonal. La interfaz utiliza React, TypeScript estricto y Vite; el tablero se representa con Canvas 2D. Las reglas se describen en `docs/especificacion_juego_hexagonal.md`.
+Juego táctico 2D para dos jugadores en tablero hexagonal. La interfaz utiliza React, TypeScript estricto y Vite; el tablero se representa con PixiJS 8 (WebGL, con respaldo Canvas). Las reglas se describen en `docs/especificacion_juego_hexagonal.md`.
 
 ## Ejecutar
 
@@ -39,7 +39,9 @@ Tras `pnpm build`, `pnpm test:offline` comprueba la recarga y la primera apertur
 
 La aplicación es una SPA local, sin backend. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión.
 
-El motor de reglas sigue siendo TypeScript independiente de React, el DOM y el almacenamiento. Canvas conserva la cámara, los glifos y las animaciones: `BoardCanvas` gestiona el renderer y sus eventos, mientras React se ocupa de la interfaz y su representación accesible. Los efectos liberan listeners, temporizadores y recursos gráficos al desmontarse.
+El motor de reglas sigue siendo TypeScript independiente de React, el DOM y el almacenamiento. PixiJS conserva la cámara, los glifos y las animaciones: `BoardCanvas` gestiona el renderer y sus eventos, mientras React se ocupa de la interfaz y su representación accesible. Los efectos liberan listeners, temporizadores y recursos gráficos al desmontarse.
+
+La escena utiliza objetos persistentes de PixiJS y renderizado bajo demanda: no mantiene un bucle continuo cuando no hay animaciones ni marcas pulsantes. La inicialización gráfica es asíncrona y respeta el desmontaje de React, las preferencias de movimiento reducido y las animaciones idle opcionales. Se utiliza WebGL cuando está disponible y el renderizador Canvas de PixiJS como respaldo; si ninguno puede iniciarse, la interfaz muestra un aviso.
 
 Los controles comunes utilizan Tailwind CSS 4, integrado con `@tailwindcss/vite`, y los tokens visuales existentes. `src/styles.css` organiza las capas y expone esos tokens con `@theme inline`; `src/styles/tokens.css` conserva los valores del tema y `src/styles/game.css` contiene los estilos específicos del juego. No se carga Preflight, para conservar la base visual actual. El tablero, las animaciones y los estilos específicos siguen utilizando CSS propio; no se ha convertido cada regla existente en utilidades.
 
@@ -111,8 +113,9 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
 - `src/match-storage.ts`: preferencias, autoguardado y progreso local.
-- `src/hex.ts`: coordenadas axiales y conversión a Canvas.
-- `src/renderer.ts`: tablero, glifos, capas y animaciones.
+- `src/hex.ts`: coordenadas axiales y conversión a posiciones visuales.
+- `src/renderer.ts`: cámara, interacción y planificación de animaciones.
+- `src/rendering/`: escena PixiJS, piezas y marcas tácticas reutilizables, contexto gráfico y modelos visuales puros.
 - `src/audio.ts`: paisajes sonoros sintetizados con Web Audio.
 - `src/main.tsx`: entrada de React, estilos y registro de la PWA.
 - `src/service-worker.js`: plantilla de la caché offline, emitida como `sw.js` con todos los recursos del build.

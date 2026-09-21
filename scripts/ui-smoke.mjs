@@ -118,6 +118,7 @@ try {
       'All five initial layouts must be available, preserving the existing options.',
     );
     const preview = page.locator('[data-layout-preview]');
+    await page.locator('[data-layout-preview][data-renderer-status="ready"]').waitFor();
     const previewImages = new Set();
     let previewSize;
     for (const [value, soldiers, tanks, capturers, launchers, airplanes] of [
@@ -203,6 +204,7 @@ try {
     await page.locator('[data-preset="tactical"]').click();
     assert(await preview.isHidden(), 'The custom preview must hide when selecting another preset.');
     await page.locator('[data-preset="custom"]').click();
+    await page.locator('[data-layout-preview][data-renderer-status="ready"]').waitFor();
     assert(
       (await preview.getAttribute('data-layout')) === '2',
       'Returning to custom must preserve the chosen layout.',
@@ -1665,6 +1667,7 @@ async function selectMode(page, mode) {
   }
   await page.locator('[data-start-free]').click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+  await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
 }
 
 async function doubleClickHex(page, q, r) {

@@ -38,7 +38,7 @@ import {
   savePreferences as persistPreferences,
 } from '../match-storage';
 import { recordTelemetry } from '../playtest-telemetry';
-import { actionsAtHex, pieceAccessibleLabel } from '../renderer';
+import { actionsAtHex, pieceAccessibleLabel } from '../rendering/model';
 import {
   dailyScenarioForDate,
   evaluateScenarioProgress,
