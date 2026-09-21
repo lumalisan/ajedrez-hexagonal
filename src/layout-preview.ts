@@ -1,4 +1,5 @@
 import { createGameState } from './engine';
+import { allBoardHexes } from './hex';
 import { BoardRenderer } from './renderer';
 import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from './setup';
 import type { FortressHp } from './types';
@@ -7,6 +8,8 @@ export interface LayoutPreviewOptions {
   initialLayout: InitialLayout;
   fortressHp: FortressHp;
   highContrast: boolean;
+  /** Show both armies and all 91 cells instead of Cian's close-up. */
+  fullBoard?: boolean;
 }
 
 export interface LayoutPreview {
@@ -20,8 +23,9 @@ const PREVIEW_POSITIONS = INITIAL_LAYOUTS.flatMap(({ id }) =>
     .filter((piece) => piece.owner === 0)
     .map((piece) => piece.position),
 );
+const FULL_BOARD_POSITIONS = allBoardHexes();
 
-/** A static close-up of the selected deployment, viewed from Cian's side. */
+/** A static deployment preview, viewed from Cian's side. */
 export function mountLayoutPreview(
   canvas: HTMLCanvasElement,
   options: LayoutPreviewOptions,
@@ -29,11 +33,13 @@ export function mountLayoutPreview(
   const renderer = new BoardRenderer(canvas);
   renderer.snapToPlayer(0);
   renderer.setDepthMode(false, true);
-  renderer.setFrame(PREVIEW_POSITIONS);
 
   function update(next: LayoutPreviewOptions): void {
     const state = createGameState(createInitialPieces(next.fortressHp, next.initialLayout));
-    const pieces = state.pieces.filter((piece) => piece.owner === 0);
+    const pieces = next.fullBoard
+      ? state.pieces
+      : state.pieces.filter((piece) => piece.owner === 0);
+    renderer.setFrame(next.fullBoard ? FULL_BOARD_POSITIONS : PREVIEW_POSITIONS);
 
     renderer.setModel({
       state: { ...state, pieces },

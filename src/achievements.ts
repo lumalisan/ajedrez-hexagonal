@@ -1,5 +1,4 @@
-import { applyAction, cloneState } from './engine';
-import { replayRecord, resolutionRulesForConfig } from './match-record';
+import { replayRecord } from './match-record';
 import { BASIC_SCENARIOS, SCENARIOS } from './scenarios';
 import type { GameEvent, GameState, MatchRecord, Player } from './types';
 
@@ -140,7 +139,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'captures-1',
     'Aquí sobraba alguien',
-    'Elimina una unidad rival y termina la partida. No cuentan Fortalezas ni sacrificios del rival.',
+    'Elimina una unidad rival. No cuentan Fortalezas ni sacrificios del rival.',
     'tactics',
     1,
     'unidades eliminadas',
@@ -149,7 +148,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'captures-25',
     'Servicio de limpieza',
-    'Elimina 25 unidades rivales en partidas terminadas. No cuentan Fortalezas ni sacrificios del rival.',
+    'Elimina 25 unidades rivales. No cuentan Fortalezas ni sacrificios del rival.',
     'tactics',
     25,
     'unidades eliminadas',
@@ -158,7 +157,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'captures-100',
     '¿Quién recoge todo esto?',
-    'Elimina 100 unidades rivales en partidas terminadas. No cuentan Fortalezas ni sacrificios del rival.',
+    'Elimina 100 unidades rivales. No cuentan Fortalezas ni sacrificios del rival.',
     'tactics',
     100,
     'unidades eliminadas',
@@ -167,7 +166,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'conversion',
     'Ahora somos familia',
-    'Cambia de bando una unidad rival con un Capturador y termina la partida.',
+    'Cambia de bando una unidad rival con un Capturador.',
     'tactics',
     1,
     'conversiones',
@@ -176,7 +175,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'interception',
     'Prohibido aparcar arriba',
-    'Intercepta una unidad aérea rival con tu defensa antiaérea y termina la partida.',
+    'Intercepta una unidad aérea rival con tu defensa antiaérea.',
     'tactics',
     1,
     'intercepciones',
@@ -185,7 +184,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'transformation',
     'Me bajo aquí',
-    'Transforma uno de tus vehículos en Soldado y termina la partida.',
+    'Transforma uno de tus vehículos en Soldado.',
     'tactics',
     1,
     'transformaciones',
@@ -277,6 +276,8 @@ export interface AchievementProgress {
   registeredMatchIds: string[];
   /** Never prune these IDs: undo, restart, and replay must not count a match twice. */
   processedMatchIds: string[];
+  /** Credited tactical events survive undo and reload until the match is processed. */
+  processedTacticalEvents: Record<string, string[]>;
   completedScenarioIds: string[];
   goldScenarioIds: string[];
 }
@@ -301,6 +302,7 @@ export function createAchievementProgress(): AchievementProgress {
     unlockedAt: {},
     registeredMatchIds: [],
     processedMatchIds: [],
+    processedTacticalEvents: {},
     completedScenarioIds: [],
     goldScenarioIds: [],
   };
@@ -318,6 +320,31 @@ export function registerAchievementMatch(
   return { ...progress, registeredMatchIds: [...progress.registeredMatchIds, record.createdAt] };
 }
 
+/** Called after committing a live order, using its actual engine events and previous state. */
+export function evaluateActionAchievements(
+  progress: AchievementProgress,
+  record: MatchRecord,
+  before: GameState,
+  events: readonly GameEvent[],
+  options: { source: 'live' | 'import' | 'replay'; at: string },
+): AchievementUpdate {
+  const unchanged = { progress, unlocked: [] };
+  if (!canEarnMatchAchievements(progress, record, options.source) || before.outcome)
+    return unchanged;
+  const humans = humanPlayers(record);
+  if (!humans.length) return unchanged;
+  const credited = new Set(progress.processedTacticalEvents[record.createdAt] ?? []);
+  const previousSize = credited.size;
+  const counters = { ...progress.counters };
+  collectHumanEvents(counters, before, events, humans, credited);
+  if (credited.size === previousSize) return unchanged;
+  assertTimestamp(options.at);
+  const next = structuredClone(progress);
+  next.counters = counters;
+  next.processedTacticalEvents[record.createdAt] = [...credited];
+  return unlockEligible(next, new Set(), options.at);
+}
+
 /** Pure evaluation. Imported records and replay views never award progress. */
 export function evaluateMatchAchievements(
   progress: AchievementProgress,
@@ -325,16 +352,7 @@ export function evaluateMatchAchievements(
   options: { source: 'live' | 'import' | 'replay'; at: string },
 ): AchievementUpdate {
   const unchanged = { progress, unlocked: [] };
-  if (
-    options.source !== 'live' ||
-    !progress.registeredMatchIds.includes(record.createdAt) ||
-    progress.processedMatchIds.includes(record.createdAt) ||
-    !['classic', 'skirmish', 'tactical', 'siege'].includes(record.config.definitionId) ||
-    record.academySession ||
-    record.currentAction === 0 ||
-    record.currentAction !== record.actions.length
-  )
-    return unchanged;
+  if (!canEarnMatchAchievements(progress, record, options.source)) return unchanged;
 
   let finalState: GameState;
   try {
@@ -343,25 +361,16 @@ export function evaluateMatchAchievements(
     return unchanged;
   }
   if (!finalState.outcome) return unchanged;
-  const humans = ([0, 1] as const).filter(
-    (owner) => record.config.participants[owner].kind === 'human',
-  );
+  const humans = humanPlayers(record);
   if (!humans.length) return unchanged;
   assertTimestamp(options.at);
   const next = structuredClone(progress);
   next.registeredMatchIds = next.registeredMatchIds.filter((id) => id !== record.createdAt);
   next.processedMatchIds.push(record.createdAt);
+  delete next.processedTacticalEvents[record.createdAt];
   next.counters.matches += 1;
   const local = humans.length === 2;
   if (local) next.counters.localMatches += 1;
-  let before = cloneState(record.initialState);
-  for (const action of record.actions) {
-    const result = applyAction(before, action, resolutionRulesForConfig(record.config));
-    // replayRecord has already validated the same sequence with the same rules.
-    collectHumanEvents(next.counters, before, result.events, humans);
-    before = result.state;
-  }
-
   const earned = new Set<AchievementId>();
   const outcome = finalState.outcome;
   if (outcome.type === 'win' && humans.includes(outcome.winner)) {
@@ -495,6 +504,12 @@ export function parseAchievementProgress(raw: string): AchievementProgress {
   }
   fresh.registeredMatchIds = uniqueStrings(value.registeredMatchIds).filter(isTimestamp);
   fresh.processedMatchIds = uniqueStrings(value.processedMatchIds).filter(isTimestamp);
+  if (isObject(value.processedTacticalEvents)) {
+    for (const [matchId, events] of Object.entries(value.processedTacticalEvents)) {
+      if (isTimestamp(matchId) && !fresh.processedMatchIds.includes(matchId))
+        fresh.processedTacticalEvents[matchId] = uniqueStrings(events);
+    }
+  }
   fresh.completedScenarioIds = uniqueStrings(value.completedScenarioIds).filter(isKnownScenario);
   fresh.goldScenarioIds = uniqueStrings(value.goldScenarioIds).filter(
     (id) => isBuiltInScenario(id) && fresh.completedScenarioIds.includes(id),
@@ -541,7 +556,14 @@ function collectHumanEvents(
   before: GameState,
   events: readonly GameEvent[],
   humans: readonly Player[],
+  credited: Set<string>,
 ): void {
+  const credit = (metric: keyof AchievementCounters, identity: readonly (string | number)[]) => {
+    const key = JSON.stringify([metric, ...identity]);
+    if (credited.has(key)) return;
+    credited.add(key);
+    counters[metric] += 1;
+  };
   for (const event of events) {
     if (event.owner === undefined || !humans.includes(event.owner)) continue;
     const target = before.pieces.find((piece) => piece.id === event.targetId);
@@ -552,11 +574,31 @@ function collectHumanEvents(
       (event.type === 'intercept' || target.owner !== event.owner) &&
       (event.type === 'intercept' || event.pieceId !== event.targetId)
     )
-      counters.captures += 1;
-    if (event.type === 'convert') counters.conversions += 1;
-    if (event.type === 'intercept') counters.interceptions += 1;
-    if (event.type === 'transform') counters.transformations += 1;
+      credit('captures', [target.id]);
+    if (event.type === 'convert' && target) credit('conversions', [target.id, event.owner]);
+    if (event.type === 'intercept' && target) credit('interceptions', [target.id]);
+    if (event.type === 'transform' && event.pieceId) credit('transformations', [event.pieceId]);
   }
+}
+
+function canEarnMatchAchievements(
+  progress: AchievementProgress,
+  record: MatchRecord,
+  source: 'live' | 'import' | 'replay',
+): boolean {
+  return (
+    source === 'live' &&
+    progress.registeredMatchIds.includes(record.createdAt) &&
+    !progress.processedMatchIds.includes(record.createdAt) &&
+    ['classic', 'skirmish', 'tactical', 'siege'].includes(record.config.definitionId) &&
+    !record.academySession &&
+    record.currentAction > 0 &&
+    record.currentAction === record.actions.length
+  );
+}
+
+function humanPlayers(record: MatchRecord): Player[] {
+  return ([0, 1] as const).filter((owner) => record.config.participants[owner].kind === 'human');
 }
 
 function isBuiltInScenario(id: string): boolean {

@@ -62,6 +62,14 @@ try {
       await page.locator('[data-home-action="rules"]').click();
       await page.locator('#rules-article').waitFor({ state: 'visible' });
       await audit('rules manual');
+      await page.locator('[data-rule-section="desarrollo"]').click();
+      await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();
+      await audit('rules / live initial deployment');
+      const rulesLayout = await openSelect(page, 'Disposición inicial');
+      await audit('rules / open layout menu');
+      await rulesLayout.press('Escape');
+      await chooseSelectOption(page, 'Disposición inicial', 'Frente extendido');
+      await audit('rules / extended initial deployment');
       await page.locator('.rules-close').click();
 
       await page.locator('[data-home-action="new"]').click();

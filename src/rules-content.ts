@@ -5,11 +5,6 @@ import {
   FORTRESS_DAMAGE_PER_HIT,
 } from './classic-rules';
 
-export interface RuleMedia {
-  src: string;
-  alt: string;
-}
-
 export interface RuleParagraph {
   text: string;
   strong?: string[];
@@ -22,7 +17,7 @@ export interface RuleSection {
   title: string;
   paragraphs: Array<string | RuleParagraph>;
   demo?: RuleDemoId;
-  media?: RuleMedia[];
+  layoutPreview?: boolean;
 }
 
 function emphasize(text: string, ...strong: string[]): RuleParagraph {
@@ -224,7 +219,7 @@ export const RULE_SECTIONS: RuleSection[] = [
     title: 'Desarrollo de la partida',
     paragraphs: [
       emphasize(
-        'En el despliegue clásico completo, cada jugador comienza con 5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones, además de una fortaleza y un escudo antiaéreo. La disposición inicial de los ejércitos sobre el tablero es la que aparece en la imagen de la derecha.',
+        'En el despliegue clásico completo, cada jugador comienza con 5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones, además de una fortaleza y un escudo antiaéreo. Explora la disposición inicial en el tablero y utiliza el selector para comparar las cinco formaciones.',
         '5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones',
       ),
       'Los presets pueden variar el número y la disposición de las unidades, así como los puntos de vida iniciales de las fortalezas. No cambian el movimiento, el combate, las capas ni el daño de un impacto salvo que la configuración lo indique expresamente.',
@@ -252,12 +247,7 @@ export const RULE_SECTIONS: RuleSection[] = [
       peerHeading('Registro y continuidad'),
       'Cada orden confirmada y el desenlace quedan guardados en el registro de partida. La destrucción de una fortaleza, las tablas, el tiempo agotado y la rendición se conservan al continuar, exportar, importar o reproducir la partida; una partida concluida no vuelve a abrirse como si siguiera activa.',
     ],
-    media: [
-      {
-        src: '/rules/image22.png',
-        alt: 'Disposición inicial completa de los ejércitos cian y ámbar sobre el tablero.',
-      },
-    ],
+    layoutPreview: true,
   },
   {
     id: 'casillas-compartidas',

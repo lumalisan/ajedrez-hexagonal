@@ -85,7 +85,7 @@ El hook `.husky/pre-commit` ejecuta `pnpm exec lint-staged`. La configuración v
 - Respeta las preferencias de sonido, contraste y movimiento reducido. Detén bucles cuando su contenido esté oculto y libera observadores, temporizadores y listeners al desmontarlo.
 - Las demostraciones de «Reglas» usan tablero plano, encuadre cercano, ritmo pausado y solo muestran las unidades implicadas. Conservan las posiciones entre pasos y ofrecen pausa, avance manual y reinicio.
 - **Los estilos holográficos y su selector fueron descartados por el usuario. No reintroducirlos salvo nueva petición explícita.**
-- Los recursos de `public/rules/` se utilizan en el manual; comprueba referencias y caché de la PWA si los cambias.
+- El manual usa demostraciones del motor y una vista del tablero completo para comparar las disposiciones iniciales. Reutiliza `src/layout-preview.ts` y `src/setup.ts`; no depende de imágenes en `public/rules/`.
 
 ## Validación y entrega
 

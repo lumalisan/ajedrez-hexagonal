@@ -35,6 +35,19 @@ try {
   const builtAssets = readdirSync(assetsDirectory, { recursive: true })
     .filter((file) => /\.(?:js|css)$/.test(file))
     .map((file) => `/assets/${file.replaceAll('\\', '/')}`);
+  const achievementDirectory = resolve(
+    server.config.root,
+    server.config.build.outDir,
+    'achievements',
+  );
+  assert(
+    existsSync(achievementDirectory),
+    'Production achievement artwork is missing. Run pnpm build first.',
+  );
+  const achievementImages = readdirSync(achievementDirectory)
+    .filter((file) => file.endsWith('.webp'))
+    .map((file) => `/achievements/${file}`);
+  assert(achievementImages.length === 28, 'The build must contain all 28 achievement images.');
   assert(
     builtAssets.some((asset) => asset.endsWith('.js')),
     'The build must contain JavaScript.',
@@ -120,10 +133,22 @@ try {
     };
   });
   assert(cachedAssets.names.length > 0, 'The production service worker must create its cache.');
+  assert(
+    !existsSync(resolve(server.config.root, server.config.build.outDir, 'rules')) &&
+      !cachedAssets.paths.some((path) => path.startsWith('/rules/')),
+    'Obsolete static rules illustrations must be absent from the build and offline cache.',
+  );
   const missingAssets = builtAssets.filter((asset) => !cachedAssets.paths.includes(asset));
   assert(
     missingAssets.length === 0,
     `All generated JS and CSS, including unopened lazy chunks, must be precached: ${missingAssets.join(', ')}`,
+  );
+  const missingAchievementImages = achievementImages.filter(
+    (asset) => !cachedAssets.paths.includes(asset),
+  );
+  assert(
+    missingAchievementImages.length === 0,
+    `All achievement images must be precached before the collection is opened: ${missingAchievementImages.join(', ')}`,
   );
 
   offline = true;
@@ -142,8 +167,48 @@ try {
     await page.getByText('¡Chúpate esa!', { exact: true }).isVisible(),
     'The achievement collection and its descriptions must be available offline.',
   );
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('[data-achievement-id] .achievement-icon')].every(
+      (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+    ),
+  );
+  const offlineArtwork = await page
+    .locator('[data-achievement-id] img.achievement-icon')
+    .evaluateAll((images) =>
+      images.map((image) => ({
+        source: new URL(image.currentSrc).pathname,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      })),
+    );
+  assert(
+    offlineArtwork.length === 28 &&
+      new Set(offlineArtwork.map(({ source }) => source)).size === 28 &&
+      offlineArtwork.every(
+        ({ source, width, height }) =>
+          achievementImages.includes(source) && width === 512 && width === height,
+      ),
+    'All 28 achievement images must load at 512×512 on the first collection visit while offline.',
+  );
   await page.keyboard.press('Escape');
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+
+  await page.locator('[data-home-action="rules"]').click();
+  await page.locator('[data-rule-section="desarrollo"]').click();
+  const rulesPreview = page.locator('[data-rules-layout-preview]');
+  await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();
+  assert(
+    (await rulesPreview.getAttribute('data-layout')) === '1' &&
+      (await rulesPreview.getAttribute('data-piece-count')) === '36',
+    'The real default deployment must render on the first rules visit while offline.',
+  );
+  await chooseSelectOption(page, 'Disposición inicial', 'Frente extendido');
+  assert(
+    (await rulesPreview.getAttribute('data-layout')) === '5' &&
+      (await rulesPreview.getAttribute('data-piece-count')) === '44',
+    'The live rules board must show the selected complete deployment offline.',
+  );
+  await page.locator('.rules-close').click();
 
   await page.locator('[data-home-action="new"]').click();
   await page.locator('[data-home-mode="local"]').click();
@@ -205,7 +270,7 @@ try {
   );
   assert(runtimeErrors.length === 0, `Offline runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    `Offline smoke passed: ${builtAssets.length} generated JS/CSS assets precached, both lazy dialogs and their selectors opened for the first time offline.`,
+    `Offline smoke passed: ${builtAssets.length} generated JS/CSS assets and 28 achievement images precached, collection artwork, live rules layouts and both lazy dialogs opened for the first time offline.`,
   );
 } catch (error) {
   if (runtimeErrors.length > 0)

@@ -79,7 +79,7 @@ export function AchievementsDialog() {
           data-achievement-summary
         />
         <p className="achievements-scope">
-          Los objetivos de partida se suman al terminar.
+          Las acciones suman al instante; las partidas y victorias, al terminar.
           {clockRunning && <strong> El reloj de la partida sigue en marcha.</strong>}
         </p>
       </div>

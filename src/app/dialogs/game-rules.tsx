@@ -8,10 +8,15 @@ import {
 } from 'react';
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules-content';
 import { mountRuleDemo, type RuleDemoController, type RuleDemoId } from '../../rules-demo';
+import { PIECE_NAMES } from '../../engine';
+import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
+import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
 import { useGame } from '../game-context';
+import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
 
 const HORIZONTAL_RULE_TABS = '(max-width: 760px) and (orientation: portrait)';
+const LAYOUT_OPTIONS = INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
 
 export function RulesDialog({ sectionId }: { sectionId?: string }) {
   const { commands } = useGame();
@@ -169,40 +174,118 @@ function paragraphText(paragraph: string | RuleParagraph): string {
 }
 
 function RuleArticle({ section }: { section: RuleSection }) {
+  const introductoryParagraphs = section.layoutPreview
+    ? section.paragraphs.slice(0, 2)
+    : section.paragraphs;
   return (
     <>
       <div className="rules-copy">
         <span className="rules-kicker">PROTOCOLO HEXAGONAL</span>
         <h3 tabIndex={-1}>{section.title}</h3>
-        {section.paragraphs.map((paragraph, index) =>
-          typeof paragraph !== 'string' && paragraph.kind === 'heading' ? (
-            <h3 key={index} className="rules-peer-heading">
-              {paragraph.text}
-            </h3>
-          ) : (
-            <p key={index}>
-              {emphasizedText(
-                paragraphText(paragraph),
-                typeof paragraph === 'string' ? [] : (paragraph.strong ?? []),
-              )}
-            </p>
-          ),
-        )}
+        <RuleParagraphs paragraphs={introductoryParagraphs} />
       </div>
       {section.demo ? (
         <RuleDemo demoId={section.demo} title={section.title} />
-      ) : section.media?.length ? (
-        <figure className="rule-media" aria-label={`Ilustración de ${section.title}`}>
-          <div className="rule-media-stage">
-            <div className="rule-media-track">
-              {section.media.map((item) => (
-                <img key={item.src} src={item.src} alt={item.alt} loading="lazy" />
-              ))}
-            </div>
+      ) : section.layoutPreview ? (
+        <>
+          <RuleLayoutPreview />
+          <div className="rules-copy rules-deployment-rest">
+            <RuleParagraphs paragraphs={section.paragraphs.slice(2)} />
           </div>
-        </figure>
+        </>
       ) : null}
     </>
+  );
+}
+
+function RuleParagraphs({ paragraphs }: { paragraphs: RuleSection['paragraphs'] }) {
+  return paragraphs.map((paragraph, index) =>
+    typeof paragraph !== 'string' && paragraph.kind === 'heading' ? (
+      <h3 key={index} className="rules-peer-heading">
+        {paragraph.text}
+      </h3>
+    ) : (
+      <p key={index}>
+        {emphasizedText(
+          paragraphText(paragraph),
+          typeof paragraph === 'string' ? [] : (paragraph.strong ?? []),
+        )}
+      </p>
+    ),
+  );
+}
+
+function RuleLayoutPreview() {
+  const { snapshot } = useGame();
+  const { highContrast } = snapshot.preferences;
+  const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRef = useRef<LayoutPreview | null>(null);
+  const layout = INITIAL_LAYOUTS.find(({ id }) => id === initialLayout)!;
+  const pieces = createInitialPieces(2, initialLayout);
+  const army = pieces.filter((piece) => piece.owner === 0);
+  const roster = Object.entries(PIECE_NAMES)
+    .map(([type, name]) => `${name}: ${army.filter((piece) => piece.type === type).length}`)
+    .join('; ');
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const options = { initialLayout, fortressHp: 2 as const, highContrast, fullBoard: true };
+    if (previewRef.current) previewRef.current.update(options);
+    else previewRef.current = mountLayoutPreview(canvasRef.current, options);
+  }, [initialLayout, highContrast]);
+
+  useEffect(
+    () => () => {
+      previewRef.current?.destroy();
+      previewRef.current = null;
+    },
+    [],
+  );
+
+  return (
+    <figure className="rule-media rule-layout-preview" aria-label="Disposiciones iniciales">
+      <div className="mb-3 grid gap-2">
+        <label htmlFor="rules-layout-setting" className="font-semibold text-ink">
+          Disposición inicial
+        </label>
+        <GameSelect
+          inputId="rules-layout-setting"
+          options={LAYOUT_OPTIONS}
+          value={initialLayout}
+          onChange={setInitialLayout}
+          describedBy="rules-layout-description"
+        />
+      </div>
+      <div className="rule-media-stage">
+        <canvas
+          ref={canvasRef}
+          className="rule-demo-canvas"
+          data-rules-layout-preview
+          data-layout={initialLayout}
+          data-piece-count={pieces.length}
+          role="img"
+          aria-label={`Disposición ${layout.name}: tablero completo de 91 casillas`}
+          aria-describedby="rules-layout-caption rules-layout-description rules-layout-roster"
+        />
+        <RendererStatus canvasRef={canvasRef} overlay />
+      </div>
+      <figcaption id="rules-layout-caption">
+        Cian abajo · Ámbar arriba · {army.length} piezas por bando
+      </figcaption>
+      <p
+        id="rules-layout-description"
+        className="mb-0 mt-3 text-sm leading-relaxed text-muted"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {layout.description}
+      </p>
+      <p id="rules-layout-roster" className="sr-only">
+        Composición de cada bando: {roster}. Las fortalezas tienen dos puntos de vida.
+      </p>
+    </figure>
   );
 }
 

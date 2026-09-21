@@ -3,6 +3,7 @@ import { WorkerAiStrategy, difficultyBudget } from '../ai-strategy';
 import { AudioDirector } from '../audio';
 import {
   evaluateAcademyAchievements,
+  evaluateActionAchievements,
   evaluateMatchAchievements,
   loadAchievementProgress,
   registerAchievementMatch,
@@ -633,6 +634,14 @@ export function createGameSession(): GameSession {
     pendingAction = null;
     mode = { kind: 'default' };
     animating = true;
+    if (matchRecord && !activeScenario && replayCursor === null) {
+      acceptAchievements(
+        evaluateActionAchievements(achievements, matchRecord, before, result.events, {
+          source: 'live',
+          at: new Date().toISOString(),
+        }),
+      );
+    }
     audio.playEvents(result.events, before);
     render();
     try {

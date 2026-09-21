@@ -393,6 +393,84 @@ describe('sesión que conecta React con el juego', () => {
     expect(resumed.getSnapshot().achievements.counters.matches).toBe(1);
   });
 
+  it('desbloquea al transformar, antes de acabar la animación, y conserva el logro al abandonar', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const animation = deferred<void>();
+    const renderer = rendererDouble();
+    renderer.playEvents.mockReturnValue(animation.promise);
+    session.attachRenderer(renderer);
+    const transform = getAllLegalActions(session.getSnapshot().state).find(
+      (action) => action.kind === 'transform',
+    );
+    expect(transform).toBeDefined();
+    session.commands.prepareAction(transform!);
+    expect(session.getSnapshot().achievements.counters.transformations).toBe(0);
+    expect(collaborators.playAchievement).not.toHaveBeenCalled();
+
+    const committed = session.commands.commitPending();
+    const earned = session.getSnapshot().achievements;
+    expect(session.getSnapshot().state.outcome).toBeNull();
+    expect(earned.counters).toMatchObject({ transformations: 1, matches: 0, wins: 0 });
+    expect(earned.unlockedAt.transformation).toBeDefined();
+    expect(loadAchievementProgress()).toEqual(earned);
+    await vi.advanceTimersByTimeAsync(750);
+    expect(session.getSnapshot().achievementNotification?.achievementId).toBe('transformation');
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
+
+    animation.resolve();
+    await committed;
+    session.commands.abandon();
+    session.dispose();
+    expect(createSession().getSnapshot().achievements).toEqual(earned);
+  });
+
+  it('no vuelve a sumar ni avisar al repetir una acción deshecha o terminar la partida', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const transform = getAllLegalActions(session.getSnapshot().state).find(
+      (action) => action.kind === 'transform',
+    );
+    expect(transform).toBeDefined();
+    session.commands.prepareAction(transform!);
+    await session.commands.commitPending();
+    await vi.advanceTimersByTimeAsync(5_500);
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
+    session.commands.undo();
+    session.dispose();
+
+    const resumed = createSession();
+    resumed.commands.continueMatch();
+    resumed.commands.redo();
+    resumed.commands.undo();
+    resumed.commands.prepareAction(transform!);
+    await resumed.commands.commitPending();
+    await vi.advanceTimersByTimeAsync(750);
+    expect(resumed.getSnapshot().achievements.counters.transformations).toBe(1);
+    expect(resumed.getSnapshot().achievementNotification).toBeNull();
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
+    resumed.commands.resign();
+    expect(resumed.getSnapshot().achievements.counters).toMatchObject({
+      transformations: 1,
+      matches: 1,
+    });
+  });
+
+  it('las acciones de una importación no desbloquean logros instantáneos', async () => {
+    const session = createSession();
+    session.commands.loadRecord(savedRecord(0));
+    const transform = getAllLegalActions(session.getSnapshot().state).find(
+      (action) => action.kind === 'transform',
+    );
+    expect(transform).toBeDefined();
+    session.commands.prepareAction(transform!);
+    await session.commands.commitPending();
+    await vi.advanceTimersByTimeAsync(750);
+    expect(session.getSnapshot().achievements.counters.transformations).toBe(0);
+    expect(session.getSnapshot().achievementNotification).toBeNull();
+    expect(collaborators.playAchievement).not.toHaveBeenCalled();
+  });
+
   it('una importación pendiente no gana logros al terminarla, ni tras recargarla', async () => {
     const session = createSession();
     session.commands.loadRecord(savedRecord());

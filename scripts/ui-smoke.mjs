@@ -393,14 +393,7 @@ try {
     'Fortaleza and Escudo antiaéreo must share the same title role.',
   );
 
-  await desktop.locator('[data-rule-section="desarrollo"]').click();
-  assert(
-    (await desktop.locator('#rules-article').textContent())?.includes(
-      'La disposición inicial de los ejércitos sobre el tablero es la que aparece en la imagen de la derecha.',
-    ),
-    'Updated initial-deployment wording is missing.',
-  );
-  await desktop.locator('.rule-media img').waitFor();
+  await assertRulesLayouts(desktop, 'desktop');
 
   await desktop.locator('[data-rule-section="casillas-compartidas"]').click();
   assert(
@@ -538,6 +531,19 @@ try {
   await desktop.locator('#help-button').click();
   await desktop.locator('#rules-article').waitFor();
   await assertFullscreenAvailable(desktop, 'Match rules');
+  const matchBeforeRulesPreview = await desktop.evaluate(() =>
+    localStorage.getItem('atlas-match-classic-v2'),
+  );
+  await desktop.locator('[data-rule-section="desarrollo"]').click();
+  await chooseSelectOption(desktop, 'Disposición inicial', 'Frente extendido');
+  await desktop
+    .locator('[data-rules-layout-preview][data-layout="5"][data-renderer-status="ready"]')
+    .waitFor();
+  assert(
+    (await desktop.evaluate(() => localStorage.getItem('atlas-match-classic-v2'))) ===
+      matchBeforeRulesPreview,
+    'Exploring rule layouts must preserve the active match, its history and configuration.',
+  );
   await desktop.locator('.rules-close').click();
 
   await clickHex(desktop, 0, -2);
@@ -898,6 +904,73 @@ try {
   );
   await cannonPage.close();
 
+  const instantAchievement = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(instantAchievement, runtimeErrors);
+  await instantAchievement.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(instantAchievement, 'local');
+  await clickHex(instantAchievement, 1, -3);
+  await instantAchievement.locator('[data-command="transform"]').click();
+  await instantAchievement.locator('[data-transform-facing="3"]').click();
+  assert(
+    (await instantAchievement
+      .locator('[data-achievement-notification="transformation"]')
+      .count()) === 0,
+    'Preparing a transformation must not unlock its achievement before confirming the order.',
+  );
+  await instantAchievement.locator('#pending-card .confirm-button').click();
+  const instantNotice = instantAchievement.locator(
+    '[data-achievement-notification="transformation"]',
+  );
+  await instantNotice.waitFor({ state: 'visible' });
+  assert(
+    (await instantNotice.locator('img.achievement-icon').count()) === 1 &&
+      (await instantNotice.locator('strong').textContent()) === 'Me bajo aquí' &&
+      (await instantNotice.locator('p, button, progress').count()) === 0,
+    'A confirmed transformation must immediately show only its achievement icon and title.',
+  );
+  const liveAchievement = await instantAchievement.evaluate(() => {
+    const record = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
+    const progress = JSON.parse(localStorage.getItem('atlas-achievements-v1'));
+    const history = JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]');
+    return {
+      active: record?.currentAction === 1 && !record.conclusion && history.length === 0,
+      transformations: progress?.counters.transformations,
+      unlockedAt: progress?.unlockedAt.transformation,
+    };
+  });
+  assert(
+    liveAchievement.active &&
+      liveAchievement.transformations === 1 &&
+      Boolean(liveAchievement.unlockedAt),
+    'The tactical unlock and counter must persist while its match is still active and unfinished.',
+  );
+  await instantAchievement.reload({ waitUntil: 'networkidle' });
+  await instantAchievement.locator('[data-home-action="achievements"]').click();
+  const savedTransformation = instantAchievement.locator('[data-achievement-id="transformation"]');
+  assert(
+    (await savedTransformation.locator('.achievement-state').textContent())?.includes(
+      'Desbloqueado',
+    ) &&
+      (await savedTransformation.locator('time').getAttribute('datetime')) ===
+        liveAchievement.unlockedAt,
+    'An instant achievement must remain unlocked after reloading without completing its match.',
+  );
+  await instantAchievement.getByRole('button', { name: 'Cerrar logros', exact: true }).click();
+  await instantAchievement.locator('[data-home-action="continue"]').click();
+  await assertActionHistory(instantAchievement, 1, 1);
+  await instantAchievement.locator('#undo-action').click();
+  await assertActionHistory(instantAchievement, 0, 1);
+  await instantAchievement.locator('#redo-action').click();
+  await assertActionHistory(instantAchievement, 1, 1);
+  assert(
+    await instantAchievement.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('atlas-achievements-v1')).counters.transformations === 1,
+    ),
+    'Resuming and redoing an order must not count an instant achievement action twice.',
+  );
+  await instantAchievement.close();
+
   for (const [control, confirmation] of [
     ['#new-game-button', '[data-confirm-abandon]'],
     ['#resign-button', '[data-confirm-resign]'],
@@ -1106,6 +1179,9 @@ try {
   if (process.env.UI_SCREENSHOT)
     await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-home.png` });
   await assertAchievementsCatalog(mobile, 'Mobile');
+  await mobile.locator('[data-home-action="rules"]').click();
+  await assertRulesLayouts(mobile, 'mobile');
+  await mobile.locator('.rules-close').click();
   await selectMode(mobile, 'local');
   const layout = await mobile.evaluate(() => ({
     viewport: window.innerWidth,
@@ -1714,7 +1790,7 @@ try {
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    'UI smoke passed: desktop and mobile achievements, earned notification and saved progress, desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
+    'UI smoke passed: desktop and mobile achievements and live rules layouts, earned notification and saved progress, desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
   );
 } finally {
   await browser.close();
@@ -1962,13 +2038,79 @@ async function assertFullscreenAvailable(page, surface) {
   );
 }
 
+async function assertRulesLayouts(page, surface) {
+  await page.locator('[data-rule-section="desarrollo"]').click();
+  const preview = page.locator('[data-rules-layout-preview]');
+  await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();
+  assert(
+    (await preview.getAttribute('data-layout')) === '1' &&
+      (await selectedOptionLabel(page, 'Disposición inicial')) === 'Frente clásico',
+    'The rules deployment preview must begin with the default classic layout.',
+  );
+  assert(
+    (await selectOptionLabels(page, 'Disposición inicial')).join('|') ===
+      Object.values(INITIAL_LAYOUT_LABELS).join('|'),
+    'The rules must offer all five real initial layouts.',
+  );
+  assert(
+    (await preview.getAttribute('role')) === 'img' &&
+      Boolean(await preview.getAttribute('aria-label')) &&
+      (await page.locator('#rules-article img').count()) === 0,
+    'The rules deployment must use an accessible live board instead of a static image.',
+  );
+  const images = new Set();
+  for (const [value, label] of Object.entries(INITIAL_LAYOUT_LABELS)) {
+    await chooseSelectOption(page, 'Disposición inicial', label);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    const rendered = await preview.evaluate((canvas) => ({
+      image: canvas.toDataURL(),
+      layout: canvas.dataset.layout,
+      pieceCount: Number(canvas.dataset.pieceCount),
+      width: canvas.getBoundingClientRect().width,
+      height: canvas.getBoundingClientRect().height,
+    }));
+    assert(
+      rendered.layout === value && rendered.pieceCount === (value === '5' ? 44 : 36),
+      `Rules layout ${value} must display both complete armies from its real initial state.`,
+    );
+    assert(
+      rendered.width > 200 && rendered.height > 150,
+      `${surface} rules deployment must retain a readable board.`,
+    );
+    images.add(rendered.image);
+  }
+  assert(images.size === 5, 'Changing rule layouts must redraw five different board positions.');
+  await assertNoHorizontalOverflow(page, `${surface} rules deployment`, '#game-dialog');
+  await preview.scrollIntoViewIfNeeded();
+  if (process.env.UI_SCREENSHOT)
+    await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-rules-layout-${surface}.png` });
+  const selector = await openSelect(page, 'Disposición inicial');
+  await assertSelectMenuWithinViewport(page, `${surface} rules layout menu`);
+  assert(
+    await page.getByRole('listbox').evaluate((menu) => Boolean(menu.closest('#game-dialog'))),
+    'The rules layout menu must remain inside its modal dialog.',
+  );
+  await selector.press('Home');
+  await selector.press('ArrowDown');
+  assert(
+    (await preview.getAttribute('data-layout')) === '5',
+    'Highlighting another rule layout must leave the preview unchanged before confirmation.',
+  );
+  await selector.press('Enter');
+  assert(
+    (await preview.getAttribute('data-layout')) === '2' &&
+      (await selector.evaluate((control) => control === document.activeElement)),
+    'Keyboard confirmation must update the live rules board and preserve selector focus.',
+  );
+}
+
 async function assertAchievementsCatalog(page, surface) {
   const opener = page.locator('[data-home-action="achievements"]');
   await opener.click();
   await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
   const cards = page.locator('[data-achievement-id]');
   const total = await cards.count();
-  assert(total > 0, `${surface} achievements must include a visible catalog.`);
+  assert(total === 28, `${surface} achievements must include the complete 28-item catalog.`);
   const ids = await cards.evaluateAll((items) => items.map((item) => item.dataset.achievementId));
   assert(new Set(ids).size === total, 'Each achievement must appear once in the full catalog.');
   assert(
@@ -2003,16 +2145,38 @@ async function assertAchievementsCatalog(page, surface) {
       progressBars.every(({ label, value, max }) => label && value === 0 && max > 0),
     'Locked cumulative achievements must expose their labeled, numeric progress to assistive technology.',
   );
-  const icons = await cards.locator('.achievement-icon').evaluateAll((items) =>
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('[data-achievement-id] .achievement-icon')].every(
+      (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+    ),
+  );
+  const icons = await cards.locator('img.achievement-icon').evaluateAll((items) =>
     items.map((item) => {
       const { width, height } = item.getBoundingClientRect();
-      return { width, height };
+      return {
+        width,
+        height,
+        source: new URL(item.currentSrc).pathname,
+        id: item.closest('[data-achievement-id]').dataset.achievementId,
+        naturalWidth: item.naturalWidth,
+        naturalHeight: item.naturalHeight,
+        decorative: item.alt === '',
+      };
     }),
   );
   assert(
     icons.length === total &&
-      icons.every(({ width, height }) => width > 0 && Math.abs(width - height) <= 1),
-    'Every achievement must have a square icon at desktop and mobile widths.',
+      new Set(icons.map(({ source }) => source)).size === total &&
+      icons.every(
+        ({ width, height, source, id, naturalWidth, naturalHeight, decorative }) =>
+          width > 0 &&
+          Math.abs(width - height) <= 1 &&
+          naturalWidth === 512 &&
+          naturalWidth === naturalHeight &&
+          source === `/achievements/${id}.webp` &&
+          decorative,
+      ),
+    'All 28 achievements must load their own decorative 512×512 artwork at desktop and mobile widths.',
   );
   await assertNoHorizontalOverflow(page, `${surface} achievements`, '#game-dialog');
 

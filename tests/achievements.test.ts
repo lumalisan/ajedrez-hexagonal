@@ -3,6 +3,7 @@ import {
   ACHIEVEMENTS,
   achievementProgressFor,
   createAchievementProgress,
+  evaluateActionAchievements,
   evaluateAcademyAchievements,
   evaluateMatchAchievements,
   loadAchievementProgress,
@@ -14,7 +15,13 @@ import {
 } from '../src/achievements';
 import { applyAction, createGameState, getAllLegalActions } from '../src/engine';
 import { createClassicConfig, type MatchConfigInput } from '../src/game-config';
-import { appendAction, concludeMatch, createMatchRecord, replayRecord } from '../src/match-record';
+import {
+  appendAction,
+  concludeMatch,
+  createMatchRecord,
+  replayRecord,
+  resolutionRulesForConfig,
+} from '../src/match-record';
 import { BASIC_SCENARIOS, SCENARIOS } from '../src/scenarios';
 import type { GameAction, MatchRecord, Piece } from '../src/types';
 
@@ -26,6 +33,20 @@ function registered(record: MatchRecord, progress = createAchievementProgress())
 
 function evaluate(record: MatchRecord, progress = registered(record)) {
   return evaluateMatchAchievements(progress, record, { source: 'live', at: AT });
+}
+
+function evaluateAction(record: MatchRecord, progress = registered(record)) {
+  const before = replayRecord(record, record.currentAction - 1);
+  const result = applyAction(
+    before,
+    record.actions[record.currentAction - 1],
+    resolutionRulesForConfig(record.config),
+  );
+  expect(result.ok).toBe(true);
+  return evaluateActionAchievements(progress, record, before, result.events, {
+    source: 'live',
+    at: AT,
+  });
 }
 
 function definition(id: AchievementId) {
@@ -76,11 +97,7 @@ function eventMatch(scenarioId: string, wanted: string, swap = false) {
     applyAction(record.initialState, candidate).events.some((event) => event.type === wanted),
   );
   expect(action).toBeDefined();
-  const played = appendAction(record, action!);
-  const state = replayRecord(played);
-  return state.outcome
-    ? played
-    : concludeMatch(played, { type: 'win', winner: 0, reason: 'resignation' });
+  return appendAction(record, action!);
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -219,18 +236,152 @@ describe('logros de partidas', () => {
     expect(result.unlocked).not.toContain('untouchable');
     expect(evaluate(fortressWin()).unlocked).not.toContain('comeback');
   });
+});
 
-  it('reconstruye capturas, conversiones y transformaciones del diario legal', () => {
-    expect(evaluate(eventMatch('medium', 'destroy')).unlocked).toContain('captures-1');
-    expect(evaluate(eventMatch('capture', 'convert')).unlocked).toContain('conversion');
-    expect(evaluate(eventMatch('transform', 'transform')).unlocked).toContain('transformation');
+describe('logros tácticos inmediatos', () => {
+  it.each([
+    ['medium', 'destroy', 'captures-1', 'captures'],
+    ['capture', 'convert', 'conversion', 'conversions'],
+    ['transform', 'transform', 'transformation', 'transformations'],
+  ] as const)(
+    'concede %s al ejecutar la orden aunque la partida continúe',
+    (scenario, event, id, metric) => {
+      const record = eventMatch(scenario, event);
+      expect(replayRecord(record).outcome).toBeNull();
+      const before = registered(record);
+      const untouched = structuredClone(before);
+      const result = evaluateAction(record, before);
+      expect(result.unlocked).toContain(id);
+      expect(result.progress.counters[metric]).toBe(1);
+      expect(result.progress.counters.matches).toBe(0);
+      expect(result.progress.unlockedAt[id]).toBe(AT);
+      expect(result.progress.registeredMatchIds).toEqual([record.createdAt]);
+      expect(before).toEqual(untouched);
+      expect(evaluate(record, result.progress).progress).toBe(result.progress);
+    },
+  );
+
+  it.each([
+    [24, 'captures-25'],
+    [99, 'captures-100'],
+  ] as const)(
+    'actualiza el progreso y supera el umbral desde %i capturas antes de terminar',
+    (captures, id) => {
+      const record = eventMatch('medium', 'destroy');
+      const progress = registered(record);
+      progress.counters.captures = captures;
+      const result = evaluateAction(record, progress);
+      expect(result.unlocked).toContain(id);
+      expect(result.progress.counters.captures).toBe(captures + 1);
+      expect(achievementProgressFor(definition(id), result.progress).unlocked).toBe(true);
+    },
+  );
+
+  it('conserva capturas, fechas y premios al deshacer, repetir, recargar y terminar', () => {
+    const record = eventMatch('medium', 'destroy');
+    const first = evaluateAction(record);
+    const reloaded = parseAchievementProgress(JSON.stringify(first.progress));
+    const undone = { ...record, currentAction: 0 };
+    const sameEvents = applyAction(record.initialState, record.actions[0]).events;
+    expect(
+      evaluateActionAchievements(reloaded, undone, record.initialState, sameEvents, {
+        source: 'live',
+        at: AT,
+      }).progress,
+    ).toBe(reloaded);
+    const repeated = evaluateAction(record, reloaded);
+    expect(repeated.progress).toBe(reloaded);
+    expect(repeated.unlocked).toEqual([]);
+    expect(repeated.progress.counters.captures).toBe(1);
+    expect(repeated.progress.unlockedAt['captures-1']).toBe(AT);
+    const finished = concludeMatch(record, { type: 'win', winner: 0, reason: 'resignation' });
+    const result = evaluate(finished, repeated.progress);
+    expect(result.progress.counters).toMatchObject({ captures: 1, matches: 1 });
+    expect(result.unlocked).not.toContain('captures-1');
+    expect(result.progress.processedTacticalEvents).toEqual({});
+    expect(evaluateAction(finished, result.progress).progress).toBe(result.progress);
+  });
+
+  it('no vuelve a contar una unidad al capturarla por otra vía tras deshacer', () => {
+    const record = eventMatch('medium', 'destroy');
+    const first = evaluateAction(record);
+    const events = applyAction(record.initialState, record.actions[0]).events;
+    const alternate = events.map((event) =>
+      event.type === 'destroy' ? { ...event, pieceId: 'another-attacker' } : event,
+    );
+    const repeated = evaluateActionAchievements(
+      first.progress,
+      record,
+      record.initialState,
+      alternate,
+      {
+        source: 'live',
+        at: AT,
+      },
+    );
+    expect(repeated.progress).toBe(first.progress);
+  });
+
+  it('excluye importaciones, replays, Academia y partidas que no se iniciaron en este dispositivo', () => {
+    const record = eventMatch('medium', 'destroy');
+    const events = applyAction(record.initialState, record.actions[0]).events;
+    const progress = registered(record);
+    for (const source of ['import', 'replay'] as const) {
+      expect(
+        evaluateActionAchievements(progress, record, record.initialState, events, {
+          source,
+          at: AT,
+        }).progress,
+      ).toBe(progress);
+    }
+    expect(evaluateAction(record, createAchievementProgress()).unlocked).toEqual([]);
+    expect(
+      evaluateAction({ ...record, config: { ...record.config, definitionId: 'scenario:medium' } })
+        .unlocked,
+    ).toEqual([]);
+    expect(
+      evaluateAction({ ...record, academySession: { scenarioId: 'medium', hintsRevealed: 0 } })
+        .unlocked,
+    ).toEqual([]);
+  });
+
+  it('no concede retrospectivamente premios tácticos al terminar una partida', () => {
+    const record = concludeMatch(eventMatch('medium', 'destroy'), {
+      type: 'win',
+      winner: 0,
+      reason: 'resignation',
+    });
+    expect(evaluate(record).progress.counters.captures).toBe(0);
+  });
+
+  it('acumula capturas de partidas distintas aunque se abandone la anterior', () => {
+    const record = eventMatch('medium', 'destroy');
+    const first = evaluateAction(record);
+    const another = { ...record, createdAt: '2026-09-21T10:01:00.000Z' };
+    const next = evaluateAction(another, registered(another, first.progress));
+    expect(next.progress.counters).toMatchObject({ captures: 2, matches: 0 });
+    expect(achievementProgressFor(definition('captures-25'), next.progress).current).toBe(2);
+    expect(next.unlocked).toEqual([]);
+    expect(next.progress.unlockedAt['captures-1']).toBe(AT);
+  });
+
+  it('no suma acciones de la IA ni modifica progreso cuando no hay eventos tácticos humanos', () => {
+    const record = eventMatch('medium', 'destroy', true);
+    const progress = registered(record);
+    expect(evaluateAction(record, progress).progress).toBe(progress);
+    expect(
+      evaluateActionAchievements(progress, record, record.initialState, [], {
+        source: 'live',
+        at: AT,
+      }).progress,
+    ).toBe(progress);
   });
 
   it('atribuye una intercepción al defensor humano y no a la IA ni al dron destruido', () => {
-    const aiDefense = evaluate(eventMatch('anti-air', 'intercept'));
+    const aiDefense = evaluateAction(eventMatch('anti-air', 'intercept'));
     expect(aiDefense.unlocked).not.toContain('interception');
     expect(aiDefense.progress.counters.captures).toBe(0);
-    const humanDefense = evaluate(eventMatch('anti-air', 'intercept', true));
+    const humanDefense = evaluateAction(eventMatch('anti-air', 'intercept', true));
     expect(humanDefense.unlocked).toContain('interception');
     expect(humanDefense.progress.counters).toMatchObject({ interceptions: 1, captures: 1 });
   });
@@ -258,20 +409,17 @@ describe('logros de partidas', () => {
       expect.arrayContaining(['convert', 'intercept']),
     );
     record = appendAction(record, action);
-    record = concludeMatch(record, { type: 'win', winner: 0, reason: 'resignation' });
-    expect(evaluate(record).progress.counters).toMatchObject({
+    expect(evaluateAction(record).progress.counters).toMatchObject({
       captures: 1,
       interceptions: 1,
       conversions: 0,
     });
   });
 
-  it('no cuenta los sacrificios ni premios tácticos de órdenes deshechas', () => {
+  it('no cuenta los sacrificios ni la destrucción de Fortalezas', () => {
     const record = eventMatch('fortress', 'fortressDamage');
-    expect(evaluate(record).progress.counters.captures).toBe(0);
-    const captured = eventMatch('medium', 'destroy');
-    const undone = { ...captured, actions: [], currentAction: 0, conclusion: null };
-    expect(evaluate(undone).progress.counters.captures).toBe(0);
+    expect(evaluateAction(record).progress.counters.captures).toBe(0);
+    expect(evaluateAction(fortressWin()).progress.counters.captures).toBe(0);
   });
 });
 
@@ -339,6 +487,33 @@ describe('logros de Academia y guardado', () => {
     expect(parsed.processedMatchIds).toEqual([AT]);
     expect(parsed.completedScenarioIds).toEqual(['movement']);
     expect(parsed.goldScenarioIds).toEqual(['movement']);
+    expect(parsed.processedTacticalEvents).toEqual({});
+  });
+
+  it('amplía guardados v1 sin perder contadores o premios y valida el registro de eventos', () => {
+    const captureAt = '2026-09-21T10:01:00.000Z';
+    const parsed = parseAchievementProgress(
+      JSON.stringify({
+        version: 1,
+        counters: { captures: 24 },
+        unlockedAt: { 'captures-1': AT },
+        registeredMatchIds: [captureAt],
+        processedMatchIds: [AT],
+        processedTacticalEvents: {
+          [AT]: ['finished-match'],
+          [captureAt]: ['capture-a', 'capture-a', false],
+          'bad-date': ['capture-b'],
+        },
+      }),
+    );
+    expect(parsed.counters.captures).toBe(24);
+    expect(parsed.unlockedAt['captures-1']).toBe(AT);
+    expect(parsed.processedTacticalEvents).toEqual({ [captureAt]: ['capture-a'] });
+    const record = { ...eventMatch('medium', 'destroy'), createdAt: captureAt };
+    const result = evaluateAction(record, parsed);
+    expect(result.unlocked).toEqual(['captures-25']);
+    expect(result.progress.counters.captures).toBe(25);
+    expect(result.progress.unlockedAt['captures-1']).toBe(AT);
   });
 
   it('recupera el progreso persistente y mantiene funcionamiento si falla el almacenamiento', () => {

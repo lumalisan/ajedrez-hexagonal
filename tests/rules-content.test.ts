@@ -43,7 +43,7 @@ describe('contenido del reglamento', () => {
     const sharedText = shared?.paragraphs.map(paragraphText).join('\n') ?? '';
 
     expect(developmentText).toContain(
-      'La disposición inicial de los ejércitos sobre el tablero es la que aparece en la imagen de la derecha.',
+      'Explora la disposición inicial en el tablero y utiliza el selector para comparar las cinco formaciones.',
     );
     expect(sharedText).toContain(
       'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado o un embestidor, estos podrán atacarlo.',
@@ -90,9 +90,9 @@ describe('contenido del reglamento', () => {
     expect(text).toContain('no concede un segundo turno independiente');
   });
 
-  it('sustituye las secuencias de imágenes por demostraciones reales salvo la disposición inicial', () => {
+  it('presenta demostraciones reales y un tablero de disposiciones sin imágenes estáticas', () => {
     const animated = RULE_SECTIONS.filter(({ demo }) => demo);
-    const staticMedia = RULE_SECTIONS.filter(({ media }) => media?.length);
+    const deployments = RULE_SECTIONS.filter(({ layoutPreview }) => layoutPreview);
 
     expect(animated.map(({ id }) => id)).toEqual([
       'fortaleza',
@@ -105,6 +105,7 @@ describe('contenido del reglamento', () => {
       'avion',
       'casillas-compartidas',
     ]);
-    expect(staticMedia.map(({ id }) => id)).toEqual(['desarrollo']);
+    expect(deployments.map(({ id }) => id)).toEqual(['desarrollo']);
+    expect(JSON.stringify(RULE_SECTIONS)).not.toContain('/rules/');
   });
 });

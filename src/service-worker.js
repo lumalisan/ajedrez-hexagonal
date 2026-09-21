@@ -4,15 +4,7 @@
 const CACHE_PREFIX = 'protocolo-hexagonal-';
 const CACHE = `${CACHE_PREFIX}__BUILD_VERSION__`;
 const BUILD_ASSETS = ['__BUILD_ASSETS__'];
-const RULE_IMAGES = Array.from({ length: 25 }, (_, index) => `/rules/image${index + 5}.png`);
-const SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/favicon.svg',
-  '/atlas-mark.svg',
-  ...RULE_IMAGES,
-];
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/atlas-mark.svg'];
 const PRECACHE_URLS = new Set(
   [...SHELL, ...BUILD_ASSETS].map((path) => new URL(path, self.location.origin).href),
 );
