@@ -1,6 +1,6 @@
 # Protocolo Hexagonal
 
-Juego táctico 2D para dos jugadores en tablero hexagonal. Implementado con TypeScript nativo y Canvas 2D según `docs/especificacion_juego_hexagonal.md`.
+Juego táctico 2D para dos jugadores en tablero hexagonal. La interfaz utiliza React, TypeScript estricto y Vite; el tablero se representa con Canvas 2D. Las reglas se describen en `docs/especificacion_juego_hexagonal.md`.
 
 ## Ejecutar
 
@@ -22,15 +22,24 @@ pnpm preview
 
 ```bash
 pnpm test:types
+pnpm lint
 pnpm test
 pnpm test:coverage
 pnpm test:ui
 pnpm test:a11y
 ```
 
-`pnpm test:types` comprueba todos los archivos TypeScript del proyecto, incluidos el código, las pruebas y la configuración, sin generar archivos. También se ejecuta al hacer el build.
+`pnpm test:types` comprueba todos los archivos TypeScript y TSX del proyecto, incluidos el código, las pruebas y la configuración, sin generar archivos. También se ejecuta al hacer el build.
 
-`pnpm test` valida geometría, reglas, configuración, invariantes y replay. La cobertura tiene umbrales específicos del dominio. Las pruebas de UI y Axe usan Edge o Chrome; puede indicarse otro navegador con `PLAYWRIGHT_BROWSER_PATH`.
+`pnpm test` valida geometría, reglas, configuración, invariantes, replay y la sesión que conecta el juego con React. La cobertura tiene umbrales específicos del dominio. Las pruebas de UI y Axe usan Edge o Chrome; puede indicarse otro navegador con `PLAYWRIGHT_BROWSER_PATH`.
+
+## Arquitectura
+
+La aplicación es una SPA local, sin backend. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión.
+
+El motor de reglas sigue siendo TypeScript independiente de React, el DOM y el almacenamiento. Canvas conserva la cámara, los glifos y las animaciones: `BoardCanvas` gestiona el renderer y sus eventos, mientras React se ocupa de la interfaz y su representación accesible. Los efectos liberan listeners, temporizadores y recursos gráficos al desmontarse.
+
+La API y el multijugador online quedan para una etapa posterior. Esta migración no añade Nitro ni cambia el formato de guardados.
 
 ## Modos y datos
 
@@ -85,15 +94,21 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/match-record.ts`: diario versionado, replay y estadísticas.
 - `src/match-clock.ts`: reloj persistente y desenlace por tiempo.
 - `src/action-identity.ts` y `src/tactical-analysis.ts`: identidad canónica y consulta táctica pura.
-- `src/match-store.ts` y `src/match-controller.ts`: estado explícito de partida e interfaz.
+- `src/match-store.ts` y `src/match-controller.ts`: estado de partida, validación de órdenes e historial de deshacer/rehacer.
+- `src/app/contracts.ts` y `src/app/game-session.ts`: contrato de snapshots y comandos; coordinación de partida, IA, reloj, preferencias y persistencia.
+- `src/app/game-context.tsx`: contexto de sesión y suscripción de los componentes React.
+- `src/app/app.tsx`, `src/app/panels.tsx` y `src/app/dialogs/`: pantallas, paneles, configuración, manual y diálogos en React.
+- `src/app/board-canvas.tsx`: ciclo de vida del renderer e interacción con el tablero.
 - `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
 - `src/match-storage.ts`: preferencias, autoguardado y progreso local.
 - `src/hex.ts`: coordenadas axiales y conversión a Canvas.
 - `src/renderer.ts`: tablero, glifos, capas y animaciones.
 - `src/audio.ts`: paisajes sonoros sintetizados con Web Audio.
-- `src/main.ts`: interacción, accesibilidad y flujo de interfaz.
+- `src/main.tsx`: entrada de React, estilos y registro de la PWA.
+- `vite.config.ts`: integración de React con Vite.
 - `tests/engine.test.ts`: pruebas de reglas y casos límite.
+- `tests/game-session.test.ts`: continuidad de guardados, comandos, replay, preferencias y cancelación de tareas al cambiar o desmontar la sesión.
 
 La auditoría técnica y el siguiente orden de evolución están en `docs/auditoria-mejoras-2026.md`.
 

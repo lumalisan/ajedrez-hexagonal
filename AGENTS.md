@@ -6,7 +6,7 @@ Este archivo se aplica a todo el repositorio. Antes de editar, revisa `git statu
 
 **Protocolo Hexagonal** es un juego táctico por turnos, en español, sobre un tablero de 91 hexágonos de radio 5. Los jugadores se identifican como Cian y Ámbar. Incluye partida local, rival de IA, Academia, Laboratorio de escenarios, historial y reproducción de partidas.
 
-La aplicación es un frontend local con TypeScript estricto, Vite, DOM y Canvas 2D. No utiliza un framework de interfaz ni requiere un backend. Mantén esta arquitectura salvo que el trabajo solicitado justifique cambiarla.
+La aplicación es una SPA local con React, TypeScript estricto, Vite y Canvas 2D. React gestiona la interfaz; una sesión observable coordina el juego, y el motor de reglas permanece independiente del framework. No requiere un backend. Mantén esta arquitectura salvo que el trabajo solicitado justifique cambiarla.
 
 - `README.md`: instalación, comandos, controles y reglas resumidas.
 - `docs/especificacion_juego_hexagonal.md`: descripción de las reglas.
@@ -46,9 +46,12 @@ El hook `.husky/pre-commit` ejecuta `pnpm exec lint-staged`. La configuración v
 | Motor                   | `src/engine.ts`, `src/classic-rules.ts`, `src/action-identity.ts`                                               | Acciones legales, resolución, eventos, condiciones de final e identidad canónica de acciones. |
 | Configuración           | `src/game-config.ts`, `src/setup.ts`, `src/match-presets.ts`                                                    | Ruleset, posiciones iniciales y presets.                                                      |
 | Partidas                | `src/match-controller.ts`, `src/match-store.ts`, `src/match-clock.ts`                                           | Control de la partida, estado y reloj.                                                        |
+| Sesión y suscripción    | `src/app/contracts.ts`, `src/app/game-session.ts`, `src/app/game-context.tsx`                                   | Snapshots y comandos de la sesión; coordinación de IA, persistencia y ciclo de vida.          |
 | Persistencia y replay   | `src/match-record.ts`, `src/match-storage.ts`, `src/match-insights.ts`                                          | Registros versionados, almacenamiento local, historial y análisis.                            |
 | IA y análisis táctico   | `src/ai.ts`, `src/ai-strategy.ts`, `src/ai-worker.ts`, `src/tactical-analysis.ts`, `src/action-consequences.ts` | Búsqueda, trabajo en Worker, amenazas y consecuencias.                                        |
-| Interfaz                | `index.html`, `src/main.ts`, `src/styles.css`, `src/ui-copy.ts`                                                 | DOM, interacción, diálogos, estilos y textos.                                                 |
+| Interfaz React          | `src/main.tsx`, `src/app/app.tsx`, `src/app/panels.tsx`, `src/app/dialogs/`                                     | Entrada, pantallas, paneles, diálogos y flujo de interfaz.                                    |
+| Tablero e interacción   | `src/app/board-canvas.tsx`, `src/renderer.ts`                                                                   | Ciclo de vida del Canvas, entrada de ratón, táctil y teclado, cámara y representación.        |
+| Estilos y textos        | `index.html`, `src/styles.css`, `src/ui-copy.ts`                                                                | Shell de la SPA, estilos compartidos y textos de interfaz.                                    |
 | Representación y sonido | `src/renderer.ts`, `src/audio.ts`                                                                               | Canvas, cámara, glifos, animaciones y audio.                                                  |
 | Reglas y demostraciones | `src/rules-content.ts`, `src/rules-demo.ts`, `src/rules-sequences.ts`                                           | Texto de ayuda y secuencias animadas con acciones del motor.                                  |
 | Academia y Laboratorio  | `src/scenarios.ts`, `src/scenario-catalog.ts`                                                                   | Lecciones, objetivos y validación de escenarios personalizados.                               |
@@ -68,6 +71,9 @@ El hook `.husky/pre-commit` ejecuta `pnpm exec lint-staged`. La configuración v
 
 ## Interfaz y animaciones
 
+- Los componentes React leen el snapshot de `GameSession` mediante `useGame` y ejecutan sus comandos. Evita mantener copias del estado de partida en componentes o añadir una suscripción manual junto al hook; el estado local se reserva para formularios y presentación.
+- Usa JSX y eventos React para pantallas, paneles y diálogos; no reconstruyas la interfaz con `innerHTML` ni añadas listeners manuales a los controles que gestiona React. El renderer Canvas mantiene su ciclo de animación fuera del estado de React.
+- Los efectos que conecten Canvas, audio, teclado u otros recursos deben limpiar sus listeners, observadores y tareas al desmontarse. Las operaciones asíncronas de una sesión anterior no deben modificar una nueva partida ni reiniciar bucles después de `dispose`.
 - Conserva el idioma español, la identidad cian/ámbar, los glifos distinguibles y la legibilidad de los indicadores. La información no debe depender únicamente del color.
 - Mantén navegación por teclado, foco visible, etiquetas accesibles y representación textual del tablero. Comprueba escritorio y móvil al modificar layout o interacción.
 - Respeta las preferencias de sonido, contraste y movimiento reducido. Detén bucles cuando su contenido esté oculto y libera observadores, temporizadores y listeners al desmontarlo.
@@ -78,7 +84,7 @@ El hook `.husky/pre-commit` ejecuta `pnpm exec lint-staged`. La configuración v
 ## Validación y entrega
 
 - Tras cambios de código, ejecuta `pnpm test:types`, `pnpm lint` y las pruebas pertinentes. Para cerrar un cambio de lógica o configuración, valida también `pnpm test` y `pnpm build`.
-- `tsconfig.json` incluye todos los archivos TypeScript del repositorio y excluye dependencias, build y cobertura. Evita silenciar errores con `any`, `@ts-ignore` o exclusiones nuevas en lugar de corregir el contrato.
+- `tsconfig.json` incluye todos los archivos TypeScript y TSX del repositorio y excluye dependencias, build y cobertura. Evita silenciar errores con `any`, `@ts-ignore` o exclusiones nuevas en lugar de corregir el contrato.
 - Los cambios visuales requieren inspección en navegador. Como referencia, utiliza 1440×900 y 390×844, además de `pnpm test:ui` y `pnpm test:a11y` cuando afecten a interacción o accesibilidad.
 - Los scripts de navegador usan Playwright con Edge o Chrome instalado. Puedes indicar otro ejecutable con `PLAYWRIGHT_BROWSER_PATH`; UI usa el puerto 4174 y Axe el 4175.
 - Las pruebas de lógica usan Vitest. Añade regresiones que comprueben comportamiento relevante; no dupliques la implementación en el test. Los umbrales de cobertura están en `vitest.config.ts`.

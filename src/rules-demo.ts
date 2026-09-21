@@ -36,6 +36,14 @@ export interface RuleDemoOptions {
   reducedMotion: boolean;
   highContrast: boolean;
   onSceneChange?: (label: string, index: number, total: number) => void;
+  onPlaybackChange?: (paused: boolean, reducedMotion: boolean) => void;
+}
+
+export interface RuleDemoController {
+  togglePlayback(): void;
+  advanceStep(): void;
+  restart(): void;
+  destroy(): void;
 }
 
 export interface RuleDemoScene {
@@ -167,7 +175,7 @@ export function mountRuleDemo(
   canvas: HTMLCanvasElement,
   demoId: RuleDemoId,
   options: RuleDemoOptions,
-): { destroy(): void } {
+): RuleDemoController {
   options = {
     ...options,
     reducedMotion:
@@ -188,20 +196,9 @@ export function mountRuleDemo(
   let paused = options.reducedMotion;
   let visible = true;
   let showingResult = false;
-  const controls = canvas.closest('figure');
-  const toggle = controls?.querySelector<HTMLButtonElement>('[data-demo-toggle]');
-  const step = controls?.querySelector<HTMLButtonElement>('[data-demo-step]');
-  const restart = controls?.querySelector<HTMLButtonElement>('[data-demo-restart]');
   const canPlay = (): boolean => !paused && visible && document.visibilityState !== 'hidden';
   const updateControls = (): void => {
-    if (toggle) {
-      toggle.textContent = options.reducedMotion
-        ? 'Movimiento reducido'
-        : paused
-          ? 'Reproducir'
-          : 'Pausar';
-      toggle.disabled = options.reducedMotion;
-    }
+    options.onPlaybackChange?.(paused, options.reducedMotion);
   };
 
   const clearTimer = (): void => {
@@ -307,11 +304,13 @@ export function mountRuleDemo(
   };
 
   const togglePlayback = (): void => {
+    if (destroyed || options.reducedMotion) return;
     paused = !paused;
     updateControls();
     handleVisibilityChange();
   };
   const advanceStep = (): void => {
+    if (destroyed) return;
     paused = true;
     updateControls();
     clearTimer();
@@ -341,6 +340,7 @@ export function mountRuleDemo(
     }
   };
   const restartDemo = (): void => {
+    if (destroyed) return;
     sceneIndex = 0;
     showingResult = false;
     handleVisibilityChange();
@@ -361,14 +361,14 @@ export function mountRuleDemo(
     ),
   );
   document.addEventListener('visibilitychange', handleVisibilityChange);
-  toggle?.addEventListener('click', togglePlayback);
-  step?.addEventListener('click', advanceStep);
-  restart?.addEventListener('click', restartDemo);
   observer.observe(canvas);
   updateControls();
   showScene();
 
   return {
+    togglePlayback,
+    advanceStep,
+    restart: restartDemo,
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
@@ -376,9 +376,6 @@ export function mountRuleDemo(
       clearTimer();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       observer.disconnect();
-      toggle?.removeEventListener('click', togglePlayback);
-      step?.removeEventListener('click', advanceStep);
-      restart?.removeEventListener('click', restartDemo);
       renderer.destroy();
       for (const [name, value] of originalAttributes) restoreAttribute(canvas, name, value);
     },
