@@ -62,6 +62,14 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 
 Los guardados declaran versión y ruleset. Una repetición importada se reconstruye acción por acción y se rechaza si contiene una orden ilegal. El desenlace terminal también forma parte del registro: victoria por Fortaleza, tiempo o rendición, y tablas por bloqueo, repetición o falta de progreso sobreviven al autoguardado, la exportación y la reproducción.
 
+## Logros
+
+El menú **Logros**, disponible desde el inicio y durante la partida, reúne 28 desafíos con iconos cuadrados, descripción de sus condiciones, progreso acumulado y fecha de desbloqueo. Permite filtrar todos, pendientes o desbloqueados. Incluye victorias contra cada dificultad de IA, partidas entre humanos, relojes de 5, 10 y 20 minutos por bando, Academia, retos diarios y hazañas como remontar con la Fortaleza a un punto o dejar al rival sin piezas.
+
+Los logros pertenecen al perfil local de este navegador: en partidas entre humanos cuentan ambos bandos; contra la IA solo cuentan las acciones y victorias del humano. Las partidas deben terminar y contener al menos una orden. Los contadores tácticos se consolidan al terminar; los de Academia, al superar la lección. Repeticiones, partidas importadas y la demostración de portada no suman logros de partida, y deshacer o rehacer no cuenta dos veces un resultado. El progreso de Academia ya guardado se reconoce al iniciar, sin repetir avisos antiguos.
+
+Cada desbloqueo muestra únicamente su icono y título, acompañado de una campanilla que respeta el silencio y los volúmenes maestro y de efectos. Si se consiguen varios, los avisos aparecen uno a uno; se posponen mientras la pestaña está oculta. Los logros se guardan por separado de las partidas y permanecen al iniciar otra, pero borrar los datos del navegador elimina la colección.
+
 ## Reglas canónicas (`classic-v2`)
 
 - El Lanzamisiles dispone de dos misiles por partida. Cada disparo consume uno; cambiar de bando no repone la munición. Agotados los misiles, conserva el movimiento y la transformación en Soldado.
@@ -113,6 +121,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
 - `src/match-storage.ts`: preferencias, autoguardado y progreso local.
+- `src/achievements.ts`: catálogo, condiciones deterministas y persistencia versionada de logros.
 - `src/hex.ts`: coordenadas axiales y conversión a posiciones visuales.
 - `src/renderer.ts`: cámara, interacción y planificación de animaciones.
 - `src/rendering/`: escena PixiJS, piezas y marcas tácticas reutilizables, contexto gráfico y modelos visuales puros.

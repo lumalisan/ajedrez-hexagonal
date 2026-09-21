@@ -10,6 +10,7 @@ import {
 } from './panels';
 import { ReplayDock } from './replay-dock';
 import { SettingsIcon, SoundButton } from './shell-icons';
+import { AchievementsMenuIcon } from './components/achievement-icon';
 
 function Header() {
   const { snapshot, commands } = useGame();
@@ -37,6 +38,16 @@ function Header() {
       <MatchStatus />
       <div className="top-actions">
         <SoundButton />
+        <button
+          className="icon-button"
+          id="achievements-button"
+          type="button"
+          aria-label="Abrir logros"
+          title="Logros"
+          onClick={() => commands.openDialog({ kind: 'achievements' })}
+        >
+          <AchievementsMenuIcon />
+        </button>
         <button
           className="icon-button"
           id="settings-button"

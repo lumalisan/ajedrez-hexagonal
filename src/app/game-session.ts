@@ -1,6 +1,15 @@
 import { chooseMachineAction, type SearchMetadata } from '../ai';
 import { WorkerAiStrategy, difficultyBudget } from '../ai-strategy';
 import { AudioDirector } from '../audio';
+import {
+  evaluateAcademyAchievements,
+  evaluateMatchAchievements,
+  loadAchievementProgress,
+  registerAchievementMatch,
+  saveAchievementProgress,
+  type AchievementId,
+  type AchievementProgress,
+} from '../achievements';
 import { createClassicConfig } from '../game-config';
 import { directionBetween, equalHex } from '../hex';
 import {
@@ -31,6 +40,8 @@ import {
   appendMatchHistory,
   clearActiveMatch,
   loadActiveMatch,
+  loadAcademyProgress,
+  loadAcademyRecords,
   loadPreferences,
   recordScenarioAttempt,
   removeMatchHistory,
@@ -113,6 +124,12 @@ export function createGameSession(): GameSession {
   let announcementId = 0;
   let nextToastId = 0;
   let toasts: GameSnapshot['toasts'] = [];
+  let achievements = loadAchievementProgress();
+  let achievementNotification: GameSnapshot['achievementNotification'] = null;
+  let nextAchievementNotificationId = 0;
+  let achievementQueue: AchievementId[] = [];
+  let achievementTimer: ReturnType<typeof setTimeout> | null = null;
+  let achievementStorageWarningShown = false;
   let snapshot: GameSnapshot;
   let disposed = false;
   let lifecycle: AbortController | null = null;
@@ -189,6 +206,8 @@ export function createGameSession(): GameSession {
       announcement,
       announcementId,
       toasts,
+      achievements,
+      achievementNotification,
     };
     syncCanvas();
     for (const listener of listeners) listener();
@@ -246,6 +265,75 @@ export function createGameSession(): GameSession {
     dialogError = message;
     render();
     announce(message);
+  }
+
+  function persistAchievements(): void {
+    if (!saveAchievementProgress(achievements) && !achievementStorageWarningShown) {
+      achievementStorageWarningShown = true;
+      showToast('Los logros seguirán activos, pero este navegador no permite guardarlos.');
+    }
+  }
+
+  function showNextAchievement(): void {
+    achievementTimer = null;
+    if (disposed || document.visibilityState === 'hidden') return;
+    const achievementId = achievementQueue.shift();
+    achievementNotification = achievementId
+      ? { id: ++nextAchievementNotificationId, achievementId }
+      : null;
+    render();
+    if (!achievementId) return;
+    audio.playAchievement();
+    achievementTimer = later(() => {
+      achievementNotification = null;
+      render();
+      achievementTimer = later(showNextAchievement, 250);
+    }, 4_500);
+  }
+
+  function acceptAchievements(result: {
+    progress: AchievementProgress;
+    unlocked: AchievementId[];
+  }): void {
+    if (result.progress === achievements) return;
+    achievements = result.progress;
+    persistAchievements();
+    achievementQueue.push(...result.unlocked);
+    if (achievementQueue.length && !achievementNotification && achievementTimer === null)
+      achievementTimer = later(showNextAchievement, 750);
+    render();
+  }
+
+  function syncAcademyAchievements(completed: ReturnType<typeof recordScenarioAttempt>): void {
+    acceptAchievements(
+      evaluateAcademyAchievements(
+        achievements,
+        [...loadAcademyProgress(), completed.id],
+        [
+          ...loadAcademyRecords()
+            .filter((record) => record.completed && record.medal === 'gold')
+            .map((record) => record.id),
+          ...(completed.medal === 'gold' ? [completed.id] : []),
+        ],
+        new Date().toISOString(),
+      ),
+    );
+  }
+
+  function registerCurrentAchievementMatch(): void {
+    if (!matchRecord) return;
+    achievements = registerAchievementMatch(achievements, matchRecord);
+    persistAchievements();
+  }
+
+  // An imported record never becomes an eligible local match after a reload.
+  function excludeImportedAchievements(record: MatchRecord): void {
+    if (!achievements.registeredMatchIds.includes(record.createdAt)) return;
+    achievements = {
+      ...achievements,
+      registeredMatchIds: achievements.registeredMatchIds.filter((id) => id !== record.createdAt),
+    };
+    persistAchievements();
   }
 
   function isHomeScreenActive(): boolean {
@@ -728,6 +816,11 @@ export function createGameSession(): GameSession {
     }
     persistCurrentMatch();
     const completedAt = new Date().toISOString();
+    if (!activeScenario && replayCursor === null) {
+      acceptAchievements(
+        evaluateMatchAchievements(achievements, matchRecord, { source: 'live', at: completedAt }),
+      );
+    }
     appendMatchHistory({
       id: matchRecord.createdAt,
       definitionId: matchRecord.config.definitionId,
@@ -760,7 +853,7 @@ export function createGameSession(): GameSession {
   function recordActiveScenarioAttempt(completed: boolean): void {
     if (!activeScenario || scenarioAttemptsRecorded) return;
     const elapsed = Math.max(0, state.ply - activeScenario.initialState.ply);
-    recordScenarioAttempt(activeScenario.id, {
+    const academyRecord = recordScenarioAttempt(activeScenario.id, {
       completed,
       plies: elapsed,
       hintsUsed: scenarioHintsRevealed,
@@ -774,6 +867,7 @@ export function createGameSession(): GameSession {
     });
     clearActiveMatch();
     scenarioAttemptsRecorded = true;
+    if (completed) syncAcademyAchievements(academyRecord);
   }
 
   function currentFiringRange(): Hex[] {
@@ -997,6 +1091,7 @@ export function createGameSession(): GameSession {
       handoffScreen: preferences.handoffScreen,
     });
     matchRecord = createMatchRecord(matchConfig);
+    registerCurrentAchievementMatch();
     matchController = new MatchController(matchRecord);
     if (matchRecord.clock) matchController.resumeClock(Date.now());
     matchRecord = matchController.record;
@@ -1306,6 +1401,7 @@ export function createGameSession(): GameSession {
         throw new Error('Espera a que termine la animación y vuelve a importar la partida.');
       }
       saveActiveMatch(record);
+      excludeImportedAchievements(record);
       loadRecordIntoMatch(record);
       closeDialog();
     } catch (error) {
@@ -1376,7 +1472,10 @@ export function createGameSession(): GameSession {
     },
     startScenario,
     resetGame,
-    loadRecord: loadRecordIntoMatch,
+    loadRecord(record) {
+      excludeImportedAchievements(record);
+      loadRecordIntoMatch(record);
+    },
     continueMatch() {
       const saved = loadActiveMatch();
       if (saved.record) loadRecordIntoMatch(saved.record);
@@ -1514,12 +1613,28 @@ export function createGameSession(): GameSession {
     stopHomeDemo();
     for (const timer of timers) clearTimeout(timer);
     timers.clear();
+    achievementQueue = [];
+    achievementNotification = null;
+    achievementTimer = null;
     for (const finish of pendingDelays) finish();
     aiAbortController?.abort();
     aiStrategy.dispose();
     audio.setEnabled(false);
   }
 
+  // Existing tutorial completion is recognized silently, without replaying old notifications.
+  const academySync = evaluateAcademyAchievements(
+    achievements,
+    loadAcademyProgress(),
+    loadAcademyRecords()
+      .filter((record) => record.completed && record.medal === 'gold')
+      .map((record) => record.id),
+    new Date().toISOString(),
+  );
+  if (academySync.progress !== achievements) {
+    achievements = academySync.progress;
+    saveAchievementProgress(achievements);
+  }
   render();
   return {
     getSnapshot: () => snapshot,
@@ -1556,6 +1671,26 @@ export function createGameSession(): GameSession {
       const options = { capture: true, signal: lifecycle.signal };
       window.addEventListener('pointerdown', activateAudio, options);
       window.addEventListener('keydown', activateAudio, options);
+      window.addEventListener(
+        'visibilitychange',
+        () => {
+          if (document.visibilityState === 'hidden') {
+            if (achievementTimer !== null) {
+              clearTimeout(achievementTimer);
+              timers.delete(achievementTimer);
+              achievementTimer = null;
+            }
+            if (achievementNotification) {
+              achievementQueue.unshift(achievementNotification.achievementId);
+              achievementNotification = null;
+              render();
+            }
+          } else if (achievementQueue.length && achievementTimer === null) {
+            showNextAchievement();
+          }
+        },
+        options,
+      );
       audio.setEnabled(preferences.sound);
       if (clockTimer !== null) clearInterval(clockTimer);
       clockTimer = setInterval(tickActiveClock, 250);

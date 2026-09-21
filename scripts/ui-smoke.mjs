@@ -299,6 +299,8 @@ try {
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-home.png` });
 
+  await assertAchievementsCatalog(desktop, 'Desktop');
+
   await desktop.locator('[data-home-action="rules"]').click();
   await desktop.locator('#rules-article').waitFor({ state: 'visible' });
   await assertFullscreenAvailable(desktop, 'Rules');
@@ -1103,6 +1105,7 @@ try {
   );
   if (process.env.UI_SCREENSHOT)
     await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-home.png` });
+  await assertAchievementsCatalog(mobile, 'Mobile');
   await selectMode(mobile, 'local');
   const layout = await mobile.evaluate(() => ({
     viewport: window.innerWidth,
@@ -1344,6 +1347,30 @@ try {
   });
   watchErrors(compactLandscape, runtimeErrors);
   await compactLandscape.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  for (const viewport of [
+    { width: 568, height: 320 },
+    { width: 844, height: 390 },
+  ]) {
+    await compactLandscape.setViewportSize(viewport);
+    await compactLandscape.locator('[data-home-action="achievements"]').click();
+    const entries = compactLandscape.locator('[data-achievement-id]');
+    await entries.first().waitFor();
+    for (const entry of [entries.first(), entries.last()]) {
+      await entry.scrollIntoViewIfNeeded();
+      assert(
+        await entry.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const dialog = element.closest('dialog').getBoundingClientRect();
+          const list = element.closest('.achievements-list').getBoundingClientRect();
+          return list.height > 0 && bounds.top >= dialog.top && bounds.bottom <= dialog.bottom;
+        }),
+        'Short landscape achievements must allow scrolling to every complete row.',
+      );
+    }
+    await assertNoHorizontalOverflow(compactLandscape, 'Landscape achievements', '#game-dialog');
+    await compactLandscape.keyboard.press('Escape');
+  }
+  await compactLandscape.setViewportSize({ width: 568, height: 320 });
   await selectMode(compactLandscape, 'local');
   await assertNoHorizontalOverflow(compactLandscape, 'Compact landscape match');
   await assertBoardHistoryControlsFit(compactLandscape);
@@ -1580,6 +1607,26 @@ try {
     (await academy.getByText('Tablas por bloqueo').count()) === 0,
     'Academy completion must not report a classical blockade draw.',
   );
+  const achievementNotice = academy.locator('[data-achievement-notification="academy-first"]');
+  await achievementNotice.waitFor({ state: 'visible' });
+  assert(
+    (await achievementNotice.locator('.achievement-icon').count()) === 1 &&
+      (await achievementNotice.locator('strong').textContent()) === 'Yo he venido a aprender' &&
+      (await achievementNotice.locator('p, button, progress').count()) === 0,
+    'Completing a lesson must show an achievement notification with only its icon and title.',
+  );
+  assert(
+    await achievementNotice.evaluate((notice) => {
+      const liveRegion = notice.closest('[role="status"]');
+      return (
+        liveRegion?.getAttribute('aria-live') === 'polite' &&
+        !notice.contains(document.activeElement)
+      );
+    }),
+    'Achievement notifications must announce the unlock without taking keyboard focus.',
+  );
+  if (process.env.UI_SCREENSHOT)
+    await academy.screenshot({ path: `${process.env.UI_SCREENSHOT}-achievement-notification.png` });
   await academy.locator('[data-academy-menu]').click();
   await academy.keyboard.press('Escape');
   await academy.locator('#settings-button').click();
@@ -1613,6 +1660,33 @@ try {
       .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
     'Completed matches must remain available through History.',
   );
+  await academy.locator('[data-home-action="achievements"]').click();
+  await academy.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
+  const completedLesson = academy.locator('[data-achievement-id="academy-first"]');
+  assert(
+    (await completedLesson.locator('.achievement-state').textContent())?.includes('Desbloqueado') &&
+      Boolean(await completedLesson.locator('time').getAttribute('datetime')),
+    'The completed lesson achievement and its unlock date must survive reloading.',
+  );
+  const tutorialProgress = academy
+    .locator('[data-achievement-id="tutorial-complete"]')
+    .getByRole('progressbar');
+  assert(
+    (await tutorialProgress.getAttribute('value')) === '1' &&
+      Number(await tutorialProgress.getAttribute('max')) > 1,
+    'The tutorial achievement must retain partial progress after completing the first lesson.',
+  );
+  await academy.getByRole('button', { name: /^Desbloqueados/ }).click();
+  assert(
+    await completedLesson.isVisible(),
+    'The unlocked filter must include an achievement earned through real gameplay.',
+  );
+  await academy.getByRole('button', { name: /^Pendientes/ }).click();
+  assert(
+    (await completedLesson.count()) === 0 && (await tutorialProgress.count()) === 1,
+    'The pending filter must exclude earned achievements while retaining partial progress.',
+  );
+  await academy.getByRole('button', { name: 'Cerrar logros', exact: true }).click();
   await academy.close();
 
   const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -1640,7 +1714,7 @@ try {
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    'UI smoke passed: desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
+    'UI smoke passed: desktop and mobile achievements, earned notification and saved progress, desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
   );
 } finally {
   await browser.close();
@@ -1751,8 +1825,8 @@ async function assertTopActionsDoNotOverlap(page) {
       }),
   );
   assert(
-    boxes.length === 5,
-    'Mobile header must expose sound, settings, help, resign and draw controls.',
+    boxes.length === 6,
+    'Mobile header must expose sound, achievements, settings, help, resign and draw controls.',
   );
   for (let index = 0; index < boxes.length; index += 1) {
     for (const other of boxes.slice(index + 1)) {
@@ -1885,6 +1959,86 @@ async function assertFullscreenAvailable(page, surface) {
   assert(
     (await button.isVisible()) && Boolean(await button.getAttribute('aria-label')),
     `${surface} must offer an accessible fullscreen button.`,
+  );
+}
+
+async function assertAchievementsCatalog(page, surface) {
+  const opener = page.locator('[data-home-action="achievements"]');
+  await opener.click();
+  await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
+  const cards = page.locator('[data-achievement-id]');
+  const total = await cards.count();
+  assert(total > 0, `${surface} achievements must include a visible catalog.`);
+  const ids = await cards.evaluateAll((items) => items.map((item) => item.dataset.achievementId));
+  assert(new Set(ids).size === total, 'Each achievement must appear once in the full catalog.');
+  assert(
+    await cards.evaluateAll((items) =>
+      items.every(
+        (item) =>
+          item.querySelector('h4')?.textContent?.trim() &&
+          item.querySelector('.achievement-description p')?.textContent?.trim() &&
+          item.querySelector('.achievement-state')?.textContent?.includes('Pendiente'),
+      ),
+    ),
+    'Each locked achievement must explain its condition and state in text.',
+  );
+  const summary = page.locator('[data-achievement-summary]');
+  const totals = await summary.evaluate((progress) => ({
+    value: Number(progress.getAttribute('aria-valuenow') ?? progress.getAttribute('value')),
+    max: Number(progress.getAttribute('aria-valuemax') ?? progress.getAttribute('max')),
+  }));
+  assert(
+    totals.value === 0 && totals.max === total,
+    'A new profile must show zero unlocked achievements and the actual catalog total.',
+  );
+  const progressBars = await page.getByRole('progressbar').evaluateAll((bars) =>
+    bars.map((bar) => ({
+      label: bar.getAttribute('aria-label') || bar.getAttribute('aria-labelledby'),
+      value: Number(bar.getAttribute('aria-valuenow') ?? bar.getAttribute('value')),
+      max: Number(bar.getAttribute('aria-valuemax') ?? bar.getAttribute('max')),
+    })),
+  );
+  assert(
+    progressBars.length > 1 &&
+      progressBars.every(({ label, value, max }) => label && value === 0 && max > 0),
+    'Locked cumulative achievements must expose their labeled, numeric progress to assistive technology.',
+  );
+  const icons = await cards.locator('.achievement-icon').evaluateAll((items) =>
+    items.map((item) => {
+      const { width, height } = item.getBoundingClientRect();
+      return { width, height };
+    }),
+  );
+  assert(
+    icons.length === total &&
+      icons.every(({ width, height }) => width > 0 && Math.abs(width - height) <= 1),
+    'Every achievement must have a square icon at desktop and mobile widths.',
+  );
+  await assertNoHorizontalOverflow(page, `${surface} achievements`, '#game-dialog');
+
+  const unlocked = page.getByRole('button', { name: /^Desbloqueados/ });
+  await unlocked.focus();
+  await unlocked.press('Enter');
+  assert(
+    (await unlocked.getAttribute('aria-pressed')) === 'true' && (await cards.count()) === 0,
+    'The unlocked filter must be keyboard operable and exclude locked achievements.',
+  );
+  const pending = page.getByRole('button', { name: /^Pendientes/ });
+  await pending.click();
+  assert(
+    (await pending.getAttribute('aria-pressed')) === 'true' && (await cards.count()) === total,
+    'The pending filter must show the full catalog for a new profile.',
+  );
+  await page.getByRole('button', { name: /^Todos/ }).click();
+  assert((await cards.count()) === total, 'The all filter must restore the complete catalog.');
+  if (process.env.UI_SCREENSHOT)
+    await page.screenshot({
+      path: `${process.env.UI_SCREENSHOT}-achievements-${surface.toLowerCase()}.png`,
+    });
+  await page.keyboard.press('Escape');
+  await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+  await page.waitForFunction(() =>
+    document.activeElement?.matches('[data-home-action="achievements"]'),
   );
 }
 

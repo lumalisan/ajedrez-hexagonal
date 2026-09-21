@@ -49,6 +49,16 @@ try {
       await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
       await audit('home');
 
+      await page.locator('[data-home-action="achievements"]').click();
+      await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
+      await audit('achievements / catalog and progress');
+      await page.getByRole('button', { name: /^Desbloqueados/ }).click();
+      await audit('achievements / unlocked empty state');
+      await page.getByRole('button', { name: /^Pendientes/ }).click();
+      await audit('achievements / pending progress');
+      await page.keyboard.press('Escape');
+      await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+
       await page.locator('[data-home-action="rules"]').click();
       await page.locator('#rules-article').waitFor({ state: 'visible' });
       await audit('rules manual');

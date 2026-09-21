@@ -4,12 +4,14 @@ import type { AiStrategy } from '../src/ai-strategy';
 import type { SearchMetadata } from '../src/ai';
 import type { GameRenderer, GameSession, GameSnapshot } from '../src/app/contracts';
 import { createGameSession } from '../src/app/game-session';
+import { loadAchievementProgress } from '../src/achievements';
 import { getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
 import { appendAction, createMatchRecord, replayRecord } from '../src/match-record';
 import { loadActiveMatch, loadPreferences, saveActiveMatch } from '../src/match-storage';
 import type { GameAction, GameState, MatchRecord } from '../src/types';
 import { installMemoryStorage } from './helpers/memory-storage';
+import { BASIC_SCENARIOS } from '../src/scenarios';
 
 const collaborators = vi.hoisted(() => ({
   chooseAction: vi.fn<AiStrategy['chooseAction']>(),
@@ -17,6 +19,7 @@ const collaborators = vi.hoisted(() => ({
   startMusic: vi.fn(),
   setEnabled: vi.fn(),
   setVolumes: vi.fn(),
+  playAchievement: vi.fn(),
   chooseDemoAction: vi.fn<(state: GameState) => GameAction | null>(),
 }));
 
@@ -29,6 +32,7 @@ vi.mock('../src/audio', () => ({
     playInvalid = vi.fn();
     playEvents = vi.fn();
     playTurn = vi.fn();
+    playAchievement = collaborators.playAchievement;
     toggle = vi.fn(() => false);
   },
 }));
@@ -341,6 +345,150 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().state.ply).toBe(0);
     expect(session.getSnapshot().matchRecord?.conclusion).toBeNull();
     expect(session.getSnapshot().matchRecord?.actions).toEqual([]);
+  });
+
+  it('guarda los logros de una partida real y presenta cada aviso una sola vez', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local', clockSeconds: 300 }));
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    session.commands.resign();
+
+    const earned = session.getSnapshot().achievements;
+    const unlockedCount = Object.keys(earned.unlockedAt).length;
+    expect(earned.counters.matches).toBe(1);
+    expect(earned.counters.wins).toBe(1);
+    expect(unlockedCount).toBeGreaterThan(1);
+    expect(loadAchievementProgress()).toEqual(earned);
+    expect(session.getSnapshot().achievementNotification).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(750);
+    expect(session.getSnapshot().achievementNotification).not.toBeNull();
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
+    const first = session.getSnapshot().achievementNotification;
+    await vi.advanceTimersByTimeAsync(4_750);
+    expect(session.getSnapshot().achievementNotification?.achievementId).not.toBe(
+      first?.achievementId,
+    );
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(2);
+
+    session.commands.openReplay(0);
+    session.commands.closeReplay();
+    expect(session.getSnapshot().achievements).toEqual(earned);
+    await vi.advanceTimersByTimeAsync(unlockedCount * 4_750);
+    expect(session.getSnapshot().achievementNotification).toBeNull();
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(unlockedCount);
+    expect(createSession().getSnapshot().achievements).toEqual(earned);
+  });
+
+  it('continúa contando una partida local guardada tras recrear la sesión', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    session.dispose();
+    const resumed = createSession();
+    resumed.commands.continueMatch();
+    resumed.commands.resign();
+    expect(resumed.getSnapshot().achievements.counters.matches).toBe(1);
+  });
+
+  it('una importación pendiente no gana logros al terminarla, ni tras recargarla', async () => {
+    const session = createSession();
+    session.commands.loadRecord(savedRecord());
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    session.dispose();
+    const resumed = createSession();
+    resumed.commands.continueMatch();
+    resumed.commands.resign();
+    expect(resumed.getSnapshot().achievements.counters.matches).toBe(0);
+    expect(resumed.getSnapshot().achievementNotification).toBeNull();
+    expect(collaborators.playAchievement).not.toHaveBeenCalled();
+  });
+
+  it('reimportar una partida propia no conserva su autorización para sumar logros', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    const exported = session.getSnapshot().matchRecord!;
+    expect(session.getSnapshot().achievements.registeredMatchIds).toContain(exported.createdAt);
+    await session.commands.importMatch({
+      text: async () => JSON.stringify(exported),
+    } as File);
+    expect(session.getSnapshot().achievements.registeredMatchIds).not.toContain(exported.createdAt);
+    session.dispose();
+    const resumed = createSession();
+    resumed.commands.continueMatch();
+    resumed.commands.resign();
+    expect(resumed.getSnapshot().achievements.counters.matches).toBe(0);
+  });
+
+  it('completar el tutorial actualiza logros; repetirlo no multiplica el progreso', async () => {
+    const session = createSession();
+    const scenario = BASIC_SCENARIOS[0];
+    const completeLesson = async () => {
+      session.commands.startScenario(scenario);
+      session.commands.closeDialog();
+      const move = getAllLegalActions(session.getSnapshot().state).find(
+        (action) => action.kind === 'move' && action.pieceId === 'academy-soldier',
+      );
+      expect(move).toBeDefined();
+      session.commands.prepareAction(move!);
+      await session.commands.commitPending();
+    };
+    await completeLesson();
+    const earned = session.getSnapshot().achievements;
+    expect(earned.completedScenarioIds).toContain(scenario.id);
+    expect(Object.keys(earned.unlockedAt).length).toBeGreaterThan(0);
+    await completeLesson();
+    expect(session.getSnapshot().achievements).toEqual(earned);
+  });
+
+  it('pospone los avisos en segundo plano y los cancela al desmontar', async () => {
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    session.commands.resign();
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    browserWindow.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(session.getSnapshot().achievementNotification).toBeNull();
+    expect(collaborators.playAchievement).not.toHaveBeenCalled();
+    vi.stubGlobal('document', { visibilityState: 'visible' });
+    browserWindow.dispatchEvent(new Event('visibilitychange'));
+    expect(session.getSnapshot().achievementNotification).not.toBeNull();
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
+    session.dispose();
+    await vi.advanceTimersByTimeAsync(30_000);
+    session.start();
+    expect(session.getSnapshot().achievementNotification).toBeNull();
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
+  });
+
+  it('conserva los logros de Academia en memoria si falla el almacenamiento', async () => {
+    const session = createSession();
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('Almacenamiento no disponible');
+    });
+    session.commands.startScenario(BASIC_SCENARIOS[0]);
+    session.commands.closeDialog();
+    const move = getAllLegalActions(session.getSnapshot().state).find(
+      (action) => action.kind === 'move' && action.pieceId === 'academy-soldier',
+    );
+    expect(move).toBeDefined();
+    session.commands.prepareAction(move!);
+    await session.commands.commitPending();
+    expect(session.getSnapshot().achievements.completedScenarioIds).toContain('movement');
+    expect(session.getSnapshot().achievements.unlockedAt['academy-first']).toBeDefined();
+    await vi.advanceTimersByTimeAsync(750);
+    expect(session.getSnapshot().achievementNotification?.achievementId).toBe('academy-first');
+    expect(session.getSnapshot().toasts.some((toast) => toast.message.includes('logros'))).toBe(
+      true,
+    );
   });
 
   it('persiste las preferencias sin mutar snapshots ya entregados', () => {

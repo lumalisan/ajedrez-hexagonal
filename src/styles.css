@@ -5,6 +5,7 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import './styles/tokens.css' layer(base);
 @import './styles/game.css' layer(components);
+@import './styles/achievements.css' layer(components);
 
 /* Utilities share the game's tokens, including its high-contrast preference. */
 @theme inline {

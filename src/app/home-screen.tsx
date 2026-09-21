@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadAcademyProgress, loadActiveMatch, loadMatchHistory } from '../match-storage';
 import { SCENARIOS } from '../scenarios';
+import { ACHIEVEMENTS, achievementProgressFor } from '../achievements';
 import { useGame } from './game-context';
 import { SettingsIcon, SoundButton } from './shell-icons';
 
@@ -139,6 +140,22 @@ export function HomeScreen() {
                   <span>Tutorial</span>
                   <small>
                     {completed} de {SCENARIOS.length} desafíos completados
+                  </small>
+                </button>
+                <button
+                  type="button"
+                  className="home-nav-button"
+                  data-home-action="achievements"
+                  onClick={() => commands.openDialog({ kind: 'achievements' })}
+                >
+                  <span>Logros</span>
+                  <small>
+                    {
+                      ACHIEVEMENTS.filter(
+                        (entry) => achievementProgressFor(entry, snapshot.achievements).unlocked,
+                      ).length
+                    }{' '}
+                    de {ACHIEVEMENTS.length} hazañas desbloqueadas
                   </small>
                 </button>
                 <button

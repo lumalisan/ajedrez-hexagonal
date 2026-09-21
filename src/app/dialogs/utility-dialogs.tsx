@@ -7,6 +7,7 @@ import { revealedScenarioHints, scenarioLessonAt } from '../../scenarios';
 import type { GamePreferences, ScenarioDefinition } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { useGame } from '../game-context';
+import { AchievementsDialog } from './achievements-dialog';
 
 const CONFIRMATION_OPTIONS: readonly {
   value: GamePreferences['confirmation'];
@@ -25,6 +26,8 @@ export function UtilityDialogs() {
       return <SettingsDialog />;
     case 'history':
       return <HistoryDialog />;
+    case 'achievements':
+      return <AchievementsDialog />;
     case 'abandon':
       return (
         <ConfirmationDialog

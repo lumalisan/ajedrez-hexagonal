@@ -136,6 +136,15 @@ try {
   await page.locator('[data-home-action="new"]').waitFor({ state: 'visible' });
   assert(await page.evaluate(() => !navigator.onLine), 'The browser must remain offline.');
 
+  await page.locator('[data-home-action="achievements"]').click();
+  await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
+  assert(
+    await page.getByText('¡Chúpate esa!', { exact: true }).isVisible(),
+    'The achievement collection and its descriptions must be available offline.',
+  );
+  await page.keyboard.press('Escape');
+  await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+
   await page.locator('[data-home-action="new"]').click();
   await page.locator('[data-home-mode="local"]').click();
   await page.locator('[data-preset="custom"]').click();

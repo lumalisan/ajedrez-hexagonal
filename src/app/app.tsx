@@ -10,6 +10,7 @@ import {
 import { GameContext, useGame } from './game-context';
 import { createGameSession } from './game-session';
 import { GameShell } from './game-shell';
+import { AchievementNotification } from './components/achievement-notification';
 
 const GameDialogs = lazy(() =>
   import('./dialogs/game-dialogs').then((module) => ({ default: module.GameDialogs })),
@@ -170,8 +171,10 @@ function DialogHost() {
           </Suspense>
         )}
         {isOpen && <FullscreenControl />}
+        {isOpen && <AchievementNotification />}
       </dialog>
       {!isOpen && <FullscreenControl />}
+      {!isOpen && <AchievementNotification />}
     </>
   );
 }

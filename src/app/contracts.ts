@@ -1,4 +1,5 @@
 import type { SearchMetadata } from '../ai';
+import type { AchievementId, AchievementProgress } from '../achievements';
 import type { UiMode } from '../match-store';
 import type { BoardRenderer } from '../renderer';
 import type { ScenarioProgress } from '../scenarios';
@@ -20,6 +21,7 @@ export type DialogState =
   | { kind: 'rules'; sectionId?: string }
   | { kind: 'settings' }
   | { kind: 'history' }
+  | { kind: 'achievements' }
   | { kind: 'abandon' }
   | { kind: 'mode'; initial?: boolean }
   | { kind: 'resign' }
@@ -64,6 +66,8 @@ export interface GameSnapshot {
   announcement: string;
   announcementId: number;
   toasts: Array<{ id: number; message: string }>;
+  achievements: AchievementProgress;
+  achievementNotification: { id: number; achievementId: AchievementId } | null;
 }
 
 export interface GameCommands {

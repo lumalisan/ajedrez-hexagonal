@@ -73,6 +73,13 @@ export class AudioDirector {
     this.tone(495, 0.07, 0.1, 'sine', 0.045, 620);
   }
 
+  playAchievement(): void {
+    this.tone(659.25, 0, 0.18, 'sine', 0.032);
+    this.tone(987.77, 0.12, 0.22, 'sine', 0.03);
+    this.tone(1318.51, 0.24, 0.48, 'sine', 0.028);
+    this.tone(2637.02, 0.24, 0.3, 'sine', 0.009);
+  }
+
   playEvents(events: GameEvent[], before: GameState): void {
     if (!this.enabled || events.length === 0) return;
     const hasVictory = events.some((event) => event.type === 'victory');
