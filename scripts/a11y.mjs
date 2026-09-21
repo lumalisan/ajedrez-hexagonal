@@ -81,6 +81,16 @@ try {
       await page.keyboard.press('Enter');
       await page.locator('#command-panel').waitFor({ state: 'visible' });
       await audit('match / selected unit');
+      if (!profile.isMobile) {
+        await page.locator('#command-window-titlebar').focus();
+        await page.keyboard.press('ArrowLeft');
+        await page.locator('#minimize-command-panel').click();
+        await page.locator('#command-panel-restore').waitFor({ state: 'visible' });
+        await audit('match / command window minimized');
+        await page.locator('#command-panel-restore').click();
+        await page.locator('#command-panel').waitFor({ state: 'visible' });
+        await page.locator('#game-canvas').focus();
+      }
       await page.keyboard.press('w');
       await page.keyboard.press('Enter');
       await page.locator('#pending-card').waitFor({ state: 'visible' });

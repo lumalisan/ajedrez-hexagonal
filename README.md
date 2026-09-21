@@ -59,7 +59,8 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 ## Controles
 
 - Ratón o táctil: seleccionar unidad, elegir marcador y confirmar orden.
-- El panel de mando aparece al seleccionar una unidad, dentro del marco del tablero. En pantallas estrechas aparece debajo; puedes desplazarte por la página para consultar las órdenes. Cancelar deselecciona la unidad.
+- En escritorio, el panel de mando es una ventana flotante a la derecha, que no desplaza el tablero. Arrastra la cabecera para moverla o enfócala y usa las flechas (Mayús acelera el movimiento). «−» la minimiza abajo y Restaurar recupera su posición y orden pendiente. «×» cierra y deselecciona; la siguiente selección abre la ventana en su posición inicial.
+- En pantallas estrechas, el panel sigue integrado junto al tablero o debajo; puedes desplazarte para consultar las órdenes. Cancelar deselecciona la unidad.
 - El botón de registro de batalla alterna entre el registro y el panel de mando.
 - Cambiar orientación y Orientar cañón abren la brújula. El movimiento del tanque permite elegir la orientación final del cañón antes de confirmar, también en modo Rápida.
 - Al abandonar un vehículo, elige la orientación y, si quieres avanzar o atacar como Soldado ese mismo turno, selecciona el destino antes de confirmar.

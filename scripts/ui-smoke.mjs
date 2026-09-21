@@ -591,6 +591,99 @@ try {
     'Confirmed action missing from battle log.',
   );
 
+  const windowPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(windowPage, runtimeErrors);
+  await windowPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(windowPage, 'local');
+  const unobstructedCanvas = await windowPage.locator('#game-canvas').boundingBox();
+  await clickHex(windowPage, 0, -2);
+  const defaultWindow = await windowPage.locator('#command-panel').boundingBox();
+  assert(defaultWindow, 'The floating command window must appear after selection.');
+  await assertCanvasBounds(windowPage, unobstructedCanvas, 'Selecting a unit');
+  await clickHex(windowPage, 0, -1);
+  await windowPage.locator('#pending-card .confirm-button').waitFor();
+  await assertCanvasBounds(windowPage, unobstructedCanvas, 'Preparing an order');
+  const beforeDrag = await windowPage.locator('#command-panel').boundingBox();
+  await dragCommandWindow(windowPage, -160, 35);
+  const afterDrag = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    afterDrag.x < beforeDrag.x - 100 && afterDrag.y > beforeDrag.y + 20,
+    'Dragging the command titlebar must move the window independently of the board.',
+  );
+  await assertCanvasBounds(windowPage, unobstructedCanvas, 'Dragging the command window');
+  const titlebar = windowPage.locator('#command-window-titlebar');
+  await titlebar.focus();
+  await titlebar.press('ArrowLeft');
+  const afterArrow = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    afterArrow.x < afterDrag.x && Math.abs(afterArrow.y - afterDrag.y) <= 1,
+    'A focused titlebar must support horizontal movement with arrow keys.',
+  );
+  await titlebar.press('Shift+ArrowDown');
+  const beforeMinimize = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    beforeMinimize.y - afterArrow.y > afterDrag.x - afterArrow.x,
+    'Shift and an arrow must move the command window farther than a plain arrow.',
+  );
+  await windowPage.locator('#minimize-command-panel').click();
+  assert(
+    (await windowPage.locator('#command-panel').isHidden()) &&
+      (await windowPage.locator('#command-panel-restore').isVisible()),
+    'Minimizing must replace the floating window with a restore control.',
+  );
+  await assertCanvasBounds(windowPage, unobstructedCanvas, 'Minimizing the command window');
+  await windowPage.locator('#command-panel-restore').click();
+  const restoredWindow = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    Math.abs(restoredWindow.x - beforeMinimize.x) <= 1 &&
+      Math.abs(restoredWindow.y - beforeMinimize.y) <= 1 &&
+      (await windowPage.locator('#pending-card .confirm-button').isVisible()) &&
+      (await windowPage.locator('#battle-log li:not(.empty-log)').count()) === 0,
+    'Restoring must preserve the dragged position and the unexecuted prepared order.',
+  );
+  await assertCanvasBounds(windowPage, unobstructedCanvas, 'Restoring the command window');
+  await windowPage.locator('#minimize-command-panel').click();
+  await clickHex(windowPage, 2, -3);
+  const restoredBySelection = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    restoredBySelection &&
+      Math.abs(restoredBySelection.x - beforeMinimize.x) <= 1 &&
+      Math.abs(restoredBySelection.y - beforeMinimize.y) <= 1 &&
+      (await windowPage.locator('#pending-card').isHidden()),
+    'Selecting another unit must restore the minimized window at its previous position.',
+  );
+  await windowPage.locator('#close-command-panel').click();
+  assert(
+    (await windowPage.locator('#command-panel').isHidden()) &&
+      (await windowPage.locator('#command-panel-restore').isHidden()) &&
+      (await windowPage.locator('#selection-summary').textContent()) ===
+        'Turno de Cian. Selecciona una unidad propia.',
+    'Closing the window must deselect the unit and discard its prepared order.',
+  );
+  await assertCanvasBounds(windowPage, unobstructedCanvas, 'Closing the command window');
+  await clickHex(windowPage, 0, -2);
+  const reopenedWindow = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    Math.abs(reopenedWindow.x - defaultWindow.x) <= 1 &&
+      Math.abs(reopenedWindow.y - defaultWindow.y) <= 1 &&
+      (await windowPage.locator('#pending-card').isHidden()),
+    'The next selection after closing must reset the window to its default position.',
+  );
+  await dragCommandWindow(windowPage, -120, 40);
+  const beforeCancel = await windowPage.locator('#command-panel').boundingBox();
+  await windowPage.locator('#cancel-selection').click();
+  await clickHex(windowPage, 0, -2);
+  const afterCancel = await windowPage.locator('#command-panel').boundingBox();
+  assert(
+    Math.abs(afterCancel.x - beforeCancel.x) <= 1 && Math.abs(afterCancel.y - beforeCancel.y) <= 1,
+    'Cancelling a selection must retain the chosen window position for the next selection.',
+  );
+  await dragCommandWindow(windowPage, 1_200, 800);
+  await assertCommandWindowInsideArena(windowPage, 'Dragging toward the edge');
+  await windowPage.setViewportSize({ width: 1000, height: 700 });
+  await assertCommandWindowInsideArena(windowPage, 'Resizing the desktop');
+  await windowPage.close();
+
   const cannonPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(cannonPage, runtimeErrors);
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
@@ -921,6 +1014,12 @@ try {
   assert(
     await mobile.locator('#cancel-selection').isVisible(),
     'The selected unit must expose Cancel on mobile.',
+  );
+  assert(
+    (await mobile.locator('#minimize-command-panel').isHidden()) &&
+      (await mobile.locator('#close-command-panel').isHidden()) &&
+      (await mobile.locator('#command-panel-restore').isHidden()),
+    'Mobile must retain the inline command panel without desktop window controls.',
   );
   await mobile.keyboard.press('w');
   assert((await selectedHex(mobile)) === '0,-1', 'W must move focus onto the soldier destination.');
@@ -1434,6 +1533,48 @@ async function pointForHex(page, q, r) {
     x: box.x + box.width / 2 + screenX * fitScale,
     y: box.y + box.height / 2 + screenY * fitScale,
   };
+}
+
+async function assertCanvasBounds(page, expected, action) {
+  const current = await page.locator('#game-canvas').boundingBox();
+  assert(
+    expected &&
+      current &&
+      ['x', 'y', 'width', 'height'].every((key) => Math.abs(current[key] - expected[key]) <= 1),
+    `${action} must not move or resize the desktop board: ${JSON.stringify({ expected, current })}.`,
+  );
+}
+
+async function dragCommandWindow(page, deltaX, deltaY) {
+  const titlebar = page.locator('#command-window-titlebar');
+  const box = await titlebar.boundingBox();
+  assert(box, 'The command window titlebar must be visible for dragging.');
+  const viewport = page.viewportSize();
+  const x = box.x + 24;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(
+    Math.max(1, Math.min(viewport.width - 2, x + deltaX)),
+    Math.max(1, Math.min(viewport.height - 2, y + deltaY)),
+    { steps: 8 },
+  );
+  await page.mouse.up();
+}
+
+async function assertCommandWindowInsideArena(page, action) {
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const arena = await page.locator('#board-arena').boundingBox();
+  const panel = await page.locator('#command-panel').boundingBox();
+  assert(
+    arena &&
+      panel &&
+      panel.x >= arena.x - 1 &&
+      panel.y >= arena.y - 1 &&
+      panel.x + panel.width <= arena.x + arena.width + 1 &&
+      panel.y + panel.height <= arena.y + arena.height + 1,
+    `${action} must keep the floating command window inside the arena: ${JSON.stringify({ arena, panel })}.`,
+  );
 }
 
 async function assertTopActionsDoNotOverlap(page) {

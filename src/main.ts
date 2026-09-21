@@ -4,6 +4,7 @@ import { chooseMachineAction } from './ai';
 import type { SearchMetadata } from './ai';
 import { WorkerAiStrategy, difficultyBudget } from './ai-strategy';
 import { AudioDirector } from './audio';
+import { FloatingCommandPanel } from './floating-command-panel';
 import { createClassicConfig } from './game-config';
 import { mountLayoutPreview, type LayoutPreview } from './layout-preview';
 import { INITIAL_LAYOUTS, createInitialPieces } from './setup';
@@ -179,6 +180,22 @@ const toastRegion = requireElement<HTMLElement>('toast-region');
 const announcer = requireElement<HTMLElement>('announcer');
 const srBoard = requireElement<HTMLElement>('sr-board');
 const matchClockDisplay = document.getElementById('match-clock');
+const floatingCommands = new FloatingCommandPanel(
+  {
+    arena: requireElement<HTMLElement>('board-arena'),
+    panel: commandPanel,
+    titlebar: requireElement<HTMLElement>('command-window-titlebar'),
+    minimize: requireElement<HTMLButtonElement>('minimize-command-panel'),
+    close: requireElement<HTMLButtonElement>('close-command-panel'),
+    restore: requireElement<HTMLButtonElement>('command-panel-restore'),
+  },
+  () => {
+    clearSelection();
+    canvas.focus({ preventScroll: true });
+    announce('Panel de mando cerrado. Unidad deseleccionada.');
+  },
+);
+import.meta.hot?.dispose(() => floatingCommands.destroy());
 
 applyPreferences();
 bindControls();
@@ -544,6 +561,7 @@ function handleCell(hex: Hex): void {
     logOpen = false;
     mode = { kind: 'pieceChoice', pieceIds: pieces.map((piece) => piece.id) };
     pendingAction = null;
+    floatingCommands.reveal();
     render();
     announce('Casilla apilada. Elige unidad de aire o suelo.');
   }
@@ -553,6 +571,7 @@ function selectPiece(pieceId: string): void {
   if (replayDock || animating || isMachineTurn()) return;
   const piece = getPiece(state, pieceId);
   if (!piece) return;
+  floatingCommands.reveal();
   logOpen = false;
   selectedId = pieceId;
   focusedHex = { ...piece.position };
@@ -588,6 +607,7 @@ function cancelDraft(): void {
 
 function setPending(action: GameAction): void {
   pendingAction = action;
+  floatingCommands.reveal();
   recordTelemetry('action-prepared', {
     kind: action.kind,
     ply: state.ply,
@@ -894,11 +914,11 @@ function render(): void {
   if (replayButton) replayButton.disabled = !matchRecord || animating || machineThinking;
   const importButton = dialog.querySelector<HTMLButtonElement>('[data-import-match]');
   if (importButton) importButton.disabled = animating;
-  commandPanel.hidden = logOpen || (!selected && mode.kind !== 'pieceChoice');
   renderPieceCard(selected);
   renderActionControls(selected, legalActions);
   renderPendingCard(selected, legalActions);
   renderBattleLog();
+  floatingCommands.setVisible(!logOpen && (Boolean(selected) || mode.kind === 'pieceChoice'));
   renderSoundButton();
   renderHistoryControls();
   renderScreenReaderBoard();

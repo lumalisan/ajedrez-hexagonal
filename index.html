@@ -253,14 +253,57 @@
               <div class="canvas-hint" id="canvas-hint" aria-hidden="true"></div>
             </div>
             <aside class="command-panel" id="command-panel" aria-label="Panel de mando" hidden>
-              <div class="panel-heading">
-                <span class="eyebrow">PANEL DE MANDO</span>
-                <span class="keyboard-hint">ESC para cancelar</span>
+              <div
+                class="command-window-titlebar"
+                id="command-window-titlebar"
+                role="group"
+                tabindex="0"
+                aria-label="Panel de mando. Arrastra para mover o usa las teclas de flecha."
+              >
+                <span class="command-window-title">Panel de mando</span>
+                <div class="command-window-controls" role="group" aria-label="Controles del panel">
+                  <button
+                    type="button"
+                    id="minimize-command-panel"
+                    aria-label="Minimizar panel de mando"
+                    title="Minimizar panel de mando"
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M3 8h10" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    id="close-command-panel"
+                    aria-label="Cerrar panel de mando"
+                    title="Cerrar panel de mando"
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="m4 4 8 8m0-8-8 8" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div id="piece-card" class="piece-card"></div>
-              <div id="action-controls" class="action-controls"></div>
-              <div id="pending-card" class="pending-card" hidden></div>
+              <div id="command-window-content" class="command-window-content">
+                <div id="piece-card" class="piece-card"></div>
+                <div id="action-controls" class="action-controls"></div>
+                <div id="pending-card" class="pending-card" hidden></div>
+              </div>
             </aside>
+            <button
+              type="button"
+              class="command-panel-restore"
+              id="command-panel-restore"
+              aria-label="Restaurar panel de mando"
+              title="Restaurar panel de mando"
+              hidden
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M3 5h14v11H3Zm0 3h14M5 3h14v11" />
+              </svg>
+              <span>Panel de mando</span>
+              <span class="command-restore-label">Restaurar</span>
+            </button>
             <aside
               class="battle-log-panel"
               id="battle-log-panel"
