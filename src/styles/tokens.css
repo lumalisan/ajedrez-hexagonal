@@ -1,0 +1,24 @@
+:root {
+  color-scheme: dark;
+  font-family: var(--font-body);
+  font-synthesis: none;
+  --font-body: 'Segoe UI Variable', 'Aptos', 'Segoe UI', sans-serif;
+  --font-display: 'Bahnschrift', 'Aptos', 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --bg: #07131a;
+  --surface: #0d2029;
+  --surface-2: #112a34;
+  --surface-3: #17343d;
+  --line: rgba(162, 188, 190, 0.22);
+  --line-strong: rgba(181, 205, 205, 0.42);
+  --text: #f3ebdd;
+  --muted: #9fb0b1;
+  --blue: #36b9ff;
+  --amber: #ffb547;
+  --move: #55e0c1;
+  --attack: #ff5c8a;
+  --convert: #b8a1ff;
+  --danger: #ff765c;
+  --threat: #ffd166;
+  --radius: 16px;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}

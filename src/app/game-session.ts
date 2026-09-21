@@ -208,7 +208,7 @@ export function createGameSession(): GameSession {
       threatenedCells: [],
       reducedMotion: preferences.reducedMotion,
       highContrast: preferences.highContrast,
-      idleAnimations: currentDialog === null,
+      idleAnimations: preferences.idleAnimations && currentDialog === null,
     });
   }
 
@@ -386,8 +386,7 @@ export function createGameSession(): GameSession {
     }
     const selected = selectedId ? getPiece(state, selectedId) : undefined;
     if (selected && equalHex(selected.position, hex)) {
-      clearSelection();
-      announce('Unidad deseleccionada.');
+      cancelDraft();
       return;
     }
     if (!state.outcome && selected?.owner === state.activePlayer) {
@@ -410,7 +409,8 @@ export function createGameSession(): GameSession {
       Boolean(piece),
     );
     if (pieces.length === 0) {
-      clearSelection();
+      if (selected) cancelDraft();
+      else render();
     } else if (pieces.length === 1) {
       selectPiece(pieces[0].id);
     } else {

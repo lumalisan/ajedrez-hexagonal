@@ -5,7 +5,30 @@ import { MATCH_PRESETS, createPresetConfig, type MatchPresetId } from '../../mat
 import { recordTelemetry } from '../../playtest-telemetry';
 import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
 import type { AiDifficulty, FortressHp } from '../../types';
+import { GameSelect } from '../components/game-select';
 import { useGame } from '../game-context';
+
+type MatchClockValue = '' | 300 | 600 | 1200;
+
+const FORTRESS_HP_OPTIONS: readonly { value: FortressHp; label: string }[] = [
+  { value: 1, label: '1 · partida explosiva' },
+  { value: 2, label: '2 · equilibrio recomendado' },
+  { value: 3, label: '3' },
+];
+const INITIAL_LAYOUT_OPTIONS: readonly { value: InitialLayout; label: string }[] =
+  INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
+const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
+  { value: 'recruit', label: 'Fácil' },
+  { value: 'tactical', label: 'Media' },
+  { value: 'commander', label: 'Difícil' },
+  { value: 'expert', label: 'Experto' },
+];
+const MATCH_CLOCK_OPTIONS: readonly { value: MatchClockValue; label: string }[] = [
+  { value: '', label: 'Sin límite' },
+  { value: 300, label: '5 minutos' },
+  { value: 600, label: '10 minutos' },
+  { value: 1200, label: '20 minutos' },
+];
 
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   const { snapshot, commands } = useGame();
@@ -14,7 +37,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   const [fortressHp, setFortressHp] = useState<FortressHp>(2);
   const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('tactical');
-  const [clock, setClock] = useState('');
+  const [clock, setClock] = useState<MatchClockValue>('');
   const customOptionsRef = useRef<HTMLDivElement>(null);
   const layout = INITIAL_LAYOUTS.find((candidate) => candidate.id === initialLayout)!;
   const pieces = createInitialPieces(fortressHp, initialLayout).filter(
@@ -33,7 +56,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
 
   function selectPreset(id: MatchPresetId) {
     setPreset(id);
-    if (id === 'skirmish' && !clock) setClock('600');
+    if (id === 'skirmish' && !clock) setClock(600);
   }
 
   function goBack() {
@@ -55,7 +78,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
       contextualHints: preferences.contextualHints,
       fixedBoard: preferences.fixedBoard,
       handoffScreen: preferences.handoffScreen,
-      clockSeconds: clock ? Number(clock) : null,
+      clockSeconds: clock || null,
       fortressHp,
       initialLayout,
     });
@@ -106,36 +129,27 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
         hidden={preset !== 'custom'}
       >
         <span className="eyebrow">AJUSTES PERSONALIZADOS</span>
-        <label className="field-row">
-          <span>Puntos de vida de la Fortaleza</span>
-          <select
-            data-fortress-hp
+        <div className="field-row">
+          <label htmlFor="fortress-hp">Puntos de vida de la Fortaleza</label>
+          <GameSelect
+            inputId="fortress-hp"
+            options={FORTRESS_HP_OPTIONS}
             value={fortressHp}
-            onChange={(event) => setFortressHp(Number(event.currentTarget.value) as FortressHp)}
-          >
-            <option value="1">1 · partida explosiva</option>
-            <option value="2">2 · equilibrio recomendado</option>
-            <option value="3">3</option>
-          </select>
-        </label>
+            onChange={setFortressHp}
+          />
+        </div>
         <div className="layout-picker">
           <div className="layout-picker-choice">
-            <label className="layout-picker-label">
-              <span>Disposición inicial</span>
-              <select
-                data-initial-layout
+            <div className="layout-picker-label">
+              <label htmlFor="initial-layout">Disposición inicial</label>
+              <GameSelect
+                inputId="initial-layout"
+                options={INITIAL_LAYOUT_OPTIONS}
                 value={initialLayout}
-                onChange={(event) =>
-                  setInitialLayout(Number(event.currentTarget.value) as InitialLayout)
-                }
-              >
-                {INITIAL_LAYOUTS.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setInitialLayout}
+                describedBy="layout-description"
+              />
+            </div>
             <p
               id="layout-description"
               className="layout-description"
@@ -177,18 +191,13 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
           <span className="eyebrow">MANDO RIVAL</span>
           <div className="field-row">
             <label htmlFor="ai-difficulty">Dificultad</label>
-            <select
-              id="ai-difficulty"
-              data-ai-difficulty
-              aria-describedby="ai-difficulty-description"
+            <GameSelect
+              inputId="ai-difficulty"
+              options={DIFFICULTY_OPTIONS}
+              describedBy="ai-difficulty-description"
               value={difficulty}
-              onChange={(event) => setDifficulty(event.currentTarget.value as AiDifficulty)}
-            >
-              <option value="recruit">Fácil</option>
-              <option value="tactical">Media</option>
-              <option value="commander">Difícil</option>
-              <option value="expert">Experto</option>
-            </select>
+              onChange={setDifficulty}
+            />
           </div>
           <p className="dialog-note" id="ai-difficulty-description">
             Cuanto mayor sea la dificultad, más tiempo dedica la IA a anticipar tus respuestas.
@@ -197,19 +206,15 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
       )}
       <div className="match-options">
         <span className="eyebrow">RELOJ POR JUGADOR</span>
-        <label className="field-row">
-          <span>Tiempo</span>
-          <select
-            data-match-clock
+        <div className="field-row">
+          <label htmlFor="match-clock-setting">Tiempo</label>
+          <GameSelect
+            inputId="match-clock-setting"
+            options={MATCH_CLOCK_OPTIONS}
             value={clock}
-            onChange={(event) => setClock(event.currentTarget.value)}
-          >
-            <option value="">Sin límite</option>
-            <option value="300">5 minutos</option>
-            <option value="600">10 minutos</option>
-            <option value="1200">20 minutos</option>
-          </select>
-        </label>
+            onChange={setClock}
+          />
+        </div>
         <p className="dialog-note">
           El reloj es real, se guarda con la partida y la derrota por tiempo queda registrada.
         </p>

@@ -36,6 +36,7 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   fixedBoard: true,
   boardDepth: false,
   reducedMotion: false,
+  idleAnimations: false,
   highContrast: false,
   confirmation: 'always',
   contextualHints: true,
@@ -52,6 +53,7 @@ export function loadPreferences(): GamePreferences {
     return {
       ...DEFAULT_PREFERENCES,
       ...value,
+      idleAnimations: value.idleAnimations === true,
       masterVolume: clamp(value.masterVolume, DEFAULT_PREFERENCES.masterVolume),
       musicVolume: clamp(value.musicVolume, DEFAULT_PREFERENCES.musicVolume),
       effectsVolume: clamp(value.effectsVolume, DEFAULT_PREFERENCES.effectsVolume),

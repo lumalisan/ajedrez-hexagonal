@@ -182,6 +182,78 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().toasts.at(-1)?.message).toBeTruthy();
   });
 
+  it('cancelar la orden conserva la unidad y permite preparar otra sin modificar la partida', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const before = structuredClone(session.getSnapshot().state);
+    const persisted = loadActiveMatch().record;
+    const action = rotation(before);
+    session.commands.selectPiece(action.pieceId);
+    session.commands.setMode({ kind: 'rotate' });
+    session.commands.prepareAction(action);
+
+    session.commands.cancelDraft();
+
+    expect(session.getSnapshot()).toMatchObject({
+      selectedId: action.pieceId,
+      pendingAction: null,
+      mode: { kind: 'default' },
+      state: before,
+    });
+    expect(loadActiveMatch().record).toEqual(persisted);
+    session.commands.prepareAction(action);
+    expect(session.getSnapshot().pendingAction).toEqual(action);
+  });
+
+  it.each(['unidad seleccionada', 'casilla vacía'])(
+    'pulsar %s cancela la orden sin deseleccionar la unidad',
+    (target) => {
+      const session = createSession();
+      session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+      const before = structuredClone(session.getSnapshot().state);
+      const piece = before.pieces.find(
+        (candidate) => candidate.position.q === 0 && candidate.position.r === -2,
+      );
+      if (!piece) throw new Error('La posición de prueba debe contener el soldado central.');
+      const move = getAllLegalActions(before).find(
+        (action) => action.pieceId === piece.id && action.kind === 'move',
+      );
+      if (!move) throw new Error('El soldado central debe poder moverse.');
+      session.commands.selectPiece(piece.id);
+      session.commands.prepareAction(move);
+
+      const hex = target === 'unidad seleccionada' ? piece.position : { q: 0, r: 0 };
+      session.commands.selectHex(hex);
+      session.commands.selectHex(hex);
+
+      expect(session.getSnapshot()).toMatchObject({
+        selectedId: piece.id,
+        pendingAction: null,
+        mode: { kind: 'default' },
+        state: before,
+      });
+      expect(loadActiveMatch().record?.actions).toEqual([]);
+    },
+  );
+
+  it('pulsar una casilla vacía conserva la elección entre unidades apiladas', () => {
+    const session = createSession();
+    const config = createClassicConfig({ mode: 'local' });
+    const drone = config.setup.find(({ piece }) => piece.type === 'drone' && piece.owner === 0);
+    if (!drone) throw new Error('La posición de prueba debe contener un dron.');
+    drone.piece.position = { q: 0, r: -2 };
+    session.commands.startMatch(config);
+    session.commands.selectHex({ q: 0, r: -2 });
+    const choice = session.getSnapshot().mode;
+    expect(choice.kind).toBe('pieceChoice');
+
+    session.commands.selectHex({ q: 0, r: 0 });
+
+    expect(session.getSnapshot().mode).toEqual(choice);
+    expect(session.getSnapshot().selectedId).toBeNull();
+    expect(session.getSnapshot().state.ply).toBe(0);
+  });
+
   it('abrir el registro cancela la selección y la orden preparada', () => {
     const session = createSession();
     session.commands.startMatch(createClassicConfig({ mode: 'local' }));
@@ -281,6 +353,7 @@ describe('sesión que conecta React con el juego', () => {
       sound: false,
       highContrast: true,
       reducedMotion: true,
+      idleAnimations: true,
       fixedBoard: false,
       handoffScreen: true,
       confirmation: 'critical' as const,
@@ -292,7 +365,43 @@ describe('sesión que conecta React con el juego', () => {
     expect(collaborators.setEnabled).toHaveBeenLastCalledWith(false);
     expect(previous.preferences.masterVolume).toBe(0.72);
     expect(previous.preferences.highContrast).toBe(false);
+    expect(previous.preferences.idleAnimations).toBe(false);
     expect(createSession().getSnapshot().preferences).toMatchObject(update);
+  });
+
+  it('activa el idle solo por preferencia y lo suspende mientras hay un diálogo', () => {
+    const session = createSession();
+    const renderer = rendererDouble();
+    session.attachRenderer(renderer);
+    const expectIdle = (idleAnimations: boolean) =>
+      expect(renderer.setModel).toHaveBeenLastCalledWith(
+        expect.objectContaining({ idleAnimations, reducedMotion: false }),
+      );
+
+    expectIdle(false);
+    session.commands.updatePreferences({ idleAnimations: true });
+    expectIdle(true);
+    session.commands.openDialog({ kind: 'settings' });
+    expectIdle(false);
+    session.commands.closeDialog();
+    expectIdle(true);
+    session.commands.updatePreferences({ idleAnimations: false });
+    expectIdle(false);
+  });
+
+  it('conserva las animaciones de órdenes con el idle desactivado por defecto', async () => {
+    const session = createSession();
+    const renderer = rendererDouble();
+    session.attachRenderer(renderer);
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const initial = structuredClone(session.getSnapshot().state);
+    session.commands.prepareAction(rotation(initial));
+
+    await session.commands.commitPending();
+
+    expect(session.getSnapshot().preferences.idleAnimations).toBe(false);
+    expect(renderer.playEvents).toHaveBeenCalledWith(expect.any(Array), initial, false);
+    expect(session.getSnapshot().state.ply).toBe(initial.ply + 1);
   });
 
   it.each(['inicio', 'otra partida'] as const)(

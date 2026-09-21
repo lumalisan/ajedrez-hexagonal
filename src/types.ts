@@ -134,6 +134,7 @@ export interface GamePreferences {
   fixedBoard: boolean;
   boardDepth: boolean;
   reducedMotion: boolean;
+  idleAnimations: boolean;
   highContrast: boolean;
   confirmation: ConfirmationMode;
   contextualHints: boolean;

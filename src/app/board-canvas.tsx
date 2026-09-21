@@ -198,8 +198,8 @@ export function BoardCanvas() {
         } else if (event.key === 'Escape') {
           event.preventDefault();
           event.stopPropagation();
-          if (current.pendingAction || current.mode.kind !== 'default') commands.cancelDraft();
-          else commands.clearSelection();
+          if (current.pendingAction || (current.selectedId && current.mode.kind !== 'default'))
+            commands.cancelDraft();
         }
       },
       options,

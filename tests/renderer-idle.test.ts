@@ -283,10 +283,55 @@ describe('ciclo de vida de las animaciones idle', () => {
     expect(frames.size).toBe(2);
   });
 
-  it('no mantiene un bucle cuando el modelo no solicita animaciones idle', () => {
-    renderer.setModel({ ...idleModel(), idleAnimations: undefined });
+  it.each([false, undefined])(
+    'no mantiene un bucle cuando idleAnimations es %s',
+    (idleAnimations) => {
+      renderer.setModel({ ...idleModel(), idleAnimations });
+      refresh();
+      expect(frames.size).toBe(0);
+    },
+  );
+
+  it('anima un movimiento y mantiene los rotores en reposo con el idle desactivado', async () => {
+    const before = { ...idleModel(), idleAnimations: false };
+    const from = { q: 0, r: 0 };
+    const to = { q: 1, r: 0 };
+    renderer.setModel(before);
     refresh();
+    const staticAngles = canvasProbe.rotorAngles();
+    expect(staticAngles).toHaveLength(4);
     expect(frames.size).toBe(0);
+
+    renderer.setModel({
+      ...before,
+      state: {
+        ...before.state,
+        pieces: before.state.pieces.map((piece) =>
+          piece.id === 'blue-drone' ? { ...piece, position: to } : piece,
+        ),
+      },
+    });
+    const finished = vi.fn();
+    void renderer
+      .playEvents([{ type: 'move', pieceId: 'blue-drone', from, to }], before.state, false)
+      .then(finished);
+    await Promise.resolve();
+    expect(finished).not.toHaveBeenCalled();
+
+    refresh();
+    expect(frames.size).toBe(1);
+    expect(canvasProbe.rotorAngles()).toEqual(staticAngles);
+    const draws = clearCanvas.mock.calls.length;
+    refresh();
+    expect(clearCanvas.mock.calls.length).toBeGreaterThan(draws);
+    expect(canvasProbe.rotorAngles()).toEqual(staticAngles);
+    expect(finished).not.toHaveBeenCalled();
+
+    for (let frame = 0; frame < 20; frame += 1) refresh();
+    await Promise.resolve();
+    expect(finished).toHaveBeenCalledOnce();
+    expect(frames.size).toBe(0);
+    expect(canvasProbe.rotorAngles()).toEqual(staticAngles);
   });
 
   it('detiene el idle con la preferencia de movimiento reducido y vuelve al desactivarla', () => {

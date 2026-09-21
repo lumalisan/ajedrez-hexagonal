@@ -125,13 +125,13 @@ export class FloatingCommandPanel {
   };
 
   private changeLayout = (): void => {
-    const { panel, restore, titlebar } = this.elements;
+    const { restore, titlebar } = this.elements;
     const focusWasInWindowControls =
       document.activeElement === restore || titlebar.contains(document.activeElement);
     this.finishDrag();
     this.sync();
     if (!this.desktop.matches && this.visible && focusWasInWindowControls) {
-      panel.querySelector<HTMLButtonElement>('#cancel-selection')?.focus({ preventScroll: true });
+      this.elements.close.focus({ preventScroll: true });
     }
   };
 

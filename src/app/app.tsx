@@ -1,9 +1,22 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { GameContext, useGame } from './game-context';
 import { createGameSession } from './game-session';
 import { GameShell } from './game-shell';
-import { GameDialogs } from './dialogs/game-dialogs';
-import { UtilityDialogs } from './dialogs/utility-dialogs';
+
+const GameDialogs = lazy(() =>
+  import('./dialogs/game-dialogs').then((module) => ({ default: module.GameDialogs })),
+);
+const UtilityDialogs = lazy(() =>
+  import('./dialogs/utility-dialogs').then((module) => ({ default: module.UtilityDialogs })),
+);
 
 export function App() {
   const [session] = useState(createGameSession);
@@ -58,8 +71,8 @@ function ApplicationEffects() {
       (event) => {
         const current = session.getSnapshot();
         if (event.key !== 'Escape' || event.defaultPrevented || current.dialog) return;
-        if (current.pendingAction || current.mode.kind !== 'default') commands.cancelDraft();
-        else if (current.selectedId) commands.clearSelection();
+        if (current.pendingAction || (current.selectedId && current.mode.kind !== 'default'))
+          commands.cancelDraft();
       },
       { signal: events.signal },
     );
@@ -101,16 +114,6 @@ function DialogHost() {
     };
   }, [isOpen, session]);
 
-  useLayoutEffect(() => {
-    if (!dialog) return;
-    const heading = dialogRef.current?.querySelector('h2');
-    if (heading) {
-      heading.id = 'active-dialog-title';
-      heading.tabIndex = -1;
-      heading.focus({ preventScroll: true });
-    }
-  }, [dialog]);
-
   useEffect(() => {
     if (!isOpen) return;
     const events = new AbortController();
@@ -123,11 +126,6 @@ function DialogHost() {
     document.addEventListener('touchmove', preventBackgroundScroll, options);
     return () => events.abort();
   }, [isOpen]);
-
-  useEffect(() => {
-    if (snapshot.dialogError)
-      dialogRef.current?.querySelector<HTMLElement>('[data-dialog-error]')?.focus();
-  }, [snapshot.dialogError]);
 
   return (
     <>
@@ -150,20 +148,68 @@ function DialogHost() {
         }}
       >
         {dialog && (
-          <div className="dialog-body" key={dialog.kind}>
-            <GameDialogs />
-            <UtilityDialogs />
-            {snapshot.dialogError && (
-              <p className="dialog-error" role="alert" tabIndex={-1} data-dialog-error>
-                {snapshot.dialogError}
-              </p>
-            )}
-          </div>
+          <Suspense
+            key={dialog.kind}
+            fallback={
+              <DialogBody>
+                <h2 id="active-dialog-title">Preparando el diálogo</h2>
+                <p role="status">Cargando opciones…</p>
+              </DialogBody>
+            }
+          >
+            <DialogBody>
+              {dialog.kind === 'config' ||
+              dialog.kind === 'mode' ||
+              dialog.kind === 'academy' ||
+              dialog.kind === 'rules' ? (
+                <GameDialogs />
+              ) : (
+                <UtilityDialogs />
+              )}
+            </DialogBody>
+          </Suspense>
         )}
         {isOpen && <FullscreenControl />}
       </dialog>
       {!isOpen && <FullscreenControl />}
     </>
+  );
+}
+
+function DialogBody({ children }: { children: ReactNode }) {
+  const { snapshot } = useGame();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const { dialog, dialogError } = snapshot;
+
+  useLayoutEffect(() => {
+    const heading = bodyRef.current?.querySelector('h2');
+    if (!heading) return;
+    heading.id = 'active-dialog-title';
+    heading.tabIndex = -1;
+    let active = true;
+    // The host opens the native dialog after child layout effects on the first render.
+    queueMicrotask(() => {
+      if (active && heading.isConnected && heading.closest('dialog')?.open)
+        heading.focus({ preventScroll: true });
+    });
+    return () => {
+      active = false;
+    };
+  }, [dialog]);
+
+  useEffect(() => {
+    if (dialogError) bodyRef.current?.querySelector<HTMLElement>('[data-dialog-error]')?.focus();
+  }, [dialogError]);
+
+  return (
+    <div ref={bodyRef} className="dialog-body">
+      {children}
+      {dialogError && (
+        <p className="dialog-error" role="alert" tabIndex={-1} data-dialog-error>
+          {dialogError}
+        </p>
+      )}
+    </div>
   );
 }
 

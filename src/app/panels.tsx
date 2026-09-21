@@ -193,32 +193,8 @@ function pieceMonogram(piece: Piece): string {
 }
 
 function PieceCard({ piece }: { piece?: Piece }) {
-  const { snapshot, commands } = useGame();
-  const cancel = () => {
-    commands.clearSelection();
-    document.getElementById('game-canvas')?.focus({ preventScroll: true });
-    commands.announce('Unidad deseleccionada.');
-  };
-  const cancelButton = (
-    <button
-      type="button"
-      className="secondary-button cancel-selection"
-      id="cancel-selection"
-      onClick={cancel}
-    >
-      Cancelar
-    </button>
-  );
-  if (!piece)
-    return (
-      <div
-        id="piece-card"
-        className="piece-card empty-state"
-        hidden={snapshot.mode.kind !== 'pieceChoice'}
-      >
-        {snapshot.mode.kind === 'pieceChoice' && cancelButton}
-      </div>
-    );
+  const { snapshot } = useGame();
+  if (!piece) return null;
   let detail: ReactNode;
   if (piece.type === 'soldier' || piece.type === 'airplane')
     detail = (
@@ -263,7 +239,6 @@ function PieceCard({ piece }: { piece?: Piece }) {
             Misiles <strong>{piece.missilesRemaining ?? 2}/2</strong>
           </span>
         )}
-        {cancelButton}
       </div>
     </div>
   );
@@ -643,6 +618,15 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
           <div className="pending-actions">
             <button
               type="button"
+              className="secondary-button cancel-selection"
+              id="cancel-selection"
+              disabled={animating}
+              onClick={commands.cancelDraft}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
               className="confirm-button"
               disabled={animating}
               onClick={() => void commands.commitPending()}
@@ -723,7 +707,7 @@ export function CommandPanel() {
     const fallback =
       panelRef.current?.querySelector<HTMLElement>('#pending-card:not([hidden]) .confirm-button') ??
       panelRef.current?.querySelector<HTMLElement>('#action-controls button:not(:disabled)') ??
-      panelRef.current?.querySelector<HTMLElement>('#cancel-selection');
+      closeRef.current;
     (replacement ?? fallback)?.focus();
   }, [snapshot.selectedId, snapshot.pendingAction, snapshot.mode]);
   return (

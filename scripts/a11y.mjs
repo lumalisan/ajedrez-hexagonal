@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
 import { createServer } from 'vite';
+import { chooseSelectOption, openSelect } from './select-helpers.mjs';
 
 const candidates =
   process.platform === 'win32'
@@ -55,20 +56,36 @@ try {
 
       await page.locator('[data-home-action="new"]').click();
       await page.locator('[data-home-mode="machine"]').click();
-      await page.getByLabel('Dificultad', { exact: true }).waitFor({ state: 'visible' });
+      await page
+        .getByRole('combobox', { name: 'Dificultad', exact: true })
+        .waitFor({ state: 'visible' });
       await audit('AI configuration / difficulty');
-      await page.getByLabel('Dificultad', { exact: true }).selectOption('expert');
+      await openSelect(page, 'Dificultad');
+      await audit('AI configuration / open difficulty menu');
+      await chooseSelectOption(page, 'Dificultad', 'Experto');
       await audit('AI configuration / expert');
       await page.locator('[data-back-menu]').click();
       await page.locator('[data-home-mode="local"]').click();
       await page.locator('[data-start-free]').waitFor({ state: 'visible' });
       await audit('match configuration');
       await page.locator('[data-preset="custom"]').click();
-      await page.locator('[data-initial-layout]').selectOption(profile.isMobile ? '4' : '3');
+      const fortressControl = await openSelect(page, 'Puntos de vida de la Fortaleza');
+      await audit('custom match / open fortress health menu');
+      await fortressControl.press('Escape');
+      await openSelect(page, 'Disposición inicial');
+      await audit('custom match / open layout menu');
+      await chooseSelectOption(
+        page,
+        'Disposición inicial',
+        profile.isMobile ? 'Frente de infantería' : 'Frente blindado',
+      );
       await page.locator('[data-layout-preview]').waitFor({ state: 'visible' });
       await audit('custom match / initial layout preview');
-      await page.locator('[data-initial-layout]').selectOption('5');
+      await chooseSelectOption(page, 'Disposición inicial', 'Frente extendido');
       await audit('custom match / extended layout preview');
+      const clockControl = await openSelect(page, 'Tiempo');
+      await audit('match configuration / open time control menu');
+      await clockControl.press('Escape');
       await page.locator('[data-preset="tactical"]').click();
       await page.locator('[data-start-free]').click();
       await page.locator('#game-canvas').waitFor({ state: 'visible' });
@@ -104,6 +121,9 @@ try {
       await page.locator('#settings-button').click();
       await page.locator('.accessibility-settings').waitFor({ state: 'visible' });
       await audit('settings');
+      const confirmationControl = await openSelect(page, 'Confirmación de órdenes');
+      await audit('settings / open order confirmation menu');
+      await confirmationControl.press('Escape');
       await page.locator('[data-dialog-close]').click();
       await page.locator('#new-game-button').click();
       await page.locator('[data-confirm-abandon]').waitFor({ state: 'visible' });

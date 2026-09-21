@@ -2,6 +2,13 @@ import { existsSync } from 'node:fs';
 
 import { chromium } from 'playwright-core';
 import { createServer } from 'vite';
+import {
+  INITIAL_LAYOUT_LABELS,
+  chooseSelectOption,
+  openSelect,
+  selectedOptionLabel,
+  selectOptionLabels,
+} from './select-helpers.mjs';
 
 const candidates =
   process.platform === 'win32'
@@ -42,32 +49,71 @@ try {
     await page.locator('[data-home-action="new"]').click();
     await page.locator(`[data-home-mode="${mode}"]`).click();
     if (mode === 'machine') {
-      await page.locator('[data-ai-difficulty]').waitFor({ state: 'visible' });
-      const difficulty = page.getByLabel('Dificultad', { exact: true });
+      const difficulty = page.getByRole('combobox', { name: 'Dificultad', exact: true });
+      await difficulty.waitFor({ state: 'visible' });
       assert((await difficulty.count()) === 1, 'AI must have a single difficulty selector.');
       assert(
-        (await difficulty.locator('option').allTextContents()).join('|') ===
-          'Fácil|Media|Difícil|Experto',
+        (await difficulty.getAttribute('aria-describedby'))
+          ?.split(' ')
+          .includes('ai-difficulty-description'),
+        'The combobox must retain the description of AI difficulty for screen readers.',
+      );
+      assert(
+        (await selectOptionLabels(page, 'Dificultad')).join('|') === 'Fácil|Media|Difícil|Experto',
         'AI must offer four clearly ordered difficulty levels.',
       );
       assert(
         (await page.locator('[data-ai-doctrine], .doctrine-grid').count()) === 0,
         'AI configuration must not expose a second doctrine selector.',
       );
-      await difficulty.selectOption('expert');
-      await difficulty.focus();
+      await chooseSelectOption(page, 'Dificultad', 'Experto');
+      await openSelect(page, 'Dificultad');
       await difficulty.press('ArrowUp');
       assert(
-        (await difficulty.inputValue()) === 'commander',
+        (await page
+          .getByRole('option', { name: 'Experto', exact: true, selected: true })
+          .count()) === 1,
+        'Moving through difficulty options must not commit a choice before Enter.',
+      );
+      await difficulty.press('Escape');
+      assert(
+        (await difficulty.getAttribute('aria-expanded')) === 'false' &&
+          (await page.locator('#game-dialog').isVisible()),
+        'Escape must close the select menu while keeping its parent dialog open.',
+      );
+      assert(
+        (await selectedOptionLabel(page, 'Dificultad')) === 'Experto',
+        'Escape must preserve the previously selected difficulty.',
+      );
+      await openSelect(page, 'Dificultad');
+      await difficulty.press('ArrowUp');
+      await difficulty.press('Enter');
+      assert(
+        (await selectedOptionLabel(page, 'Dificultad')) === 'Difícil',
         'Difficulty must remain selectable with the keyboard.',
       );
+      await openSelect(page, 'Dificultad');
+      await assertSelectMenuWithinViewport(page, 'Difficulty menu');
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-mobile-select.png` });
+      await difficulty.press('Escape');
       if (process.env.UI_SCREENSHOT)
         await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-mobile.png` });
+      await difficulty.press('Escape');
+      await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+      assert(
+        await page
+          .locator('[data-home-mode="machine"]')
+          .evaluate((button) => button === document.activeElement),
+        'Escape with the menu closed must close the dialog and return focus to its opener.',
+      );
+      await page.locator('[data-home-mode="machine"]').click();
+      await chooseSelectOption(page, 'Dificultad', 'Difícil');
     }
     await page.locator('[data-preset="custom"]').click();
-    const layoutSelect = page.getByLabel('Disposición inicial');
+    const layoutSelect = page.getByRole('combobox', { name: 'Disposición inicial', exact: true });
     assert(
-      (await layoutSelect.locator('option').allTextContents()).join('|') ===
+      (await selectOptionLabels(page, 'Disposición inicial')).join('|') ===
         'Frente clásico|Columnas de asedio|Frente blindado|Frente de infantería|Frente extendido',
       'All five initial layouts must be available, preserving the existing options.',
     );
@@ -81,8 +127,7 @@ try {
       ['4', 7, 2, 1, 1, 1],
       ['5', 11, 2, 1, 1, 1],
     ]) {
-      await layoutSelect.selectOption(value);
-      await layoutSelect.focus();
+      await chooseSelectOption(page, 'Disposición inicial', INITIAL_LAYOUT_LABELS[value]);
       await page.evaluate(() => new Promise(requestAnimationFrame));
       const rendered = await preview.evaluate((canvas) => ({
         image: canvas.toDataURL(),
@@ -127,20 +172,34 @@ try {
       );
     }
     assert(previewImages.size === 5, 'Each layout must produce a different board preview.');
+    await openSelect(page, 'Disposición inicial');
     await layoutSelect.press('Home');
     await layoutSelect.press('ArrowDown');
+    assert(
+      (await preview.getAttribute('data-layout')) === '5',
+      'Navigating layout options must leave the preview unchanged until selection is confirmed.',
+    );
+    await layoutSelect.press('Enter');
     assert(
       (await preview.getAttribute('data-layout')) === '2',
       'Keyboard selection must update the preview.',
     );
+    await openSelect(page, 'Disposición inicial');
+    await layoutSelect.press('End');
+    await layoutSelect.press('Tab');
+    assert(
+      (await layoutSelect.getAttribute('aria-expanded')) === 'false' &&
+        (await preview.getAttribute('data-layout')) === '2',
+      'Tab must close the layout menu without committing the highlighted option.',
+    );
     const beforeHealth = await preview.evaluate((canvas) => canvas.toDataURL());
-    await page.locator('[data-fortress-hp]').selectOption('3');
+    await chooseSelectOption(page, 'Puntos de vida de la Fortaleza', '3');
     await page.evaluate(() => new Promise(requestAnimationFrame));
     assert(
       (await preview.evaluate((canvas) => canvas.toDataURL())) !== beforeHealth,
       'Fortress health changes must be reflected in the preview.',
     );
-    await page.locator('[data-fortress-hp]').selectOption('2');
+    await chooseSelectOption(page, 'Puntos de vida de la Fortaleza', '2 · equilibrio recomendado');
     await page.locator('[data-preset="tactical"]').click();
     assert(await preview.isHidden(), 'The custom preview must hide when selecting another preset.');
     await page.locator('[data-preset="custom"]').click();
@@ -148,8 +207,7 @@ try {
       (await preview.getAttribute('data-layout')) === '2',
       'Returning to custom must preserve the chosen layout.',
     );
-    await layoutSelect.selectOption(layout);
-    await layoutSelect.focus();
+    await chooseSelectOption(page, 'Disposición inicial', INITIAL_LAYOUT_LABELS[layout]);
     await page
       .locator('.layout-picker')
       .evaluate((picker) => picker.scrollIntoView({ block: 'start' }));
@@ -240,6 +298,7 @@ try {
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-home.png` });
 
   await desktop.locator('[data-home-action="rules"]').click();
+  await desktop.locator('#rules-article').waitFor({ state: 'visible' });
   await assertFullscreenAvailable(desktop, 'Rules');
   assert(
     (await desktop.locator('[data-rule-section]').count()) === 12,
@@ -367,12 +426,15 @@ try {
   );
   await desktop.locator('[data-preset="custom"]').click();
   assert(
-    (await desktop.locator('[data-fortress-hp]').inputValue()) === '2',
+    (await selectedOptionLabel(desktop, 'Puntos de vida de la Fortaleza')) ===
+      '2 · equilibrio recomendado',
     'Fortress health must default to the balanced 2 HP.',
   );
-  const initialLayout = desktop.locator('[data-initial-layout]');
-  assert((await initialLayout.inputValue()) === '1', 'Initial layout must default to option 1.');
-  await initialLayout.selectOption('2');
+  assert(
+    (await selectedOptionLabel(desktop, 'Disposición inicial')) === 'Frente clásico',
+    'Initial layout must default to option 1.',
+  );
+  await chooseSelectOption(desktop, 'Disposición inicial', 'Columnas de asedio');
   await desktop.locator('[data-start-free]').click();
   await desktop.locator('#game-dialog').waitFor({ state: 'hidden' });
   assert(
@@ -417,6 +479,7 @@ try {
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-main.png` });
 
   await desktop.locator('#settings-button').click();
+  await desktop.locator('[data-volume="masterVolume"]').waitFor({ state: 'visible' });
   assert(
     (await desktop.locator('[data-volume]').count()) === 3,
     'Options must expose three volume sliders.',
@@ -455,7 +518,7 @@ try {
   await fixedBoardToggle.check();
   assert(
     await desktop.evaluate(
-      () => JSON.parse(localStorage.getItem('atlas-preferences-v1') ?? '{}').fixedBoard === true,
+      () => JSON.parse(localStorage.getItem('atlas-preferences-v2') ?? '{}').fixedBoard === true,
     ),
     'Fixed-board preference must be persisted.',
   );
@@ -497,13 +560,56 @@ try {
       (await desktop.locator('#battle-log-panel').isHidden()),
     'Selecting a unit must replace the battle log with its command panel.',
   );
+  assert(
+    await desktop.locator('#cancel-selection').isHidden(),
+    'Cancel must appear beside confirmation only when an order is prepared.',
+  );
+  await clickHex(desktop, 0, -1);
+  await assertPendingActionsTogether(desktop);
+  if (process.env.UI_SCREENSHOT)
+    await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-cancel-desktop.png` });
   await desktop.locator('#cancel-selection').click();
-  assert(await desktop.locator('#command-panel').isHidden(), 'Cancel must deselect the unit.');
-  await clickHex(desktop, 0, -2);
+  assert(
+    (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#pending-card').isHidden()) &&
+      (await desktop.locator('#battle-log li:not(.empty-log)').count()) === 0 &&
+      (await desktop.locator('#selection-summary').textContent()) ===
+        'Soldado seleccionado. Elige una casilla para desplazarte o atacar, o cambia su orientación.',
+    'Cancel must discard the prepared order while keeping its unit and panel selected.',
+  );
+  assert(
+    await desktop
+      .locator('#command-panel')
+      .evaluate((panel) => panel.contains(document.activeElement)),
+    'Cancelling an order from its button must keep keyboard focus in the command panel.',
+  );
   await clickHex(desktop, 0, -2);
   assert(
-    await desktop.locator('#command-panel').isHidden(),
-    'Clicking the selected piece must deselect it.',
+    await desktop.locator('#command-panel').isVisible(),
+    'Clicking the selected piece must keep its command panel open.',
+  );
+  await clickHex(desktop, 0, 0);
+  assert(
+    await desktop.locator('#command-panel').isVisible(),
+    'Clicking an empty cell without a legal order must keep the command panel open.',
+  );
+  await clickHex(desktop, 0, -1);
+  await desktop.locator('#game-canvas').focus();
+  await desktop.keyboard.press('Escape');
+  await desktop.keyboard.press('Escape');
+  assert(
+    (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#pending-card').isHidden()),
+    'Escape from the board must cancel a draft and preserve the panel on repeated presses.',
+  );
+  await clickHex(desktop, 0, -1);
+  await desktop.locator('#pending-card .confirm-button').focus();
+  await desktop.keyboard.press('Escape');
+  await desktop.keyboard.press('Escape');
+  assert(
+    (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#pending-card').isHidden()),
+    'Escape from panel controls must cancel a draft and preserve the panel on repeated presses.',
   );
   await clickHex(desktop, 0, 2);
   assert(
@@ -670,13 +776,16 @@ try {
     'The next selection after closing must reset the window to its default position.',
   );
   await dragCommandWindow(windowPage, -120, 40);
+  await clickHex(windowPage, 0, -1);
   const beforeCancel = await windowPage.locator('#command-panel').boundingBox();
   await windowPage.locator('#cancel-selection').click();
-  await clickHex(windowPage, 0, -2);
   const afterCancel = await windowPage.locator('#command-panel').boundingBox();
   assert(
-    Math.abs(afterCancel.x - beforeCancel.x) <= 1 && Math.abs(afterCancel.y - beforeCancel.y) <= 1,
-    'Cancelling a selection must retain the chosen window position for the next selection.',
+    afterCancel &&
+      Math.abs(afterCancel.x - beforeCancel.x) <= 1 &&
+      Math.abs(afterCancel.y - beforeCancel.y) <= 1 &&
+      (await windowPage.locator('#pending-card').isHidden()),
+    'Cancelling a prepared order must keep the command window open at its chosen position.',
   );
   await dragCommandWindow(windowPage, 1_200, 800);
   await assertCommandWindowInsideArena(windowPage, 'Dragging toward the edge');
@@ -689,7 +798,27 @@ try {
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await selectMode(cannonPage, 'local');
   await cannonPage.locator('#settings-button').click();
-  await cannonPage.locator('[data-pref="confirmation"]').selectOption('quick');
+  assert(
+    (await selectOptionLabels(cannonPage, 'Confirmación de órdenes')).join('|') ===
+      'Siempre|Solo críticas|Rápida',
+    'Order confirmation must preserve the three existing choices.',
+  );
+  await chooseSelectOption(cannonPage, 'Confirmación de órdenes', 'Rápida');
+  assert(
+    await cannonPage.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('atlas-preferences-v2') ?? '{}').confirmation === 'quick',
+    ),
+    'Changing the confirmation combobox must persist the actual preference.',
+  );
+  await cannonPage.locator('[data-dialog-close]').click();
+  await cannonPage.reload({ waitUntil: 'networkidle' });
+  await cannonPage.locator('[data-home-action="continue"]').click();
+  await cannonPage.locator('#settings-button').click();
+  assert(
+    (await selectedOptionLabel(cannonPage, 'Confirmación de órdenes')) === 'Rápida',
+    'Order confirmation must recover its selected value after reloading the application.',
+  );
   await cannonPage.locator('[data-dialog-close]').click();
   await clickHex(cannonPage, 1, -3);
   assert(
@@ -724,7 +853,12 @@ try {
     'Selecting the transformed soldier destination must remove the reminder and ask for confirmation.',
   );
   await cannonPage.locator('#cancel-selection').click();
-  await clickHex(cannonPage, 1, -3);
+  assert(
+    (await cannonPage.locator('#command-panel').isVisible()) &&
+      (await cannonPage.locator('#pending-card').isHidden()) &&
+      (await cannonPage.locator('[data-command="transform"]').isVisible()),
+    'Cancelling transformation must retain the tank and restore its normal orders.',
+  );
   const mediumMoves = cannonPage
     .locator('#sr-board [role="gridcell"]')
     .filter({ hasText: 'Tanque se moverá' });
@@ -770,6 +904,7 @@ try {
     await confirmationPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
     await selectMode(confirmationPage, 'local');
     await confirmationPage.locator(control).click();
+    await confirmationPage.locator(confirmation).waitFor({ state: 'visible' });
     assert(
       await confirmationPage.locator(confirmation).isVisible(),
       `${control} must ask for confirmation.`,
@@ -1012,17 +1147,30 @@ try {
     'Keyboard hex navigation failed.',
   );
   assert(
-    await mobile.locator('#cancel-selection').isVisible(),
-    'The selected unit must expose Cancel on mobile.',
+    (await mobile.locator('#cancel-selection').isHidden()) &&
+      (await mobile.locator('#close-command-panel').isVisible()),
+    'A mobile selection must expose the close button and reserve Cancel for prepared orders.',
   );
   assert(
     (await mobile.locator('#minimize-command-panel').isHidden()) &&
-      (await mobile.locator('#close-command-panel').isHidden()) &&
       (await mobile.locator('#command-panel-restore').isHidden()),
-    'Mobile must retain the inline command panel without desktop window controls.',
+    'Mobile must retain the inline command panel without desktop minimize controls.',
   );
   await mobile.keyboard.press('w');
   assert((await selectedHex(mobile)) === '0,-1', 'W must move focus onto the soldier destination.');
+  await mobile.keyboard.press('Enter');
+  await mobile.locator('#pending-card:not([hidden])').waitFor();
+  await assertPendingActionsTogether(mobile);
+  await mobile.locator('#pending-card .confirm-button').scrollIntoViewIfNeeded();
+  if (process.env.UI_SCREENSHOT)
+    await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-cancel-mobile.png` });
+  await mobile.locator('#cancel-selection').click();
+  assert(
+    (await mobile.locator('#command-panel').isVisible()) &&
+      (await mobile.locator('#pending-card').isHidden()),
+    'Cancel on a portrait phone must preserve the selected unit and command panel.',
+  );
+  await mobile.locator('#game-canvas').focus();
   await mobile.keyboard.press('Enter');
   await mobile.locator('#pending-card:not([hidden])').waitFor();
   await mobile.keyboard.press('Enter');
@@ -1047,12 +1195,13 @@ try {
   await narrow.locator('#command-panel').waitFor();
   await assertNoHorizontalOverflow(narrow, 'Narrow selected unit');
   assert(
-    await narrow.locator('#cancel-selection').isVisible(),
-    'Selecting a unit must expose a reachable Cancel button on small phones.',
+    await narrow.locator('#close-command-panel').isVisible(),
+    'Selecting a unit must expose a reachable close button on small phones.',
   );
   await clickHex(narrow, 0, -1);
   await narrow.locator('#pending-card .confirm-button').scrollIntoViewIfNeeded();
   await assertNoHorizontalOverflow(narrow, 'Narrow pending order');
+  await assertPendingActionsTogether(narrow);
   assert(
     await narrow.locator('#pending-card .confirm-button').isVisible(),
     'Prepared orders must expose confirmation on mobile.',
@@ -1061,9 +1210,16 @@ try {
     await narrow.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-pending.png` });
   await narrow.locator('#cancel-selection').click();
   assert(
-    (await narrow.locator('#command-panel').isHidden()) &&
+    (await narrow.locator('#command-panel').isVisible()) &&
+      (await narrow.locator('#pending-card').isHidden()) &&
       (await narrow.locator('#battle-log li:not(.empty-log)').count()) === 0,
-    'Cancelling a prepared order must deselect without executing it.',
+    'Cancelling a prepared order must preserve the mobile panel without executing the order.',
+  );
+  await narrow.locator('#close-command-panel').click();
+  assert(
+    (await narrow.locator('#command-panel').isHidden()) &&
+      (await narrow.locator('#command-panel-restore').isHidden()),
+    'The mobile close button must close the panel and deselect its unit.',
   );
   await narrow.locator('#log-toggle').click();
   assert(await narrow.locator('#battle-log-panel').isVisible(), 'Battle log must open on mobile.');
@@ -1271,7 +1427,12 @@ try {
   await clocked.locator('[data-dialog-close]').click();
   await clocked.locator('[data-home-action="new"]').click();
   await clocked.locator('[data-home-mode="local"]').click();
-  await clocked.locator('[data-match-clock]').selectOption('600');
+  assert(
+    (await selectOptionLabels(clocked, 'Tiempo')).join('|') ===
+      'Sin límite|5 minutos|10 minutos|20 minutos',
+    'The clock combobox must preserve all time controls.',
+  );
+  await chooseSelectOption(clocked, 'Tiempo', '10 minutos');
   await clocked.locator('[data-start-free]').click();
   await clickHex(clocked, 0, -2);
   await doubleClickHex(clocked, 0, -1);
@@ -1498,7 +1659,7 @@ async function selectMode(page, mode) {
     await page.locator(`[data-game-mode="${mode}"]`).click();
   }
   if (mode === 'machine') {
-    await page.getByLabel('Dificultad', { exact: true }).selectOption('expert');
+    await chooseSelectOption(page, 'Dificultad', 'Experto');
     if (process.env.UI_SCREENSHOT)
       await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-desktop.png` });
   }
@@ -1606,6 +1767,7 @@ async function assertTopActionsDoNotOverlap(page) {
 
 async function assertPendingActionsReachable(page) {
   await page.locator('#pending-card .confirm-button').waitFor();
+  await assertPendingActionsTogether(page);
   const controls = [];
   const buttons = await page.locator('#pending-card .confirm-button, #cancel-selection').all();
   for (const button of buttons) {
@@ -1630,6 +1792,24 @@ async function assertPendingActionsReachable(page) {
     controls.length === 2 &&
       controls.every(({ visible, width, height }) => visible && width >= 44 && height >= 44),
     `Landscape confirmation controls must remain visible and touch accessible: ${JSON.stringify(controls)}.`,
+  );
+}
+
+async function assertPendingActionsTogether(page) {
+  const confirm = await page
+    .locator('#pending-card .pending-actions .confirm-button')
+    .boundingBox();
+  const cancel = await page
+    .locator('#pending-card .pending-actions #cancel-selection')
+    .boundingBox();
+  assert(
+    confirm &&
+      cancel &&
+      Math.abs(confirm.y - cancel.y) <= 1 &&
+      (confirm.x + confirm.width <= cancel.x + 1 || cancel.x + cancel.width <= confirm.x + 1) &&
+      cancel.width >= 44 &&
+      cancel.height >= 44,
+    'Cancel must remain beside Confirm action in the same row with a touch-accessible target.',
   );
 }
 
@@ -1750,6 +1930,31 @@ async function assertVisibleFormFontSize(page, containerSelector, minimumPixels)
 
 async function selectedHex(page) {
   return page.locator('#sr-board [aria-selected="true"]').getAttribute('data-hex');
+}
+
+async function assertSelectMenuWithinViewport(page, label) {
+  const menu = page.getByRole('listbox');
+  const box = await menu.boundingBox();
+  const viewport = page.viewportSize();
+  assert(
+    box &&
+      viewport &&
+      box.x >= -1 &&
+      box.y >= -1 &&
+      box.x + box.width <= viewport.width + 1 &&
+      box.y + box.height <= viewport.height + 1,
+    `${label} must stay inside the viewport: ${JSON.stringify({ box, viewport })}.`,
+  );
+  const targets = await page.getByRole('option').evaluateAll((options) =>
+    options.map((option) => {
+      const rect = option.getBoundingClientRect();
+      return { text: option.textContent, width: rect.width, height: rect.height };
+    }),
+  );
+  assert(
+    targets.length > 0 && targets.every(({ width, height }) => width >= 44 && height >= 44),
+    `${label} must offer 44px touch targets: ${JSON.stringify(targets)}.`,
+  );
 }
 
 function watchErrors(page, errors) {

@@ -5,7 +5,17 @@ import { calculateStatistics } from '../../match-record';
 import { loadAcademyRecords, loadMatchHistory, type AcademyRecord } from '../../match-storage';
 import { revealedScenarioHints, scenarioLessonAt } from '../../scenarios';
 import type { GamePreferences, ScenarioDefinition } from '../../types';
+import { GameSelect } from '../components/game-select';
 import { useGame } from '../game-context';
+
+const CONFIRMATION_OPTIONS: readonly {
+  value: GamePreferences['confirmation'];
+  label: string;
+}[] = [
+  { value: 'always', label: 'Siempre' },
+  { value: 'critical', label: 'Solo críticas' },
+  { value: 'quick', label: 'Rápida' },
+];
 
 export function UtilityDialogs() {
   const { snapshot, commands } = useGame();
@@ -202,22 +212,15 @@ function SettingsDialog() {
           checked={preferences.fixedBoard}
           onChange={(fixedBoard) => commands.updatePreferences({ fixedBoard })}
         />
-        <label className="field-row">
-          <span>Confirmación de órdenes</span>
-          <select
-            data-pref="confirmation"
+        <div className="field-row">
+          <label htmlFor="confirmation">Confirmación de órdenes</label>
+          <GameSelect
+            inputId="confirmation"
+            options={CONFIRMATION_OPTIONS}
             value={preferences.confirmation}
-            onChange={(event) =>
-              commands.updatePreferences({
-                confirmation: event.currentTarget.value as GamePreferences['confirmation'],
-              })
-            }
-          >
-            <option value="always">Siempre</option>
-            <option value="critical">Solo críticas</option>
-            <option value="quick">Rápida</option>
-          </select>
-        </label>
+            onChange={(confirmation) => commands.updatePreferences({ confirmation })}
+          />
+        </div>
         <TogglePreference
           label="Pantalla de entrega"
           description="Oculta la posición entre turnos locales"
@@ -237,6 +240,13 @@ function SettingsDialog() {
           attribute="contrast"
           checked={preferences.highContrast}
           onChange={(highContrast) => commands.updatePreferences({ highContrast })}
+        />
+        <TogglePreference
+          label="Animar fichas en reposo"
+          description="Anima las fichas mientras esperan. No afecta a movimientos ni ataques."
+          attribute="idle-animations"
+          checked={preferences.idleAnimations}
+          onChange={(idleAnimations) => commands.updatePreferences({ idleAnimations })}
         />
         <TogglePreference
           label="Reducir movimiento"

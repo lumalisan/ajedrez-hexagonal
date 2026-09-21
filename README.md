@@ -33,11 +33,17 @@ pnpm test:a11y
 
 `pnpm test` valida geometría, reglas, configuración, invariantes, replay y la sesión que conecta el juego con React. La cobertura tiene umbrales específicos del dominio. Las pruebas de UI y Axe usan Edge o Chrome; puede indicarse otro navegador con `PLAYWRIGHT_BROWSER_PATH`.
 
+Tras `pnpm build`, `pnpm test:offline` comprueba la recarga y la primera apertura de los diálogos y selectores sin conexión. Vite genera la precarga de todos los recursos de producción para que los diálogos puedan cargarse bajo demanda también offline.
+
 ## Arquitectura
 
 La aplicación es una SPA local, sin backend. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión.
 
 El motor de reglas sigue siendo TypeScript independiente de React, el DOM y el almacenamiento. Canvas conserva la cámara, los glifos y las animaciones: `BoardCanvas` gestiona el renderer y sus eventos, mientras React se ocupa de la interfaz y su representación accesible. Los efectos liberan listeners, temporizadores y recursos gráficos al desmontarse.
+
+Los controles comunes utilizan Tailwind CSS 4, integrado con `@tailwindcss/vite`, y los tokens visuales existentes. `src/styles.css` organiza las capas y expone esos tokens con `@theme inline`; `src/styles/tokens.css` conserva los valores del tema y `src/styles/game.css` contiene los estilos específicos del juego. No se carga Preflight, para conservar la base visual actual. El tablero, las animaciones y los estilos específicos siguen utilizando CSS propio; no se ha convertido cada regla existente en utilidades.
+
+Los selectores comparten `GameSelect`, basado en React Select con `unstyled` y `classNames` de Tailwind. Sus listas cortas no ofrecen búsqueda ni borrado del valor, mantienen etiquetas y mensajes en español y muestran el foco. Dentro de un diálogo, el menú se monta en el propio diálogo para conservar la interacción modal y evitar recortes.
 
 La API y el multijugador online quedan para una etapa posterior. Esta migración no añade Nitro ni cambia el formato de guardados.
 
@@ -69,7 +75,8 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 
 - Ratón o táctil: seleccionar unidad, elegir marcador y confirmar orden.
 - En escritorio, el panel de mando es una ventana flotante a la derecha, que no desplaza el tablero. Arrastra la cabecera para moverla o enfócala y usa las flechas (Mayús acelera el movimiento). «−» la minimiza abajo y Restaurar recupera su posición y orden pendiente. «×» cierra y deselecciona; la siguiente selección abre la ventana en su posición inicial.
-- En pantallas estrechas, el panel sigue integrado junto al tablero o debajo; puedes desplazarte para consultar las órdenes. Cancelar deselecciona la unidad.
+- En pantallas estrechas, el panel sigue integrado junto al tablero o debajo; puedes desplazarte para consultar las órdenes. «×» también permite cerrarlo.
+- Cancelar aparece junto a Confirmar acción y descarta la orden preparada manteniendo la unidad seleccionada y el panel abierto. Pulsar la unidad seleccionada o una casilla vacía sin orden legal tampoco cierra el panel; usa «×» para cerrarlo.
 - El botón de registro de batalla alterna entre el registro y el panel de mando.
 - Cambiar orientación y Orientar cañón abren la brújula. El movimiento del tanque permite elegir la orientación final del cañón antes de confirmar, también en modo Rápida.
 - Al abandonar un vehículo, elige la orientación y, si quieres avanzar o atacar como Soldado ese mismo turno, selecciona el destino antes de confirmar.
@@ -81,7 +88,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `Q W E` y `A S D`: las seis direcciones hexagonales.
 - `7 8 9 4 2 6`: alternativa con teclado numérico.
 - `Enter`: seleccionar casilla enfocada.
-- `Esc`: cancelar orden o selección.
+- `Esc`: cancelar la orden o maniobra en preparación sin cerrar el panel.
 - `U`/`Mayús+U`: recorrer unidades propias.
 - `H`, `L`, `C`: reglas, registro y centrar tablero.
 
@@ -98,7 +105,9 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/app/contracts.ts` y `src/app/game-session.ts`: contrato de snapshots y comandos; coordinación de partida, IA, reloj, preferencias y persistencia.
 - `src/app/game-context.tsx`: contexto de sesión y suscripción de los componentes React.
 - `src/app/app.tsx`, `src/app/panels.tsx` y `src/app/dialogs/`: pantallas, paneles, configuración, manual y diálogos en React.
+- `src/app/components/game-select.tsx`: selector compartido con React Select, accesibilidad y estilos mediante Tailwind.
 - `src/app/board-canvas.tsx`: ciclo de vida del renderer e interacción con el tablero.
+- `src/styles.css`, `src/styles/tokens.css` y `src/styles/game.css`: entrada y capas de Tailwind, tokens visuales y CSS específico del juego.
 - `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
 - `src/match-storage.ts`: preferencias, autoguardado y progreso local.
@@ -106,7 +115,8 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `src/renderer.ts`: tablero, glifos, capas y animaciones.
 - `src/audio.ts`: paisajes sonoros sintetizados con Web Audio.
 - `src/main.tsx`: entrada de React, estilos y registro de la PWA.
-- `vite.config.ts`: integración de React con Vite.
+- `src/service-worker.js`: plantilla de la caché offline, emitida como `sw.js` con todos los recursos del build.
+- `vite.config.ts`: integración de React y Tailwind CSS 4 con Vite y generación de la precarga offline.
 - `tests/engine.test.ts`: pruebas de reglas y casos límite.
 - `tests/game-session.test.ts`: continuidad de guardados, comandos, replay, preferencias y cancelación de tareas al cambiar o desmontar la sesión.
 
