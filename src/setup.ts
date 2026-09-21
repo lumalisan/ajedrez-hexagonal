@@ -7,7 +7,7 @@ interface SetupPiece {
   cannon?: Direction;
 }
 
-export type InitialLayout = 1 | 2 | 3 | 4;
+export type InitialLayout = 1 | 2 | 3 | 4 | 5;
 
 export const INITIAL_LAYOUTS = [
   {
@@ -33,6 +33,12 @@ export const INITIAL_LAYOUTS = [
     name: 'Frente de infantería',
     description:
       'Siete soldados y dos tanques centrales. Un lanzamisiles y un avión en retaguardia.',
+  },
+  {
+    id: 5,
+    name: 'Frente extendido',
+    description:
+      'Once soldados al frente y dos tanques retrasados. Un lanzamisiles y un avión en retaguardia.',
   },
 ] as const satisfies ReadonlyArray<{ id: InitialLayout; name: string; description: string }>;
 
@@ -68,9 +74,12 @@ function setupForLayout(initialLayout: InitialLayout): SetupPiece[] {
     });
   }
 
-  return CLASSIC_BLUE_SETUP.map((piece) => {
+  const setup: SetupPiece[] = CLASSIC_BLUE_SETUP.map((piece) => {
     if (piece.type === 'long') {
       return { type: initialLayout === 3 ? 'medium' : 'soldier', position: piece.position };
+    }
+    if (initialLayout === 5 && piece.type === 'medium') {
+      return { type: 'soldier', position: piece.position };
     }
     // Retaguardia izquierda vista desde Cian, cuya cámara gira media vuelta.
     if (piece.type === 'airplane' && piece.position.q === 1) {
@@ -78,6 +87,16 @@ function setupForLayout(initialLayout: InitialLayout): SetupPiece[] {
     }
     return piece;
   });
+
+  if (initialLayout === 5) {
+    setup.push(
+      { type: 'soldier', position: { q: 5, r: -5 } },
+      { type: 'soldier', position: { q: -5, r: 0 } },
+      { type: 'medium', position: { q: 2, r: -4 } },
+      { type: 'medium', position: { q: -2, r: -2 } },
+    );
+  }
+  return setup;
 }
 
 function makePiece(spec: SetupPiece, owner: Player, index: number, fortressHp: FortressHp): Piece {

@@ -33,18 +33,43 @@ try {
   for (const { layout, mode, viewport } of [
     { layout: '3', mode: 'local', viewport: { width: 1440, height: 900 } },
     { layout: '4', mode: 'machine', viewport: { width: 390, height: 844 } },
+    { layout: '5', mode: 'local', viewport: { width: 1440, height: 900 } },
+    { layout: '5', mode: 'machine', viewport: { width: 390, height: 844 } },
   ]) {
     const page = await browser.newPage({ viewport });
     watchErrors(page, runtimeErrors);
     await page.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
     await page.locator('[data-home-action="new"]').click();
     await page.locator(`[data-home-mode="${mode}"]`).click();
+    if (mode === 'machine') {
+      await page.locator('[data-ai-difficulty]').waitFor({ state: 'visible' });
+      const difficulty = page.getByLabel('Dificultad', { exact: true });
+      assert((await difficulty.count()) === 1, 'AI must have a single difficulty selector.');
+      assert(
+        (await difficulty.locator('option').allTextContents()).join('|') ===
+          'Fácil|Media|Difícil|Experto',
+        'AI must offer four clearly ordered difficulty levels.',
+      );
+      assert(
+        (await page.locator('[data-ai-doctrine], .doctrine-grid').count()) === 0,
+        'AI configuration must not expose a second doctrine selector.',
+      );
+      await difficulty.selectOption('expert');
+      await difficulty.focus();
+      await difficulty.press('ArrowUp');
+      assert(
+        (await difficulty.inputValue()) === 'commander',
+        'Difficulty must remain selectable with the keyboard.',
+      );
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-mobile.png` });
+    }
     await page.locator('[data-preset="custom"]').click();
     const layoutSelect = page.getByLabel('Disposición inicial');
     assert(
       (await layoutSelect.locator('option').allTextContents()).join('|') ===
-        'Frente clásico|Columnas de asedio|Frente blindado|Frente de infantería',
-      'All four initial layouts must be available, preserving the existing options.',
+        'Frente clásico|Columnas de asedio|Frente blindado|Frente de infantería|Frente extendido',
+      'All five initial layouts must be available, preserving the existing options.',
     );
     const preview = page.locator('[data-layout-preview]');
     const previewImages = new Set();
@@ -54,6 +79,7 @@ try {
       ['2', 5, 2, 2, 1, 2],
       ['3', 5, 4, 1, 1, 1],
       ['4', 7, 2, 1, 1, 1],
+      ['5', 11, 2, 1, 1, 1],
     ]) {
       await layoutSelect.selectOption(value);
       await layoutSelect.focus();
@@ -86,15 +112,21 @@ try {
           roster.Capturador === capturers &&
           roster.Lanzamisiles === launchers &&
           roster.Avión === airplanes &&
-          Object.values(roster).reduce((total, count) => total + count, 0) === 18,
+          Object.values(roster).reduce((total, count) => total + count, 0) ===
+            (value === '5' ? 22 : 18),
         `Layout ${value} must describe the actual army in text.`,
+      );
+      assert(
+        (await page.locator('[data-layout-count]').textContent()) ===
+          `${value === '5' ? 22 : 18} piezas por bando`,
+        `Layout ${value} must announce its actual army size.`,
       );
       assert(
         await layoutSelect.evaluate((select) => select === document.activeElement),
         'Updating the preview must preserve keyboard focus.',
       );
     }
-    assert(previewImages.size === 4, 'Each layout must produce a different board preview.');
+    assert(previewImages.size === 5, 'Each layout must produce a different board preview.');
     await layoutSelect.press('Home');
     await layoutSelect.press('ArrowDown');
     assert(
@@ -123,9 +155,20 @@ try {
       .evaluate((picker) => picker.scrollIntoView({ block: 'start' }));
     await assertNoHorizontalOverflow(page, `Layout ${layout} configuration`, '#game-dialog');
     if (process.env.UI_SCREENSHOT)
-      await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-layout-${layout}-config.png` });
+      await page.screenshot({
+        path: `${process.env.UI_SCREENSHOT}-layout-${layout}-${mode}-config.png`,
+      });
     await page.locator('[data-start-free]').click();
     await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+    if (mode === 'machine') {
+      const rival = await page.evaluate(
+        () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config.participants[1],
+      );
+      assert(
+        rival.difficulty === 'commander' && rival.personality === 'balanced',
+        'A new AI match must save the selected difficulty with the default strategy.',
+      );
+    }
     await page.locator('#game-canvas[data-viewpoint="blue"]:not([data-rotating])').waitFor();
     const frontLabel = layout === '3' ? 'TNQ,' : 'SOL,';
     for (const [q, r, label] of [
@@ -144,9 +187,30 @@ try {
         );
       }
     }
+    if (layout === '5') {
+      for (const [q, r, label] of [
+        [5, -5, 'SOL,'],
+        [1, -3, 'SOL,'],
+        [2, -4, 'TNQ,'],
+        [-5, 0, 'SOL,'],
+        [-1, -2, 'SOL,'],
+        [-2, -2, 'TNQ,'],
+      ]) {
+        for (const sign of [1, -1]) {
+          assert(
+            (
+              await page.locator(`#sr-board [data-hex="${q * sign},${r * sign}"]`).textContent()
+            )?.startsWith(label),
+            `Extended layout must place ${label} at ${q * sign},${r * sign}.`,
+          );
+        }
+      }
+    }
     await assertNoHorizontalOverflow(page, `Layout ${layout} match`);
     if (process.env.UI_SCREENSHOT)
-      await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-layout-${layout}-board.png` });
+      await page.screenshot({
+        path: `${process.env.UI_SCREENSHOT}-layout-${layout}-${mode}-board.png`,
+      });
     await page.close();
   }
 
@@ -157,9 +221,11 @@ try {
     await desktop.locator('#home-screen').isVisible(),
     'The new home screen must be visible on first load.',
   );
+  await assertFullscreenAvailable(desktop, 'Home');
   assert(
-    (await desktop.locator('[data-home-action]').count()) >= 6,
-    'Home must expose New game, Continue, Rules, Tutorial, Laboratory and History.',
+    (await desktop.locator('[data-home-action]').count()) >= 5 &&
+      (await desktop.locator('[data-home-action="laboratory"]').count()) === 0,
+    'Home must retain New game, Continue, Rules, Tutorial and History without Laboratory.',
   );
   assert(
     (await desktop.locator('#home-settings-button, #home-sound-button').count()) === 2,
@@ -174,6 +240,7 @@ try {
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-home.png` });
 
   await desktop.locator('[data-home-action="rules"]').click();
+  await assertFullscreenAvailable(desktop, 'Rules');
   assert(
     (await desktop.locator('[data-rule-section]').count()) === 12,
     'Rules must expose the twelve requested sections.',
@@ -313,19 +380,12 @@ try {
     'Closing a modal must restore the page scroll state.',
   );
   assert((await desktop.title()) === 'Protocolo Hexagonal', 'Document title missing.');
-  const threatToggle = desktop.locator('#threat-toggle');
+  await assertFullscreenAvailable(desktop, 'Match');
   assert(
-    (await threatToggle.getAttribute('aria-pressed')) === 'false',
-    'Threat overlay must start disabled.',
-  );
-  await threatToggle.click();
-  assert(
-    (await threatToggle.getAttribute('aria-pressed')) === 'true',
-    'Threat overlay toggle did not activate.',
-  );
-  assert(
-    await threatToggle.evaluate((button) => button.classList.contains('active')),
-    'Threat overlay active state is not visible.',
+    (await desktop.locator('#threat-toggle').count()) === 0 &&
+      (await desktop.locator('#command-panel').isHidden()) &&
+      (await desktop.locator('#battle-log-panel').isHidden()),
+    'A new match must hide the command and battle log panels and remove the threat control.',
   );
   assert(
     (await desktop.locator('#sr-board [role="gridcell"]').count()) === 91,
@@ -366,24 +426,28 @@ try {
     'Accessibility options missing.',
   );
   const fixedBoardToggle = desktop.locator('[data-pref="fixed-board"]');
-  const boardDepthToggle = desktop.locator('[data-pref="board-depth"]');
-  assert((await boardDepthToggle.count()) === 1, '2.5D board option missing.');
-  assert(!(await boardDepthToggle.isChecked()), 'The board must use 2D by default.');
-  await boardDepthToggle.check();
   assert(
-    (await desktop.locator('#game-canvas').getAttribute('data-perspective')) === '2.5d',
-    'Enabling 2.5D must update the canvas perspective.',
+    (await desktop
+      .locator(
+        '[data-pref="board-depth"], [data-pref="hints"], [data-pref="threats"], [data-data-center]',
+      )
+      .count()) === 0,
+    'Settings must remove perspective, contextual hints, threats and the nested data menu.',
   );
-  assert(
-    (await desktop.locator('#game-canvas').getAttribute('data-perspective-transition')) === 'true',
-    'Changing perspective must start a transition.',
-  );
-  await desktop.locator('#game-canvas:not([data-perspective-transition])').waitFor();
-  await boardDepthToggle.uncheck();
-  await desktop.locator('#game-canvas:not([data-perspective-transition])').waitFor();
+  for (const label of [
+    'Exportar partida',
+    'Importar partida',
+    'Ver repetición',
+    'Historial de resultados',
+  ]) {
+    assert(
+      await desktop.getByRole('button', { name: label, exact: true }).isVisible(),
+      `${label} must be directly available in settings.`,
+    );
+  }
   assert(
     (await desktop.locator('#game-canvas').getAttribute('data-perspective')) === '2d',
-    'Disabling 2.5D must restore the flat board.',
+    'The board must remain flat.',
   );
   assert((await fixedBoardToggle.count()) === 1, 'Fixed-board option missing.');
   assert(await fixedBoardToggle.isChecked(), 'Fixed-board option must be enabled by default.');
@@ -405,11 +469,9 @@ try {
   await desktop.locator('[data-dialog-close]').click();
 
   await desktop.locator('#help-button').click();
-  const keyboardGap = await desktop
-    .locator('.game-dialog details + .keyboard-card')
-    .evaluate((element) => Number.parseFloat(getComputedStyle(element).marginTop));
-  assert(keyboardGap >= 16, 'Help keyboard section needs separation from tactical rules.');
-  await desktop.getByRole('button', { name: 'Entendido' }).click();
+  await desktop.locator('#rules-article').waitFor();
+  await assertFullscreenAvailable(desktop, 'Match rules');
+  await desktop.locator('.rules-close').click();
 
   await clickHex(desktop, 0, -2);
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
@@ -417,9 +479,30 @@ try {
     (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
     'Canvas selection failed.',
   );
+  assert(
+    (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#selection-summary').textContent()) ===
+        'Soldado seleccionado. Elige una casilla para desplazarte o atacar, o cambia su orientación.',
+    'Selecting a soldier must reveal the command panel and its next-step instruction.',
+  );
+  await desktop.locator('#log-toggle').click();
+  assert(
+    (await desktop.locator('#command-panel').isHidden()) &&
+      (await desktop.locator('#battle-log-panel').isVisible()),
+    'Opening the battle log must deselect the unit and replace its command panel.',
+  );
   await clickHex(desktop, 0, -2);
   assert(
-    (await desktop.locator('#piece-card h2').textContent())?.includes('Esperando selecci'),
+    (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#battle-log-panel').isHidden()),
+    'Selecting a unit must replace the battle log with its command panel.',
+  );
+  await desktop.locator('#cancel-selection').click();
+  assert(await desktop.locator('#command-panel').isHidden(), 'Cancel must deselect the unit.');
+  await clickHex(desktop, 0, -2);
+  await clickHex(desktop, 0, -2);
+  assert(
+    await desktop.locator('#command-panel').isHidden(),
     'Clicking the selected piece must deselect it.',
   );
   await clickHex(desktop, 0, 2);
@@ -440,6 +523,12 @@ try {
   await clickHex(desktop, 0, -2);
 
   await desktop.locator('[data-command="rotate"]').click();
+  assert(
+    (await desktop.locator('#action-controls h3').textContent()) === 'Cambiar orientación' &&
+      (await desktop.locator('#selection-summary').textContent()) ===
+        'Elige un rumbo en la brújula del panel de mando',
+    'Soldier orientation must use the requested label and compass instruction.',
+  );
   const visualNorth = desktop.locator('.hex-compass button[aria-label="N, orientación actual"]');
   const visualSouth = desktop.locator('.hex-compass button[aria-label="S"]');
   assert(
@@ -458,6 +547,11 @@ try {
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-compass.png` });
   await visualSouth.click();
+  assert(
+    (await desktop.locator('#selection-summary').textContent()) ===
+      'Confirma la acción en el panel de mando',
+    'Choosing a direction must ask for confirmation.',
+  );
   assert(
     (await desktop.locator('.hex-compass .compass-center strong').textContent()) === 'S',
     'Compass center must reflect the selected direction.',
@@ -501,11 +595,43 @@ try {
   watchErrors(cannonPage, runtimeErrors);
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await selectMode(cannonPage, 'local');
+  await cannonPage.locator('#settings-button').click();
+  await cannonPage.locator('[data-pref="confirmation"]').selectOption('quick');
+  await cannonPage.locator('[data-dialog-close]').click();
   await clickHex(cannonPage, 1, -3);
   assert(
     (await cannonPage.locator('#piece-card h2').textContent())?.includes('Tanque'),
     'Tank selection failed.',
   );
+  await cannonPage.locator('[data-command="transform"]').click();
+  assert(
+    (await cannonPage.locator('#selection-summary').textContent()) ===
+      'Elige un rumbo en la brújula del panel de mando',
+    'Abandoning a vehicle must begin by asking for its soldier orientation.',
+  );
+  await cannonPage.locator('[data-transform-facing="3"]').click();
+  assert(
+    (await cannonPage.locator('.transform-warning').textContent()) ===
+      'Para realizar un desplazamiento o ataque como soldado en este mismo turno, selecciona la casilla de destino antes de confirmar' &&
+      (await cannonPage.locator('.consequence-lens').count()) === 0,
+    'A stationary transformation must show the destination reminder without the consequence card.',
+  );
+  const transformedMove = cannonPage
+    .locator('#sr-board [role="gridcell"]')
+    .filter({ hasText: 'el Soldado avanzará' })
+    .first();
+  const transformedKey = await transformedMove.getAttribute('data-hex');
+  assert(transformedKey, 'The selected tank must offer a soldier destination.');
+  const [soldierQ, soldierR] = transformedKey.split(',').map(Number);
+  await clickHex(cannonPage, soldierQ, soldierR);
+  assert(
+    (await cannonPage.locator('.transform-warning').count()) === 0 &&
+      (await cannonPage.locator('#selection-summary').textContent()) ===
+        'Confirma la acción en el panel de mando',
+    'Selecting the transformed soldier destination must remove the reminder and ask for confirmation.',
+  );
+  await cannonPage.locator('#cancel-selection').click();
+  await clickHex(cannonPage, 1, -3);
   const mediumMoves = cannonPage
     .locator('#sr-board [role="gridcell"]')
     .filter({ hasText: 'Tanque se moverá' });
@@ -515,12 +641,87 @@ try {
   const [targetQ, targetR] = targetKey.split(',').map(Number);
   await clickHex(cannonPage, targetQ, targetR);
   assert(
-    (await cannonPage.locator('.hex-compass.compact .compass-direction').count()) === 6,
-    'Post-move cannon compass must expose six choices.',
+    (await cannonPage.locator('.hex-compass.compact .compass-direction').count()) === 6 &&
+      (await cannonPage.locator('#battle-log li:not(.empty-log)').count()) === 0 &&
+      (await cannonPage.locator('#pending-card .confirm-button').isVisible()),
+    'Quick tank movement must wait for cannon orientation and confirmation before executing.',
+  );
+  const alternateCannon = cannonPage.locator('[data-pending-cannon]:not(.active)').first();
+  const chosenCannon = Number(await alternateCannon.getAttribute('data-pending-cannon'));
+  await alternateCannon.click();
+  assert(
+    (await cannonPage.locator('#battle-log li:not(.empty-log)').count()) === 0,
+    'Selecting the tank cannon orientation must keep the move pending.',
   );
   if (process.env.UI_SCREENSHOT)
     await cannonPage.screenshot({ path: `${process.env.UI_SCREENSHOT}-compact-compass.png` });
+  await cannonPage.locator('#pending-card .confirm-button').click();
+  await assertActionHistory(cannonPage, 1, 1);
+  assert(
+    await cannonPage.evaluate(
+      (direction) =>
+        JSON.parse(localStorage.getItem('atlas-match-classic-v2')).actions[0].cannon === direction,
+      chosenCannon,
+    ),
+    'Confirmed tank movement must save the chosen cannon orientation.',
+  );
   await cannonPage.close();
+
+  for (const [control, confirmation] of [
+    ['#new-game-button', '[data-confirm-abandon]'],
+    ['#resign-button', '[data-confirm-resign]'],
+    ['#blockade-button', '[data-confirm-draw-offer]'],
+  ]) {
+    const confirmationPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    watchErrors(confirmationPage, runtimeErrors);
+    await confirmationPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+    await selectMode(confirmationPage, 'local');
+    await confirmationPage.locator(control).click();
+    assert(
+      await confirmationPage.locator(confirmation).isVisible(),
+      `${control} must ask for confirmation.`,
+    );
+    assert(
+      await confirmationPage.evaluate(
+        () => JSON.parse(localStorage.getItem('atlas-match-classic-v2'))?.outcome == null,
+      ),
+      'Opening a confirmation must not conclude the match.',
+    );
+    await confirmationPage.locator('[data-dialog-close]').click();
+    assert(
+      await confirmationPage.locator('#home-screen').isHidden(),
+      'Cancelling must keep the match visible.',
+    );
+    await confirmationPage.locator(control).click();
+    await confirmationPage.locator(confirmation).click();
+    if (control === '#new-game-button') {
+      await confirmationPage.locator('#home-screen').waitFor();
+      assert(
+        (await confirmationPage.locator('#game-dialog').isHidden()) &&
+          (await confirmationPage.locator('[data-home-action="new"]').isVisible()),
+        'Abandoning must return directly to the main home menu.',
+      );
+    } else if (control === '#blockade-button') {
+      await confirmationPage.locator('[data-accept-blockade]').waitFor();
+      assert(
+        await confirmationPage.getByRole('button', { name: 'Rechazar', exact: true }).isVisible(),
+        'A confirmed draw offer must still give the opponent the choice to reject it.',
+      );
+      await confirmationPage.locator('[data-accept-blockade]').click();
+      await confirmationPage.waitForFunction(
+        () => localStorage.getItem('atlas-match-classic-v2') === null,
+      );
+    } else {
+      await confirmationPage.waitForFunction(() => {
+        const history = JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]');
+        return (
+          localStorage.getItem('atlas-match-classic-v2') === null &&
+          history[0]?.outcome?.reason === 'resignation'
+        );
+      });
+    }
+    await confirmationPage.close();
+  }
 
   const historyPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(historyPage, runtimeErrors);
@@ -686,17 +887,17 @@ try {
   if (process.env.UI_SCREENSHOT)
     await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-game.png` });
   assert(
-    await mobile.locator('#mobile-new-game-button').isVisible(),
-    'Mobile new-game control is hidden.',
+    await mobile.locator('#new-game-button').isVisible(),
+    'Mobile abandon-match control is hidden.',
   );
   await assertTopActionsDoNotOverlap(mobile);
   await assertBoardHistoryControlsFit(mobile);
   assert(
-    await mobile.locator('.panel-footer').evaluate((footer) => footer.inert),
-    'Collapsed command panel controls must be excluded from keyboard and assistive navigation.',
+    await mobile.locator('#command-panel').isHidden(),
+    'The command panel must stay hidden before a mobile selection.',
   );
   assert(
-    (await mobile.locator('.legend > span:visible').count()) === 6,
+    (await mobile.locator('.legend > span:visible').count()) === 5,
     'Portrait mobile must retain every board legend entry.',
   );
 
@@ -718,8 +919,8 @@ try {
     'Keyboard hex navigation failed.',
   );
   assert(
-    (await mobile.locator('.command-sheet-label').textContent()) === 'Soldado',
-    'The collapsed panel must identify the selected unit.',
+    await mobile.locator('#cancel-selection').isVisible(),
+    'The selected unit must expose Cancel on mobile.',
   );
   await mobile.keyboard.press('w');
   assert((await selectedHex(mobile)) === '0,-1', 'W must move focus onto the soldier destination.');
@@ -742,103 +943,33 @@ try {
   await selectMode(narrow, 'local');
   await assertTopActionsDoNotOverlap(narrow);
   await assertBoardHistoryControlsFit(narrow);
-  assert(
-    await narrow
-      .locator('body')
-      .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
-    'The mobile command sheet must start collapsed.',
-  );
+  assert(await narrow.locator('#command-panel').isHidden(), 'No unit means no command panel.');
   await clickHex(narrow, 0, -2);
+  await narrow.locator('#command-panel').waitFor();
+  await assertNoHorizontalOverflow(narrow, 'Narrow selected unit');
   assert(
-    await narrow
-      .locator('body')
-      .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
-    'Selecting a piece must keep the mobile command sheet collapsed.',
-  );
-  await narrow.setViewportSize({ width: 844, height: 390 });
-  await narrow.waitForFunction(() => !document.querySelector('.panel-footer').inert);
-  await assertBoardHistoryControlsFit(narrow);
-  await narrow.setViewportSize({ width: 320, height: 720 });
-  await narrow.waitForFunction(() => document.querySelector('.panel-footer').inert);
-  await narrow.locator('#command-sheet-toggle').focus();
-  await narrow.keyboard.press('Tab');
-  assert(
-    await narrow.evaluate(() => !document.activeElement.closest('#command-panel > [inert]')),
-    'Tab must not enter off-screen command panel controls.',
-  );
-  await dragCommandSheet(narrow, -150);
-  assert(
-    await narrow
-      .locator('body')
-      .evaluate((body) => body.classList.contains('command-sheet-expanded')),
-    'Dragging the command sheet upward must expand it.',
-  );
-  await dragCommandSheet(narrow, 150);
-  assert(
-    await narrow
-      .locator('body')
-      .evaluate((body) => body.classList.contains('command-sheet-collapsed')),
-    'Dragging the command sheet downward must collapse it.',
+    await narrow.locator('#cancel-selection').isVisible(),
+    'Selecting a unit must expose a reachable Cancel button on small phones.',
   );
   await clickHex(narrow, 0, -1);
+  await narrow.locator('#pending-card .confirm-button').scrollIntoViewIfNeeded();
+  await assertNoHorizontalOverflow(narrow, 'Narrow pending order');
   assert(
-    await narrow
-      .locator('body')
-      .evaluate((body) => body.classList.contains('command-sheet-expanded')),
-    'Preparing an order must reveal its confirmation controls.',
-  );
-  assert(
-    (await narrow.locator('.command-sheet-chevron').count()) === 0,
-    'The command sheet must not render a redundant chevron.',
-  );
-  const pendingSheetLayout = await narrow.evaluate(() => {
-    const panel = document.querySelector('#command-panel')?.getBoundingClientRect();
-    const toggle = document.querySelector('#command-sheet-toggle')?.getBoundingClientRect();
-    const pending = document.querySelector('#pending-card')?.getBoundingClientRect();
-    const piece = document.querySelector('#piece-card');
-    const controls = document.querySelector('#action-controls');
-    return {
-      panel: panel ? { top: panel.top, bottom: panel.bottom } : null,
-      toggle: toggle ? { top: toggle.top, bottom: toggle.bottom } : null,
-      pending: pending ? { top: pending.top, bottom: pending.bottom } : null,
-      pieceDisplay: piece ? getComputedStyle(piece).display : null,
-      controlsDisplay: controls ? getComputedStyle(controls).display : null,
-      pendingPosition: document.querySelector('#pending-card')
-        ? getComputedStyle(document.querySelector('#pending-card')).position
-        : null,
-    };
-  });
-  assert(
-    pendingSheetLayout.pieceDisplay === 'none' && pendingSheetLayout.controlsDisplay === 'none',
-    'Prepared-order mode must replace, not cover, the selection controls.',
-  );
-  assert(
-    pendingSheetLayout.pendingPosition === 'static' &&
-      pendingSheetLayout.panel &&
-      pendingSheetLayout.toggle &&
-      pendingSheetLayout.pending &&
-      pendingSheetLayout.pending.top >= pendingSheetLayout.toggle.bottom - 1 &&
-      pendingSheetLayout.pending.bottom <= pendingSheetLayout.panel.bottom + 1,
-    'Prepared-order controls must flow inside the command sheet without overlap.',
+    await narrow.locator('#pending-card .confirm-button').isVisible(),
+    'Prepared orders must expose confirmation on mobile.',
   );
   if (process.env.UI_SCREENSHOT)
     await narrow.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-pending.png` });
-  await narrow.locator('#command-sheet-toggle').click();
+  await narrow.locator('#cancel-selection').click();
   assert(
-    (await narrow.locator('#command-sheet-toggle').getAttribute('aria-expanded')) === 'false' &&
-      (await narrow.locator('#pending-card').evaluate((card) => card.inert && !card.hidden)),
-    'A pending order must be retained when its panel is collapsed to inspect the board.',
+    (await narrow.locator('#command-panel').isHidden()) &&
+      (await narrow.locator('#battle-log li:not(.empty-log)').count()) === 0,
+    'Cancelling a prepared order must deselect without executing it.',
   );
-  await narrow.locator('#command-sheet-toggle').click();
-  assert(
-    (await narrow.locator('#command-sheet-toggle').getAttribute('aria-expanded')) === 'true' &&
-      !(await narrow.locator('#pending-card').evaluate((card) => card.inert)),
-    'Reopening the panel must make the pending order confirmation accessible again.',
-  );
-  assert(
-    await narrow.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    'Narrow mobile header causes horizontal overflow.',
-  );
+  await narrow.locator('#log-toggle').click();
+  assert(await narrow.locator('#battle-log-panel').isVisible(), 'Battle log must open on mobile.');
+  await narrow.locator('#close-battle-log').click();
+  assert(await narrow.locator('#battle-log-panel').isHidden(), 'Battle log must close on mobile.');
   await narrow.close();
 
   const compactPortrait = await browser.newPage({
@@ -959,32 +1090,14 @@ try {
   await selectMode(compactLandscape, 'local');
   await assertNoHorizontalOverflow(compactLandscape, 'Compact landscape match');
   await assertBoardHistoryControlsFit(compactLandscape);
-  const landscapeGameLayout = await compactLandscape.evaluate(() => {
-    const canvas = document.querySelector('#game-canvas')?.getBoundingClientRect();
-    const board = document.querySelector('.board-stage')?.getBoundingClientRect();
-    const panel = document.querySelector('#command-panel')?.getBoundingClientRect();
-    const panelElement = document.querySelector('#command-panel');
-    const toggle = document.querySelector('#command-sheet-toggle');
-    return {
-      canvasHeight: canvas?.height ?? 0,
-      panelWidth: panel?.width ?? 0,
-      panelStartsAfterBoard: Boolean(panel && board && panel.left >= board.right - 1),
-      panelPosition: panelElement ? getComputedStyle(panelElement).position : null,
-      toggleDisplay: toggle ? getComputedStyle(toggle).display : null,
-    };
-  });
   assert(
-    landscapeGameLayout.canvasHeight >= 180,
-    `Compact landscape canvas is only ${landscapeGameLayout.canvasHeight}px tall.`,
+    await compactLandscape.locator('#command-panel').isHidden(),
+    'Landscape match must start with the command panel hidden.',
   );
   assert(
-    landscapeGameLayout.panelWidth >= 240 &&
-      landscapeGameLayout.panelStartsAfterBoard &&
-      landscapeGameLayout.panelPosition === 'relative' &&
-      landscapeGameLayout.toggleDisplay === 'none',
-    'Compact landscape must use a visible side panel without the mobile sheet toggle.',
+    (await compactLandscape.locator('#game-canvas').boundingBox()).height >= 180,
+    'Compact landscape must preserve a useful board before selection.',
   );
-
   await clickHex(compactLandscape, 0, -2);
   await clickHex(compactLandscape, 0, -1);
   await assertPendingActionsReachable(compactLandscape);
@@ -994,9 +1107,14 @@ try {
   await compactLandscape.locator('#pending-card .confirm-button').click();
   await compactLandscape.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   await compactLandscape.locator('#settings-button').click();
-  await compactLandscape.locator('[data-data-center]').click();
   await compactLandscape.locator('[data-open-replay]').click();
   await compactLandscape.locator('.replay-dock').waitFor();
+  assert(
+    (await compactLandscape.getByRole('button', { name: 'Explorar desde aquí' }).count()) === 0 &&
+      (await compactLandscape.locator('.replay-dock [data-export-match]').textContent()) ===
+        'Exportar partida',
+    'Replay must expose the renamed export action and no branching action.',
+  );
   await assertHistoryControlsHidden(compactLandscape, 'Replay');
   assert(
     await compactLandscape.evaluate(() => {
@@ -1072,7 +1190,18 @@ try {
     'The next player clock must stay paused while animation or handoff blocks interaction.',
   );
   await clocked.locator('[data-handoff-ready]').click();
-  await clocked.waitForTimeout(1_200);
+  await clocked.waitForFunction(
+    (remainingBeforeHandoff) => {
+      const clock = JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock;
+      return (
+        clock.status === 'running' &&
+        clock.activePlayer === 1 &&
+        clock.remainingMs[1] < remainingBeforeHandoff
+      );
+    },
+    pausedClock.remainingMs[1],
+    { timeout: 5_000 },
+  );
   const runningClock = await clocked.evaluate(
     () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).clock,
   );
@@ -1192,7 +1321,6 @@ try {
   await academy.locator('[data-academy-menu]').click();
   await academy.keyboard.press('Escape');
   await academy.locator('#settings-button').click();
-  await academy.locator('[data-data-center]').click();
   await academy.locator('[data-open-replay]').click();
   assert(
     await academy.locator('.replay-dock').isVisible(),
@@ -1246,36 +1374,6 @@ try {
     (await solo.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
     'Solo mode must keep the board viewed from the human side.',
   );
-  await solo.locator('#settings-button').click();
-  await solo.locator('[data-data-center]').click();
-  await solo.locator('[data-undo-match]').click();
-  await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
-  assert(
-    (await solo.locator('#battle-log li:not(.empty-log)').count()) === 0,
-    'Undo after a machine response must return to the human decision before both orders.',
-  );
-  await solo.waitForTimeout(1_000);
-  assert(
-    (await solo.locator('#battle-log li:not(.empty-log)').count()) === 0,
-    'Undo must cancel stale machine calculations instead of committing another order.',
-  );
-  assert(
-    !(await solo.locator('#turn-chip').textContent())?.includes('Pensando'),
-    'Undo must clear the machine thinking state.',
-  );
-
-  await clickHex(solo, 0, -2);
-  await doubleClickHex(solo, 0, -1);
-  await solo.locator('#turn-chip').getByText('Máquina pensando…').waitFor();
-  await solo.locator('#settings-button').click();
-  await solo.locator('[data-data-center]').click();
-  await solo.locator('[data-undo-match]').click();
-  await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
-  await solo.waitForTimeout(1_000);
-  assert(
-    (await solo.locator('#battle-log li:not(.empty-log)').count()) === 0,
-    'Undo while the machine is thinking must cancel its pending response.',
-  );
   await solo.close();
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
@@ -1292,20 +1390,6 @@ async function clickHex(page, q, r) {
   await page.mouse.click(point.x, point.y);
 }
 
-async function dragCommandSheet(page, deltaY) {
-  const toggle = page.locator('#command-sheet-toggle');
-  await toggle.click({ trial: true });
-  const box = await toggle.boundingBox();
-  assert(box, 'Command sheet toggle has no layout box.');
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x, y + deltaY, { steps: 6 });
-  await page.mouse.up();
-  await page.waitForTimeout(300);
-}
-
 async function selectMode(page, mode) {
   if (await page.locator('#home-screen').isVisible()) {
     if (!(await page.locator(`[data-home-mode="${mode}"]`).isVisible()))
@@ -1313,6 +1397,11 @@ async function selectMode(page, mode) {
     await page.locator(`[data-home-mode="${mode}"]`).click();
   } else {
     await page.locator(`[data-game-mode="${mode}"]`).click();
+  }
+  if (mode === 'machine') {
+    await page.getByLabel('Dificultad', { exact: true }).selectOption('expert');
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-desktop.png` });
   }
   await page.locator('[data-start-free]').click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
@@ -1325,6 +1414,7 @@ async function doubleClickHex(page, q, r) {
 
 async function pointForHex(page, q, r) {
   const canvas = page.locator('#game-canvas');
+  await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   assert(box, 'Canvas has no layout box.');
   const perspective = await canvas.getAttribute('data-perspective');
@@ -1348,23 +1438,39 @@ async function pointForHex(page, q, r) {
 
 async function assertTopActionsDoNotOverlap(page) {
   const boxes = await page.locator('.top-actions .icon-button').evaluateAll((buttons) =>
-    buttons.map((button) => {
-      const rect = button.getBoundingClientRect();
-      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-    }),
+    buttons
+      .filter((button) => button.getBoundingClientRect().width > 0)
+      .map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      }),
   );
-  assert(boxes.length === 3, 'Mobile header must expose all three icon controls.');
-  for (let index = 1; index < boxes.length; index += 1) {
-    assert(boxes[index - 1].right <= boxes[index].left, 'Mobile header icon controls overlap.');
+  assert(
+    boxes.length === 5,
+    'Mobile header must expose sound, settings, help, resign and draw controls.',
+  );
+  for (let index = 0; index < boxes.length; index += 1) {
+    for (const other of boxes.slice(index + 1)) {
+      const button = boxes[index];
+      assert(
+        button.right <= other.left ||
+          other.right <= button.left ||
+          button.bottom <= other.top ||
+          other.bottom <= button.top,
+        'Mobile header icon controls overlap.',
+      );
+    }
   }
 }
 
 async function assertPendingActionsReachable(page) {
   await page.locator('#pending-card .confirm-button').waitFor();
-  const controls = await page
-    .locator('#pending-card .pending-actions button')
-    .evaluateAll((buttons) =>
-      buttons.map((button) => {
+  const controls = [];
+  const buttons = await page.locator('#pending-card .confirm-button, #cancel-selection').all();
+  for (const button of buttons) {
+    await button.scrollIntoViewIfNeeded();
+    controls.push(
+      await button.evaluate((button) => {
         const rect = button.getBoundingClientRect();
         return {
           label: button.textContent,
@@ -1378,6 +1484,7 @@ async function assertPendingActionsReachable(page) {
         };
       }),
     );
+  }
   assert(
     controls.length === 2 &&
       controls.every(({ visible, width, height }) => visible && width >= 44 && height >= 44),
@@ -1426,7 +1533,7 @@ async function assertBoardHistoryControlsFit(page) {
     layout.buttons.length === 6 &&
       layout.buttons.some(({ id }) => id === 'undo-action') &&
       layout.buttons.some(({ id }) => id === 'redo-action'),
-    'Mobile board toolbar must show undo, redo, threats and all three view controls.',
+    'Mobile board toolbar must show undo, redo, battle log and all three view controls.',
   );
   assert(
     layout.buttons.every(
@@ -1447,6 +1554,14 @@ async function assertBoardHistoryControlsFit(page) {
       );
     }
   }
+}
+
+async function assertFullscreenAvailable(page, surface) {
+  const button = page.locator('#fullscreen-button');
+  assert(
+    (await button.isVisible()) && Boolean(await button.getAttribute('aria-label')),
+    `${surface} must offer an accessible fullscreen button.`,
+  );
 }
 
 async function assertNoHorizontalOverflow(page, label, targetSelector) {

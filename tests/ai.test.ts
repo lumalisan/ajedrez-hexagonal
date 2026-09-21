@@ -88,6 +88,28 @@ describe('machine player', () => {
     expect(getAllLegalActions(state)).toContainEqual(advanced);
   });
 
+  it('sees an enemy conversion beyond the completed depth instead of taking poisoned bait', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'machine-fast', type: 'fast', owner: 1, position: { q: 0, r: 0 } },
+        { id: 'human-bait', type: 'soldier', owner: 0, position: { q: 0, r: -2 }, facing: 3 },
+        { id: 'human-capturer', type: 'capturer', owner: 0, position: { q: 1, r: -2 } },
+      ],
+      1,
+    );
+    const result = searchMachineActionWithMetadata(state, { depth: 1, budgetMs: 1_000 });
+
+    expect(result.metadata.completedDepth).toBe(1);
+    expect(result.action).not.toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-fast',
+      to: { q: 0, r: -2 },
+    });
+    expect(getAllLegalActions(state)).toContainEqual(result.action);
+  });
+
   it('prefers shooting over a kamikaze when both can destroy the same target', () => {
     const state = createGameState(
       [
@@ -319,5 +341,87 @@ describe('machine player', () => {
     expect(result.metadata.elapsedMs).toBeGreaterThanOrEqual(0);
     expect(result.metadata.candidatesConsidered).toBeGreaterThan(0);
     expect(progress).toEqual([1, 2]);
+  });
+
+  it('values a loaded launcher above an empty one when choosing a conversion', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'capturer', type: 'capturer', owner: 1, position: { q: 0, r: 0 } },
+        { id: 'empty', type: 'long', owner: 0, position: { q: 1, r: -1 }, missilesRemaining: 0 },
+        { id: 'loaded', type: 'long', owner: 0, position: { q: -1, r: 1 }, missilesRemaining: 2 },
+      ],
+      1,
+    );
+
+    expect(chooseMachineAction(state, { difficulty: 'expert' })).toMatchObject({
+      kind: 'convert',
+      targetId: 'loaded',
+    });
+  });
+
+  it('uses the match draw rules instead of inventing a no-progress draw', () => {
+    const state = createChoiceState();
+    state.noProgressPlyCount = 119;
+    const standard = searchMachineActionWithMetadata(state, { depth: 1, budgetMs: 1_000 });
+    const unlimited = searchMachineActionWithMetadata(state, {
+      depth: 1,
+      budgetMs: 1_000,
+      resolutionRules: { repetition: null, noProgressPlyLimit: null },
+    });
+
+    expect(standard.metadata.score).toBe(0);
+    expect(unlimited.metadata.score).toBeGreaterThan(0);
+    expect(getAllLegalActions(state)).toContainEqual(unlimited.action);
+  });
+
+  it('does not mistake an inferior alpha-beta bound for an equally good root move', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'a-machine', type: 'soldier', owner: 1, position: { q: 2, r: 0 }, facing: 2 },
+        { id: 'b-machine', type: 'capturer', owner: 1, position: { q: 1, r: 0 } },
+        { id: 'a-human', type: 'soldier', owner: 0, position: { q: -3, r: 2 }, facing: 1 },
+        { id: 'b-human', type: 'capturer', owner: 0, position: { q: 3, r: 0 } },
+      ],
+      1,
+    );
+
+    // Retreating to (2,1) previously inherited the winning capture's bound and
+    // won the alphabetical tie-break, despite losing material to a conversion.
+    for (const difficulty of ['tactical', 'expert'] as const) {
+      expect(searchMachineAction(state, { depth: 2, budgetMs: 1_000, difficulty })).toMatchObject({
+        kind: 'move',
+        pieceId: 'a-machine',
+        to: { q: 3, r: 0 },
+      });
+    }
+  });
+
+  it('blocks a fatal Fortress attack quietly and sees the conversion after the block', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 1 },
+        { id: 'tank', type: 'medium', owner: 1, position: { q: 1, r: 3 }, cannon: 2 },
+        { id: 'capturer', type: 'capturer', owner: 1, position: { q: 1, r: 4 } },
+        { id: 'human-fast', type: 'fast', owner: 0, position: { q: 0, r: 2 } },
+        { id: 'human-soldier', type: 'soldier', owner: 0, position: { q: -4, r: 0 }, facing: 3 },
+      ],
+      1,
+    );
+    const action = searchMachineAction(state, { depth: 1, budgetMs: 1_000 });
+
+    expect(action).toMatchObject({ kind: 'move', pieceId: 'tank', to: { q: 0, r: 4 } });
+    const after = applyAction(state, action!);
+    expect(after.ok).toBe(true);
+    expect(
+      getAllLegalActions(after.state).some((reply) => {
+        const outcome = applyAction(after.state, reply).state.outcome;
+        return outcome?.type === 'win' && outcome.winner === 0;
+      }),
+    ).toBe(false);
   });
 });

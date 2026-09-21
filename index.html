@@ -94,6 +94,7 @@
       <header class="topbar">
         <div
           class="brand"
+          role="img"
           aria-label="Protocolo Hexagonal: Estrategia Hexagonal - Protocolo Hexagonal"
         >
           <img src="/atlas-mark.svg" alt="" width="38" height="38" />
@@ -149,12 +150,36 @@
             class="icon-button"
             id="help-button"
             type="button"
-            aria-label="Abrir ayuda"
-            title="Cómo jugar"
+            aria-label="Abrir reglas"
+            title="Reglas"
           >
             <span aria-hidden="true">?</span>
           </button>
-          <button class="menu-button" id="new-game-button" type="button">Nueva partida</button>
+          <button
+            class="icon-button"
+            id="resign-button"
+            type="button"
+            aria-label="Rendirse"
+            title="Rendirse"
+          >
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 21V4m0 1c4-4 8 4 14 0v10c-6 4-10-4-14 0" />
+            </svg>
+          </button>
+          <button
+            class="icon-button"
+            id="blockade-button"
+            type="button"
+            aria-label="Proponer tablas"
+            title="Proponer tablas"
+          >
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="m2 10 4-5 4 2m12 3-4-5-4 1-5 5 2 2 4-3 5 5-6 5-8-6-4-4Zm4 4 4-5m10 6 2-5M9 17l2-2m1 4 2-2"
+              />
+            </svg>
+          </button>
+          <button class="menu-button" id="new-game-button" type="button">Abandonar partida</button>
         </div>
       </header>
 
@@ -197,30 +222,65 @@
               </div>
               <button
                 type="button"
-                id="threat-toggle"
-                class="threat-toggle"
-                aria-label="Mostrar amenazas inmediatas"
-                aria-pressed="false"
-                title="Amenazas inmediatas"
+                id="log-toggle"
+                aria-label="Mostrar registro de batalla"
+                aria-controls="battle-log-panel"
+                aria-expanded="false"
+                title="Registro de batalla"
               >
-                <span aria-hidden="true">!</span>
+                <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M6 3h14v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 0v18M10 7h6m-6 5h6m-6 5h4"
+                  />
+                </svg>
               </button>
               <button type="button" id="zoom-out" aria-label="Alejar">−</button>
               <button type="button" id="reset-view" aria-label="Centrar tablero">◎</button>
               <button type="button" id="zoom-in" aria-label="Acercar">+</button>
             </div>
           </div>
-          <div class="canvas-wrap" id="canvas-wrap">
-            <canvas
-              id="game-canvas"
-              tabindex="0"
-              role="grid"
-              aria-label="Tablero hexagonal interactivo"
-              aria-rowcount="11"
-              aria-colcount="11"
-              aria-owns="sr-board"
-            ></canvas>
-            <div class="canvas-hint" id="canvas-hint" aria-hidden="true"></div>
+          <div class="board-arena" id="board-arena">
+            <div class="canvas-wrap" id="canvas-wrap">
+              <canvas
+                id="game-canvas"
+                tabindex="0"
+                role="grid"
+                aria-label="Tablero hexagonal interactivo"
+                aria-rowcount="11"
+                aria-colcount="11"
+                aria-owns="sr-board"
+              ></canvas>
+              <div class="canvas-hint" id="canvas-hint" aria-hidden="true"></div>
+            </div>
+            <aside class="command-panel" id="command-panel" aria-label="Panel de mando" hidden>
+              <div class="panel-heading">
+                <span class="eyebrow">PANEL DE MANDO</span>
+                <span class="keyboard-hint">ESC para cancelar</span>
+              </div>
+              <div id="piece-card" class="piece-card"></div>
+              <div id="action-controls" class="action-controls"></div>
+              <div id="pending-card" class="pending-card" hidden></div>
+            </aside>
+            <aside
+              class="battle-log-panel"
+              id="battle-log-panel"
+              aria-labelledby="battle-log-heading"
+              hidden
+            >
+              <div class="panel-heading">
+                <h2 id="battle-log-heading">Registro de batalla</h2>
+                <button
+                  type="button"
+                  class="icon-button"
+                  id="close-battle-log"
+                  aria-label="Cerrar registro de batalla"
+                  title="Cerrar registro de batalla"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+              <ol id="battle-log" class="battle-log"></ol>
+            </aside>
           </div>
           <div class="legend" aria-label="Leyenda del tablero">
             <span><i class="legend-dot move"></i>Movimiento</span>
@@ -235,50 +295,8 @@
               >Conversión</span
             >
             <span><i class="legend-dot danger"></i>Intercepción AA</span>
-            <span><i class="legend-dot threat"></i>Amenaza inmediata</span>
           </div>
         </section>
-
-        <aside class="command-panel" id="command-panel" aria-label="Panel de mando">
-          <button
-            class="command-sheet-toggle"
-            id="command-sheet-toggle"
-            type="button"
-            aria-controls="command-panel"
-            aria-expanded="true"
-            aria-label="Contraer panel de mando"
-            aria-describedby="command-sheet-detail"
-          >
-            <span class="command-sheet-grip" aria-hidden="true"></span>
-            <span class="command-sheet-label">Órdenes</span>
-            <span class="command-sheet-detail" id="command-sheet-detail"
-              >Toca para ver opciones</span
-            >
-          </button>
-          <div class="panel-heading">
-            <span class="eyebrow">PANEL DE MANDO</span>
-            <span class="keyboard-hint">ESC para cancelar</span>
-          </div>
-          <div id="piece-card" class="piece-card empty-state"></div>
-          <div id="action-controls" class="action-controls"></div>
-          <div id="pending-card" class="pending-card" hidden></div>
-          <div class="panel-footer">
-            <button
-              type="button"
-              class="secondary-button mobile-new-game"
-              id="mobile-new-game-button"
-            >
-              Nueva partida
-            </button>
-            <button type="button" class="secondary-button" id="blockade-button">
-              Proponer tablas
-            </button>
-            <button type="button" class="text-button" id="log-toggle" aria-expanded="false">
-              Registro de batalla
-            </button>
-          </div>
-          <ol id="battle-log" class="battle-log" hidden></ol>
-        </aside>
       </main>
 
       <div
@@ -292,6 +310,20 @@
 
     <dialog id="game-dialog" class="game-dialog"></dialog>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    <div id="fullscreen-control" class="fullscreen-control" popover="manual">
+      <button
+        type="button"
+        id="fullscreen-button"
+        class="icon-button"
+        aria-label="Entrar en pantalla completa"
+        aria-pressed="false"
+        title="Pantalla completa"
+      >
+        <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+        </svg>
+      </button>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

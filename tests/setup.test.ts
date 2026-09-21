@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyAction, getAllLegalActions, validateState } from '../src/engine';
 import { createClassicConfig, validateMatchConfig } from '../src/game-config';
 import { hexKey } from '../src/hex';
+import { createPresetConfig } from '../src/match-presets';
 import {
   appendAction,
   createMatchRecord,
@@ -55,7 +56,37 @@ describe('disposiciones iniciales', () => {
     },
   );
 
-  it.each([1, 2, 3, 4] as const)(
+  it('reproduce las 22 posiciones de la imagen en la disposición 5', () => {
+    const cyan = createInitialPieces(2, 5).filter((piece) => piece.owner === 0);
+
+    expect(Object.fromEntries(cyan.map((piece) => [hexKey(piece.position), piece.type]))).toEqual({
+      '4,-4': 'soldier',
+      '2,-3': 'soldier',
+      '0,-2': 'soldier',
+      '-2,-1': 'soldier',
+      '-4,0': 'soldier',
+      '5,-5': 'soldier',
+      '3,-4': 'soldier',
+      '1,-3': 'soldier',
+      '-1,-2': 'soldier',
+      '-3,-1': 'soldier',
+      '-5,0': 'soldier',
+      '4,-5': 'fast',
+      '2,-4': 'medium',
+      '0,-3': 'capturer',
+      '-2,-2': 'medium',
+      '-4,-1': 'fast',
+      '2,-5': 'drone',
+      '0,-4': 'fortress',
+      '-2,-3': 'drone',
+      '1,-5': 'long',
+      '-1,-4': 'airplane',
+      '0,-5': 'antiAir',
+    });
+    expect(cyan).toHaveLength(22);
+  });
+
+  it.each([1, 2, 3, 4, 5] as const)(
     'mantiene la disposición %i válida y simétrica con cualquier vida de Fortaleza',
     (initialLayout) => {
       for (const fortressHp of [1, 2, 3] as const) {
@@ -64,9 +95,12 @@ describe('disposiciones iniciales', () => {
 
         expect(validateMatchConfig(config)).toEqual([]);
         expect(validateState(state, config)).toEqual([]);
-        expect(state.pieces).toHaveLength(36);
-        expect(new Set(state.pieces.map((piece) => piece.id)).size).toBe(36);
-        expect(new Set(state.pieces.map((piece) => hexKey(piece.position))).size).toBe(36);
+        const expectedPieceCount = initialLayout === 5 ? 44 : 36;
+        expect(state.pieces).toHaveLength(expectedPieceCount);
+        expect(new Set(state.pieces.map((piece) => piece.id)).size).toBe(expectedPieceCount);
+        expect(new Set(state.pieces.map((piece) => hexKey(piece.position))).size).toBe(
+          expectedPieceCount,
+        );
 
         for (const cyan of state.pieces.filter((piece) => piece.owner === 0)) {
           const amber = state.pieces.find(
@@ -95,7 +129,19 @@ describe('disposiciones iniciales', () => {
     );
   });
 
-  it.each([3, 4] as const)(
+  it.each(['local', 'machine'] as const)(
+    'conserva la disposición 5 en la partida personalizada de modo %s',
+    (mode) => {
+      const config = createPresetConfig('custom', { mode, initialLayout: 5, fortressHp: 3 });
+
+      expect(config.setup.map(({ piece }) => piece)).toEqual(createInitialPieces(3, 5));
+      expect(config.setup).toHaveLength(44);
+      expect(config.participants[1].kind).toBe(mode === 'machine' ? 'machine' : 'human');
+      expect(validateMatchConfig(config)).toEqual([]);
+    },
+  );
+
+  it.each([3, 4, 5] as const)(
     'guarda, importa y reproduce una partida legal con la disposición %i',
     (initialLayout) => {
       installMemoryStorage();

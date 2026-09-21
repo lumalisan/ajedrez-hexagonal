@@ -34,14 +34,13 @@ pnpm test:a11y
 
 ## Modos y datos
 
-- **Partida libre:** local o contra IA en cuatro dificultades, con doctrinas Equilibrada, Agresiva, Guardiana y Emboscada.
+- **Partida libre:** local o contra IA con un único selector de dificultad: Fácil, Media, Difícil y Experto. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil.
 - **Presets:** Escaramuza, Táctica, Asedio y configuración Personalizada. Ajustan despliegue, ritmo e integridad inicial sin alterar el movimiento ni el combate de las unidades.
-- **Disposiciones iniciales:** en Nueva partida → Personalizada puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques) o Frente de infantería (7 soldados y 2 tanques). Las dos nuevas variantes tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando, y conservan 18 piezas por jugador. Disponibles en partida local y contra la IA.
+- **Disposiciones iniciales:** en Nueva partida → Personalizada puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques), Frente de infantería (7 soldados y 2 tanques) o Frente extendido (11 soldados y 2 tanques retrasados). Las cuatro primeras tienen 18 piezas por jugador; Frente extendido tiene 22. Las variantes blindada, de infantería y extendida tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando. Disponibles en partida local y contra la IA.
 - Al elegir una disposición, la vista previa muestra el ejército de Cian con los símbolos del tablero, su composición y una breve descripción. Se actualiza también al cambiar la vida de la Fortaleza; Ámbar utiliza la formación reflejada.
 - **Academia táctica:** fundamentos, misión guiada de varios turnos, retos estratégicos y un reto diario determinista que usan `classic-v2`.
-- **Laboratorio:** editor JSON validado y catálogo local.
-- Autoguardado después de cada orden, continuar, importar/exportar y visor de repetición.
-- Capa opcional de amenazas inmediatas, con detalle accesible y preferencias persistentes.
+- Autoguardado después de cada orden y continuación desde el inicio. Ajustes ofrece directamente Exportar partida, Importar partida, Ver repetición e Historial de resultados.
+- El visor de repetición permite recorrer la partida sin modificarla.
 - PWA instalable con caché offline del shell.
 
 Los guardados declaran versión y ruleset. Una repetición importada se reconstruye acción por acción y se rechaza si contiene una orden ilegal. El desenlace terminal también forma parte del registro: victoria por Fortaleza, tiempo o rendición, y tablas por bloqueo, repetición o falta de progreso sobreviven al autoguardado, la exportación y la reproducción.
@@ -60,7 +59,12 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 ## Controles
 
 - Ratón o táctil: seleccionar unidad, elegir marcador y confirmar orden.
-- En móvil vertical, toca o desliza el tirador inferior para abrir las órdenes de la unidad seleccionada. Puedes contraer una orden pendiente para consultar el tablero y volver a abrirla sin perderla; en horizontal, las órdenes aparecen en un panel lateral.
+- El panel de mando aparece al seleccionar una unidad, dentro del marco del tablero. En pantallas estrechas aparece debajo; puedes desplazarte por la página para consultar las órdenes. Cancelar deselecciona la unidad.
+- El botón de registro de batalla alterna entre el registro y el panel de mando.
+- Cambiar orientación y Orientar cañón abren la brújula. El movimiento del tanque permite elegir la orientación final del cañón antes de confirmar, también en modo Rápida.
+- Al abandonar un vehículo, elige la orientación y, si quieres avanzar o atacar como Soldado ese mismo turno, selecciona el destino antes de confirmar.
+- La cabecera permite rendirse, proponer tablas en partidas locales y abandonar la partida, siempre con confirmación. Abandonar descarta la partida en curso y vuelve al inicio.
+- Pantalla completa está disponible en todas las pantallas y diálogos.
 - Arrastrar: desplazar cámara.
 - Rueda o pinza: zoom.
 - Flechas de deshacer y rehacer junto al zoom: retroceder o recuperar órdenes en partidas locales de dos jugadores. Puedes volver varios pasos atrás; una orden nueva sustituye la continuación deshecha. El reloj conserva el tiempo consumido.
@@ -69,7 +73,7 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 - `Enter`: seleccionar casilla enfocada.
 - `Esc`: cancelar orden o selección.
 - `U`/`Mayús+U`: recorrer unidades propias.
-- `H`, `L`, `C`: ayuda, registro y centrar tablero.
+- `H`, `L`, `C`: reglas, registro y centrar tablero.
 
 ## Estructura
 

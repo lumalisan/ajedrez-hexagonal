@@ -1,6 +1,6 @@
 import { createGameState } from './engine';
 import { BoardRenderer } from './renderer';
-import { createInitialPieces, type InitialLayout } from './setup';
+import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from './setup';
 import type { FortressHp } from './types';
 
 export interface LayoutPreviewOptions {
@@ -14,6 +14,13 @@ export interface LayoutPreview {
   destroy(): void;
 }
 
+// All layouts share a camera frame so their positions can be compared without zoom changes.
+const PREVIEW_POSITIONS = INITIAL_LAYOUTS.flatMap(({ id }) =>
+  createInitialPieces(2, id)
+    .filter((piece) => piece.owner === 0)
+    .map((piece) => piece.position),
+);
+
 /** A static close-up of the selected deployment, viewed from Cian's side. */
 export function mountLayoutPreview(
   canvas: HTMLCanvasElement,
@@ -22,12 +29,12 @@ export function mountLayoutPreview(
   const renderer = new BoardRenderer(canvas);
   renderer.snapToPlayer(0);
   renderer.setDepthMode(false, true);
+  renderer.setFrame(PREVIEW_POSITIONS);
 
   function update(next: LayoutPreviewOptions): void {
     const state = createGameState(createInitialPieces(next.fortressHp, next.initialLayout));
     const pieces = state.pieces.filter((piece) => piece.owner === 0);
 
-    renderer.setFrame(pieces.map((piece) => piece.position));
     renderer.setModel({
       state: { ...state, pieces },
       fortressMaxHp: [next.fortressHp, next.fortressHp],

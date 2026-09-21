@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import { searchMachineActionWithMetadata } from './ai';
+import type { ActionResolutionRules } from './engine';
 import type { AiDifficulty, AiPersonality, GameState } from './types';
 
 interface SearchRequest {
@@ -10,6 +11,7 @@ interface SearchRequest {
   budgetMs: number;
   difficulty: AiDifficulty;
   personality: AiPersonality;
+  resolutionRules: Readonly<ActionResolutionRules>;
   seed?: number;
 }
 
@@ -21,6 +23,7 @@ self.addEventListener('message', (event: MessageEvent<SearchRequest>) => {
     difficulty: request.difficulty,
     personality: request.personality,
     seed: request.seed,
+    resolutionRules: request.resolutionRules,
     onProgress: (metadata) => {
       self.postMessage({ id: request.id, type: 'progress', metadata });
     },

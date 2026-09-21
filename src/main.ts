@@ -3,9 +3,7 @@ import './styles.css';
 import { chooseMachineAction } from './ai';
 import type { SearchMetadata } from './ai';
 import { WorkerAiStrategy, difficultyBudget } from './ai-strategy';
-import { analyzeActionConsequences, consequenceTone } from './action-consequences';
 import { AudioDirector } from './audio';
-import { CLASSIC_RULES_NOTE, fortressAttackSummary } from './classic-rules';
 import { createClassicConfig } from './game-config';
 import { mountLayoutPreview, type LayoutPreview } from './layout-preview';
 import { INITIAL_LAYOUTS, createInitialPieces } from './setup';
@@ -40,7 +38,6 @@ import {
   createMatchRecord,
   parseRecord,
   replayRecord,
-  resolutionRulesForConfig,
   serializeRecord,
   setAcademySession,
 } from './match-record';
@@ -57,20 +54,12 @@ import {
   loadPreferences,
   recordScenarioAttempt,
   removeMatchHistory,
-  resetAcademyProgress,
   saveActiveMatch,
   savePreferences as persistPreferences,
   type AcademyRecord,
 } from './match-storage';
-import {
-  clearTelemetry,
-  loadTelemetry,
-  recordTelemetry,
-  serializeTelemetry,
-  telemetrySummary,
-} from './playtest-telemetry';
+import { recordTelemetry } from './playtest-telemetry';
 import { BoardRenderer, actionsAtHex, pieceAccessibleLabel, type RenderModel } from './renderer';
-import { analyzeImmediateThreats } from './tactical-analysis';
 import {
   SCENARIOS,
   dailyScenarioForDate,
@@ -82,18 +71,12 @@ import {
   scenariosByCategory,
   type ScenarioProgress,
 } from './scenarios';
-import {
-  loadScenarioCatalog,
-  saveCustomScenario,
-  validateCustomScenario,
-  type CustomScenario,
-} from './scenario-catalog';
+import { loadScenarioCatalog, type CustomScenario } from './scenario-catalog';
 import { mountRuleDemo } from './rules-demo';
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from './rules-content';
-import { captureAboveCommandLabel } from './ui-copy';
+import { captureAboveCommandLabel, selectedUnitInstruction } from './ui-copy';
 import type {
   AiDifficulty,
-  AiPersonality,
   Direction,
   GameAction,
   GameEvent,
@@ -104,7 +87,6 @@ import type {
   MatchRecord,
   Piece,
   ScenarioDefinition,
-  ScenarioObjective,
 } from './types';
 
 type UiMode =
@@ -123,15 +105,6 @@ interface PointerState {
   moved: boolean;
 }
 
-interface CommandSheetDragState {
-  pointerId: number;
-  startY: number;
-  startTranslateY: number;
-  maxTranslateY: number;
-  currentTranslateY: number;
-  moved: boolean;
-}
-
 const canvas = requireElement<HTMLCanvasElement>('game-canvas');
 const app = requireElement<HTMLElement>('app');
 const homeScreen = requireElement<HTMLElement>('home-screen');
@@ -139,14 +112,12 @@ const homeMenuContent = requireElement<HTMLElement>('home-menu-content');
 const topbar = requireElementBySelector<HTMLElement>('.topbar');
 const gameLayout = requireElementBySelector<HTMLElement>('.game-layout');
 const commandPanel = requireElement<HTMLElement>('command-panel');
-const commandSheetToggle = requireElement<HTMLButtonElement>('command-sheet-toggle');
-const commandSheetViewport = window.matchMedia('(max-width: 760px)');
-const commandSheetLandscape = window.matchMedia(
-  '(max-width: 900px) and (orientation: landscape) and (max-height: 650px)',
-);
 const renderer = new BoardRenderer(canvas);
 const preferences = loadPreferences();
-renderer.setDepthMode(preferences.boardDepth, true);
+preferences.boardDepth = false;
+preferences.tacticalThreats = false;
+preferences.contextualHints = false;
+renderer.setDepthMode(false, true);
 const audio = new AudioDirector(preferences);
 const aiStrategy = new WorkerAiStrategy();
 audio.setEnabled(preferences.sound);
@@ -180,9 +151,6 @@ let scenarioProgress: ScenarioProgress | null = null;
 let scenarioHintsRevealed = 0;
 let scenarioAttemptsRecorded = false;
 let outcomePresentedFor = '';
-let commandSheetExpanded = false;
-let commandSheetDrag: CommandSheetDragState | null = null;
-let suppressCommandSheetClick = false;
 let lastClockPersistSecond = -1;
 
 const pointers = new Map<number, PointerState>();
@@ -203,8 +171,6 @@ const soundButton = requireElement<HTMLButtonElement>('sound-button');
 const homeSoundButton = requireElement<HTMLButtonElement>('home-sound-button');
 const homeSettingsButton = requireElement<HTMLButtonElement>('home-settings-button');
 const blockadeButton = requireElement<HTMLButtonElement>('blockade-button');
-const mobileNewGameButton = requireElement<HTMLButtonElement>('mobile-new-game-button');
-const threatToggle = requireElement<HTMLButtonElement>('threat-toggle');
 const historyControls = requireElement<HTMLElement>('history-controls');
 const undoButton = requireElement<HTMLButtonElement>('undo-action');
 const redoButton = requireElement<HTMLButtonElement>('redo-action');
@@ -224,22 +190,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 function bindControls(): void {
   homeMenuContent.addEventListener('click', onHomeMenuClick);
-  bindCommandSheetControls();
   undoButton.addEventListener('click', undoLastAction);
   redoButton.addEventListener('click', () => navigateLocalHistory('redo'));
-  threatToggle.addEventListener('click', () => {
-    preferences.tacticalThreats = !preferences.tacticalThreats;
-    savePreferences();
-    render();
-    const count = preferences.tacticalThreats
-      ? analyzeImmediateThreats(state).threatenedPieceIds.length
-      : 0;
-    announce(
-      preferences.tacticalThreats
-        ? `Amenazas inmediatas visibles. ${count} ${count === 1 ? 'unidad amenazada' : 'unidades amenazadas'}.`
-        : 'Amenazas inmediatas ocultas.',
-    );
-  });
   requireElement<HTMLButtonElement>('zoom-in').addEventListener('click', () =>
     renderer.zoomBy(1.16),
   );
@@ -250,14 +202,21 @@ function bindControls(): void {
     renderer.resetView(),
   );
   requireElement<HTMLButtonElement>('new-game-button').addEventListener('click', showNewGameDialog);
-  mobileNewGameButton.addEventListener('click', showNewGameDialog);
-  requireElement<HTMLButtonElement>('help-button').addEventListener('click', showHelpDialog);
+  requireElement<HTMLButtonElement>('help-button').addEventListener('click', () =>
+    showRulesDialog(),
+  );
+  requireElement<HTMLButtonElement>('resign-button').addEventListener('click', showResignDialog);
+  requireElement<HTMLButtonElement>('fullscreen-button').addEventListener('click', () => {
+    void toggleFullscreen();
+  });
+  document.addEventListener('fullscreenchange', syncFullscreenControl);
+  syncFullscreenControl();
   requireElement<HTMLButtonElement>('settings-button').addEventListener(
     'click',
     showSettingsDialog,
   );
   homeSettingsButton.addEventListener('click', showSettingsDialog);
-  blockadeButton.addEventListener('click', showBlockadeDialog);
+  blockadeButton.addEventListener('click', showDrawOfferConfirmation);
 
   for (const button of [soundButton, homeSoundButton]) {
     button.addEventListener('click', () => {
@@ -279,8 +238,13 @@ function bindControls(): void {
   window.addEventListener('keydown', activateAudio, { capture: true });
 
   logToggle.addEventListener('click', () => {
-    logOpen = !logOpen;
-    renderBattleLog();
+    toggleBattleLog();
+  });
+
+  requireElement<HTMLButtonElement>('close-battle-log').addEventListener('click', () => {
+    logOpen = false;
+    render();
+    logToggle.focus();
   });
 
   canvas.addEventListener('pointerdown', onPointerDown);
@@ -319,6 +283,7 @@ function bindControls(): void {
     if (!dialog.open) {
       destroyLayoutPreview();
       unlockPageScroll();
+      syncFullscreenControl();
     }
   });
   const preventBackgroundScroll = (event: Event): void => {
@@ -334,6 +299,38 @@ function bindControls(): void {
     capture: true,
     passive: false,
   });
+}
+
+async function toggleFullscreen(): Promise<void> {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      announce('Este navegador no permite activar la pantalla completa.');
+      showToast('Este navegador no permite activar la pantalla completa.');
+    }
+  } catch {
+    announce('No se pudo cambiar la pantalla completa. Vuelve a intentarlo.');
+    showToast('No se pudo cambiar la pantalla completa. Vuelve a intentarlo.');
+  }
+  syncFullscreenControl();
+}
+
+function syncFullscreenControl(): void {
+  const control = requireElement<HTMLElement>('fullscreen-control');
+  const button = requireElement<HTMLButtonElement>('fullscreen-button');
+  const parent = dialog.open ? dialog : document.body;
+  if (control.parentElement !== parent) parent.append(control);
+  if (typeof control.showPopover === 'function') {
+    if (control.matches(':popover-open')) control.hidePopover();
+    control.showPopover();
+  }
+  const isFullscreen = Boolean(document.fullscreenElement);
+  const label = isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa';
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-pressed', String(isFullscreen));
+  button.title = label;
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -425,13 +422,12 @@ function onCanvasKeyDown(event: KeyboardEvent): void {
   const shortcut = event.key.toLowerCase();
   if (shortcut === 'h') {
     event.preventDefault();
-    showHelpDialog();
+    showRulesDialog();
     return;
   }
   if (shortcut === 'l') {
     event.preventDefault();
-    logOpen = !logOpen;
-    renderBattleLog();
+    toggleBattleLog();
     logToggle.focus();
     return;
   }
@@ -528,7 +524,6 @@ function handleCell(hex: Hex): void {
     }
     if (matching.length > 1) {
       mode = { kind: 'actionChoice', actions: matching };
-      commandSheetExpanded = true;
       pendingAction = null;
       render();
       announce('Hay varias maniobras en esa casilla. Elige la orden en el panel.');
@@ -546,8 +541,8 @@ function handleCell(hex: Hex): void {
     selectPiece(pieces[0].id);
   } else {
     selectedId = null;
+    logOpen = false;
     mode = { kind: 'pieceChoice', pieceIds: pieces.map((piece) => piece.id) };
-    commandSheetExpanded = true;
     pendingAction = null;
     render();
     announce('Casilla apilada. Elige unidad de aire o suelo.');
@@ -555,8 +550,10 @@ function handleCell(hex: Hex): void {
 }
 
 function selectPiece(pieceId: string): void {
+  if (replayDock || animating || isMachineTurn()) return;
   const piece = getPiece(state, pieceId);
   if (!piece) return;
+  logOpen = false;
   selectedId = pieceId;
   focusedHex = { ...piece.position };
   pendingAction = null;
@@ -572,7 +569,6 @@ function clearSelection(): void {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
-  if (isCommandSheetLayout()) commandSheetExpanded = false;
   render();
 }
 
@@ -592,7 +588,6 @@ function cancelDraft(): void {
 
 function setPending(action: GameAction): void {
   pendingAction = action;
-  commandSheetExpanded = true;
   recordTelemetry('action-prepared', {
     kind: action.kind,
     ply: state.ply,
@@ -600,7 +595,6 @@ function setPending(action: GameAction): void {
   });
   if (mode.kind === 'actionChoice') mode = { kind: 'default' };
   render();
-  if (isCommandSheetLayout()) commandPanel.scrollTop = 0;
   const requiresConfirmation = shouldConfirmAction(action);
   announce(
     `${describeAction(state, action)}.${requiresConfirmation ? ' Pulsa confirmar para ejecutar.' : ' Ejecutando orden.'}`,
@@ -610,6 +604,7 @@ function setPending(action: GameAction): void {
 
 function shouldConfirmAction(action: GameAction): boolean {
   if (preferences.confirmation === 'always') return true;
+  if (action.kind === 'move' && getPiece(state, action.pieceId)?.type === 'medium') return true;
   if (preferences.confirmation === 'quick') return action.kind === 'transform';
   const preview = applyAction(state, action);
   if (!preview.ok) return true;
@@ -624,12 +619,13 @@ function shouldConfirmAction(action: GameAction): boolean {
 }
 
 async function commitPending(): Promise<void> {
-  if (!pendingAction || animating || isMachineTurn()) return;
+  if (!pendingAction || animating || isMachineTurn() || replayDock) return;
   await executeTurn(pendingAction);
 }
 
 async function executeTurn(action: GameAction): Promise<void> {
   if (animating) return;
+  const controller = matchController;
   if (matchController?.record.clock && !state.outcome) {
     matchController.tickClock(Date.now());
     matchRecord = matchController.record;
@@ -671,12 +667,12 @@ async function executeTurn(action: GameAction): Promise<void> {
   selectedId = null;
   pendingAction = null;
   mode = { kind: 'default' };
-  if (isCommandSheetLayout()) commandSheetExpanded = false;
   animating = true;
   audio.playEvents(result.events, before);
   render();
   try {
     await renderer.playEvents(result.events, before, preferences.reducedMotion);
+    if (controller !== matchController || isHomeScreenActive()) return;
     if (!state.outcome && !preferences.fixedBoard)
       await renderer.rotateToPlayer(viewPlayer(), preferences.reducedMotion);
   } finally {
@@ -715,6 +711,7 @@ async function executeTurn(action: GameAction): Promise<void> {
 
 async function runMachineTurn(): Promise<void> {
   if (!isMachineTurn() || state.outcome || animating) return;
+  const controller = matchController;
   machineThinking = true;
   machineSearch = null;
   selectedId = null;
@@ -725,6 +722,7 @@ async function runMachineTurn(): Promise<void> {
   await new Promise<void>((resolve) =>
     window.setTimeout(resolve, preferences.reducedMotion ? 60 : 220),
   );
+  if (controller !== matchController || isHomeScreenActive()) return;
   if (!isMachineTurn() || state.outcome) {
     machineThinking = false;
     render();
@@ -732,19 +730,22 @@ async function runMachineTurn(): Promise<void> {
   }
   aiAbortController?.abort();
   aiAbortController = new AbortController();
+  const searchSignal = aiAbortController.signal;
   const participant = matchConfig?.participants[state.activePlayer];
   const difficulty = participant?.difficulty ?? 'recruit';
   const action = matchConfig
     ? await aiStrategy.chooseAction(state, matchConfig, {
-        maxMs: difficultyBudget(difficulty, window.innerWidth < 700),
-        signal: aiAbortController.signal,
+        maxMs: difficultyBudget(difficulty),
+        signal: searchSignal,
         onProgress: (metadata) => {
+          if (searchSignal.aborted || controller !== matchController) return;
           machineSearch = { ...metadata };
           renderedStatusKey = '';
           render();
         },
       })
     : null;
+  if (searchSignal.aborted || controller !== matchController || isHomeScreenActive()) return;
   machineThinking = false;
   if (!action) {
     render();
@@ -860,151 +861,16 @@ function recordActiveScenarioAttempt(completed: boolean): void {
   scenarioAttemptsRecorded = true;
 }
 
-function isCommandSheetLayout(): boolean {
-  return commandSheetViewport.matches && !commandSheetLandscape.matches;
-}
-
-function renderCommandSheetState(): void {
-  const expanded = !isCommandSheetLayout() || commandSheetExpanded;
-  if (
-    !expanded &&
-    document.activeElement instanceof HTMLElement &&
-    commandPanel.contains(document.activeElement) &&
-    !commandSheetToggle.contains(document.activeElement)
-  ) {
-    commandSheetToggle.focus({ preventScroll: true });
-  }
-  for (const child of commandPanel.children) {
-    if (child instanceof HTMLElement && child !== commandSheetToggle) child.inert = !expanded;
-  }
-  document.body.classList.toggle('command-sheet-expanded', expanded);
-  document.body.classList.toggle('command-sheet-collapsed', !expanded);
-  document.body.classList.toggle('command-sheet-pending', Boolean(pendingAction));
-  commandSheetToggle.setAttribute('aria-expanded', String(expanded));
-  const selected = selectedId ? getPiece(state, selectedId) : undefined;
-  const unitLabel = selected ? PIECE_NAMES[selected.type] : 'Órdenes';
-  commandSheetToggle.setAttribute(
-    'aria-label',
-    `${unitLabel} · ${expanded ? 'Contraer panel de mando' : 'Abrir panel de mando'}`,
-  );
-  const label = commandSheetToggle.querySelector<HTMLElement>('.command-sheet-label');
-  const detail = commandSheetToggle.querySelector<HTMLElement>('.command-sheet-detail');
-  if (label) label.textContent = unitLabel;
-  if (detail) {
-    detail.textContent = pendingAction
-      ? expanded
-        ? 'Toca para consultar el tablero'
-        : 'Orden pendiente · Toca para revisar'
-      : expanded
-        ? 'Toca para contraer'
-        : selected
-          ? 'Toca para ver sus órdenes'
-          : 'Toca para ver opciones';
-  }
-}
-
-function bindCommandSheetControls(): void {
-  commandSheetToggle.addEventListener('click', (event) => {
-    if (suppressCommandSheetClick) {
-      event.preventDefault();
-      suppressCommandSheetClick = false;
-      return;
-    }
-    commandSheetExpanded = !commandSheetExpanded;
-    renderCommandSheetState();
-  });
-  commandSheetToggle.addEventListener('pointerdown', onCommandSheetPointerDown);
-  commandSheetToggle.addEventListener('pointermove', onCommandSheetPointerMove);
-  commandSheetToggle.addEventListener('pointerup', onCommandSheetPointerUp);
-  commandSheetToggle.addEventListener('pointercancel', onCommandSheetPointerCancel);
-  const updateLayout = (): void => {
-    finishCommandSheetDrag();
-    if (!isCommandSheetLayout() && document.activeElement === commandSheetToggle) {
-      canvas.focus({ preventScroll: true });
-    }
-  };
-  commandSheetViewport.addEventListener('change', updateLayout);
-  commandSheetLandscape.addEventListener('change', updateLayout);
-}
-
-function onCommandSheetPointerDown(event: PointerEvent): void {
-  if (!isCommandSheetLayout() || !event.isPrimary || event.button !== 0) return;
-  const maxTranslateY = commandSheetMaxTranslate();
-  commandSheetDrag = {
-    pointerId: event.pointerId,
-    startY: event.clientY,
-    startTranslateY: commandSheetTranslateY(),
-    maxTranslateY,
-    currentTranslateY: commandSheetTranslateY(),
-    moved: false,
-  };
-  commandSheetToggle.setPointerCapture(event.pointerId);
-  document.body.classList.add('command-sheet-dragging');
-}
-
-function onCommandSheetPointerMove(event: PointerEvent): void {
-  if (!commandSheetDrag || commandSheetDrag.pointerId !== event.pointerId) return;
-  const deltaY = event.clientY - commandSheetDrag.startY;
-  if (Math.abs(deltaY) > 5) commandSheetDrag.moved = true;
-  commandSheetDrag.currentTranslateY = Math.max(
-    0,
-    Math.min(commandSheetDrag.maxTranslateY, commandSheetDrag.startTranslateY + deltaY),
-  );
-  commandPanel.style.transform = `translateY(${commandSheetDrag.currentTranslateY}px)`;
-  if (commandSheetDrag.moved) event.preventDefault();
-}
-
-function onCommandSheetPointerUp(event: PointerEvent): void {
-  if (!commandSheetDrag || commandSheetDrag.pointerId !== event.pointerId) return;
-  const drag = commandSheetDrag;
-  const deltaY = event.clientY - drag.startY;
-  if (drag.moved) {
-    commandSheetExpanded =
-      Math.abs(deltaY) >= 28 ? deltaY < 0 : drag.currentTranslateY < drag.maxTranslateY / 2;
-    suppressCommandSheetClick = true;
-    window.setTimeout(() => {
-      suppressCommandSheetClick = false;
-    }, 0);
-  }
-  finishCommandSheetDrag();
-}
-
-function onCommandSheetPointerCancel(event: PointerEvent): void {
-  if (!commandSheetDrag || commandSheetDrag.pointerId !== event.pointerId) return;
-  finishCommandSheetDrag();
-}
-
-function finishCommandSheetDrag(): void {
-  if (commandSheetDrag && commandSheetToggle.hasPointerCapture(commandSheetDrag.pointerId)) {
-    commandSheetToggle.releasePointerCapture(commandSheetDrag.pointerId);
-  }
-  commandSheetDrag = null;
-  commandPanel.style.removeProperty('transform');
-  document.body.classList.remove('command-sheet-dragging');
-  renderCommandSheetState();
-}
-
-function commandSheetTranslateY(): number {
-  const transform = getComputedStyle(commandPanel).transform;
-  if (transform === 'none') return 0;
-  return new DOMMatrixReadOnly(transform).m42;
-}
-
-function commandSheetMaxTranslate(): number {
-  const rootStyles = getComputedStyle(document.documentElement);
-  const panelStyles = getComputedStyle(commandPanel);
-  const peek = Number.parseFloat(rootStyles.getPropertyValue('--command-sheet-peek')) || 66;
-  const safeArea = Math.max(0, (Number.parseFloat(panelStyles.paddingBottom) || 14) - 14);
-  return Math.max(0, commandPanel.getBoundingClientRect().height - peek - safeArea);
-}
-
 function render(): void {
   const activeElement =
     document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const restoreDynamicFocus = Boolean(
     activeElement &&
-    (actionControls.contains(activeElement) || pendingCard.contains(activeElement)),
+    (pieceCard.contains(activeElement) ||
+      actionControls.contains(activeElement) ||
+      pendingCard.contains(activeElement)),
   );
+  const focusId = activeElement?.id;
   const focusAttribute = activeElement
     ?.getAttributeNames()
     .find((name) => name.startsWith('data-'));
@@ -1024,27 +890,30 @@ function render(): void {
     : [];
   visibleActions = filterVisibleActions(displayActions, selected);
   renderStatus();
+  const replayButton = dialog.querySelector<HTMLButtonElement>('[data-open-replay]');
+  if (replayButton) replayButton.disabled = !matchRecord || animating || machineThinking;
+  const importButton = dialog.querySelector<HTMLButtonElement>('[data-import-match]');
+  if (importButton) importButton.disabled = animating;
+  commandPanel.hidden = logOpen || (!selected && mode.kind !== 'pieceChoice');
   renderPieceCard(selected);
   renderActionControls(selected, legalActions);
   renderPendingCard(selected, legalActions);
   renderBattleLog();
   renderSoundButton();
-  renderThreatToggle();
   renderHistoryControls();
-  renderCommandSheetState();
   renderScreenReaderBoard();
   syncCanvas();
   if (restoreDynamicFocus) {
     queueMicrotask(() => {
-      if (isCommandSheetLayout() && !commandSheetExpanded) {
-        commandSheetToggle.focus({ preventScroll: true });
-        return;
-      }
       const selector =
         focusAttribute && typeof focusValue === 'string'
           ? `[${focusAttribute}="${CSS.escape(focusValue)}"]`
           : '';
-      const replacement = selector ? document.querySelector<HTMLElement>(selector) : null;
+      const replacement = focusId
+        ? document.getElementById(focusId)
+        : selector
+          ? document.querySelector<HTMLElement>(selector)
+          : null;
       replacement?.focus();
       if (!replacement) {
         pendingCard.querySelector<HTMLElement>('.confirm-button')?.focus();
@@ -1057,7 +926,6 @@ function render(): void {
 }
 
 function syncCanvas(): void {
-  const tacticalAnalysis = preferences.tacticalThreats ? analyzeImmediateThreats(state) : null;
   const model: RenderModel = {
     state,
     fortressMaxHp: [fortressMaximumHp(0), fortressMaximumHp(1)],
@@ -1068,7 +936,7 @@ function syncCanvas(): void {
     focused: focusedHex,
     firingRange: currentFiringRange(),
     lastEvents,
-    threatenedCells: tacticalAnalysis?.threatenedCells ?? [],
+    threatenedCells: [],
     reducedMotion: preferences.reducedMotion,
     highContrast: preferences.highContrast,
   };
@@ -1125,8 +993,20 @@ function filterVisibleActions(actions: GameAction[], selected?: Piece): GameActi
 }
 
 function renderStatus(): void {
+  requireElement<HTMLButtonElement>('resign-button').disabled =
+    !matchController ||
+    Boolean(state.outcome) ||
+    Boolean(activeScenario) ||
+    machineThinking ||
+    animating ||
+    Boolean(replayDock);
   blockadeButton.disabled =
-    Boolean(state.outcome) || animating || gameMode === 'machine' || Boolean(activeScenario);
+    Boolean(state.outcome) ||
+    animating ||
+    machineThinking ||
+    Boolean(replayDock) ||
+    gameMode === 'machine' ||
+    Boolean(activeScenario);
   blockadeButton.hidden = gameMode === 'machine' || Boolean(activeScenario);
   renderClockDisplay();
   const fortressState = state.pieces
@@ -1243,88 +1123,55 @@ function factionMarkMarkup(player: 0 | 1): string {
 }
 
 function renderPieceCard(piece?: Piece): void {
+  selectionSummary.textContent = state.outcome
+    ? outcomeText(state.outcome)
+    : pendingAction
+      ? 'Confirma la acción en el panel de mando'
+      : mode.kind === 'rotate' || mode.kind === 'orient' || mode.kind === 'transform'
+        ? 'Elige un rumbo en la brújula del panel de mando'
+        : mode.kind === 'pieceChoice'
+          ? 'Elige una unidad en el panel de mando'
+          : mode.kind === 'actionChoice'
+            ? 'Elige una acción en el panel de mando'
+            : piece
+              ? piece.owner === state.activePlayer
+                ? selectedUnitInstruction(piece)
+                : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
+              : isMachineTurn()
+                ? 'La máquina está calculando su siguiente orden.'
+                : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
   if (!piece) {
     pieceCard.className = 'piece-card empty-state';
-    pieceCard.innerHTML = `
-      <div class="empty-radar" aria-hidden="true"><i></i><i></i><i></i></div>
-      <h2>Esperando selección</h2>
-      <p>Toca una unidad. Destinos legales aparecerán directamente sobre el tablero.</p>
-      <span class="key-map">Teclado: W A S D · Enter</span>`;
-    selectionSummary.textContent = activeScenario
-      ? `Objetivo: ${activeScenario.summary} · ${scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}`
-      : state.outcome
-        ? outcomeText(state.outcome)
-        : isMachineTurn()
-          ? 'La máquina está calculando su siguiente orden.'
-          : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
-    return;
-  }
-
-  const ownTurn = piece.owner === state.activePlayer && !state.outcome;
-  const facing =
-    piece.type === 'soldier'
-      ? `<span>Orientación <strong>${directionNameForView(piece.facing)}</strong></span>`
-      : piece.type === 'airplane'
+    pieceCard.hidden = mode.kind !== 'pieceChoice';
+    pieceCard.innerHTML =
+      mode.kind === 'pieceChoice'
+        ? '<button type="button" class="secondary-button cancel-selection" id="cancel-selection">Cancelar</button>'
+        : '';
+  } else {
+    const facing =
+      piece.type === 'soldier' || piece.type === 'airplane'
         ? `<span>Orientación <strong>${directionNameForView(piece.facing)}</strong></span>`
         : piece.type === 'medium'
           ? `<span>Cañón <strong>${directionNameForView(piece.cannon)}</strong></span>`
           : piece.type === 'fortress'
             ? `<span>Integridad <strong>${piece.hp}/${fortressMaximumHp(piece.owner)} HP</strong></span>`
             : '';
-  const layer = isAirPiece(piece) ? 'Aire' : 'Suelo';
-  const q = piece.position.q >= 0 ? `+${piece.position.q}` : `${piece.position.q}`;
-  const r = piece.position.r >= 0 ? `+${piece.position.r}` : `${piece.position.r}`;
-  const threatNote = threatSummaryMarkup(piece);
-  pieceCard.className = `piece-card player-${piece.owner === 0 ? 'blue' : 'amber'}`;
-  pieceCard.innerHTML = `
-    <div class="piece-title-row">
-      <div class="piece-monogram">${pieceMonogram(piece)}</div>
-      <div><span class="eyebrow">${PLAYER_NAMES[piece.owner]} · ${layer}</span><h2>${PIECE_NAMES[piece.type]}</h2></div>
-      <span class="unit-state ${ownTurn ? 'ready' : ''}">${ownTurn ? 'LISTA' : 'INSPECCIÓN'}</span>
-    </div>
-    <p>${pieceDescription(piece)}</p>
-    ${threatNote}
-    <div class="piece-stats"><span>Coordenadas <strong>${q}, ${r}</strong></span>${facing}${piece.type === 'long' ? `<span>Misiles <strong>${piece.missilesRemaining ?? 2}/2</strong></span>` : ''}</div>`;
-  selectionSummary.textContent =
-    activeScenario && ownTurn
-      ? `Objetivo: ${activeScenario.summary} · ${scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}`
-      : ownTurn
-        ? preferences.contextualHints
-          ? contextualHint(piece)
-          : `${PIECE_NAMES[piece.type]} seleccionada · elige una orden o un destino marcado.`
-        : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]} · inspección táctica; sus amenazas aparecen atenuadas.`;
-}
-
-function threatSummaryMarkup(piece: Piece): string {
-  if (!preferences.tacticalThreats || piece.owner !== state.activePlayer) return '';
-  const threats = analyzeImmediateThreats(state, piece.owner).threats.filter(
-    (threat) => threat.targetId === piece.id,
-  );
-  if (!threats.length) return '';
-  const attackers = [
-    ...new Set(
-      threats
-        .map((threat) => getPiece(state, threat.attackerId))
-        .filter((attacker): attacker is Piece => Boolean(attacker))
-        .map((attacker) => PIECE_NAMES[attacker.type]),
-    ),
-  ];
-  return `<div class="threat-note" role="status"><strong>Amenaza inmediata</strong><span>${escapeHtml(attackers.join(', '))}</span></div>`;
-}
-
-function contextualHint(piece: Piece): string {
-  const hints: Record<Piece['type'], string> = {
-    soldier: 'Consejo · El Soldado avanza por su arco frontal; girarlo también consume el turno.',
-    capturer: 'Consejo · El Capturador convierte una unidad adyacente sin desplazarse.',
-    medium: 'Consejo · El Tanque puede mover y elegir la orientación final del cañón.',
-    long: 'Consejo · El Lanzamisiles tiene dos misiles para toda la partida y dispara a tres hexágonos exactos.',
-    fast: 'Consejo · El Embestidor recorre una línea libre y captura ocupando el destino.',
-    drone: 'Consejo · El Dron puede volar y compartir casilla con una unidad terrestre.',
-    airplane: 'Consejo · El Avión elige entre volar y disparar; entrar en un escudo lo destruye.',
-    antiAir: 'Consejo · El Escudo antiaéreo es inmóvil y protege las seis casillas adyacentes.',
-    fortress: `Consejo · La Fortaleza tiene ${fortressMaximumHp(piece.owner)} HP; protégela para evitar la derrota.`,
-  };
-  return hints[piece.type];
+    const q = piece.position.q >= 0 ? `+${piece.position.q}` : `${piece.position.q}`;
+    const r = piece.position.r >= 0 ? `+${piece.position.r}` : `${piece.position.r}`;
+    pieceCard.hidden = false;
+    pieceCard.className = `piece-card player-${piece.owner === 0 ? 'blue' : 'amber'}`;
+    pieceCard.innerHTML = `
+      <div class="piece-title-row">
+        <div class="piece-monogram" aria-hidden="true">${pieceMonogram(piece)}</div>
+        <h2>${PIECE_NAMES[piece.type]}</h2>
+      </div>
+      <div class="piece-stats"><span>Coordenadas <strong>${q}, ${r}</strong></span>${facing}${piece.type === 'long' ? `<span>Misiles <strong>${piece.missilesRemaining ?? 2}/2</strong></span>` : ''}<button type="button" class="secondary-button cancel-selection" id="cancel-selection">Cancelar</button></div>`;
+  }
+  pieceCard.querySelector('#cancel-selection')?.addEventListener('click', () => {
+    clearSelection();
+    canvas.focus({ preventScroll: true });
+    announce('Unidad deseleccionada.');
+  });
 }
 
 function renderActionControls(piece: Piece | undefined, legalActions: GameAction[]): void {
@@ -1351,9 +1198,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   if (mode.kind === 'actionChoice') {
     actionControls.innerHTML = `<div class="control-section"><h3>Elegir maniobra</h3><p>Esta casilla admite varias órdenes.</p><div class="choice-list">${mode.actions
       .map((action, index) => targetChoiceMarkup(action, index))
-      .join(
-        '',
-      )}</div><button class="text-button cancel-mode" type="button">Cancelar</button></div>`;
+      .join('')}</div><button class="text-button cancel-mode" type="button">Volver</button></div>`;
     actionControls.querySelectorAll<HTMLButtonElement>('[data-action-choice]').forEach((button) => {
       button.addEventListener('click', () => {
         const action =
@@ -1377,7 +1222,7 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
         : pendingAction?.kind === 'orient'
           ? pendingAction.cannon
           : null;
-    const title = mode.kind === 'rotate' ? 'Orientar Soldado' : 'Orientar cañón';
+    const title = mode.kind === 'rotate' ? 'Cambiar orientación' : 'Orientar cañón';
     actionControls.innerHTML = directionPanel(title, current, selectedDirection, 'direction-order');
     actionControls
       .querySelectorAll<HTMLButtonElement>('[data-direction-order]')
@@ -1409,7 +1254,6 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
               Boolean(action.attackAboveId),
           );
     actionControls.innerHTML = `${directionPanel('Abandonar vehículo', null, mode.facing, 'transform-facing')}
-      <div class="transform-note"><strong>Acción inmediata</strong><span>Tras elegir orientación, confirma sin mover, toca un destino frontal o ataca al Dron situado encima.</span></div>
       ${attackAbove ? '<button type="button" class="stacked-response" data-transform-attack>Transformarse y atacar al Dron superior</button>' : ''}`;
     actionControls
       .querySelectorAll<HTMLButtonElement>('[data-transform-facing]')
@@ -1443,17 +1287,6 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
     return;
   }
 
-  const moveCount = uniqueDestinations(
-    legalActions.filter((action) => action.kind === 'move'),
-  ).length;
-  const attackCount = legalActions.filter(
-    (action) =>
-      action.kind === 'shoot' ||
-      action.kind === 'convert' ||
-      action.kind === 'attackAbove' ||
-      action.kind === 'attackBelow' ||
-      (action.kind === 'move' && Boolean(action.kamikaze)),
-  ).length;
   const canRotate = legalActions.some((action) => action.kind === 'rotate');
   const canOrient = legalActions.some((action) => action.kind === 'orient');
   const canTransform = legalActions.some((action) => action.kind === 'transform');
@@ -1469,30 +1302,21 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   const captureAboveTarget = captureAbove ? getPiece(state, captureAbove.targetId) : undefined;
 
   actionControls.innerHTML = `
-    <div class="control-section">
-      <div class="order-overview">
-        <span><strong>${moveCount}</strong> destinos</span>
-        <span><strong>${attackCount}</strong> objetivos</span>
-      </div>
-      <p class="order-hint">Toca un marcador del tablero para preparar la orden.</p>
       <div class="command-buttons">
-        ${canRotate ? '<button type="button" data-command="rotate">Girar unidad</button>' : ''}
+        ${canRotate ? '<button type="button" data-command="rotate">Cambiar orientación</button>' : ''}
         ${canOrient ? '<button type="button" data-command="orient">Orientar cañón</button>' : ''}
         ${above ? '<button type="button" data-command="above">Atacar aeronave superior</button>' : ''}
         ${below ? '<button type="button" data-command="below">Atacar unidad inferior</button>' : ''}
         ${captureAboveTarget ? `<button type="button" data-command="capture-above">${escapeHtml(captureAboveCommandLabel(captureAboveTarget.type))}</button>` : ''}
         ${canTransform ? '<button type="button" class="danger-command" data-command="transform">Abandonar vehículo</button>' : ''}
-      </div>
-    </div>`;
+      </div>`;
   actionControls.querySelector('[data-command="rotate"]')?.addEventListener('click', () => {
     mode = { kind: 'rotate' };
-    commandSheetExpanded = true;
     pendingAction = null;
     render();
   });
   actionControls.querySelector('[data-command="orient"]')?.addEventListener('click', () => {
     mode = { kind: 'orient' };
-    commandSheetExpanded = true;
     pendingAction = null;
     render();
   });
@@ -1507,7 +1331,6 @@ function renderActionControls(piece: Piece | undefined, legalActions: GameAction
   });
   actionControls.querySelector('[data-command="transform"]')?.addEventListener('click', () => {
     mode = { kind: 'transform', facing: null };
-    commandSheetExpanded = true;
     pendingAction = null;
     render();
   });
@@ -1521,18 +1344,6 @@ function renderPendingCard(piece: Piece | undefined, legalActions: GameAction[])
     return;
   }
   pendingCard.hidden = false;
-  const consequences = analyzeActionConsequences(
-    state,
-    action,
-    matchConfig ? resolutionRulesForConfig(matchConfig) : undefined,
-  );
-  const tone = consequenceTone(consequences);
-  const toneClass =
-    tone === 'warning'
-      ? 'tone-danger'
-      : tone === 'favorable' || tone === 'decisive'
-        ? 'tone-positive'
-        : 'tone-neutral';
   const mediumMove = piece?.type === 'medium' && action.kind === 'move';
   const cannon =
     piece?.type === 'medium' && action.kind === 'move' ? (action.cannon ?? piece.cannon) : null;
@@ -1540,18 +1351,10 @@ function renderPendingCard(piece: Piece | undefined, legalActions: GameAction[])
     <div class="pending-label"><span>ORDEN PREPARADA</span><i></i></div>
     <strong>${escapeHtml(describeAction(state, action))}</strong>
     ${mediumMove ? `<div class="inline-direction"><span>Cañón tras mover</span>${directionButtons(cannon, 'pending-cannon')}</div>` : ''}
-    <div class="consequence-lens ${toneClass}">
-      <span class="eyebrow">CONSECUENCIA INMEDIATA</span>
-      ${consequences.summaries.map((summary) => `<span class="consequence-item ${toneClass}">${escapeHtml(summary)}</span>`).join('')}
-      ${consequences.outcomeLabel ? `<strong>${escapeHtml(consequences.outcomeLabel)}</strong>` : ''}
-    </div>
+    ${action.kind === 'transform' && !action.to && !action.attackAboveId ? '<p class="transform-warning">Para realizar un desplazamiento o ataque como soldado en este mismo turno, selecciona la casilla de destino antes de confirmar</p>' : ''}
     <div class="pending-actions">
-      <button type="button" class="secondary-button cancel-pending">Cancelar</button>
       <button type="button" class="confirm-button" ${animating ? 'disabled' : ''}>Confirmar acción</button>
     </div>`;
-  pendingCard
-    .querySelector<HTMLButtonElement>('.cancel-pending')
-    ?.addEventListener('click', cancelDraft);
   pendingCard
     .querySelector<HTMLButtonElement>('.confirm-button')
     ?.addEventListener('click', () => void commitPending());
@@ -1676,10 +1479,25 @@ function targetChoiceMarkup(action: GameAction, index: number): string {
   return `<button type="button" data-action-choice="${index}"><span>${layer}</span><strong>${target ? PIECE_NAMES[target.type] : 'Objetivo'}</strong></button>`;
 }
 
+function toggleBattleLog(): void {
+  logOpen = !logOpen;
+  if (logOpen) {
+    selectedId = null;
+    pendingAction = null;
+    mode = { kind: 'default' };
+  }
+  render();
+}
+
 function renderBattleLog(): void {
-  battleLog.hidden = !logOpen;
+  requireElement<HTMLElement>('battle-log-panel').hidden = !logOpen;
   logToggle.setAttribute('aria-expanded', String(logOpen));
-  logToggle.textContent = logOpen ? 'Ocultar registro' : 'Registro de batalla';
+  logToggle.setAttribute('aria-pressed', String(logOpen));
+  logToggle.setAttribute(
+    'aria-label',
+    logOpen ? 'Ocultar registro de batalla' : 'Mostrar registro de batalla',
+  );
+  logToggle.title = logOpen ? 'Ocultar registro de batalla' : 'Registro de batalla';
   battleLog.innerHTML = state.history.length
     ? [...state.history]
         .reverse()
@@ -1715,29 +1533,12 @@ function renderHistoryControls(): void {
   redoButton.disabled = !visible || animating || !matchController?.canRedo();
 }
 
-function renderThreatToggle(): void {
-  const enabled = preferences.tacticalThreats;
-  const count = enabled ? analyzeImmediateThreats(state).threatenedPieceIds.length : 0;
-  threatToggle.classList.toggle('active', enabled);
-  threatToggle.setAttribute('aria-pressed', String(enabled));
-  threatToggle.setAttribute(
-    'aria-label',
-    enabled
-      ? `Ocultar amenazas inmediatas. ${count} ${count === 1 ? 'unidad amenazada' : 'unidades amenazadas'}`
-      : 'Mostrar amenazas inmediatas',
-  );
-  threatToggle.title = enabled ? `Amenazas visibles · ${count}` : 'Amenazas inmediatas';
-}
-
 function renderScreenReaderBoard(): void {
   const rows: string[] = [];
   const inspected = selectedId ? getPiece(state, selectedId) : undefined;
   const actionLabel =
     inspected?.owner !== state.activePlayer ? 'Amenazas potenciales' : 'Acciones legales';
   const firingRange = new Set(currentFiringRange().map(hexKey));
-  const threatenedPieces = new Set(
-    preferences.tacticalThreats ? analyzeImmediateThreats(state).threatenedPieceIds : [],
-  );
   for (let r = -5; r <= 5; r += 1) {
     const cells: string[] = [];
     for (let q = -5; q <= 5; q += 1) {
@@ -1754,12 +1555,7 @@ function renderScreenReaderBoard(): void {
       ];
       const cellId = accessibleCellId(hex);
       const rangeLabel = firingRange.has(hexKey(hex)) ? '. Alcance potencial de disparo' : '';
-      const threatLabel = [occupancy.ground, occupancy.air].some(
-        (piece) => piece && threatenedPieces.has(piece.id),
-      )
-        ? '. Amenaza inmediata rival'
-        : '';
-      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía`}${rangeLabel}${threatLabel}${legal.length ? `. ${actionLabel}: ${legal.join('; ')}` : ''}`;
+      const label = `${pieces.length ? pieces.join('. ') : `Casilla ${q}, ${r}, vacía`}${rangeLabel}${legal.length ? `. ${actionLabel}: ${legal.join('; ')}` : ''}`;
       cells.push(
         `<div id="${cellId}" role="gridcell" aria-rowindex="${r + 6}" aria-colindex="${q + 6}" aria-selected="${Boolean(focusedHex && equalHex(focusedHex, hex))}" data-hex="${hexKey(hex)}">${escapeHtml(label)}</div>`,
       );
@@ -1785,16 +1581,12 @@ function announceCell(hex: Hex): void {
     ),
   ];
   const inFiringRange = currentFiringRange().some((cell) => equalHex(cell, hex));
-  const threatenedPieces = new Set(
-    preferences.tacticalThreats ? analyzeImmediateThreats(state).threatenedPieceIds : [],
-  );
-  const isThreatened = pieces.some((piece) => threatenedPieces.has(piece.id));
   announce(
     `${
       pieces.length
         ? pieces.map((piece) => pieceAccessibleLabel(state, piece, viewPlayer())).join('. ')
         : `Casilla ${hex.q}, ${hex.r}, vacía.`
-    }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${isThreatened ? ' Amenaza inmediata rival.' : ''}${legal.length ? ` ${actionLabel}: ${legal.join('; ')}.` : ''}`,
+    }${inFiringRange ? ' Alcance potencial de disparo.' : ''}${legal.length ? ` ${actionLabel}: ${legal.join('; ')}.` : ''}`,
   );
 }
 
@@ -1806,6 +1598,7 @@ function announce(message: string): void {
 }
 
 function showHomeScreen(view: 'main' | 'new' = 'main'): void {
+  logOpen = false;
   aiAbortController?.abort();
   if (matchController?.record.clock && !state.outcome) {
     matchController.pauseClock(Date.now());
@@ -1831,7 +1624,6 @@ function showHomeScreen(view: 'main' | 'new' = 'main'): void {
   scenarioProgress = null;
   scenarioHintsRevealed = 0;
   scenarioAttemptsRecorded = false;
-  commandSheetExpanded = false;
   lastClockPersistSecond = -1;
   homeDemoBusy = false;
   renderedStatusKey = '';
@@ -1856,8 +1648,6 @@ function leaveHomeScreen(): void {
   homeScreen.inert = true;
   topbar.inert = false;
   gameLayout.inert = false;
-  commandSheetExpanded = !isCommandSheetLayout();
-  renderCommandSheetState();
 }
 
 function isHomeScreenActive(): boolean {
@@ -1892,9 +1682,6 @@ function showHomeMainMenu(): void {
       </button>
       <button type="button" class="home-nav-button" data-home-action="tutorial">
         <span>Tutorial</span><small>${completed} de ${SCENARIOS.length} desafíos completados</small>
-      </button>
-      <button type="button" class="home-nav-button" data-home-action="lab">
-        <span>Laboratorio</span><small>Crea, valida y juega tus propias misiones</small>
       </button>
       <button type="button" class="home-nav-button" data-home-action="history">
         <span>Historial</span><small>${history.length ? `${history.length} batallas concluidas` : 'Tus resultados aparecerán aquí'}</small>
@@ -1943,7 +1730,6 @@ function onHomeMenuClick(event: MouseEvent): void {
   if (action === 'new') showHomeNewGameMenu();
   else if (action === 'back') showHomeMainMenu();
   else if (action === 'rules') showRulesDialog();
-  else if (action === 'lab') showScenarioEditorDialog();
   else if (action === 'history') showHistoryDialog();
   else if (action === 'tutorial') {
     gameMode = 'academy';
@@ -2008,7 +1794,19 @@ async function runHomeDemoTurn(): Promise<void> {
 }
 
 function showNewGameDialog(): void {
-  showHomeScreen('new');
+  openDialog(`
+    <span class="eyebrow">ABANDONAR PARTIDA</span>
+    <h2>¿Volver al inicio?</h2>
+    <p>La partida en curso se descartará y volverás al inicio.</p>
+    <div class="dialog-actions">
+      <button type="button" class="secondary-button" data-dialog-close>Seguir jugando</button>
+      <button type="button" class="confirm-button" data-confirm-abandon>Abandonar partida</button>
+    </div>`);
+  dialog.querySelector('[data-confirm-abandon]')?.addEventListener('click', () => {
+    showHomeScreen();
+    clearActiveMatch();
+    showHomeMainMenu();
+  });
 }
 
 function showGameModeDialog(initial: boolean): void {
@@ -2061,7 +1859,6 @@ function showGameModeDialog(initial: boolean): void {
 
 function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
   let selectedPreset: MatchPresetId = 'tactical';
-  let selectedDoctrine: AiPersonality = 'balanced';
   openDialog(`
     <button type="button" class="config-close" data-dialog-close aria-label="Cerrar configuración">×</button>
     <span class="eyebrow">NUEVA PARTIDA</span>
@@ -2106,16 +1903,13 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
     ${
       modeToConfigure === 'machine'
         ? `<div class="match-options"><span class="eyebrow">MANDO RIVAL</span>
-          <label class="field-row"><span>Dificultad</span><select data-ai-difficulty>
+          <div class="field-row"><label for="ai-difficulty">Dificultad</label><select id="ai-difficulty" data-ai-difficulty aria-describedby="ai-difficulty-description">
             <option value="recruit">Fácil</option>
             <option value="tactical" selected>Media</option>
             <option value="commander">Difícil</option>
             <option value="expert">Experto</option>
-          </select></label>
-          <div class="doctrine-grid" role="radiogroup" aria-label="Doctrina de la IA">
-            ${aiDoctrineCards(selectedDoctrine)}
-          </div>
-          <p class="dialog-note" data-doctrine-description>${aiDoctrineDescription(selectedDoctrine)}</p>
+          </select></div>
+          <p class="dialog-note" id="ai-difficulty-description">Cuanto mayor sea la dificultad, más tiempo dedica la IA a anticipar tus respuestas.</p>
         </div>`
         : ''
     }
@@ -2203,18 +1997,6 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       }
     });
   });
-  dialog.querySelectorAll<HTMLButtonElement>('[data-ai-doctrine]').forEach((button) => {
-    button.addEventListener('click', () => {
-      selectedDoctrine = (button.dataset.aiDoctrine as AiPersonality) ?? 'balanced';
-      dialog.querySelectorAll<HTMLButtonElement>('[data-ai-doctrine]').forEach((candidate) => {
-        const selected = candidate.dataset.aiDoctrine === selectedDoctrine;
-        candidate.classList.toggle('selected', selected);
-        candidate.setAttribute('aria-checked', String(selected));
-      });
-      const description = dialog.querySelector<HTMLElement>('[data-doctrine-description]');
-      if (description) description.textContent = aiDoctrineDescription(selectedDoctrine);
-    });
-  });
   dialog.querySelector('[data-back-menu]')?.addEventListener('click', () => {
     if (isHomeScreenActive()) {
       dialog.close();
@@ -2229,7 +2011,6 @@ function showFreeMatchConfig(modeToConfigure: 'local' | 'machine'): void {
       difficulty:
         (dialog.querySelector<HTMLSelectElement>('[data-ai-difficulty]')?.value as AiDifficulty) ??
         'tactical',
-      personality: selectedDoctrine,
       seed: createMatchSeed(),
       confirmation: preferences.confirmation,
       contextualHints: preferences.contextualHints,
@@ -2615,51 +2396,6 @@ function ruleEmphasisMarkup(text: string, strong: string[]): string {
   return markup + escapeHtml(text.slice(cursor));
 }
 
-function showHelpDialog(): void {
-  const fortressHp = fortressMaximumHp(0);
-  openDialog(`
-    <button type="button" class="dialog-dismiss" data-dialog-close aria-label="Cerrar ayuda">×</button>
-    <span class="eyebrow">MANUAL DE CAMPO</span>
-    <h2>${activeScenario ? escapeHtml(activeScenario.title) : 'Destruye la Fortaleza rival'}</h2>
-    ${
-      activeScenario
-        ? `<div class="scenario-hints"><strong>Objetivo</strong><p>${escapeHtml(activeScenario.summary)}</p><p>${escapeHtml(scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply))}</p><ol data-hint-list>${revealedScenarioHints(
-            activeScenario,
-            scenarioHintsRevealed,
-          )
-            .map((hint) => `<li>${escapeHtml(hint)}</li>`)
-            .join(
-              '',
-            )}</ol><button type="button" class="text-button" data-reveal-scenario-hint>${scenarioHintsRevealed ? 'Revelar otra pista' : 'Revelar una pista'}</button></div>`
-        : ''
-    }
-    <div class="help-grid">
-      <section><strong>1 · Selecciona</strong><p>Elige una unidad propia. Menta indica movimiento, rosa ataque, una red sobre el objetivo indica conversión y naranja intercepción.</p></section>
-      <section><strong>2 · Prepara</strong><p>Toca destino. En casillas apiladas podrás elegir aire o suelo. Revisa consecuencia antes de confirmar.</p></section>
-      <section><strong>3 · Confirma</strong><p>Cada turno exige una acción. Girar Soldado y orientar cañón también consumen turno.</p></section>
-      <section><strong>Victoria</strong><p>${escapeHtml(fortressAttackSummary(fortressHp))}</p></section>
-    </div>
-    <details><summary>Reglas tácticas esenciales</summary>
-      <p>${escapeHtml(CLASSIC_RULES_NOTE)}</p>
-      <p>El Lanzamisiles tiene dos disparos por partida y alcanza el anillo de distancia 3. Drones y Aviones comparten la capa aérea y pueden apilarse sobre una unidad terrestre, pero no atravesarse entre sí.</p>
-      <p>Las unidades terrestres pueden pasar y detenerse bajo un Avión enemigo sin atacarlo. Un Dron enemigo sigue bloqueando ese movimiento.</p>
-      <p>El Avión vuela hasta dos casillas por su frente o dispara a su cono ofensivo. Su kamikaze destruye objetivo y Avión. El Escudo antiaéreo es inmóvil: pulveriza aeronaves enemigas y bloquea sus disparos.</p>
-      <p>Tanque, Lanzamisiles y Embestidor pueden abandonarse y convertirse permanentemente en Soldados, con movimiento opcional inmediato.</p>
-    </details>
-    <div class="keyboard-card"><strong>Teclado</strong><span>Q/W/E y A/S/D cubren las seis direcciones · teclado numérico 7/8/9/4/2/6 · Enter selecciona · Esc cancela · H ayuda · L registro · C centra</span></div>
-    <p class="game-credits">
-      Juego ideado por
-      <a href="https://www.instagram.com/roldan_musica" target="_blank" rel="noopener noreferrer">Miquel Roldán Llinàs</a>.
-      <span>Programado por <a href="https://lisandrorocha.vercel.app/" target="_blank" rel="noopener noreferrer">Lisandro Rocha Tau</a>.</span>
-    </p>
-    <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Entendido</button></div>`);
-  if (activeScenario) {
-    dialog
-      .querySelector('[data-reveal-scenario-hint]')
-      ?.addEventListener('click', () => revealOneScenarioHint(activeScenario!, dialog));
-  }
-}
-
 function showSettingsDialog(): void {
   openDialog(`
     <span class="eyebrow">OPCIONES</span>
@@ -2671,12 +2407,9 @@ function showSettingsDialog(): void {
       ${volumeControlMarkup('effectsVolume', 'Efectos especiales', 'Movimientos, ataques y avisos', preferences.effectsVolume)}
     </div>
     <div class="board-settings">
-      <div><span class="eyebrow">VISTA DEL TABLERO</span><p>Configura la profundidad y la orientación durante la partida.</p></div>
-      <label class="toggle-row"><span><strong>Perspectiva 2.5D</strong><small>Inclina el tablero y eleva las unidades aéreas</small></span><input type="checkbox" data-pref="board-depth" ${preferences.boardDepth ? 'checked' : ''}/></label>
+      <div><span class="eyebrow">TABLERO Y ÓRDENES</span><p>Configura la orientación y la confirmación durante la partida.</p></div>
       <label class="toggle-row"><span><strong>Mantener tablero fijo</strong><small>Cian permanece abajo y Ámbar arriba durante toda la partida</small></span><input type="checkbox" data-pref="fixed-board" ${preferences.fixedBoard ? 'checked' : ''}/></label>
       <label class="field-row"><span>Confirmación de órdenes</span><select data-pref="confirmation"><option value="always" ${preferences.confirmation === 'always' ? 'selected' : ''}>Siempre</option><option value="critical" ${preferences.confirmation === 'critical' ? 'selected' : ''}>Solo críticas</option><option value="quick" ${preferences.confirmation === 'quick' ? 'selected' : ''}>Rápida</option></select></label>
-      <label class="toggle-row"><span><strong>Consejos contextuales</strong><small>Muestra orientación cuando una mecánica sea relevante</small></span><input type="checkbox" data-pref="hints" ${preferences.contextualHints ? 'checked' : ''}/></label>
-      <label class="toggle-row"><span><strong>Amenazas inmediatas</strong><small>Marca unidades que el rival puede atacar en su próxima orden</small></span><input type="checkbox" data-pref="threats" ${preferences.tacticalThreats ? 'checked' : ''}/></label>
       <label class="toggle-row"><span><strong>Pantalla de entrega</strong><small>Oculta la posición entre turnos locales</small></span><input type="checkbox" data-pref="handoff" ${preferences.handoffScreen ? 'checked' : ''}/></label>
     </div>
     <div class="accessibility-settings">
@@ -2685,12 +2418,14 @@ function showSettingsDialog(): void {
       <label class="toggle-row"><span><strong>Reducir movimiento</strong><small>Limita animaciones y transiciones</small></span><input type="checkbox" data-pref="motion" ${preferences.reducedMotion ? 'checked' : ''}/></label>
     </div>
     <div class="board-settings">
-      <div><span class="eyebrow">PARTIDA ACTUAL</span><p>Las herramientas avanzadas y los datos viven en un centro independiente.</p></div>
+      <div><span class="eyebrow">PARTIDAS</span><p>Guarda, carga y revisa tus partidas.</p></div>
       <div class="inline-actions">
-        <button type="button" class="secondary-button" data-data-center>Partidas y datos</button>
-        <button type="button" class="text-button" data-scenario-editor>Laboratorio</button>
-        <button type="button" class="text-button data-danger" data-resign-match ${matchRecord && !state.outcome && !activeScenario ? '' : 'disabled'}>Rendirse</button>
+        <button type="button" class="secondary-button" data-export-match ${matchRecord ? '' : 'disabled'}>Exportar partida</button>
+        <button type="button" class="secondary-button" data-import-match ${animating ? 'disabled' : ''}>Importar partida</button>
+        <button type="button" class="secondary-button" data-open-replay ${matchRecord && !animating && !machineThinking ? '' : 'disabled'}>Ver repetición</button>
+        <button type="button" class="secondary-button" data-history>Historial de resultados</button>
       </div>
+      <input type="file" accept="application/json,.json" data-import-file hidden/>
     </div>
     <div class="dialog-actions"><button type="button" class="confirm-button" data-dialog-close>Listo</button></div>`);
 
@@ -2711,14 +2446,6 @@ function showSettingsDialog(): void {
       savePreferences();
     });
   });
-  dialog
-    .querySelector<HTMLInputElement>('[data-pref="board-depth"]')
-    ?.addEventListener('change', (event) => {
-      preferences.boardDepth = (event.currentTarget as HTMLInputElement).checked;
-      savePreferences();
-      renderer.setDepthMode(preferences.boardDepth, preferences.reducedMotion);
-      announce(preferences.boardDepth ? 'Perspectiva 2.5D activada.' : 'Perspectiva 2D activada.');
-    });
   dialog
     .querySelector<HTMLInputElement>('[data-pref="fixed-board"]')
     ?.addEventListener('change', (event) => {
@@ -2755,56 +2482,14 @@ function showSettingsDialog(): void {
         .value as GamePreferences['confirmation'];
       savePreferences();
     });
-  for (const [selector, key] of [
-    ['[data-pref="hints"]', 'contextualHints'],
-    ['[data-pref="threats"]', 'tacticalThreats'],
-    ['[data-pref="handoff"]', 'handoffScreen'],
-  ] as const) {
-    dialog.querySelector<HTMLInputElement>(selector)?.addEventListener('change', (event) => {
-      preferences[key] = (event.currentTarget as HTMLInputElement).checked;
-      savePreferences();
-      if (key === 'tacticalThreats') render();
-    });
-  }
-  dialog.querySelector('[data-data-center]')?.addEventListener('click', showDataCenterDialog);
-  dialog.querySelector('[data-resign-match]')?.addEventListener('click', showResignDialog);
   dialog
-    .querySelector('[data-scenario-editor]')
-    ?.addEventListener('click', showScenarioEditorDialog);
-}
-
-function showDataCenterDialog(): void {
-  const events = loadTelemetry();
-  const summary = telemetrySummary(events);
-  const telemetryTotal = events.length;
-  openDialog(`
-    <span class="eyebrow">PARTIDAS Y DATOS</span>
-    <h2>Archivo local</h2>
-    <p>Todo se guarda únicamente en este navegador. No se transmite ninguna partida ni diagnóstico.</p>
-    <section class="board-settings">
-      <div><span class="eyebrow">REPETICIONES</span><p>Los archivos se validan antes de cargarse.</p></div>
-      <div class="inline-actions">
-        <button type="button" class="secondary-button" data-export-match ${matchRecord ? '' : 'disabled'}>Exportar partida</button>
-        <button type="button" class="secondary-button" data-import-match>Importar JSON</button>
-        <button type="button" class="text-button" data-open-replay ${matchRecord ? '' : 'disabled'}>Analizar tablero</button>
-        <button type="button" class="text-button" data-undo-match ${matchController?.canUndo() && !animating && (!state.outcome || isLocalMatch()) ? '' : 'disabled'}>Deshacer última orden</button>
-        <button type="button" class="text-button" data-history>Historial de resultados</button>
-      </div>
-      <input type="file" accept="application/json,.json" data-import-file hidden/>
-    </section>
-    <section class="telemetry-summary">
-      <div><span class="eyebrow">DIAGNÓSTICO DE PLAYTEST</span><p>${telemetryTotal} eventos locales · ${summary['match-start'] ?? 0} partidas iniciadas · ${summary['action-cancelled'] ?? 0} órdenes canceladas · ${summary['academy-hint'] ?? 0} pistas usadas.</p></div>
-      <div class="inline-actions">
-        <button type="button" class="secondary-button" data-export-telemetry ${telemetryTotal ? '' : 'disabled'}>Exportar diagnóstico</button>
-        <button type="button" class="text-button data-danger" data-clear-telemetry ${telemetryTotal ? '' : 'disabled'}>Borrar diagnóstico</button>
-        <button type="button" class="text-button data-danger" data-reset-academy>Reiniciar Academia</button>
-      </div>
-    </section>
-    <div class="dialog-actions"><button type="button" class="secondary-button" data-back-settings>Volver a opciones</button><button type="button" class="confirm-button" data-dialog-close>Listo</button></div>`);
-  dialog.querySelector('[data-back-settings]')?.addEventListener('click', showSettingsDialog);
+    .querySelector<HTMLInputElement>('[data-pref="handoff"]')
+    ?.addEventListener('change', (event) => {
+      preferences.handoffScreen = (event.currentTarget as HTMLInputElement).checked;
+      savePreferences();
+    });
   dialog.querySelector('[data-export-match]')?.addEventListener('click', exportCurrentMatch);
   dialog.querySelector('[data-open-replay]')?.addEventListener('click', () => showReplayDialog());
-  dialog.querySelector('[data-undo-match]')?.addEventListener('click', undoLastAction);
   dialog.querySelector('[data-history]')?.addEventListener('click', showHistoryDialog);
   const importInput = dialog.querySelector<HTMLInputElement>('[data-import-file]');
   dialog
@@ -2812,29 +2497,25 @@ function showDataCenterDialog(): void {
     ?.addEventListener('click', () => importInput?.click());
   importInput?.addEventListener('change', () => {
     const file = importInput.files?.[0];
+    importInput.value = '';
     if (file) void importMatchFile(file);
-  });
-  dialog.querySelector('[data-export-telemetry]')?.addEventListener('click', () => {
-    downloadText('protocolo-hexagonal-playtest.json', serializeTelemetry());
-  });
-  bindTwoStepDestructive('[data-clear-telemetry]', 'Confirmar borrado', () => {
-    clearTelemetry();
-    showToast('Diagnóstico local borrado.');
-    showDataCenterDialog();
-  });
-  bindTwoStepDestructive('[data-reset-academy]', 'Confirmar reinicio', () => {
-    resetAcademyProgress();
-    showToast('Progreso de Academia reiniciado.');
-    showDataCenterDialog();
   });
 }
 
 function showResignDialog(): void {
-  if (!matchController || state.outcome || activeScenario) return;
+  if (
+    !matchController ||
+    state.outcome ||
+    activeScenario ||
+    animating ||
+    machineThinking ||
+    replayDock
+  )
+    return;
   openDialog(`
     <span class="eyebrow">CONFIRMAR RENDICIÓN</span>
     <h2>${PLAYER_NAMES[state.activePlayer]} abandona la batalla</h2>
-    <p>La victoria del rival quedará registrada y podrá revisarse en el análisis.</p>
+    <p>La victoria del rival quedará registrada y podrá revisarse en la repetición.</p>
     <div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>Seguir jugando</button><button type="button" class="confirm-button data-danger" data-confirm-resign>Rendirse</button></div>`);
   dialog.querySelector('[data-confirm-resign]')?.addEventListener('click', () => {
     if (!matchController) return;
@@ -2873,31 +2554,7 @@ function showHistoryDialog(): void {
     if (isHomeScreenActive()) {
       dialog.close();
       showHomeMainMenu();
-    } else showDataCenterDialog();
-  });
-}
-
-function bindTwoStepDestructive(
-  selector: string,
-  confirmationLabel: string,
-  action: () => void,
-): void {
-  const button = dialog.querySelector<HTMLButtonElement>(selector);
-  if (!button) return;
-  button.addEventListener('click', () => {
-    if (button.dataset.confirmed === 'true') {
-      action();
-      return;
-    }
-    button.dataset.confirmed = 'true';
-    button.textContent = confirmationLabel;
-    window.setTimeout(() => {
-      if (!button.isConnected) return;
-      button.dataset.confirmed = 'false';
-      button.textContent = selector.includes('academy')
-        ? 'Reiniciar Academia'
-        : 'Borrar diagnóstico';
-    }, 4_000);
+    } else showSettingsDialog();
   });
 }
 
@@ -2915,13 +2572,26 @@ function volumeControlMarkup(
   </label>`;
 }
 
+function showDrawOfferConfirmation(): void {
+  if (!matchController || state.outcome || animating || machineThinking || replayDock) return;
+  openDialog(`
+    <span class="eyebrow">PROPONER TABLAS</span>
+    <h2>¿Proponer tablas al rival?</h2>
+    <p>La partida terminará en tablas únicamente si el rival acepta la propuesta.</p>
+    <div class="dialog-actions">
+      <button type="button" class="secondary-button" data-dialog-close>Seguir jugando</button>
+      <button type="button" class="confirm-button" data-confirm-draw-offer>Proponer tablas</button>
+    </div>`);
+  dialog.querySelector('[data-confirm-draw-offer]')?.addEventListener('click', showBlockadeDialog);
+}
+
 function showBlockadeDialog(): void {
-  if (state.outcome || animating) return;
+  if (!matchController || state.outcome || animating || machineThinking || replayDock) return;
   const resultPreview = blockadePreview();
   openDialog(`
     <div class="dialog-icon">≋</div>
-    <span class="eyebrow">ACUERDO DE BLOQUEO</span>
-    <h2>${PLAYER_NAMES[state.activePlayer]} propone finalizar</h2>
+    <span class="eyebrow">PROPUESTA DE TABLAS</span>
+    <h2>${PLAYER_NAMES[state.activePlayer]} propone tablas</h2>
     <p>El rival debe aceptar. Según integridad actual, el resultado será: <strong>${resultPreview}</strong>.</p>
     <p class="dialog-warning">Aceptar no consume turno y finaliza inmediatamente la partida.</p>
     <div class="dialog-actions">
@@ -3001,7 +2671,7 @@ function showOutcomeDialog(): void {
     }
     ${isLocalMatch() && matchController?.canUndo() ? '<div class="inline-actions"><button type="button" class="text-button" data-undo-match>Deshacer última orden</button></div>' : ''}
     <div class="dialog-actions triple">
-      <button type="button" class="text-button" data-analyze>Analizar partida</button>
+      <button type="button" class="text-button" data-analyze>Ver repetición</button>
       <button type="button" class="secondary-button" data-rematch>Revancha</button>
       <button type="button" class="confirm-button" data-new-game>Nueva partida</button>
     </div>`);
@@ -3031,6 +2701,7 @@ function openDialog(markup: string): void {
   destroyLayoutPreview();
   closeReplay();
   if (dialog.open) dialog.close();
+  document.body.append(requireElement<HTMLElement>('fullscreen-control'));
   dialog.innerHTML = `<div class="dialog-body">${markup}</div>`;
   const heading = dialog.querySelector<HTMLElement>('h2');
   if (heading) {
@@ -3045,6 +2716,7 @@ function openDialog(markup: string): void {
   });
   lockPageScroll();
   dialog.showModal();
+  syncFullscreenControl();
   window.setTimeout(() => {
     heading?.focus();
   }, 0);
@@ -3173,6 +2845,7 @@ function startScenario(scenario: ScenarioDefinition): void {
 function loadRecordIntoMatch(record: MatchRecord): void {
   if (isHomeScreenActive()) leaveHomeScreen();
   aiAbortController?.abort();
+  machineThinking = false;
   const scenarioId = record.config.definitionId.startsWith('scenario:')
     ? record.config.definitionId.slice('scenario:'.length)
     : '';
@@ -3334,7 +3007,7 @@ function showHandoffDialog(): void {
 }
 
 function showReplayDialog(initialAction?: number): void {
-  if (!matchRecord) return;
+  if (!matchRecord || animating || machineThinking) return;
   if (dialog.open) dialog.close();
   closeReplay();
   replayClockWasRunning = matchController?.record.clock?.status === 'running';
@@ -3344,6 +3017,8 @@ function showReplayDialog(initialAction?: number): void {
     persistCurrentMatch();
   }
   const record = matchRecord;
+  logOpen = false;
+  mode = { kind: 'default' };
   const moments = analyzeMatchMoments(record);
   const startingAction = Math.max(
     0,
@@ -3353,14 +3028,13 @@ function showReplayDialog(initialAction?: number): void {
   if (!boardStage) return;
   replayFocusReturn = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.classList.add('replay-active');
-  commandSheetExpanded = false;
   replayDock = document.createElement('section');
   replayDock.className = 'replay-dock';
-  replayDock.setAttribute('aria-label', 'Controles de análisis de partida');
+  replayDock.setAttribute('aria-label', 'Controles de repetición de partida');
   replayDock.innerHTML = `
     <div class="replay-heading">
-      <div><span class="eyebrow">ANÁLISIS</span><strong>Posición <output data-replay-output>${record.currentAction}</output> de ${record.actions.length}</strong></div>
-      <button type="button" class="icon-button replay-close" data-replay-close aria-label="Cerrar análisis">×</button>
+      <div><span class="eyebrow">REPETICIÓN</span><strong>Posición <output data-replay-output>${record.currentAction}</output> de ${record.actions.length}</strong></div>
+      <button type="button" class="icon-button replay-close" data-replay-close aria-label="Cerrar repetición">×</button>
     </div>
     <p class="replay-description" data-replay-description></p>
     <div class="replay-controls">
@@ -3373,7 +3047,7 @@ function showReplayDialog(initialAction?: number): void {
         ? `<div class="key-moments">${moments.map((moment) => `<button type="button" class="moment-jump" data-replay-moment="${moment.actionIndex}"><span>${moment.actionIndex}</span><strong>${escapeHtml(moment.title)}</strong><small>${moment.suggestedAlternativeLabel ? `Alternativa: ${escapeHtml(moment.suggestedAlternativeLabel)}` : escapeHtml(moment.detail)}</small></button>`).join('')}</div>`
         : ''
     }
-    <div class="inline-actions"><button type="button" class="text-button replay-export" data-export-match>Exportar JSON</button><button type="button" class="secondary-button" data-branch-match>Explorar desde aquí</button></div>`;
+    <div class="inline-actions"><button type="button" class="text-button replay-export" data-export-match>Exportar partida</button></div>`;
   boardStage.append(replayDock);
   const slider = replayDock.querySelector<HTMLInputElement>('[data-replay-slider]');
   const updateReplay = (value: number): void => {
@@ -3404,14 +3078,11 @@ function showReplayDialog(initialAction?: number): void {
     button.addEventListener('click', () => updateReplay(Number(button.dataset.replayMoment)));
   });
   replayDock.querySelector('[data-export-match]')?.addEventListener('click', exportCurrentMatch);
-  replayDock.querySelector('[data-branch-match]')?.addEventListener('click', () => {
-    branchFromReplay(record, Number(slider?.value ?? startingAction));
-  });
   replayDock.querySelector('[data-replay-close]')?.addEventListener('click', () => closeReplay());
   updateReplay(startingAction);
   replayDock.querySelector<HTMLButtonElement>('[data-replay-close]')?.focus();
   recordTelemetry('analysis-opened', { actions: record.currentAction, moments: moments.length });
-  announce('Modo análisis abierto. El tablero permanece visible.');
+  announce('Repetición abierta. El tablero permanece visible.');
 }
 
 function closeReplay({ resumeClock = true }: { resumeClock?: boolean } = {}): void {
@@ -3434,43 +3105,6 @@ function closeReplay({ resumeClock = true }: { resumeClock?: boolean } = {}): vo
   if (focusReturn?.isConnected) window.requestAnimationFrame(() => focusReturn.focus());
 }
 
-function branchFromReplay(record: MatchRecord, actionCount: number): void {
-  let cursor = Math.max(0, Math.min(record.actions.length, Math.floor(actionCount)));
-  const boardOnlyRecord = { ...record, conclusion: null };
-  if (cursor > 0 && replayRecord(boardOnlyRecord, cursor).outcome) cursor -= 1;
-  const now = new Date().toISOString();
-  const branched: MatchRecord = {
-    ...structuredClone(record),
-    config: {
-      ...structuredClone(record.config),
-      definitionId: `analysis-branch-${Date.now()}`,
-      participants: [
-        { kind: 'human', name: 'Análisis Cian' },
-        { kind: 'human', name: 'Análisis Ámbar' },
-      ],
-      options: {
-        ...record.config.options,
-        clockSeconds: null,
-        handoffScreen: false,
-        allowUndo: true,
-      },
-    },
-    actions: structuredClone(record.actions.slice(0, cursor)),
-    currentAction: cursor,
-    conclusion: null,
-    clock: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  replayRecord(branched);
-  replayClockWasRunning = false;
-  closeReplay();
-  saveActiveMatch(branched);
-  loadRecordIntoMatch(branched);
-  recordTelemetry('analysis-branched', { fromAction: cursor });
-  showToast('Rama de análisis creada. Ahora puedes probar otra orden.');
-}
-
 function replayForDisplay(
   record: MatchRecord,
   actionCount = record.currentAction,
@@ -3488,7 +3122,7 @@ function undoLastAction(): void {
     return;
   }
   if (state.outcome) {
-    showToast('Usa Análisis para explorar una variante desde una partida concluida.');
+    showToast('La partida ha concluido. Puedes revisar su desarrollo en Ver repetición.');
     return;
   }
   aiAbortController?.abort();
@@ -3581,6 +3215,9 @@ function exportCurrentMatch(): void {
 async function importMatchFile(file: File): Promise<void> {
   try {
     const record = parseRecord(await file.text());
+    if (animating) {
+      throw new Error('Espera a que termine la animación y vuelve a importar la partida.');
+    }
     saveActiveMatch(record);
     loadRecordIntoMatch(record);
     dialog.close();
@@ -3590,184 +3227,6 @@ async function importMatchFile(file: File): Promise<void> {
       dialog.querySelector<HTMLElement>('[data-import-match]'),
     );
   }
-}
-
-function showScenarioEditorDialog(): void {
-  const scenarioId = `custom-${Date.now()}`;
-  const editorState = isHomeScreenActive() ? createInitialState() : state;
-  const baseConfig =
-    matchConfig ??
-    createClassicConfig({
-      mode: 'local',
-      confirmation: preferences.confirmation,
-      fixedBoard: true,
-    });
-  const template: CustomScenario = {
-    version: 2,
-    id: scenarioId,
-    title: 'Escenario personalizado',
-    summary: 'Destruye la Fortaleza rival antes de agotar el límite.',
-    config: {
-      ...baseConfig,
-      definitionId: scenarioId,
-      setup: editorState.pieces.map((piece) => ({ id: piece.id, piece })),
-    },
-    initialState: editorState,
-    objective: { kind: 'win-in', maxPlies: 80 },
-    maxPlies: 80,
-    hints: ['Estudia las líneas de ataque antes de comprometer tus piezas.'],
-    successText: 'Misión de laboratorio completada.',
-  };
-  const catalog = loadScenarioCatalog();
-  openDialog(`
-    <span class="eyebrow">LABORATORIO</span>
-    <h2>Forja una misión</h2>
-    <p>Define qué hace interesante la posición. El JSON avanzado conserva control total sobre cada unidad.</p>
-    <form data-forge-form>
-    <div class="forge-form">
-      <label><span>Título</span><input type="text" data-forge-title value="${escapeHtml(template.title)}" maxlength="80"/></label>
-      <label><span>Bando controlado</span><select data-forge-player>
-        <option value="0" ${template.initialState.activePlayer === 0 ? 'selected' : ''}>Cian</option>
-        <option value="1" ${template.initialState.activePlayer === 1 ? 'selected' : ''}>Ámbar</option>
-      </select></label>
-      <label><span>Objetivo del bando controlado</span><select data-forge-objective>
-        <option value="win">Ganar la batalla</option>
-        <option value="win-in" selected>Ganar dentro del límite</option>
-        <option value="survive">Sobrevivir hasta el límite</option>
-        <option value="protect-piece">Proteger una unidad</option>
-        <option value="reach">Alcanzar una coordenada</option>
-      </select></label>
-      <label><span>Límite de órdenes</span><input type="number" data-forge-limit value="80" min="1" max="300"/></label>
-      <label><span>Unidad del objetivo</span><input type="text" data-forge-piece placeholder="id de la unidad"/></label>
-      <div class="inline-actions"><label><span>Destino q</span><input type="number" data-forge-q value="0" min="-5" max="5"/></label><label><span>Destino r</span><input type="number" data-forge-r value="0" min="-5" max="5"/></label></div>
-      <label><span>Descripción</span><textarea data-forge-summary rows="2">${escapeHtml(template.summary ?? '')}</textarea></label>
-      <label><span>Pistas · una por línea</span><textarea data-forge-hints rows="3">${escapeHtml(template.hints?.join('\n') ?? '')}</textarea></label>
-    </div>
-    <details><summary>Posición y reglas · JSON avanzado</summary><p class="dialog-note">Se validan tablero, capas, Fortalezas, identificadores y ruleset antes de jugar.</p><textarea class="scenario-editor" data-scenario-json spellcheck="false">${escapeHtml(JSON.stringify(template, null, 2))}</textarea></details>
-    ${
-      catalog.length
-        ? `<label class="field-row"><span>Catálogo local</span><select data-catalog-choice><option value="">Seleccionar…</option>${catalog.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.title)}</option>`).join('')}</select></label>`
-        : '<p class="muted-copy">El catálogo local está vacío.</p>'
-    }
-    <div class="dialog-error" data-dialog-error role="alert" hidden></div>
-    <div class="dialog-actions">
-      <button type="button" class="secondary-button" data-dialog-close>Cancelar</button>
-      <button type="submit" class="confirm-button" data-save-scenario>Validar y jugar</button>
-    </div>
-    </form>`);
-  const editor = dialog.querySelector<HTMLTextAreaElement>('[data-scenario-json]');
-  const forgeForm = dialog.querySelector<HTMLFormElement>('[data-forge-form]');
-  dialog
-    .querySelector<HTMLSelectElement>('[data-catalog-choice]')
-    ?.addEventListener('change', (event) => {
-      const selected = catalog.find(
-        (entry) => entry.id === (event.currentTarget as HTMLSelectElement).value,
-      );
-      if (selected && editor) {
-        editor.value = JSON.stringify(selected, null, 2);
-        populateForgeFields(selected);
-      }
-    });
-  forgeForm?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const errorRegion = dialog.querySelector<HTMLElement>('[data-dialog-error]');
-    if (errorRegion) {
-      errorRegion.hidden = true;
-      errorRegion.textContent = '';
-    }
-    editor?.removeAttribute('aria-invalid');
-    try {
-      const candidate = JSON.parse(editor?.value ?? '') as CustomScenario;
-      const limit = Math.max(
-        1,
-        Math.min(
-          300,
-          Number(dialog.querySelector<HTMLInputElement>('[data-forge-limit]')?.value) || 1,
-        ),
-      );
-      candidate.title =
-        dialog.querySelector<HTMLInputElement>('[data-forge-title]')?.value.trim() ||
-        candidate.title;
-      candidate.summary =
-        dialog.querySelector<HTMLTextAreaElement>('[data-forge-summary]')?.value.trim() ||
-        candidate.summary;
-      candidate.maxPlies = limit;
-      candidate.hints = (
-        dialog.querySelector<HTMLTextAreaElement>('[data-forge-hints]')?.value ?? ''
-      )
-        .split('\n')
-        .map((hint) => hint.trim())
-        .filter(Boolean);
-      const controlledPlayer =
-        dialog.querySelector<HTMLSelectElement>('[data-forge-player]')?.value === '1' ? 1 : 0;
-      candidate.initialState = { ...candidate.initialState, activePlayer: controlledPlayer };
-      candidate.successText ||= 'Misión de laboratorio completada.';
-      candidate.objective = forgeObjective(
-        dialog.querySelector<HTMLSelectElement>('[data-forge-objective]')?.value ?? 'win',
-        limit,
-        dialog.querySelector<HTMLInputElement>('[data-forge-piece]')?.value.trim() ?? '',
-        Number(dialog.querySelector<HTMLInputElement>('[data-forge-q]')?.value) || 0,
-        Number(dialog.querySelector<HTMLInputElement>('[data-forge-r]')?.value) || 0,
-        controlledPlayer,
-      );
-      const scenario = validateCustomScenario(candidate);
-      saveCustomScenario(scenario);
-      dialog.close();
-      startScenario(customScenarioDefinition(scenario));
-      showToast(`Misión “${scenario.title}” guardada en el catálogo local.`);
-    } catch (error) {
-      showDialogError(
-        error instanceof Error ? error.message : 'El escenario no es válido.',
-        editor,
-      );
-    }
-  });
-}
-
-function populateForgeFields(scenario: CustomScenario): void {
-  const objective = scenario.objective;
-  const setValue = (selector: string, value: string): void => {
-    const field = dialog.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-      selector,
-    );
-    if (field) field.value = value;
-  };
-  setValue('[data-forge-title]', scenario.title);
-  setValue('[data-forge-player]', String(scenario.initialState.activePlayer));
-  setValue('[data-forge-summary]', scenario.summary ?? '');
-  setValue('[data-forge-limit]', String(scenario.maxPlies ?? 20));
-  setValue('[data-forge-hints]', scenario.hints?.join('\n') ?? '');
-  if (
-    objective &&
-    ['win', 'win-in', 'survive', 'protect-piece', 'reach'].includes(objective.kind)
-  ) {
-    setValue('[data-forge-objective]', objective.kind);
-  }
-  if (objective?.kind === 'protect-piece' || objective?.kind === 'reach') {
-    setValue('[data-forge-piece]', objective.pieceId);
-  }
-  if (objective?.kind === 'reach') {
-    setValue('[data-forge-q]', String(objective.target.q));
-    setValue('[data-forge-r]', String(objective.target.r));
-  }
-}
-
-function forgeObjective(
-  kind: string,
-  limit: number,
-  pieceId: string,
-  q: number,
-  r: number,
-  controlledPlayer: 0 | 1,
-): ScenarioObjective {
-  if ((kind === 'protect-piece' || kind === 'reach') && !pieceId) {
-    throw new Error('Ese objetivo necesita el identificador de una unidad.');
-  }
-  if (kind === 'win-in') return { kind, maxPlies: limit };
-  if (kind === 'survive') return { kind, plies: limit, owner: controlledPlayer };
-  if (kind === 'protect-piece') return { kind, pieceId, plies: limit };
-  if (kind === 'reach') return { kind, pieceId, target: { q, r } };
-  return { kind: 'win' };
 }
 
 function customScenarioDefinition(scenario: CustomScenario): ScenarioDefinition {
@@ -3832,29 +3291,6 @@ function savePreferences(): void {
   persistPreferences(preferences);
 }
 
-function aiDoctrineCards(selected: AiPersonality): string {
-  return (['balanced', 'aggressive', 'guardian', 'ambush'] as const)
-    .map((personality) => {
-      const labels: Record<AiPersonality, string> = {
-        balanced: 'Equilibrada',
-        aggressive: 'Asaltante',
-        guardian: 'Guardián',
-        ambush: 'Emboscada',
-      };
-      return `<button type="button" class="doctrine-card ${personality === selected ? 'selected' : ''}" role="radio" aria-checked="${personality === selected}" data-ai-doctrine="${personality}"><strong>${labels[personality]}</strong><small>${escapeHtml(aiDoctrineDescription(personality))}</small></button>`;
-    })
-    .join('');
-}
-
-function aiDoctrineDescription(personality: AiPersonality): string {
-  return {
-    balanced: 'Combina material, seguridad y presión sin forzar un único plan.',
-    aggressive: 'Avanza, acepta intercambios y prioriza la Fortaleza rival.',
-    guardian: 'Refuerza su retaguardia y castiga ataques mal preparados.',
-    ambush: 'Busca líneas aéreas, geometrías ocultas y respuestas tácticas.',
-  }[personality];
-}
-
 function createMatchSeed(): number {
   const values = new Uint32Array(1);
   crypto.getRandomValues(values);
@@ -3881,14 +3317,6 @@ function accessibleCellId(hex: Hex): string {
   return `hex-cell-${hex.q + 5}-${hex.r + 5}`;
 }
 
-function uniqueDestinations(actions: GameAction[]): string[] {
-  const keys = new Set<string>();
-  for (const action of actions) {
-    if (action.kind === 'move') keys.add(hexKey(action.to));
-  }
-  return [...keys];
-}
-
 function pieceMonogram(piece: Piece): string {
   return {
     soldier: 'S',
@@ -3900,22 +3328,6 @@ function pieceMonogram(piece: Piece): string {
     airplane: 'A',
     antiAir: 'AA',
     fortress: 'F',
-  }[piece.type];
-}
-
-function pieceDescription(piece: Piece): string {
-  return {
-    soldier: 'Avanza una casilla en su arco frontal. Puede girar como acción exclusiva.',
-    capturer:
-      'Convierte una unidad rival adyacente sin desplazarse. Capturadores aliados protegen.',
-    medium: 'Mueve una casilla o dispara a distancia 2 en el arco del cañón.',
-    long: `Mueve una casilla o dispara exactamente a distancia 3. ${piece.type === 'long' && (piece.missilesRemaining ?? 2) === 0 ? 'Sin misiles: puede seguir moviéndose o convertirse en Soldado.' : 'Dispone de dos misiles para toda la partida; no se recargan.'}`,
-    fast: 'Recorre una línea libre sin límite y captura ocupando el destino.',
-    drone: 'Vuela hasta tres casillas, sobrevuela suelo y puede compartir hexágono.',
-    airplane:
-      'Vuela hasta dos casillas por su arco frontal o dispara al cono ofensivo. Puede atacar en kamikaze.',
-    antiAir: 'Escudo inmóvil: protege siete hexágonos, pulveriza aeronaves y bloquea disparos.',
-    fortress: 'Objetivo estratégico inmóvil. Su destrucción termina la partida.',
   }[piece.type];
 }
 

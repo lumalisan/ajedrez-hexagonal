@@ -54,6 +54,12 @@ try {
       await page.locator('.rules-close').click();
 
       await page.locator('[data-home-action="new"]').click();
+      await page.locator('[data-home-mode="machine"]').click();
+      await page.getByLabel('Dificultad', { exact: true }).waitFor({ state: 'visible' });
+      await audit('AI configuration / difficulty');
+      await page.getByLabel('Dificultad', { exact: true }).selectOption('expert');
+      await audit('AI configuration / expert');
+      await page.locator('[data-back-menu]').click();
       await page.locator('[data-home-mode="local"]').click();
       await page.locator('[data-start-free]').waitFor({ state: 'visible' });
       await audit('match configuration');
@@ -61,23 +67,37 @@ try {
       await page.locator('[data-initial-layout]').selectOption(profile.isMobile ? '4' : '3');
       await page.locator('[data-layout-preview]').waitFor({ state: 'visible' });
       await audit('custom match / initial layout preview');
+      await page.locator('[data-initial-layout]').selectOption('5');
+      await audit('custom match / extended layout preview');
       await page.locator('[data-preset="tactical"]').click();
       await page.locator('[data-start-free]').click();
       await page.locator('#game-canvas').waitFor({ state: 'visible' });
 
-      if (profile.isMobile) {
-        await page.locator('#command-sheet-toggle[aria-expanded="false"]').waitFor();
-        await audit('match / command panel collapsed');
-        await page.locator('#command-sheet-toggle').click();
-        await page.locator('#command-sheet-toggle[aria-expanded="true"]').waitFor();
-        await audit('match / command panel expanded');
-      } else {
-        await audit('match / command panel visible');
-      }
+      await page.locator('#command-panel').waitFor({ state: 'hidden' });
+      await audit('match / no selection');
+      await page.locator('#game-canvas').focus();
+      await page.keyboard.press('s');
+      await page.keyboard.press('s');
+      await page.keyboard.press('Enter');
+      await page.locator('#command-panel').waitFor({ state: 'visible' });
+      await audit('match / selected unit');
+      await page.keyboard.press('w');
+      await page.keyboard.press('Enter');
+      await page.locator('#pending-card').waitFor({ state: 'visible' });
+      await audit('match / pending order');
+      await page.locator('#cancel-selection').click();
+      await page.locator('#log-toggle').click();
+      await page.locator('#battle-log-panel').waitFor({ state: 'visible' });
+      await audit('match / battle log');
+      await page.locator('#close-battle-log').click();
 
       await page.locator('#settings-button').click();
       await page.locator('.accessibility-settings').waitFor({ state: 'visible' });
       await audit('settings');
+      await page.locator('[data-dialog-close]').click();
+      await page.locator('#new-game-button').click();
+      await page.locator('[data-confirm-abandon]').waitFor({ state: 'visible' });
+      await audit('abandon confirmation');
     } finally {
       await context.close();
     }

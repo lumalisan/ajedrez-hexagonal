@@ -1,4 +1,10 @@
-import { applyAction, getAllLegalActions, getFiringRangeCells, getPiece } from './engine';
+import {
+  applyAction,
+  getAllLegalActions,
+  getFiringRangeCells,
+  getPiece,
+  type ActionResolutionRules,
+} from './engine';
 import { actionKey } from './action-identity';
 import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
 import type {
@@ -14,6 +20,7 @@ import type {
 const MATE_SCORE = 1_000_000;
 const TIMEOUT_CHECK_INTERVAL = 64;
 const MAX_SEARCH_MOVES = 24;
+const MAX_ROOT_SEARCH_MOVES = 40;
 
 const PIECE_VALUE: Record<PieceType, number> = {
   soldier: 100,
@@ -34,6 +41,10 @@ interface SearchContext {
   nodes: number;
   table: Map<string, Transposition>;
   killers: Map<number, string[]>;
+  evaluation: WeakMap<GameState, number>;
+  fortressThreats: WeakMap<GameState, Map<Player, boolean>>;
+  variationWindow: number;
+  resolutionRules?: Readonly<ActionResolutionRules>;
 }
 
 interface Transposition {
@@ -45,6 +56,7 @@ interface Transposition {
 
 interface OrderedAction {
   action: GameAction;
+  key: string;
   state: GameState;
   tactical: boolean;
   score: number;
@@ -57,6 +69,7 @@ export interface ActionChoiceOptions {
   seed?: number;
   personality?: AiPersonality;
   difficulty?: AiDifficulty;
+  resolutionRules?: Readonly<ActionResolutionRules>;
 }
 
 export interface SearchMetadata {
@@ -160,7 +173,17 @@ export function chooseMachineAction(
 
   const player = state.activePlayer;
   const personality = options.personality ?? 'balanced';
-  const ordered = orderActions(state, actions, player, personality, 0);
+  const ordered = orderActions(
+    state,
+    actions,
+    player,
+    personality,
+    0,
+    undefined,
+    [],
+    undefined,
+    options.resolutionRules,
+  );
   const random = createSeededRandom(seedForState(options.seed, state));
   return chooseNearBest(
     ordered.map(({ action, score }) => ({ action, score })),
@@ -176,6 +199,7 @@ export interface SearchOptions {
   seed?: number;
   personality?: AiPersonality;
   difficulty?: AiDifficulty;
+  resolutionRules?: Readonly<ActionResolutionRules>;
   /** Called after each completed iteration with a read-only search snapshot. */
   onProgress?: (metadata: Readonly<SearchMetadata>) => void;
 }
@@ -221,18 +245,29 @@ export function searchMachineActionWithMetadata(
     nodes: 0,
     table: new Map(),
     killers: new Map(),
+    evaluation: new WeakMap(),
+    fortressThreats: new WeakMap(),
+    variationWindow: VARIATION[options.difficulty ?? 'expert'].window,
+    resolutionRules: options.resolutionRules,
   };
-  const initial = orderActions(state, actions, context.rootPlayer, context.personality, 0);
+  const initial = orderActions(
+    state,
+    actions,
+    context.rootPlayer,
+    context.personality,
+    0,
+    undefined,
+    [],
+    context,
+  );
   let ranked: ScoredAction[] = initial.map(({ action, score }) => ({ action, score }));
-  let preferred = actionKey(ranked[0]?.action ?? actions[0]);
   let completedDepth = 0;
   let timedOut = false;
 
   for (let depth = 1; depth <= requestedDepth; depth += 1) {
     try {
-      const result = searchRoot(state, actions, depth, context, preferred);
+      const result = searchRoot(initial, ranked, depth, context);
       ranked = result.ranked;
-      preferred = actionKey(ranked[0].action);
       completedDepth = depth;
       options.onProgress?.({
         requestedDepth,
@@ -268,21 +303,25 @@ export function searchMachineActionWithMetadata(
 }
 
 function searchRoot(
-  state: GameState,
-  actions: GameAction[],
+  initial: OrderedAction[],
+  previous: ScoredAction[],
   depth: number,
   context: SearchContext,
-  preferred: string,
 ): { ranked: ScoredAction[] } {
   checkTime(context, true);
-  const ordered = orderActions(
-    state,
-    actions,
-    context.rootPlayer,
-    context.personality,
-    0,
-    preferred,
-  );
+  const order = new Map(previous.map(({ action }, index) => [actionKey(action), index]));
+  // The first complete iteration checks every order with tactical replies.
+  // Deeper iterations concentrate on those results, retaining all forcing moves
+  // and the best continuation for each unit instead of spending the clock on
+  // dozens of equivalent tank facings.
+  const seenPieces = new Set<string>();
+  const ordered = [...initial]
+    .sort((left, right) => (order.get(left.key) ?? Infinity) - (order.get(right.key) ?? Infinity))
+    .filter((candidate, index) => {
+      const firstForPiece = !seenPieces.has(candidate.action.pieceId);
+      seenPieces.add(candidate.action.pieceId);
+      return depth === 1 || candidate.tactical || firstForPiece || index < MAX_ROOT_SEARCH_MOVES;
+    });
   const ranked: ScoredAction[] = [];
   let alpha = Number.NEGATIVE_INFINITY;
 
@@ -291,7 +330,10 @@ function searchRoot(
     const score = alphaBeta(
       candidate.state,
       depth - 1,
-      alpha,
+      // Fail-low values are upper bounds, not exact ties. Keep the complete
+      // variety window open so an inferior bound can never win the final sort
+      // or masquerade as a near-equivalent random choice.
+      alpha - context.variationWindow - 1,
       Number.POSITIVE_INFINITY,
       context,
       1,
@@ -330,7 +372,7 @@ function alphaBeta(
   }
 
   const actions = getAllLegalActions(state);
-  if (!actions.length) return evaluateState(state, context.rootPlayer, context.personality);
+  if (!actions.length) return evaluateSearchState(state, context);
   const maximizing = state.activePlayer === context.rootPlayer;
   const killers = context.killers.get(ply) ?? [];
   const candidates = selectSearchActions(
@@ -347,6 +389,7 @@ function alphaBeta(
     ply,
     cached?.actionKey,
     killers,
+    context,
   );
   let bestScore = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
   let bestActionKey: string | undefined;
@@ -391,18 +434,24 @@ function quiescence(
   if (state.outcome) return terminalScore(state, context.rootPlayer, ply);
 
   const maximizing = state.activePlayer === context.rootPlayer;
-  let value = evaluateState(state, context.rootPlayer, context.personality);
-  if (maximizing) {
+  let value = evaluateSearchState(state, context);
+  if (remaining <= 0) return value;
+
+  // A threatened last Fortress point is the equivalent of check: passing is
+  // not a legal substitute for a defense, and a quiet block must be searched.
+  const mustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
+  if (mustDefend) {
+    value = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+  } else if (maximizing) {
     if (value >= beta) return value;
     alpha = Math.max(alpha, value);
   } else {
     if (value <= alpha) return value;
     beta = Math.min(beta, value);
   }
-  if (remaining <= 0) return value;
 
-  const tacticalActions = getAllLegalActions(state).filter((action) =>
-    isTacticalAction(state, action),
+  const tacticalActions = getAllLegalActions(state).filter(
+    (action) => mustDefend || isTacticalAction(state, action),
   );
   const tactical = orderActions(
     state,
@@ -410,15 +459,54 @@ function quiescence(
     context.rootPlayer,
     context.personality,
     ply,
-  ).filter((candidate) => candidate.tactical);
+    undefined,
+    [],
+    context,
+  ).filter((candidate) => mustDefend || candidate.tactical);
   for (const candidate of tactical) {
-    const score = quiescence(candidate.state, alpha, beta, context, ply + 1, remaining - 1);
+    const leavesFortressLost =
+      mustDefend &&
+      !candidate.state.outcome &&
+      hasImmediateFortressWin(candidate.state, otherPlayer(state.activePlayer), context);
+    const score = leavesFortressLost
+      ? maximizing
+        ? -MATE_SCORE + ply + 2
+        : MATE_SCORE - ply - 2
+      : quiescence(candidate.state, alpha, beta, context, ply + 1, remaining - 1);
     value = maximizing ? Math.max(value, score) : Math.min(value, score);
     if (maximizing) alpha = Math.max(alpha, value);
     else beta = Math.min(beta, value);
     if (alpha >= beta) break;
   }
   return value;
+}
+
+function hasImmediateFortressWin(
+  state: GameState,
+  attacker: Player,
+  context: SearchContext,
+): boolean {
+  const fortress = fortressOf(state, otherPlayer(attacker));
+  if (!fortress || fortress.hp !== 1 || state.outcome) return false;
+  const cached = context.fortressThreats.get(state)?.get(attacker);
+  if (cached !== undefined) return cached;
+  const attackingState =
+    state.activePlayer === attacker ? state : { ...state, activePlayer: attacker };
+  const threatened = getAllLegalActions(attackingState).some((action) => {
+    if (!(
+      ('targetId' in action && action.targetId === fortress.id) ||
+      ('to' in action && action.to && hexKey(action.to) === hexKey(fortress.position))
+    ))
+      return false;
+    const result = applyAction(attackingState, action, context.resolutionRules);
+    return (
+      result.ok && result.state.outcome?.type === 'win' && result.state.outcome.winner === attacker
+    );
+  });
+  const threats = context.fortressThreats.get(state) ?? new Map<Player, boolean>();
+  threats.set(attacker, threatened);
+  context.fortressThreats.set(state, threats);
+  return threatened;
 }
 
 function orderActions(
@@ -429,29 +517,46 @@ function orderActions(
   ply: number,
   preferred?: string,
   killers: string[] = [],
+  context?: SearchContext,
+  resolutionRules: Readonly<ActionResolutionRules> | undefined = context?.resolutionRules,
 ): OrderedAction[] {
   const maximizing = state.activePlayer === rootPlayer;
   const weights = PERSONALITY_WEIGHTS[personality];
   return actions
     .map((action) => {
-      const result = applyAction(state, action);
+      if (context && ply > 0) checkTime(context);
+      const result = applyAction(state, action, resolutionRules);
       if (!result.ok) return null;
       const key = actionKey(action);
       const tacticalScore = tacticalDelta(state, result.state, state.activePlayer);
-      let score = evaluateState(result.state, rootPlayer, personality);
+      let score = context
+        ? evaluateSearchState(result.state, context)
+        : evaluateState(result.state, rootPlayer, personality);
       score += (maximizing ? tacticalScore : -tacticalScore) * weights.tactics;
       if (key === preferred) score += maximizing ? 10_000_000 : -10_000_000;
       else if (killers.includes(key)) score += maximizing ? 500_000 : -500_000;
       score += (maximizing ? 1 : -1) * stableActionBias(action, ply);
       return {
         action,
+        key,
         state: result.state,
-        tactical: tacticalScore > 0 || Boolean(result.state.outcome),
+        tactical:
+          result.events.some((event) =>
+            ['destroy', 'convert', 'fortressDamage', 'intercept'].includes(event.type),
+          ) || Boolean(result.state.outcome),
         score,
       };
     })
     .filter((candidate): candidate is OrderedAction => candidate !== null)
     .sort((left, right) => (maximizing ? right.score - left.score : left.score - right.score));
+}
+
+function evaluateSearchState(state: GameState, context: SearchContext): number {
+  const cached = context.evaluation.get(state);
+  if (cached !== undefined) return cached;
+  const score = evaluateState(state, context.rootPlayer, context.personality);
+  context.evaluation.set(state, score);
+  return score;
 }
 
 function evaluateState(state: GameState, player: Player, personality: AiPersonality): number {
@@ -468,7 +573,7 @@ function evaluateState(state: GameState, player: Player, personality: AiPersonal
     const sign = piece.owner === player ? 1 : -1;
     const targetFortress = piece.owner === player ? enemyFortress : ownFortress;
     const homeFortress = piece.owner === player ? ownFortress : enemyFortress;
-    score += sign * PIECE_VALUE[piece.type] * weights.material;
+    score += sign * materialValue(piece) * weights.material;
 
     if (targetFortress) {
       const advance = BOARD_RADIUS * 2 + 1 - hexDistance(piece.position, targetFortress.position);
@@ -483,8 +588,11 @@ function evaluateState(state: GameState, player: Player, personality: AiPersonal
     score += sign * supportScore(state, piece) * weights.support;
     if (weights.ambushPressure > 0)
       score += sign * ambushPressureScore(state, piece) * weights.ambushPressure;
-    if (piece.type === 'airplane')
-      score += sign * airplanePressureScore(state, piece) * weights.airPressure;
+    if (piece.type === 'airplane' || piece.type === 'medium' || piece.type === 'long')
+      score +=
+        sign *
+        firingPressureScore(state, piece) *
+        (piece.type === 'airplane' ? weights.airPressure : 1);
   }
   return score;
 }
@@ -503,7 +611,7 @@ function selectSearchActions(
   if (actions.length <= MAX_SEARCH_MOVES) return actions;
   const forced = new Set(forcedKeys);
   const tactical: GameAction[] = [];
-  const quiet: Array<{ action: GameAction; score: number }> = [];
+  const quiet: Array<{ action: GameAction; score: number; group: string }> = [];
   const enemyFortress = fortressOf(state, otherPlayer(state.activePlayer));
   const ownFortress = fortressOf(state, state.activePlayer);
   const weights = PERSONALITY_WEIGHTS[personality];
@@ -515,6 +623,7 @@ function selectSearchActions(
       continue;
     }
     let score = 0;
+    const actor = getPiece(state, action.pieceId);
     if ('to' in action && action.to) {
       score += enemyFortress
         ? (BOARD_RADIUS * 2 - hexDistance(action.to, enemyFortress.position)) * 20 * weights.advance
@@ -524,16 +633,39 @@ function selectSearchActions(
         : 0;
       score -= hexDistance(action.to, { q: 0, r: 0 }) * weights.center;
     }
-    if (action.kind === 'orient' || action.kind === 'rotate') score -= 80;
-    if (action.kind === 'transform') score -= 45;
+    if (action.kind === 'orient' || action.kind === 'rotate') score -= 20;
+    if (action.kind === 'transform')
+      score -= actor ? Math.max(0, materialValue(actor) - PIECE_VALUE.soldier) : 45;
+    if (actor?.type === 'medium' && (action.kind === 'move' || action.kind === 'orient')) {
+      score += firingPressureScore(state, actor, {
+        position: action.kind === 'move' ? action.to : actor.position,
+        cannon: action.cannon,
+      });
+    }
     score += stableActionBias(action, state.ply);
-    quiet.push({ action, score });
+    const destination = 'to' in action && action.to ? hexKey(action.to) : '-';
+    quiet.push({ action, score, group: `${action.pieceId}:${action.kind}:${destination}` });
   }
   quiet.sort((left, right) => right.score - left.score);
-  return [
-    ...tactical,
-    ...quiet.slice(0, Math.max(0, MAX_SEARCH_MOVES - tactical.length)).map(({ action }) => action),
-  ];
+  const selected: GameAction[] = [...tactical];
+  const groups = new Set<string>();
+  const pieces = new Set<string>();
+  // First preserve a quiet option for each unit. Then fill with distinct
+  // destinations, choosing useful cannon facings before applying the cap.
+  for (const candidate of quiet) {
+    if (pieces.has(candidate.action.pieceId)) continue;
+    if (selected.length >= MAX_SEARCH_MOVES) break;
+    pieces.add(candidate.action.pieceId);
+    groups.add(candidate.group);
+    selected.push(candidate.action);
+  }
+  for (const candidate of quiet) {
+    if (selected.length >= MAX_SEARCH_MOVES) break;
+    if (groups.has(candidate.group)) continue;
+    groups.add(candidate.group);
+    selected.push(candidate.action);
+  }
+  return selected;
 }
 
 function isTacticalAction(state: GameState, action: GameAction): boolean {
@@ -564,10 +696,16 @@ function tacticalDelta(before: GameState, after: GameState, mover: Player): numb
   const afterIds = new Set(after.pieces.map((piece) => piece.id));
   let score = before.pieces
     .filter((piece) => piece.owner === enemy && !afterIds.has(piece.id))
-    .reduce((total, piece) => total + PIECE_VALUE[piece.type] * 12, 0);
+    .reduce((total, piece) => total + materialValue(piece) * 12, 0);
   score -= before.pieces
     .filter((piece) => piece.owner === mover && !afterIds.has(piece.id))
-    .reduce((total, piece) => total + PIECE_VALUE[piece.type] * 12, 0);
+    .reduce((total, piece) => total + materialValue(piece) * 12, 0);
+  for (const piece of after.pieces) {
+    const previous = getPiece(before, piece.id);
+    if (previous && previous.owner !== piece.owner) {
+      score += (piece.owner === mover ? 1 : -1) * materialValue(piece) * 24;
+    }
+  }
   const oldFortress = fortressOf(before, enemy);
   const newFortress = fortressOf(after, enemy);
   score += ((oldFortress?.hp ?? 0) - (newFortress?.hp ?? 0)) * 90_000;
@@ -586,23 +724,40 @@ function supportScore(state: GameState, piece: Piece): number {
   return score;
 }
 
-function airplanePressureScore(
+function firingPressureScore(
   state: GameState,
-  airplane: Extract<Piece, { type: 'airplane' }>,
+  piece: Extract<Piece, { type: 'airplane' | 'medium' | 'long' }>,
+  preview: Parameters<typeof getFiringRangeCells>[2] = {},
 ): number {
-  const firingCells = new Set(getFiringRangeCells(state, airplane.id).map(hexKey));
+  // Skip expensive long-range shield ray checks when there is no target at all.
+  if (
+    piece.type === 'long' &&
+    !state.pieces.some(
+      (target) =>
+        target.owner !== piece.owner && hexDistance(piece.position, target.position) === 3,
+    )
+  )
+    return 0;
+  const firingCells = new Set(getFiringRangeCells(state, piece.id, preview).map(hexKey));
   return state.pieces
     .filter(
       (target) =>
-        target.owner !== airplane.owner &&
+        target.owner !== piece.owner &&
         target.type !== 'antiAir' &&
         firingCells.has(hexKey(target.position)),
     )
     .reduce(
       (score, target) =>
-        score + (target.type === 'fortress' ? 80 : Math.max(5, PIECE_VALUE[target.type] / 20)),
+        score +
+        (target.type === 'fortress' ? (target.hp === 1 ? 240 : 100) : materialValue(target) * 0.12),
       0,
     );
+}
+
+function materialValue(piece: Piece): number {
+  return piece.type === 'long'
+    ? 180 + 110 * (piece.missilesRemaining ?? 2)
+    : PIECE_VALUE[piece.type];
 }
 
 function ambushPressureScore(state: GameState, piece: Piece): number {
@@ -663,11 +818,12 @@ function positionKey(state: GameState): string {
       const facing = piece.type === 'soldier' || piece.type === 'airplane' ? piece.facing : '-';
       const cannon = piece.type === 'medium' ? piece.cannon : '-';
       const hp = piece.type === 'fortress' ? piece.hp : '-';
-      return `${piece.id}:${piece.owner}:${piece.type}:${piece.position.q},${piece.position.r}:${facing}:${cannon}:${hp}`;
+      const ammunition = piece.type === 'long' ? (piece.missilesRemaining ?? 2) : '-';
+      return `${piece.id}:${piece.owner}:${piece.type}:${piece.position.q},${piece.position.r}:${facing}:${cannon}:${hp}:${ammunition}`;
     })
     .sort()
     .join('|');
-  return `${state.activePlayer}:${state.firstFortressDamageBy ?? '-'}:${repetitionHash(state)}:${pieces}`;
+  return `${state.activePlayer}:${state.firstFortressDamageBy ?? '-'}:${state.noProgressPlyCount ?? 0}:${repetitionHash(state)}:${pieces}`;
 }
 
 function repetitionHash(state: GameState): number {

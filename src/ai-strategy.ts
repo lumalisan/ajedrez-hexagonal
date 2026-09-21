@@ -1,5 +1,6 @@
 import { chooseMachineAction, searchMachineAction } from './ai';
 import type { SearchMetadata } from './ai';
+import { resolutionRulesForConfig } from './match-record';
 import type { AiDifficulty, GameAction, GameState, MatchConfig } from './types';
 
 export interface AiBudget {
@@ -20,13 +21,15 @@ const DIFFICULTY: Record<AiDifficulty, { depth: number; maxMs: number }> = {
   expert: { depth: 7, maxMs: 5_000 },
 };
 
-export function difficultyBudget(difficulty: AiDifficulty, mobile = false): number {
-  const base = DIFFICULTY[difficulty].maxMs;
-  return mobile ? Math.round(base * 0.65) : base;
+const MAIN_THREAD_MAX_MS = 400;
+
+export function difficultyBudget(difficulty: AiDifficulty): number {
+  return DIFFICULTY[difficulty].maxMs;
 }
 
 export class WorkerAiStrategy implements AiStrategy {
   #worker: Worker | null = null;
+  #cancelSearch: (() => void) | null = null;
   #requestId = 0;
 
   async chooseAction(
@@ -34,59 +37,101 @@ export class WorkerAiStrategy implements AiStrategy {
     config: MatchConfig,
     budget: AiBudget,
   ): Promise<GameAction | null> {
+    if (budget.signal?.aborted) return null;
+    this.dispose();
     const participant = config.participants[state.activePlayer];
     const difficulty = participant.difficulty ?? 'recruit';
     const personality = participant.personality ?? 'balanced';
     const seed = participant.seed;
-    const choiceOptions = { difficulty, personality, seed };
+    const choiceOptions = {
+      difficulty,
+      personality,
+      seed,
+      resolutionRules: resolutionRulesForConfig(config),
+    };
     if (difficulty === 'recruit') return chooseMachineAction(state, choiceOptions);
     const settings = DIFFICULTY[difficulty];
-    if (typeof Worker === 'undefined')
-      return searchMachineAction(state, {
+    const budgetMs = Math.min(settings.maxMs, budget.maxMs);
+    const searchLocally = (): GameAction | null => {
+      if (budget.signal?.aborted) return null;
+      const action = searchMachineAction(state, {
         depth: settings.depth,
-        budgetMs: Math.min(settings.maxMs, budget.maxMs),
+        budgetMs: Math.min(budgetMs, MAIN_THREAD_MAX_MS),
         ...choiceOptions,
         onProgress: budget.onProgress,
       });
-    if (budget.signal?.aborted) return null;
-    this.dispose();
-    const worker = new Worker(new URL('./ai-worker.ts', import.meta.url), { type: 'module' });
+      return budget.signal?.aborted ? null : action;
+    };
+    if (typeof Worker === 'undefined') return searchLocally();
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./ai-worker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      return searchLocally();
+    }
     this.#worker = worker;
     const id = ++this.#requestId;
-    return new Promise<GameAction | null>((resolve) => {
+    return new Promise<GameAction | null>((resolve, reject) => {
       let settled = false;
+      const stopWorker = (): void => {
+        worker.removeEventListener('message', onMessage);
+        worker.removeEventListener('error', onError);
+        worker.removeEventListener('messageerror', onError);
+        worker.terminate();
+        if (this.#worker === worker) this.#worker = null;
+      };
+      const cleanup = (): void => {
+        budget.signal?.removeEventListener('abort', onAbort);
+        if (this.#cancelSearch === onAbort) this.#cancelSearch = null;
+        stopWorker();
+      };
       const finish = (action: GameAction | null): void => {
         if (settled) return;
         settled = true;
-        budget.signal?.removeEventListener('abort', onAbort);
-        if (this.#worker === worker) this.dispose();
+        cleanup();
         resolve(action);
       };
       const onAbort = (): void => finish(null);
-      budget.signal?.addEventListener('abort', onAbort, { once: true });
-      worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
-        if (event.data.id !== id) return;
+      const onMessage = (event: MessageEvent<WorkerResponse>): void => {
+        if (settled || event.data.id !== id) return;
         if (event.data.type === 'progress') {
           budget.onProgress?.(event.data.metadata);
           return;
         }
         budget.onProgress?.(event.data.metadata);
         finish(event.data.action);
-      });
-      worker.addEventListener('error', () => finish(chooseMachineAction(state, choiceOptions)), {
-        once: true,
-      });
-      worker.postMessage({
-        id,
-        state,
-        depth: settings.depth,
-        budgetMs: Math.min(settings.maxMs, budget.maxMs),
-        ...choiceOptions,
-      });
+      };
+      const onError = (): void => {
+        if (settled) return;
+        stopWorker();
+        try {
+          finish(searchLocally());
+        } catch (error) {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        }
+      };
+      this.#cancelSearch = onAbort;
+      budget.signal?.addEventListener('abort', onAbort, { once: true });
+      worker.addEventListener('message', onMessage);
+      worker.addEventListener('error', onError, { once: true });
+      worker.addEventListener('messageerror', onError, { once: true });
+      if (budget.signal?.aborted) {
+        onAbort();
+        return;
+      }
+      try {
+        worker.postMessage({ id, state, depth: settings.depth, budgetMs, ...choiceOptions });
+      } catch {
+        onError();
+      }
     });
   }
 
   dispose(): void {
+    this.#cancelSearch?.();
     this.#worker?.terminate();
     this.#worker = null;
   }
