@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import {
   ACHIEVEMENTS,
@@ -145,22 +146,17 @@ export function AchievementsDialog() {
                 ? 'Has desbloqueado todos los logros. El tablero sigue teniendo sorpresas.'
                 : 'Completa una partida o un ejercicio de la Academia para estrenar tu palmarés.'}
             </p>
-            <button type="button" className="secondary-button" onClick={() => setFilter('all')}>
+            <Button type="button" variant="secondary" onClick={() => setFilter('all')}>
               Ver todos los logros
-            </button>
+            </Button>
           </div>
         )}
       </div>
       <footer className="achievements-footer">
         <span>Tu progreso se guarda en este navegador.</span>
-        <button
-          type="button"
-          className="secondary-button"
-          data-dialog-close
-          onClick={commands.closeDialog}
-        >
+        <Button type="button" variant="secondary" data-dialog-close onClick={commands.closeDialog}>
           {snapshot.homeView ? 'Volver al menú' : 'Volver al juego'}
-        </button>
+        </Button>
       </footer>
     </section>
   );

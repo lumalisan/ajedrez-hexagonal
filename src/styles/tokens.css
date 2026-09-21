@@ -21,4 +21,12 @@
   --threat: #ffd166;
   --radius: 16px;
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  --on-accent: #06231f;
+  --control-radius: 9px;
+  --control-height: 44px;
+  --focus-ring: var(--move);
+  --focus-width: 2px;
+  --focus-offset: 3px;
+  --duration-fast: 150ms;
+  --elevation-menu: 0 18px 36px rgb(0 0 0 / 40%);
 }

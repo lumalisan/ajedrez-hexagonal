@@ -1,0 +1,8 @@
+/* This entry is only served by the development catalog, outside the game's fixed shell. */
+body {
+  overflow: auto;
+}
+
+.ds-preview {
+  min-height: 100dvh;
+}

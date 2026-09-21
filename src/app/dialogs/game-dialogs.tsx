@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import {
   loadAcademyProgress,
@@ -103,14 +104,14 @@ function ModeDialog({ initial }: { initial: boolean }) {
       </div>
       {!initial && (
         <div className="dialog-actions">
-          <button
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             data-dialog-close
             onClick={commands.closeDialog}
           >
             Cancelar
-          </button>
+          </Button>
         </div>
       )}
     </>
@@ -236,9 +237,9 @@ function AcademyDialog() {
           </section>
         ))}
         <div className="dialog-actions academy-actions">
-          <button type="button" className="secondary-button" data-back-menu onClick={goBack}>
+          <Button type="button" variant="secondary" data-back-menu onClick={goBack}>
             Volver al menú
-          </button>
+          </Button>
         </div>
       </div>
     </div>

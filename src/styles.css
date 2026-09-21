@@ -6,6 +6,7 @@
 @import './styles/tokens.css' layer(base);
 @import './styles/game.css' layer(components);
 @import './styles/achievements.css' layer(components);
+@import './styles/design-system.css' layer(components);
 
 /* Utilities share the game's tokens, including its high-contrast preference. */
 @theme inline {
@@ -21,10 +22,12 @@
   --color-amber: var(--amber);
   --color-accent: var(--move);
   --color-danger: var(--danger);
+  --color-on-accent: var(--on-accent);
   --font-ui: var(--font-body);
   --font-heading: var(--font-display);
-  --radius-control: 9px;
-  --shadow-dropdown: 0 18px 36px rgb(0 0 0 / 40%);
+  --spacing-control: var(--control-height);
+  --radius-control: var(--control-radius);
+  --shadow-dropdown: var(--elevation-menu);
 }
 
 @layer components {

@@ -25,6 +25,7 @@ pnpm test:types
 pnpm lint
 pnpm test
 pnpm test:coverage
+pnpm test:design-system
 pnpm test:ui
 pnpm test:a11y
 ```
@@ -46,6 +47,8 @@ La escena utiliza objetos persistentes de PixiJS y renderizado bajo demanda: no 
 Los controles comunes utilizan Tailwind CSS 4, integrado con `@tailwindcss/vite`, y los tokens visuales existentes. `src/styles.css` organiza las capas y expone esos tokens con `@theme inline`; `src/styles/tokens.css` conserva los valores del tema y `src/styles/game.css` contiene los estilos específicos del juego. No se carga Preflight, para conservar la base visual actual. El tablero, las animaciones y los estilos específicos siguen utilizando CSS propio; no se ha convertido cada regla existente en utilidades.
 
 Los selectores comparten `GameSelect`, basado en React Select con `unstyled` y `classNames` de Tailwind. Sus listas cortas no ofrecen búsqueda ni borrado del valor, mantienen etiquetas y mensajes en español y muestran el foco. Dentro de un diálogo, el menú se monta en el propio diálogo para conservar la interacción modal y evitar recortes.
+
+El [sistema de diseño](docs/design-system.md) reúne botones, campos, validación y controles compuestos con Radix UI en `src/app/components/ui/`. Los componentes son independientes de la sesión de juego y comparten tokens, foco y preferencias de accesibilidad. Con `pnpm dev`, el [catálogo de desarrollo](http://localhost:5173/design-system.html) permite probar sus estados e interacciones; no se incluye como entrada del build de producción. `pnpm test:design-system` comprueba el catálogo en navegador.
 
 La API y el multijugador online quedan para una etapa posterior. Esta migración no añade Nitro ni cambia el formato de guardados.
 
@@ -117,6 +120,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - `src/app/game-context.tsx`: contexto de sesión y suscripción de los componentes React.
 - `src/app/app.tsx`, `src/app/panels.tsx` y `src/app/dialogs/`: pantallas, paneles, configuración, manual y diálogos en React.
 - `src/app/components/game-select.tsx`: selector compartido con React Select, accesibilidad y estilos mediante Tailwind.
+- `src/app/components/ui/` y `docs/design-system.md`: controles reutilizables, contratos de composición y guía del sistema de diseño.
 - `src/app/board-canvas.tsx`: ciclo de vida del renderer e interacción con el tablero.
 - `src/styles.css`, `src/styles/tokens.css` y `src/styles/game.css`: entrada y capas de Tailwind, tokens visuales y CSS específico del juego.
 - `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.

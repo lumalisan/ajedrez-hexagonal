@@ -1,0 +1,63 @@
+/* Cross-cutting behaviour that must survive contextual game selectors. */
+.preset-card[data-slot='radio-group-item'] strong {
+  padding-right: 0;
+}
+
+.ds-control:focus-visible,
+.ds-input:focus-visible,
+.ds-textarea:focus-visible,
+.ds-checkbox:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.ds-control,
+.ds-input,
+.ds-textarea,
+.ds-checkbox {
+  transition-property: color, background-color, border-color;
+  transition-duration: var(--duration-fast);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-control,
+  .ds-input,
+  .ds-textarea,
+  .ds-checkbox {
+    transition: none;
+    animation: none;
+  }
+}
+
+.reduced-motion .ds-control,
+.reduced-motion .ds-input,
+.reduced-motion .ds-textarea,
+.reduced-motion .ds-checkbox {
+  transition: none;
+  animation: none;
+}
+
+@media (forced-colors: active) {
+  .ds-control,
+  .ds-input,
+  .ds-textarea,
+  .ds-checkbox-box {
+    border-color: ButtonText;
+  }
+
+  .ds-control:focus-visible,
+  .ds-input:focus-visible,
+  .ds-textarea:focus-visible,
+  .ds-checkbox:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .ds-control:disabled,
+  .ds-input:disabled,
+  .ds-textarea:disabled,
+  .ds-checkbox:disabled {
+    color: GrayText;
+    border-color: GrayText;
+    opacity: 1;
+  }
+}

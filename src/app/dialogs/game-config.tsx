@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { PIECE_NAMES } from '../../engine';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
 import { MATCH_PRESETS, createPresetConfig, type MatchPresetId } from '../../match-presets';
@@ -7,6 +7,8 @@ import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../
 import type { AiDifficulty, FortressHp } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
+import { Button, IconButton } from '../components/ui/button';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { useGame } from '../game-context';
 
 type MatchClockValue = '' | 300 | 600 | 1200;
@@ -39,6 +41,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('tactical');
   const [clock, setClock] = useState<MatchClockValue>('');
+  const presetId = useId();
   const customOptionsRef = useRef<HTMLDivElement>(null);
   const layout = INITIAL_LAYOUTS.find((candidate) => candidate.id === initialLayout)!;
   const pieces = createInitialPieces(fortressHp, initialLayout).filter(
@@ -94,35 +97,44 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
 
   return (
     <>
-      <button
-        type="button"
+      <IconButton
         className="config-close"
         data-dialog-close
-        aria-label="Cerrar configuración"
+        label="Cerrar configuración"
         onClick={commands.closeDialog}
       >
         ×
-      </button>
+      </IconButton>
       <span className="eyebrow">NUEVA PARTIDA</span>
       <h2>{mode === 'machine' ? 'Individual vs. IA' : 'Dos jugadores'}</h2>
       <p>Elige el ritmo primero. Siempre podrás afinar los detalles con la opción personalizada.</p>
-      <div className="preset-grid" role="radiogroup" aria-label="Ritmo de partida">
+      <RadioGroup
+        className="preset-grid"
+        aria-label="Ritmo de partida"
+        value={preset}
+        onValueChange={(value) => {
+          const selected = MATCH_PRESETS.find((candidate) => candidate.id === value);
+          if (selected) selectPreset(selected.id);
+        }}
+      >
         {MATCH_PRESETS.map((candidate) => (
-          <button
+          <RadioGroupItem
             key={candidate.id}
-            type="button"
-            className={`preset-card ${candidate.id === preset ? 'selected' : ''}`}
-            role="radio"
-            aria-checked={candidate.id === preset}
+            value={candidate.id}
+            variant="card"
+            className="preset-card"
+            aria-labelledby={`${presetId}-${candidate.id}-name`}
+            aria-describedby={`${presetId}-${candidate.id}-duration ${presetId}-${candidate.id}-description`}
             data-preset={candidate.id}
-            onClick={() => selectPreset(candidate.id)}
           >
-            <span className="preset-badge">{candidate.duration}</span>
-            <strong>{candidate.name}</strong>
-            <small>{candidate.description}</small>
-          </button>
+            <span id={`${presetId}-${candidate.id}-duration`} className="preset-badge">
+              {candidate.duration}
+            </span>
+            <strong id={`${presetId}-${candidate.id}-name`}>{candidate.name}</strong>
+            <small id={`${presetId}-${candidate.id}-description`}>{candidate.description}</small>
+          </RadioGroupItem>
         ))}
-      </div>
+      </RadioGroup>
       <div
         ref={customOptionsRef}
         className="match-options"
@@ -221,12 +233,12 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
         </p>
       </div>
       <div className="dialog-actions">
-        <button type="button" className="secondary-button" data-back-menu onClick={goBack}>
+        <Button data-back-menu onClick={goBack}>
           Volver
-        </button>
-        <button type="button" className="confirm-button" data-start-free onClick={startMatch}>
+        </Button>
+        <Button variant="primary" data-start-free onClick={startMatch}>
           Crear partida
-        </button>
+        </Button>
       </div>
     </>
   );

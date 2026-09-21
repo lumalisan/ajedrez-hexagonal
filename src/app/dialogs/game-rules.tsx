@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules-content';
 import { mountRuleDemo, type RuleDemoController, type RuleDemoId } from '../../rules-demo';
 import { PIECE_NAMES } from '../../engine';
@@ -14,6 +7,9 @@ import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../
 import { useGame } from '../game-context';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
+import { IconButton } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 
 const HORIZONTAL_RULE_TABS = '(max-width: 760px) and (orientation: portrait)';
 const LAYOUT_OPTIONS = INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
@@ -28,7 +24,6 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
     () => window.matchMedia(HORIZONTAL_RULE_TABS).matches,
   );
   const articleRef = useRef<HTMLElement>(null);
-  const navigationRef = useRef<HTMLDivElement>(null);
   const focusArticleRef = useRef(false);
   const normalizedQuery = query.trim().toLocaleLowerCase('es');
   const visibleSections = RULE_SECTIONS.filter((section) =>
@@ -67,51 +62,37 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
     }
   }
 
-  function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, id: string) {
-    if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key))
-      return;
-    event.preventDefault();
-    const index = visibleSections.findIndex((candidate) => candidate.id === id);
-    if (index < 0 || !visibleSections.length) return;
-    const next =
-      event.key === 'Home'
-        ? visibleSections[0]
-        : event.key === 'End'
-          ? visibleSections.at(-1)!
-          : visibleSections[
-              (index +
-                (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1) +
-                visibleSections.length) %
-                visibleSections.length
-            ];
-    navigationRef.current
-      ?.querySelector<HTMLButtonElement>(`[data-rule-section="${next.id}"]`)
-      ?.focus();
-    activate(next.id, false);
+  function panelId(id: string) {
+    // Preserve the active article's public hook while every tab keeps an ARIA target.
+    return id === section?.id ? 'rules-article' : `rules-article-${id}`;
   }
 
   return (
-    <div className="rules-shell">
+    <Tabs
+      className="rules-shell"
+      value={selectedId}
+      onValueChange={(id) => activate(id, false)}
+      orientation={horizontal ? 'horizontal' : 'vertical'}
+    >
       <aside className="rules-sidebar">
         <div className="rules-heading">
           <div>
             <span className="rules-kicker">MANUAL DE CAMPO</span>
             <h2>Reglas</h2>
           </div>
-          <button
-            type="button"
+          <IconButton
             className="rules-close"
             data-dialog-close
-            aria-label="Cerrar reglas"
+            label="Cerrar reglas"
             onClick={commands.closeDialog}
           >
             ×
-          </button>
+          </IconButton>
         </div>
         <p>Selecciona una sección para consultar las reglas de Protocolo Hexagonal.</p>
         <label className="rules-search">
           <span className="sr-only">Buscar en las reglas</span>
-          <input
+          <Input
             type="search"
             data-rule-search
             placeholder="Buscar..."
@@ -120,43 +101,52 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
             onChange={(event) => changeQuery(event.currentTarget.value)}
           />
         </label>
-        <div
-          ref={navigationRef}
-          className="rules-navigation"
-          role="tablist"
-          aria-label="Secciones del reglamento"
-          aria-orientation={horizontal ? 'horizontal' : 'vertical'}
-        >
-          {RULE_SECTIONS.map((candidate) => (
-            <button
-              key={candidate.id}
-              type="button"
-              role="tab"
-              data-rule-section={candidate.id}
-              aria-selected={candidate.id === selectedId}
-              aria-controls="rules-article"
-              className={candidate.id === selectedId ? 'active' : ''}
-              tabIndex={candidate.id === selectedId ? 0 : -1}
-              hidden={!sectionMatches(candidate, normalizedQuery)}
-              onClick={() => activate(candidate.id)}
-              onKeyDown={(event) => navigateTabs(event, candidate.id)}
-            >
-              {candidate.label}
-            </button>
-          ))}
-        </div>
+        <TabsList className="rules-navigation" aria-label="Secciones del reglamento">
+          {RULE_SECTIONS.map((candidate) => {
+            const filteredOut = !sectionMatches(candidate, normalizedQuery);
+            return (
+              <TabsTrigger
+                key={candidate.id}
+                value={candidate.id}
+                data-rule-section={candidate.id}
+                aria-controls={panelId(candidate.id)}
+                className={candidate.id === selectedId ? 'active' : undefined}
+                hidden={filteredOut}
+                disabled={filteredOut}
+                onClick={() => activate(candidate.id)}
+              >
+                {candidate.label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
       </aside>
-      <article ref={articleRef} id="rules-article" className="rules-article" role="tabpanel">
-        {section ? (
-          <RuleArticle key={section.id} section={section} />
-        ) : (
+      {RULE_SECTIONS.map((candidate) => {
+        const active = candidate.id === section?.id;
+        return (
+          <TabsContent
+            key={candidate.id}
+            value={candidate.id}
+            id={panelId(candidate.id)}
+            hidden={!active}
+            forceMount
+            asChild
+          >
+            <article ref={active ? articleRef : undefined} className="rules-article">
+              {active && <RuleArticle section={candidate} />}
+            </article>
+          </TabsContent>
+        );
+      })}
+      {!section && (
+        <article ref={articleRef} id="rules-article" className="rules-article">
           <div className="rules-empty" role="status">
             <strong>Sin coincidencias</strong>
             <p>Prueba con el nombre de una unidad, acción o condición de victoria.</p>
           </div>
-        )}
-      </article>
-    </div>
+        </article>
+      )}
+    </Tabs>
   );
 }
 

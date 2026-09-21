@@ -1,4 +1,7 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
+import { Field, FieldControl, FieldLabel } from '../components/ui/field';
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { outcomeText, PLAYER_NAMES } from '../../engine';
 import { analyzeMatchMoments } from '../../match-insights';
 import { calculateStatistics } from '../../match-record';
@@ -111,14 +114,14 @@ export function UtilityDialogs() {
             . La posición queda oculta hasta continuar.
           </p>
           <div className="dialog-actions">
-            <button
+            <Button
               type="button"
-              className="confirm-button"
+              variant="primary"
               data-handoff-ready
               onClick={commands.readyForTurn}
             >
               Estoy listo
-            </button>
+            </Button>
           </div>
         </>
       );
@@ -156,22 +159,17 @@ function ConfirmationDialog({
       <h2>{title}</h2>
       {children}
       <div className="dialog-actions">
-        <button
-          type="button"
-          className="secondary-button"
-          data-dialog-close
-          onClick={commands.closeDialog}
-        >
+        <Button type="button" variant="secondary" data-dialog-close onClick={commands.closeDialog}>
           {cancelLabel}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={`confirm-button${danger ? ' data-danger' : ''}`}
+          variant={danger ? 'danger' : 'primary'}
           {...{ [confirmAttribute]: true }}
           onClick={onConfirm}
         >
           {confirmLabel}
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -265,41 +263,41 @@ function SettingsDialog() {
           <p>Guarda, carga y revisa tus partidas.</p>
         </div>
         <div className="inline-actions">
-          <button
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             data-export-match
             disabled={!matchRecord}
             onClick={commands.exportMatch}
           >
             Exportar partida
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             data-import-match
             disabled={animating}
             onClick={() => importInput.current?.click()}
           >
             Importar partida
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             data-open-replay
             disabled={!matchRecord || animating || machineThinking}
             onClick={() => commands.openReplay()}
           >
             Ver repetición
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="secondary-button"
+            variant="secondary"
             data-history
             onClick={() => commands.openDialog({ kind: 'history' })}
           >
             Historial de resultados
-          </button>
+          </Button>
         </div>
         <input
           ref={importInput}
@@ -315,14 +313,9 @@ function SettingsDialog() {
         />
       </div>
       <div className="dialog-actions">
-        <button
-          type="button"
-          className="confirm-button"
-          data-dialog-close
-          onClick={commands.closeDialog}
-        >
+        <Button type="button" variant="primary" data-dialog-close onClick={commands.closeDialog}>
           Listo
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -375,19 +368,27 @@ function TogglePreference({
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
+  const id = useId();
   return (
-    <label className="toggle-row">
-      <span>
-        <strong>{label}</strong>
-        <small>{description}</small>
-      </span>
-      <input
-        type="checkbox"
-        data-pref={attribute}
-        checked={checked}
-        onChange={(event) => onChange(event.currentTarget.checked)}
-      />
-    </label>
+    <Field>
+      <FieldLabel className="toggle-row">
+        <span>
+          <strong id={`${id}-label`}>{label}</strong>
+          <small id={`${id}-description`} className="font-normal">
+            {description}
+          </small>
+        </span>
+        <FieldControl>
+          <Checkbox
+            data-pref={attribute}
+            aria-labelledby={`${id}-label`}
+            aria-describedby={`${id}-description`}
+            checked={checked}
+            onCheckedChange={(value) => onChange(value === true)}
+          />
+        </FieldControl>
+      </FieldLabel>
+    </Field>
   );
 }
 
@@ -419,9 +420,9 @@ function HistoryDialog() {
         )}
       </div>
       <div className="dialog-actions">
-        <button
+        <Button
           type="button"
-          className="secondary-button"
+          variant="secondary"
           data-history-back
           onClick={() => {
             if (snapshot.homeView) {
@@ -431,15 +432,10 @@ function HistoryDialog() {
           }}
         >
           Volver
-        </button>
-        <button
-          type="button"
-          className="confirm-button"
-          data-dialog-close
-          onClick={commands.closeDialog}
-        >
+        </Button>
+        <Button type="button" variant="primary" data-dialog-close onClick={commands.closeDialog}>
           Listo
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -523,9 +519,9 @@ function OutcomeDialog() {
         >
           Ver repetición
         </button>
-        <button
+        <Button
           type="button"
-          className="secondary-button"
+          variant="secondary"
           data-rematch
           onClick={() => {
             commands.closeDialog();
@@ -533,10 +529,10 @@ function OutcomeDialog() {
           }}
         >
           Revancha
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="confirm-button"
+          variant="primary"
           data-new-game
           onClick={() => {
             commands.closeDialog();
@@ -544,7 +540,7 @@ function OutcomeDialog() {
           }}
         >
           Nueva partida
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -594,14 +590,9 @@ function ScenarioBriefingDialog({ scenario }: { scenario: ScenarioDefinition }) 
       </p>
       <div className="dialog-actions">
         <AcademyMenuButton>Volver</AcademyMenuButton>
-        <button
-          type="button"
-          className="confirm-button"
-          data-dialog-close
-          onClick={commands.closeDialog}
-        >
+        <Button type="button" variant="primary" data-dialog-close onClick={commands.closeDialog}>
           Empezar ejercicio
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -628,14 +619,14 @@ function ScenarioSuccessDialog({ scenario }: { scenario: ScenarioDefinition }) {
         </span>
       </div>
       <div className="dialog-actions">
-        <button
+        <Button
           type="button"
-          className="secondary-button"
+          variant="secondary"
           data-retry-scenario
           onClick={() => commands.startScenario(scenario)}
         >
           Repetir
-        </button>
+        </Button>
         <AcademyMenuButton primary>Seguir entrenando</AcademyMenuButton>
       </div>
     </>
@@ -666,14 +657,14 @@ function ScenarioRetryDialog({
       </ol>
       <div className="dialog-actions">
         <AcademyMenuButton>Elegir otro</AcademyMenuButton>
-        <button
+        <Button
           type="button"
-          className="confirm-button"
+          variant="primary"
           data-retry-scenario
           onClick={() => commands.startScenario(scenario)}
         >
           Reintentar
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -688,14 +679,14 @@ function AcademyMenuButton({
 }) {
   const { commands } = useGame();
   return (
-    <button
+    <Button
       type="button"
-      className={primary ? 'confirm-button' : 'secondary-button'}
+      variant={primary ? 'primary' : 'secondary'}
       data-academy-menu
       onClick={() => commands.openDialog({ kind: 'academy' })}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:a11y": "node scripts/a11y.mjs",
+    "test:design-system": "node scripts/design-system-smoke.mjs",
     "test:offline": "node scripts/offline-smoke.mjs",
     "test:watch": "vitest",
     "prepare": "husky"
@@ -48,6 +49,7 @@
   },
   "dependencies": {
     "pixi.js": "^8.21.0",
+    "radix-ui": "^1.6.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-select": "^5.10.2"
