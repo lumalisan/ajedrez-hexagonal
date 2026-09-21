@@ -48,6 +48,8 @@ export interface RenderModel {
   selectedId: string | null;
   actions: GameAction[];
   pending: GameAction | null;
+  /** Visual intent in instructional scenes; does not change the action sent to the engine. */
+  pendingDestination?: Hex | null;
   hovered: Hex | null;
   focused: Hex | null;
   firingRange: Hex[];

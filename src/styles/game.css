@@ -511,10 +511,11 @@ button:disabled {
   stroke-linejoin: round;
 }
 
-.legend-dot.danger {
+.legend-danger {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
   color: var(--danger);
-  border-radius: 1px;
-  transform: rotate(45deg);
 }
 
 .panel-heading {

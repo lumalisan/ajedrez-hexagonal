@@ -87,10 +87,16 @@ it('la Fortaleza cae tras dos avances y el Dron es interceptado en el borde del 
     false,
   );
   const intercept = applyAction(scenes[2].state, scenes[2].action);
+  expect(scenes[2].intendedDestination).toEqual({ q: 0, r: 5 });
+  expect(scenes[2].action).toMatchObject({ kind: 'move', to: { q: 1, r: 4 } });
+  expect(intercept.ok).toBe(true);
   expect(scenes[2].state.pieces.find((piece) => piece.id === 'actor')?.position).toEqual({
     q: 3,
     r: 2,
   });
+  expect(intercept.events).toContainEqual(
+    expect.objectContaining({ type: 'move', from: { q: 3, r: 2 }, to: { q: 1, r: 4 } }),
+  );
   expect(intercept.events).toContainEqual(
     expect.objectContaining({ type: 'intercept', at: { q: 1, r: 4 } }),
   );

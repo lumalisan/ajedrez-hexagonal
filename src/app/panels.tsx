@@ -187,7 +187,7 @@ function pieceMonogram(piece: Piece): string {
     fast: 'E',
     drone: 'D',
     airplane: 'A',
-    antiAir: 'AA',
+    antiAir: 'EA',
     fortress: 'F',
   }[piece.type];
 }

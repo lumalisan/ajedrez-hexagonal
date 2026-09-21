@@ -73,7 +73,9 @@ export class PixiOverlays {
       this.updateMarkers(model, selected);
       positionAtHex(
         this.pending,
-        model.pending ? actionDestination(model.state, model.pending) : null,
+        model.pending
+          ? (model.pendingDestination ?? actionDestination(model.state, model.pending))
+          : null,
       );
       positionAtHex(this.hovered, model.hovered);
       positionAtHex(this.focused, model.focused);
@@ -84,7 +86,7 @@ export class PixiOverlays {
     for (const [key, marker] of this.markers) {
       const view = this.markerViews.get(key);
       if (!view) continue;
-      view.animate(pulse);
+      view.animate(pulse, orientation);
       if (view.target.visible) {
         const point = projectHex(marker.hex, orientation, depth);
         view.target.position.set(point.x, point.y);
@@ -307,7 +309,9 @@ class MarkerView {
     }
   }
 
-  animate(pulse: number): void {
+  animate(pulse: number, orientation: number): void {
+    // Keep the warning upright while its cell follows the board's perspective.
+    this.danger.rotation = -orientation;
     this.fill.alpha = this.isRange ? 0.2 : 0.22 + pulse * 0.06;
     const radius = 5.2 + pulse * 1.2;
     if (this.moving) {

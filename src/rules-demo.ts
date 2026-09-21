@@ -1,4 +1,5 @@
 import {
+  actionDestination,
   applyAction,
   createGameState,
   getFiringRangeCells,
@@ -51,6 +52,7 @@ export interface RuleDemoScene {
   actorId: string;
   state: GameState;
   action: GameAction;
+  intendedDestination?: Hex;
   sequence: number;
 }
 
@@ -119,6 +121,7 @@ export function createRuleDemoScenes(demoId: RuleDemoId): RuleDemoScene[] {
         actorId: step.actorId,
         state,
         action,
+        intendedDestination: step.intendedDestination,
         sequence: sequenceIndex,
       };
       const result = applyAction(state, action);
@@ -156,6 +159,7 @@ function sceneModel(
     selectedId: presentation.selectedId,
     actions: presentation.actions,
     pending: presentation.pending,
+    pendingDestination: presentation.pending ? scene.intendedDestination : undefined,
     hovered: null,
     focused: null,
     firingRange: presentation.selectedId ? getFiringRangeCells(state, presentation.selectedId) : [],
@@ -182,6 +186,20 @@ export function mountRuleDemo(
       options.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   };
   const scenes = createRuleDemoScenes(demoId);
+  const sequenceFrames = RULE_SEQUENCES[demoId].map((_, sequence) =>
+    scenes
+      .filter((scene) => scene.sequence === sequence)
+      .flatMap((scene) => {
+        const destination =
+          scene.intendedDestination ?? actionDestination(scene.state, scene.action);
+        return [
+          ...scene.state.pieces
+            .filter((piece) => !piece.id.startsWith('demo-'))
+            .map((piece) => piece.position),
+          ...(destination ? [destination] : []),
+        ];
+      }),
+  );
   const renderer = new BoardRenderer(canvas);
   const originalAttributes = new Map(
     ['role', 'aria-label', 'data-rule-demo-id', 'data-rule-demo-scene'].map((name) => [
@@ -190,6 +208,7 @@ export function mountRuleDemo(
     ]),
   );
   let sceneIndex = 0;
+  let framedSequence: number | null = null;
   let timer: number | null = null;
   let cycleToken = 0;
   let destroyed = false;
@@ -226,6 +245,11 @@ export function mountRuleDemo(
   const showScene = (): void => {
     if (destroyed) return;
     const scene = scenes[sceneIndex];
+    // Keep the camera stable within an animation, then center the next independent sequence.
+    if (framedSequence !== scene.sequence) {
+      renderer.setFrame(sequenceFrames[scene.sequence]);
+      framedSequence = scene.sequence;
+    }
     const token = ++cycleToken;
     const actions = getLegalActionsForPiece(scene.state, scene.actorId);
     showingResult = false;
@@ -353,13 +377,6 @@ export function mountRuleDemo(
 
   renderer.setDepthMode(false, true);
   renderer.snapToPlayer(0);
-  renderer.setFrame(
-    scenes.flatMap((scene) =>
-      scene.state.pieces
-        .filter((piece) => !piece.id.startsWith('demo-'))
-        .map((piece) => piece.position),
-    ),
-  );
   document.addEventListener('visibilitychange', handleVisibilityChange);
   observer.observe(canvas);
   updateControls();

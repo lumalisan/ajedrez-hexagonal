@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountRuleDemo } from '../src/rules-demo';
+import type { Hex } from '../src/types';
 
 const renderer = vi.hoisted(() => ({
   setDepthMode: vi.fn(),
   snapToPlayer: vi.fn(),
-  setFrame: vi.fn(),
+  setFrame: vi.fn<(positions: readonly Hex[]) => void>(),
   setModel: vi.fn(),
   playEvents: vi.fn(async () => undefined),
   destroy: vi.fn(),
@@ -57,6 +58,63 @@ function createCanvas(): HTMLCanvasElement {
 }
 
 describe('ciclo de vida de las demostraciones controladas por React', () => {
+  it('centra cada animación de Fortaleza y Escudo sin mover la cámara entre sus pasos', () => {
+    const demo = mountRuleDemo(createCanvas(), 'fortaleza', {
+      reducedMotion: true,
+      highContrast: false,
+    });
+    const fortressFrame = renderer.setFrame.mock.lastCall?.[0];
+    expect(fortressFrame).toEqual(
+      expect.arrayContaining([
+        { q: 0, r: 2 },
+        { q: 0, r: 3 },
+        { q: 0, r: 4 },
+      ]),
+    );
+    expect(fortressFrame?.every(({ q, r }) => q === 0 && r < 5)).toBe(true);
+
+    demo.advanceStep();
+    demo.advanceStep();
+    demo.advanceStep();
+    expect(renderer.setFrame).toHaveBeenCalledTimes(1);
+    demo.advanceStep();
+    expect(renderer.setFrame).toHaveBeenCalledTimes(2);
+    expect(renderer.setFrame.mock.lastCall?.[0]).toEqual(
+      expect.arrayContaining([
+        { q: 3, r: 2 },
+        { q: 0, r: 5 },
+      ]),
+    );
+    expect(renderer.setFrame.mock.lastCall?.[0]).not.toContainEqual({ q: 0, r: 4 });
+
+    demo.restart();
+    expect(renderer.setFrame.mock.lastCall?.[0]).toEqual(fortressFrame);
+    demo.destroy();
+  });
+
+  it('selecciona el destino previsto del Dron antes de reproducir la intercepción del motor', async () => {
+    const demo = mountRuleDemo(createCanvas(), 'fortaleza', {
+      reducedMotion: false,
+      highContrast: false,
+    });
+    for (let step = 0; step < 4; step += 1) demo.advanceStep();
+    demo.togglePlayback();
+    await vi.advanceTimersByTimeAsync(1_700);
+    expect(renderer.setModel.mock.lastCall?.[0]).toMatchObject({
+      pending: { kind: 'move', to: { q: 1, r: 4 } },
+      pendingDestination: { q: 0, r: 5 },
+    });
+    await vi.advanceTimersByTimeAsync(900);
+    expect(renderer.playEvents).toHaveBeenLastCalledWith(
+      expect.arrayContaining([expect.objectContaining({ type: 'intercept', at: { q: 1, r: 4 } })]),
+      expect.anything(),
+      false,
+      2,
+    );
+    expect(renderer.setModel.mock.lastCall?.[0].pendingDestination).toBeUndefined();
+    demo.destroy();
+  });
+
   it('permite pausar, avanzar y reiniciar mediante su API sin buscar controles DOM', () => {
     const onSceneChange = vi.fn();
     const onPlaybackChange = vi.fn();

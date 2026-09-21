@@ -1,8 +1,10 @@
 import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createGameState, getLegalActionsForPiece } from '../src/engine';
+import { hexToWorld } from '../src/hex';
 import { projectHex, type RenderModel } from '../src/rendering/model';
 import { PixiOverlays } from '../src/rendering/pixi-overlays';
+import { createRuleDemoScenes } from '../src/rules-demo';
 import type { GameState, Piece } from '../src/types';
 
 function position(extra: Piece[] = []): GameState {
@@ -42,6 +44,33 @@ function graphicsIn(container: Container): Graphics[] {
 }
 
 describe('overlays tácticos nativos de Pixi', () => {
+  it('selecciona el destino previsto del Dron antes de su intercepción en la demo', () => {
+    const overlays = new PixiOverlays();
+    const scene = createRuleDemoScenes('fortaleza')[2];
+    const model: RenderModel = {
+      ...modelFor(position()),
+      state: scene.state,
+      selectedId: scene.actorId,
+      actions: getLegalActionsForPiece(scene.state, scene.actorId),
+      pending: scene.action,
+      pendingDestination: scene.intendedDestination,
+    };
+    try {
+      overlays.update(model, 0, Math.PI, 0);
+      const selection = overlays.board.getChildByLabel('pending-destination')!;
+      expect(selection.visible).toBe(true);
+      expect(selection.position).toMatchObject(hexToWorld({ q: 0, r: 5 }));
+
+      overlays.update({ ...model, pendingDestination: null }, 100, Math.PI, 0);
+      expect(selection.position).toMatchObject(hexToWorld({ q: 1, r: 4 }));
+
+      overlays.update({ ...model, pending: null }, 200, Math.PI, 0);
+      expect(selection.visible).toBe(false);
+    } finally {
+      overlays.destroy();
+    }
+  });
+
   it('anima los indicadores sin reconstruir su geometría ni crear nodos por fotograma', () => {
     const overlays = new PixiOverlays();
     const model = modelFor(position());

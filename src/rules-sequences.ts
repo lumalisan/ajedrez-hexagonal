@@ -5,6 +5,8 @@ export interface RuleSequenceStep {
   actorId: string;
   kind: GameAction['kind'];
   to?: Hex;
+  /** Intended target for the demonstration; the engine still resolves the legal action. */
+  intendedDestination?: Hex;
   targetId?: string;
   cannon?: Direction;
   kamikaze?: boolean;
@@ -86,12 +88,15 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
         { id: 'anti-air', type: 'antiAir', owner: 1, position: at(0, 5) },
       ],
       steps: [
-        move(
-          'Animación 2 · El Dron intenta llegar a [+0, +5]; el escudo antiaéreo lo destruye al entrar en su alcance.',
-          'actor',
-          1,
-          4,
-        ),
+        {
+          ...move(
+            'Animación 2 · El Dron intenta llegar a [+0, +5]; el escudo antiaéreo lo intercepta y destruye en [+1, +4].',
+            'actor',
+            1,
+            4,
+          ),
+          intendedDestination: at(0, 5),
+        },
       ],
     },
   ],

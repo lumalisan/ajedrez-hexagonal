@@ -206,8 +206,12 @@ function BoardLegend() {
         Conversión
       </span>
       <span>
-        <i className="legend-dot danger" />
-        Intercepción AA
+        <svg className="legend-danger" viewBox="-15 -15 30 30" aria-hidden="true" focusable="false">
+          <path d="M0-12.5 12.5 9.75H-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <rect x="-1.05" y="-2.5" width="2.1" height="5.2" rx="0.6" fill="currentColor" />
+          <circle cx="0" cy="5.4" r="1.15" fill="currentColor" />
+        </svg>
+        Intercepción
       </span>
     </div>
   );
