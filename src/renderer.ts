@@ -61,6 +61,8 @@ export interface RenderModel {
   threatenedCells: Hex[];
   reducedMotion: boolean;
   highContrast: boolean;
+  /** Ambient motion is opt-in so instructional scenes and previews remain still. */
+  idleAnimations?: boolean;
 }
 
 interface AnimationState {
@@ -101,6 +103,8 @@ export class BoardRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly resizeObserver: ResizeObserver;
+  private readonly intersectionObserver: IntersectionObserver;
+  private readonly motionPreference: MediaQueryList;
   private readonly cells = allBoardHexes();
   private model: RenderModel | null = null;
   private width = 1;
@@ -117,12 +121,24 @@ export class BoardRenderer {
   private renderedDepth = 0;
   private depthTransition: DepthTransitionState | null = null;
   private frameId = 0;
+  private visible = false;
+  private destroyed = false;
+  private needsRender = true;
+  private lastRenderAt = -Infinity;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D no está disponible en este navegador.');
     this.ctx = context;
+    this.motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this.motionPreference.addEventListener('change', this.refreshAmbientMotion);
+    document.addEventListener('visibilitychange', this.refreshAmbientMotion);
+    this.intersectionObserver = new IntersectionObserver(([entry]) => {
+      this.visible = entry.isIntersecting;
+      this.refreshAmbientMotion();
+    });
+    this.intersectionObserver.observe(canvas);
     this.canvas.dataset.viewpoint = 'blue';
     this.canvas.dataset.perspective = '2d';
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -132,10 +148,18 @@ export class BoardRenderer {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.resizeObserver.disconnect();
+    this.intersectionObserver.disconnect();
+    this.motionPreference.removeEventListener('change', this.refreshAmbientMotion);
+    document.removeEventListener('visibilitychange', this.refreshAmbientMotion);
     if (this.frameId) cancelAnimationFrame(this.frameId);
+    this.frameId = 0;
     if (this.animation) this.animation.resolve();
     if (this.rotation) this.rotation.resolve();
+    this.animation = null;
+    this.rotation = null;
+    this.depthTransition = null;
   }
 
   setModel(model: RenderModel): void {
@@ -325,7 +349,13 @@ export class BoardRenderer {
 
   private readonly frame = (time: number): void => {
     this.frameId = 0;
-    this.render(time);
+    if (this.destroyed) return;
+    // Idle only needs 30 painted frames/s; input and action animations render immediately.
+    if (this.needsRender || this.hasTransition() || time - this.lastRenderAt >= 1000 / 30) {
+      this.needsRender = false;
+      this.lastRenderAt = time;
+      this.render(time);
+    }
     if (this.animation && time - this.animation.startedAt >= this.animation.duration) {
       const resolve = this.animation.resolve;
       this.animation = null;
@@ -349,15 +379,55 @@ export class BoardRenderer {
       delete this.canvas.dataset.perspectiveTransition;
     }
     const pulseMarkers = Boolean(
-      this.model && this.model.actions.length > 0 && !this.model.reducedMotion,
+      this.canAnimateAmbient() && this.model && this.model.actions.length > 0,
     );
-    if (this.animation || this.rotation || this.depthTransition || pulseMarkers)
-      this.requestFrame();
+    if (this.hasTransition() || pulseMarkers || this.canAnimateIdle()) this.scheduleFrame();
   };
 
   private requestFrame(): void {
-    if (!this.frameId) this.frameId = requestAnimationFrame(this.frame);
+    this.needsRender = true;
+    this.scheduleFrame();
   }
+
+  private scheduleFrame(): void {
+    if (!this.destroyed && !this.frameId) this.frameId = requestAnimationFrame(this.frame);
+  }
+
+  private hasTransition(): boolean {
+    return Boolean(this.animation || this.rotation || this.depthTransition);
+  }
+
+  private canAnimateAmbient(): boolean {
+    return (
+      !this.destroyed &&
+      this.visible &&
+      document.visibilityState !== 'hidden' &&
+      !this.motionPreference.matches &&
+      Boolean(this.model && !this.model.reducedMotion)
+    );
+  }
+
+  private canAnimateIdle(): boolean {
+    return Boolean(
+      this.canAnimateAmbient() &&
+      this.model?.idleAnimations &&
+      this.model.state.pieces.length > 0 &&
+      !this.model.state.outcome,
+    );
+  }
+
+  private readonly refreshAmbientMotion = (): void => {
+    if (this.destroyed) return;
+    if (!this.visible || document.visibilityState === 'hidden') {
+      // Finite action animations still finish and resolve their gameplay promises.
+      if (!this.hasTransition() && this.frameId) {
+        cancelAnimationFrame(this.frameId);
+        this.frameId = 0;
+      }
+      return;
+    }
+    this.requestFrame();
+  };
 
   private clampPan(): void {
     const limitX = this.width * 0.55;
@@ -420,7 +490,7 @@ export class BoardRenderer {
     this.drawActionMarkers(ctx, model, time);
     this.drawFocus(ctx, model);
     ctx.restore();
-    this.drawPieces(ctx, model, orientation);
+    this.drawPieces(ctx, model, orientation, time);
     this.drawTargetOverlays(ctx, model, time, orientation);
     if (this.animation) this.drawAnimation(ctx, this.animation, time, orientation);
     ctx.restore();
@@ -775,7 +845,13 @@ export class BoardRenderer {
     }
   }
 
-  private drawPieces(ctx: CanvasRenderingContext2D, model: RenderModel, orientation: number): void {
+  private drawPieces(
+    ctx: CanvasRenderingContext2D,
+    model: RenderModel,
+    orientation: number,
+    time: number,
+  ): void {
+    const idleTime = this.canAnimateIdle() ? time : undefined;
     const movingIds = new Set(
       this.animation?.events
         .filter((event) => event.type === 'move')
@@ -807,6 +883,7 @@ export class BoardRenderer {
         isStacked,
         orientation,
         fortressMaxHp: model.fortressMaxHp[piece.owner],
+        idleTime,
       });
     }
     for (const hex of stackedHexes) {
@@ -871,6 +948,7 @@ export class BoardRenderer {
       orientation: number;
       glyphRotation?: number;
       fortressMaxHp?: 1 | 2 | 3;
+      idleTime?: number;
     },
   ): void {
     const color = piece.owner === 0 ? COLORS.blue : COLORS.amber;
@@ -965,15 +1043,30 @@ export class BoardRenderer {
     ctx.shadowColor = color;
     ctx.shadowBlur = 3.5;
     ctx.save();
+    const phase =
+      options.idleTime === undefined ? null : pieceIdlePhase(piece.id, options.idleTime);
+    // Animate only the glyph: bases, ownership, health and hit targets stay anchored.
+    if (phase !== null) {
+      if (piece.type === 'drone') {
+        ctx.translate(Math.sin(phase) * 1.8, Math.sin(phase * 1.4) * 0.85);
+        ctx.rotate(Math.sin(phase) * 0.035);
+      } else if (piece.type === 'airplane') {
+        ctx.translate(0, Math.sin(phase) * 0.65);
+        ctx.rotate(Math.sin(phase * 0.8) * 0.035);
+      } else if (piece.type === 'soldier') {
+        const breath = 1 + Math.sin(phase * 2) * 0.045;
+        ctx.scale(breath, breath);
+      }
+    }
     ctx.rotate(options.orientation + (options.glyphRotation ?? 0));
-    drawPieceGlyph(ctx, piece);
+    drawPieceGlyph(ctx, piece, phase);
     ctx.restore();
     ctx.shadowColor = 'transparent';
 
     if (piece.type === 'fortress') {
       drawFortressHealth(ctx, piece.hp, options.fortressMaxHp ?? 2, color);
     } else {
-      drawOwnerMark(ctx, piece.owner, color);
+      drawOwnerMark(ctx, piece.owner, color, piece.type === 'airplane');
     }
     ctx.restore();
   }
@@ -1032,6 +1125,7 @@ export class BoardRenderer {
           orientation,
           glyphRotation: motion.rotation,
           fortressMaxHp: this.model?.fortressMaxHp[piece.owner],
+          idleTime: this.canAnimateIdle() ? time : undefined,
         });
       }
 
@@ -1400,11 +1494,29 @@ function drawDangerMarker(ctx: CanvasRenderingContext2D, radius: number): void {
   ctx.fillText('!', 0, 3);
 }
 
-function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
+/** Stable per-piece rhythm without adding state to the game or its saved records. */
+function pieceIdlePhase(id: string, time: number): number {
+  let seed = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    seed = (Math.imul(seed, 31) + id.charCodeAt(index)) >>> 0;
+  }
+  const period = 4800 + (seed % 1800);
+  return (time / period) * Math.PI * 2 + ((seed % 997) / 997) * Math.PI * 2;
+}
+
+function drawPieceGlyph(
+  ctx: CanvasRenderingContext2D,
+  piece: Piece,
+  idlePhase: number | null = null,
+): void {
   switch (piece.type) {
     case 'soldier': {
       ctx.save();
       ctx.rotate(-Math.PI / 2 + piece.facing * (Math.PI / 3));
+      // Alternating boots suggest a guard shifting their weight without changing heading.
+      const stride = idlePhase === null ? 0 : Math.sin(idlePhase * 2) * 2;
+      ctx.fillRect(-8 + stride, -6, 4, 2.7);
+      ctx.fillRect(-8 - stride, 3.3, 4, 2.7);
       ctx.beginPath();
       ctx.moveTo(10, 0);
       ctx.lineTo(-3, -7);
@@ -1422,14 +1534,18 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.beginPath();
       ctx.arc(-1, 0, 7.5, Math.PI * 0.25, Math.PI * 1.75);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(4.3, -5.3);
-      ctx.lineTo(10, -7.5);
-      ctx.lineTo(8.2, -1.5);
-      ctx.moveTo(4.3, 5.3);
-      ctx.lineTo(10, 7.5);
-      ctx.lineTo(8.2, 1.5);
-      ctx.stroke();
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(4.3, side * 5.3);
+        const grip = idlePhase === null ? 0 : (Math.sin(idlePhase * 1.5) + 1) * 0.2;
+        ctx.rotate(-side * grip);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(5.7, side * 2.2);
+        ctx.lineTo(3.9, -side * 3.8);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.beginPath();
       ctx.arc(-1, 0, 2.2, 0, Math.PI * 2);
       ctx.fill();
@@ -1437,14 +1553,25 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       break;
     }
     case 'medium':
-      drawTankGlyph(ctx, piece.cannon, 10, 1);
+      drawTankGlyph(ctx, piece.cannon, 10, 1, idlePhase);
       break;
     case 'long':
-      drawMissileLauncherGlyph(ctx, piece);
+      drawMissileLauncherGlyph(ctx, piece, idlePhase);
       break;
     case 'fast': {
       ctx.save();
       ctx.rotate(piece.owner === 0 ? Math.PI / 2 : -Math.PI / 2);
+      // The ram's paired pistons cycle inside the stationary track frame.
+      for (const side of [-1, 1]) {
+        const compression = idlePhase === null ? 0 : Math.sin(idlePhase * 3 + side) * 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-10, side * 3);
+        ctx.lineTo(-5 + compression, side * 3);
+        ctx.stroke();
+        ctx.fillRect(-8 + compression, side * 3 - 1.7, 2.8, 3.4);
+      }
+      ctx.save();
+      if (idlePhase !== null) ctx.translate(Math.sin(idlePhase * 3) * 0.8, 0);
       // Low-profile assault vehicle with a pointed nose and visible tracks.
       ctx.beginPath();
       ctx.moveTo(10, 0);
@@ -1460,6 +1587,7 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.lineTo(7.5, 0);
       ctx.lineTo(2, 3.5);
       ctx.stroke();
+      ctx.restore();
       for (const y of [-8, 8]) {
         ctx.beginPath();
         ctx.moveTo(-8, y);
@@ -1484,6 +1612,15 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
         ctx.beginPath();
         ctx.arc(rotorX, rotorY, 3, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.save();
+        ctx.translate(rotorX, rotorY);
+        ctx.rotate(idlePhase === null ? 0 : idlePhase * 3);
+        ctx.lineWidth *= 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-1.8, 0);
+        ctx.lineTo(1.8, 0);
+        ctx.stroke();
+        ctx.restore();
       }
       ctx.beginPath();
       ctx.moveTo(0, -4.5);
@@ -1501,6 +1638,7 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
     case 'airplane': {
       ctx.save();
       ctx.rotate(-Math.PI / 2 + piece.facing * (Math.PI / 3));
+      if (idlePhase !== null) drawJetExhaust(ctx, idlePhase);
       ctx.beginPath();
       ctx.moveTo(11, 0);
       ctx.lineTo(1.5, -3.2);
@@ -1524,6 +1662,24 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
     }
     case 'antiAir': {
       // Radar dish above a twin missile rack.
+      ctx.save();
+      if (idlePhase !== null) {
+        ctx.translate(0, -1);
+        ctx.rotate(Math.sin(idlePhase * 1.2) * 0.5);
+        ctx.translate(0, 1);
+        ctx.save();
+        ctx.globalAlpha *= 0.28;
+        ctx.beginPath();
+        ctx.moveTo(0, -1);
+        ctx.arc(0, -1, 12, -Math.PI / 2 - 0.22, -Math.PI / 2 + 0.22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.beginPath();
+        ctx.moveTo(0, -3);
+        ctx.lineTo(0, -13);
+        ctx.stroke();
+      }
       ctx.beginPath();
       ctx.arc(0, -1, 9, Math.PI * 1.12, Math.PI * 1.88);
       ctx.stroke();
@@ -1533,6 +1689,7 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.beginPath();
       ctx.arc(0, -1, 1.8, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
       ctx.strokeRect(-7.5, 5, 5, 3.5);
       ctx.strokeRect(2.5, 5, 5, 3.5);
       ctx.beginPath();
@@ -1545,6 +1702,16 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
     }
     case 'fortress': {
       // Solid battlements, corner towers and a central gate.
+      if (idlePhase !== null) {
+        ctx.save();
+        const alpha = ctx.globalAlpha;
+        for (const side of [-1, 1]) {
+          ctx.globalAlpha =
+            alpha * (0.12 + ((Math.sin(idlePhase * 1.4 + side * 1.5) + 1) / 2) * 0.36);
+          ctx.fillRect(side < 0 ? -10 : 7, -7, 3, 15);
+        }
+        ctx.restore();
+      }
       ctx.beginPath();
       ctx.moveTo(-11, 9);
       ctx.lineTo(-11, -8);
@@ -1566,11 +1733,57 @@ function drawPieceGlyph(ctx: CanvasRenderingContext2D, piece: Piece): void {
       ctx.arc(0, 4, 3.5, Math.PI, 0);
       ctx.lineTo(3.5, 9);
       ctx.stroke();
+      if (idlePhase !== null) {
+        // A lit portcullis rises and settles inside the doorway; health bars stay separate.
+        const gateLift = (Math.sin(idlePhase * 1.3) + 1) * 1.7;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-2.5, 4, 5, 5);
+        ctx.clip();
+        ctx.globalAlpha *= 0.85;
+        ctx.lineWidth = 1;
+        for (const x of [-1.5, 1.5]) {
+          ctx.beginPath();
+          ctx.moveTo(x, 3 - gateLift);
+          ctx.lineTo(x, 9 - gateLift);
+          ctx.stroke();
+        }
+        ctx.fillRect(-2.5, 7.5 - gateLift, 5, 1.5);
+        ctx.restore();
+      }
+      ctx.save();
+      if (idlePhase !== null) ctx.globalAlpha *= 0.6 + Math.sin(idlePhase * 1.4) * 0.4;
       ctx.fillRect(-8, -1, 2.5, 3.5);
+      ctx.restore();
+      ctx.save();
+      if (idlePhase !== null) ctx.globalAlpha *= 0.6 - Math.sin(idlePhase * 1.4) * 0.4;
       ctx.fillRect(5.5, -1, 2.5, 3.5);
+      ctx.restore();
       break;
     }
   }
+}
+
+function drawJetExhaust(ctx: CanvasRenderingContext2D, phase: number): void {
+  const thrust = 8 + Math.sin(phase * 7) * 1.5 + Math.sin(phase * 11) * 0.7;
+  const flutter = Math.sin(phase * 9) * 0.7;
+  ctx.save();
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#ff8b3d';
+  ctx.beginPath();
+  ctx.moveTo(-9.5, -2.4);
+  ctx.quadraticCurveTo(-13, -4, -9.5 - thrust, flutter);
+  ctx.quadraticCurveTo(-13, 4, -9.5, 2.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#fff1bd';
+  ctx.beginPath();
+  ctx.moveTo(-9.5, -1);
+  ctx.lineTo(-9.5 - thrust * 0.65, flutter * 0.35);
+  ctx.lineTo(-9.5, 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawTankGlyph(
@@ -1578,9 +1791,32 @@ function drawTankGlyph(
   direction: number,
   barrelLength: number,
   rangeMarks: number,
+  idlePhase: number | null,
 ): void {
   ctx.save();
   ctx.rotate(-Math.PI / 2 + direction * (Math.PI / 3));
+  if (idlePhase !== null) {
+    // Two short exhaust puffs disperse behind the hull, inside the token's footprint.
+    ctx.save();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = COLORS.muted;
+    ctx.lineWidth = 1.6;
+    const alpha = ctx.globalAlpha;
+    for (const offset of [0, 0.5]) {
+      const progress = ((((idlePhase / (Math.PI * 2)) * 3 + offset) % 1) + 1) % 1;
+      ctx.globalAlpha = alpha * (1 - progress);
+      ctx.beginPath();
+      ctx.arc(
+        -9 - progress * 4.2,
+        -1 + Math.sin(progress * Math.PI) * 1.5,
+        0.8 + progress * 1.6,
+        0,
+        Math.PI * 1.6,
+      );
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   // Top-down hull with separate tracks, rotating turret and calibrated barrel.
   ctx.strokeRect(-7.5, -7, 10.5, 3);
   ctx.strokeRect(-7.5, 4, 10.5, 3);
@@ -1612,6 +1848,7 @@ function drawTankGlyph(
 function drawMissileLauncherGlyph(
   ctx: CanvasRenderingContext2D,
   piece: Extract<Piece, { type: 'long' }>,
+  idlePhase: number | null,
 ): void {
   ctx.save();
   ctx.rotate(piece.owner === 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -1626,6 +1863,9 @@ function drawMissileLauncherGlyph(
   ctx.lineTo(-2, 8);
   ctx.stroke();
   for (const y of [-4, 4].slice(0, piece.missilesRemaining ?? 2)) {
+    ctx.save();
+    // Each loaded missile makes a short calibration adjustment along its own rail.
+    if (idlePhase !== null) ctx.translate(Math.sin(idlePhase * 1.5 + y * 0.25) * 1.5, 0);
     ctx.beginPath();
     ctx.moveTo(-6.5, y - 1.8);
     ctx.lineTo(5.5, y - 1.8);
@@ -1640,6 +1880,17 @@ function drawMissileLauncherGlyph(
     ctx.moveTo(-5, y + 1.8);
     ctx.lineTo(-8, y + 4);
     ctx.stroke();
+    ctx.restore();
+  }
+  if (idlePhase !== null) {
+    ctx.save();
+    ctx.lineWidth = 2;
+    const scannerY = Math.sin(idlePhase * 1.5) * 5;
+    ctx.beginPath();
+    ctx.moveTo(-7.5, scannerY);
+    ctx.lineTo(-3.5, scannerY);
+    ctx.stroke();
+    ctx.restore();
   }
   ctx.beginPath();
   ctx.arc(-2, 0, 2.4, 0, Math.PI * 2);
@@ -1664,19 +1915,32 @@ function drawFortressHealth(
   ctx.globalAlpha = 1;
 }
 
-function drawOwnerMark(ctx: CanvasRenderingContext2D, owner: Player, color: string): void {
+function drawOwnerMark(
+  ctx: CanvasRenderingContext2D,
+  owner: Player,
+  color: string,
+  outlined = false,
+): void {
+  ctx.save();
+  if (outlined) {
+    ctx.strokeStyle = '#061118';
+    ctx.lineWidth = 1.1;
+  }
   ctx.fillStyle = color;
   if (owner === 0) {
     ctx.beginPath();
     ctx.arc(0, 12, 1.6, 0, Math.PI * 2);
+    if (outlined) ctx.stroke();
     ctx.fill();
   } else {
     ctx.save();
     ctx.translate(0, 11.5);
     ctx.rotate(Math.PI / 4);
+    if (outlined) ctx.strokeRect(-1.6, -1.6, 3.2, 3.2);
     ctx.fillRect(-1.6, -1.6, 3.2, 3.2);
     ctx.restore();
   }
+  ctx.restore();
 }
 
 export function pieceAccessibleLabel(

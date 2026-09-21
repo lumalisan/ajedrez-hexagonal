@@ -196,6 +196,7 @@ const floatingCommands = new FloatingCommandPanel(
   },
 );
 import.meta.hot?.dispose(() => floatingCommands.destroy());
+import.meta.hot?.dispose(() => renderer.destroy());
 
 applyPreferences();
 bindControls();
@@ -301,6 +302,7 @@ function bindControls(): void {
       destroyLayoutPreview();
       unlockPageScroll();
       syncFullscreenControl();
+      syncCanvas();
     }
   });
   const preventBackgroundScroll = (event: Event): void => {
@@ -959,6 +961,7 @@ function syncCanvas(): void {
     threatenedCells: [],
     reducedMotion: preferences.reducedMotion,
     highContrast: preferences.highContrast,
+    idleAnimations: !dialog.open,
   };
   renderer.setModel(model);
 }
@@ -2736,6 +2739,7 @@ function openDialog(markup: string): void {
   });
   lockPageScroll();
   dialog.showModal();
+  syncCanvas();
   syncFullscreenControl();
   window.setTimeout(() => {
     heading?.focus();
