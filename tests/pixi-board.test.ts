@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyAction, createGameState, getLegalActionsForPiece } from '../src/engine';
 import { PixiBoard, type BoardAnimation } from '../src/rendering/pixi-board';
 import { PixiPiece } from '../src/rendering/pixi-piece';
-import type { RenderModel } from '../src/rendering/model';
+import { projectHex, type RenderModel } from '../src/rendering/model';
 import type { GameAction, GameState, Piece } from '../src/types';
 
 const scenes: { scene: PixiBoard; stage: Container }[] = [];
@@ -85,6 +85,19 @@ function child(parent: Container, label: string): Container {
 function paintOrder(parent: Container): Container[] {
   if (parent.sortableChildren) parent.sortChildren();
   return parent.children.flatMap((node) => [node, ...paintOrder(node)]);
+}
+
+function effectHexagons(stage: Container) {
+  return paintOrder(stage).flatMap((node) =>
+    node instanceof Graphics
+      ? node.context.instructions.flatMap((instruction) =>
+          instruction.action === 'stroke' &&
+          (instruction.data.style.width === 2.3 || instruction.data.style.width === 1.35)
+            ? [instruction.data.path]
+            : [],
+        )
+      : [],
+  );
 }
 
 function resolve(
@@ -189,6 +202,78 @@ describe('integración de la escena Pixi', () => {
       state.pieces.length,
     );
   });
+
+  it.each([
+    { orientation: 0, depth: 0 },
+    { orientation: Math.PI, depth: 0 },
+    { orientation: 0, depth: 1 },
+    { orientation: Math.PI, depth: 1 },
+  ])('los tres hexágonos de impacto giran en la Fortaleza ($orientation, $depth)', (camera) => {
+    const before = position([
+      { id: 'attacker', type: 'soldier', owner: 0, position: { q: 0, r: -1 }, facing: 0 },
+    ]);
+    const { scene, stage } = board(before);
+    const { state, animation } = resolve(
+      before,
+      'attacker',
+      (action) => action.kind === 'move' && action.to.q === 0 && action.to.r === -2,
+    );
+    expect(animation.events.some((event) => event.type === 'fortressDamage')).toBe(true);
+    const center = projectHex({ q: 0, r: -2 }, camera.orientation, camera.depth);
+
+    for (const time of [250, 500, 850]) {
+      scene.update(modelFor(state), time, { ...view, ...camera }, animation);
+      const hexagons = effectHexagons(stage);
+      expect(hexagons).toHaveLength(3);
+      for (const [index, path] of hexagons.entries()) {
+        const bounds = path.bounds;
+        const x = (bounds.minX + bounds.maxX) / 2;
+        const y = (bounds.minY + bounds.maxY) / 2;
+        if (index < 2) {
+          expect(x).toBeCloseTo(center.x, 8);
+          expect(y).toBeCloseTo(center.y, 8);
+        } else {
+          // Un extremo visible puede caer en un hueco de cinco unidades del trazo.
+          expect(Math.abs(x - center.x)).toBeLessThanOrEqual(2.5);
+          expect(Math.abs(y - center.y)).toBeLessThanOrEqual(2.5);
+        }
+      }
+    }
+  });
+
+  it.each(['convert', 'transform'] as const)(
+    'el hexágono de %s permanece en la casilla de la acción al girar',
+    (kind) => {
+      const before = position(
+        kind === 'convert'
+          ? [
+              { id: 'actor', type: 'capturer', owner: 0, position: { q: 2, r: 0 } },
+              {
+                id: 'target',
+                type: 'soldier',
+                owner: 1,
+                position: { q: 2, r: -1 },
+                facing: 3,
+              },
+            ]
+          : [{ id: 'actor', type: 'medium', owner: 0, position: { q: 2, r: 0 }, cannon: 0 }],
+      );
+      const { scene, stage } = board(before);
+      const { state, animation } = resolve(before, 'actor', (action) => action.kind === kind);
+      const event = animation.events.find((candidate) => candidate.type === kind);
+      if (!event?.at) throw new Error('La acción debe indicar la casilla de su efecto.');
+      const center = projectHex(event.at, view.orientation, view.depth);
+
+      for (const time of [250, 500, 850]) {
+        scene.update(modelFor(state), time, view, animation);
+        const hexagons = effectHexagons(stage);
+        expect(hexagons).toHaveLength(1);
+        const bounds = hexagons[0].bounds;
+        expect((bounds.minX + bounds.maxX) / 2).toBeCloseTo(center.x, 8);
+        expect((bounds.minY + bounds.maxY) / 2).toBeCloseTo(center.y, 8);
+      }
+    },
+  );
 
   it('transforma y desplaza el mismo nodo sin conservar el glifo anterior ni duplicar piezas', () => {
     const before = position([

@@ -426,22 +426,31 @@ export class PixiBoard {
         event.type === 'fortressDamage' ||
         event.type === 'transform'
       ) {
+        // Rotate each shape locally before placing it at the impact cell.
+        // Pixi's draw-time rotation also rotates any existing translation.
         graphics
           .save()
-          .translateTransform(at.x, at.y)
           .rotateTransform(raw * Math.PI * 0.6)
+          .translateTransform(at.x, at.y)
           .poly(hexPoints(18 + eased * 10))
           .stroke({
             color: event.type === 'fortressDamage' ? COLORS.attack : COLORS.convert,
             alpha: Math.sin(raw * Math.PI) * 0.9,
             width: 2.3,
-          });
+          })
+          .restore();
         if (event.type === 'fortressDamage') {
           graphics
-            .rotateTransform(-raw * Math.PI * 1.15)
+            .save()
+            .rotateTransform(-raw * Math.PI * 0.55)
+            .translateTransform(at.x, at.y)
             .poly(hexPoints(27 + eased * 24))
-            .stroke({ color: COLORS.amber, alpha: Math.sin(raw * Math.PI) * 0.62, width: 1.35 });
-          graphics.rotateTransform(raw * Math.PI * 2.4);
+            .stroke({ color: COLORS.amber, alpha: Math.sin(raw * Math.PI) * 0.62, width: 1.35 })
+            .restore();
+          graphics
+            .save()
+            .rotateTransform(raw * Math.PI * 1.85)
+            .translateTransform(at.x, at.y);
           strokeDashedPath(
             graphics,
             hexPoints(38 + eased * 35),
@@ -450,8 +459,8 @@ export class PixiBoard {
             { color: COLORS.amber, alpha: Math.sin(raw * Math.PI) * 0.62, width: 1.35 },
             true,
           );
+          graphics.restore();
         }
-        graphics.restore();
       }
     }
   }
