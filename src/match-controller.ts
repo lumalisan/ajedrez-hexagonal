@@ -116,17 +116,11 @@ export class MatchController {
   }
 
   tickClock(nowMs: number): MatchClockSnapshot | null {
-    const clock = this.updateClock((current) => tickMatchClock(current, nowMs));
-    const outcome = clock ? clockOutcome(clock) : null;
-    if (outcome && !this.store.getState().game.outcome) this.conclude(outcome);
-    return clock;
+    return this.updateClock((current) => tickMatchClock(current, nowMs));
   }
 
-  switchClock(activePlayer: Player, nowMs: number): MatchClockSnapshot | null {
-    const clock = this.updateClock((current) => switchMatchClock(current, activePlayer, nowMs));
-    const outcome = clock ? clockOutcome(clock) : null;
-    if (outcome && !this.store.getState().game.outcome) this.conclude(outcome);
-    return clock;
+  switchClock(activePlayer: Player, nowMs: number, newTurn = false): MatchClockSnapshot | null {
+    return this.updateClock((current) => switchMatchClock(current, activePlayer, nowMs, newTurn));
   }
 
   private canNavigateHistory(): boolean {
@@ -141,6 +135,8 @@ export class MatchController {
     if (!this.record.clock) return null;
     const clock = update(this.record.clock);
     this.record = setMatchClock(this.record, clock);
+    const outcome = clockOutcome(clock);
+    if (outcome && !this.store.getState().game.outcome) this.conclude(outcome);
     return clock;
   }
 }

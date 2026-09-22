@@ -23,6 +23,61 @@ import {
 import { SCENARIOS, evaluateScenario } from '../src/scenarios';
 
 describe('configuración, invariantes y diario', () => {
+  it.each([null, 300])(
+    'conserva el reloj por turno con total %s al guardar e importar',
+    (total) => {
+      const config = createClassicConfig({
+        mode: 'local',
+        clockSeconds: total,
+        turnClockSeconds: 30,
+      });
+      let record = createMatchRecord(config);
+      const running = resumeMatchClock(record.clock!, 1_000);
+      record = setMatchClock(record, tickMatchClock(running, 6_000));
+      const restored = parseRecord(serializeRecord(record));
+      expect(restored).toEqual(record);
+      expect(restored.clock?.turnRemainingMs).toBe(25_000);
+      const expired = tickMatchClock(restored.clock!, 31_000);
+      record = concludeMatch(setMatchClock(restored, expired), clockOutcome(expired)!);
+      expect(replayRecord(parseRecord(serializeRecord(record))).outcome).toEqual({
+        type: 'win',
+        winner: 1,
+        reason: 'timeout',
+      });
+    },
+  );
+
+  it('valida límites por turno y rechaza alteraciones del reloj configurado', () => {
+    for (const turnClockSeconds of [0, -1, Infinity, 0.00001]) {
+      expect(
+        validateMatchConfig(createClassicConfig({ mode: 'local', turnClockSeconds })),
+      ).toContain('El tiempo por turno debe ser positivo.');
+    }
+    const record = createMatchRecord(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    expect(() => setMatchClock(record, null)).toThrow(/reloj por turno/u);
+    expect(() => parseRecord(JSON.stringify({ ...record, clock: null }))).toThrow(
+      /reloj por turno/u,
+    );
+    expect(() => setMatchClock(record, { ...record.clock!, turnInitialMs: 60_000 })).toThrow(
+      /no coincide con la duración/u,
+    );
+    expect(() =>
+      parseRecord(
+        JSON.stringify({
+          ...record,
+          clock: { ...record.clock, turnRemainingMs: -1 },
+        }),
+      ),
+    ).toThrow(/tiempo restante del turno/u);
+  });
+
+  it('importa un reloj total antiguo sin opciones ni campos por turno', () => {
+    const record = createMatchRecord(createClassicConfig({ mode: 'local', clockSeconds: 300 }));
+    delete record.config.options.turnClockSeconds;
+    expect(parseRecord(serializeRecord(record))).toEqual(record);
+    expect(record.clock?.turnInitialMs).toBeUndefined();
+  });
+
   it('valida classic-v2 y todos los escenarios', () => {
     const config = createClassicConfig({ mode: 'local' });
     expect(config.victory.repetition).toBe(3);

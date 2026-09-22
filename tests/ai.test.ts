@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   chooseMachineAction,
@@ -8,7 +8,7 @@ import {
 import { actionKey } from '../src/action-identity';
 import { applyAction, createGameState, getAllLegalActions } from '../src/engine';
 import { stepHex } from '../src/hex';
-import type { AiPersonality, GameAction, Piece } from '../src/types';
+import type { AiDifficulty, AiPersonality, GameAction, Piece } from '../src/types';
 
 function createChoiceState() {
   return createGameState(
@@ -229,61 +229,31 @@ describe('machine player', () => {
     }
   });
 
-  it('varies near-equivalent Recruit and Tactical orders while Expert stays exact', () => {
-    const state = createChoiceState();
-    const seeds = Array.from({ length: 24 }, (_, seed) => seed);
-    const recruitChoices = new Set(
-      seeds.map((seed) =>
-        keyOf(
-          chooseMachineAction(state, {
-            personality: 'balanced',
-            difficulty: 'recruit',
-            seed,
-          }),
-        ),
-      ),
-    );
-    const tacticalChoices = new Set(
-      seeds.map((seed) =>
-        keyOf(
-          searchMachineAction(state, {
-            depth: 1,
-            budgetMs: 500,
-            personality: 'balanced',
-            difficulty: 'tactical',
-            seed,
-          }),
-        ),
-      ),
-    );
-    const expertChoices = new Set(
-      seeds.map((seed) =>
-        keyOf(
-          chooseMachineAction(state, {
-            personality: 'balanced',
-            difficulty: 'expert',
-            seed,
-          }),
-        ),
-      ),
-    );
-    const commanderChoices = new Set(
-      seeds.map((seed) =>
-        keyOf(
-          chooseMachineAction(state, {
-            personality: 'balanced',
-            difficulty: 'commander',
-            seed,
-          }),
-        ),
-      ),
-    );
-
-    expect(recruitChoices.size).toBeGreaterThan(1);
-    expect(tacticalChoices.size).toBeGreaterThan(1);
-    expect(commanderChoices.size).toBeLessThanOrEqual(2);
-    expect(expertChoices.size).toBe(1);
-  });
+  it.each<AiDifficulty>(['recruit', 'tactical', 'commander', 'expert'])(
+    'varies near-equivalent orders reproducibly in %s',
+    (difficulty) => {
+      const state = createChoiceState();
+      const seeds = Array.from({ length: 24 }, (_, seed) => seed);
+      const choices = seeds.map((seed) => {
+        const options = {
+          depth: 1,
+          budgetMs: 500,
+          personality: 'balanced' as const,
+          difficulty,
+          seed,
+        };
+        const choose = () =>
+          difficulty === 'recruit'
+            ? chooseMachineAction(state, options)
+            : searchMachineAction(state, options);
+        const choice = choose();
+        expect(getAllLegalActions(state)).toContainEqual(choice);
+        expect(choose()).toEqual(choice);
+        return keyOf(choice);
+      });
+      expect(new Set(choices).size).toBeGreaterThan(1);
+    },
+  );
 
   it('keeps every personality choice legal', () => {
     const state = createChoiceState();
@@ -423,5 +393,83 @@ describe('machine player', () => {
         return outcome?.type === 'win' && outcome.winner === 0;
       }),
     ).toBe(false);
+  });
+
+  it('recognizes a forced Fortress loss prepared by a quiet enemy rotation', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 1 },
+        { id: 'p0', type: 'soldier', owner: 0, position: { q: -1, r: 5 }, facing: 5 },
+        { id: 'p1', type: 'soldier', owner: 1, position: { q: 1, r: 3 }, facing: 0 },
+        { id: 'p2', type: 'soldier', owner: 0, position: { q: -1, r: 4 }, facing: 3 },
+        { id: 'p3', type: 'soldier', owner: 1, position: { q: -1, r: 1 }, facing: 3 },
+        { id: 'p4', type: 'fast', owner: 0, position: { q: -2, r: 2 } },
+        { id: 'p5', type: 'soldier', owner: 1, position: { q: 1, r: 0 }, facing: 2 },
+      ],
+      1,
+    );
+    const result = searchMachineActionWithMetadata(state, {
+      depth: 2,
+      budgetMs: 1_500,
+      difficulty: 'expert',
+      seed: 7,
+    });
+    // Previously this was only a material disadvantage (~ -8,000). Rotating
+    // p0 toward the Fortress prepares a win against every available defense.
+    expect(result.metadata.completedDepth).toBe(2);
+    expect(result.metadata.score).toBeLessThan(-900_000);
+    expect(getAllLegalActions(state)).toContainEqual(result.action);
+  });
+
+  it('keeps immediate wins across seeds instead of varying into a slower plan', () => {
+    const state = createGameState(
+      [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 1 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+        { id: 'fast', type: 'fast', owner: 1, position: { q: 0, r: -2 } },
+        { id: 'soldier', type: 'soldier', owner: 0, position: { q: 4, r: -1 }, facing: 3 },
+      ],
+      1,
+    );
+    for (let seed = 0; seed < 16; seed += 1) {
+      const action = searchMachineAction(state, {
+        depth: 2,
+        budgetMs: 1_000,
+        difficulty: 'expert',
+        seed,
+      });
+      expect(action).not.toBeNull();
+      expect(applyAction(state, action!).state.outcome).toEqual({
+        type: 'win',
+        winner: 1,
+        reason: 'fortress',
+      });
+    }
+  });
+
+  it('keeps the last complete iteration when a deeper search runs out of time', () => {
+    const state = createChoiceState();
+    const options = { depth: 1, budgetMs: 1_000, difficulty: 'expert', seed: 13 } as const;
+    const expected = searchMachineActionWithMetadata(state, options);
+    let expired = false;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => (expired ? 2_000 : 0));
+    try {
+      const result = searchMachineActionWithMetadata(state, {
+        ...options,
+        depth: 5,
+        onProgress: ({ completedDepth }) => {
+          if (completedDepth === 1) expired = true;
+        },
+      });
+      expect(result.metadata).toMatchObject({
+        completedDepth: 1,
+        timedOut: true,
+        score: expected.metadata.score,
+      });
+      expect(result.action).toEqual(expected.action);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

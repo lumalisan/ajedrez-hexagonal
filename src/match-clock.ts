@@ -2,17 +2,18 @@ import type { MatchClockSnapshot, Outcome, Player } from './types';
 
 /** Creates a paused, serializable two-player countdown clock. */
 export function createMatchClock(
-  initialSeconds: number,
+  initialSeconds: number | null,
   activePlayer: Player = 0,
+  turnSeconds: number | null = null,
 ): MatchClockSnapshot {
-  if (!Number.isFinite(initialSeconds) || initialSeconds <= 0)
-    throw new RangeError('La duración del reloj debe ser positiva.');
-  const initialMs = Math.round(initialSeconds * 1_000);
-  if (!Number.isSafeInteger(initialMs) || initialMs <= 0)
-    throw new RangeError('La duración del reloj está fuera de rango.');
+  const initialMs = initialSeconds === null ? null : clockDuration(initialSeconds);
+  const turnInitialMs = turnSeconds === null ? null : clockDuration(turnSeconds);
+  if (initialMs === null && turnInitialMs === null)
+    throw new RangeError('El reloj necesita al menos un límite de tiempo.');
   return {
     initialMs,
-    remainingMs: [initialMs, initialMs],
+    remainingMs: [initialMs ?? 0, initialMs ?? 0],
+    ...(turnInitialMs === null ? {} : { turnInitialMs, turnRemainingMs: turnInitialMs }),
     activePlayer,
     status: 'paused',
     lastTickAt: null,
@@ -57,11 +58,16 @@ export function tickMatchClock(
   if (next.status !== 'running' || next.lastTickAt === null) return next;
   if (nowMs <= next.lastTickAt) return next;
 
-  const elapsed = nowMs - next.lastTickAt;
+  // Stop both reserves at the instant the first limit expires, even if the
+  // caller ticks late (for example after a backgrounded browser tab).
+  const elapsed = Math.min(nowMs - next.lastTickAt, activeClockRemainingMs(next));
   const player = next.activePlayer;
-  next.remainingMs[player] = Math.max(0, next.remainingMs[player] - elapsed);
+  if (next.initialMs !== null)
+    next.remainingMs[player] = Math.max(0, next.remainingMs[player] - elapsed);
+  if (next.turnRemainingMs != null)
+    next.turnRemainingMs = Math.max(0, next.turnRemainingMs - elapsed);
   next.lastTickAt = nowMs;
-  if (next.remainingMs[player] === 0) {
+  if (activeClockRemainingMs(next) === 0) {
     next.status = 'timeout';
     next.timedOutPlayer = player;
     next.lastTickAt = null;
@@ -69,19 +75,31 @@ export function tickMatchClock(
   return next;
 }
 
-/** Charges the old player, then assigns the clock to the supplied player. */
+/** Charges the old player, then assigns the clock; newTurn also handles automatic passes. */
 export function switchMatchClock(
   clock: Readonly<MatchClockSnapshot>,
   activePlayer: Player,
   nowMs: number,
+  newTurn = false,
 ): MatchClockSnapshot {
   const ticked = tickMatchClock(clock, nowMs);
   if (ticked.status === 'timeout') return ticked;
   return {
     ...ticked,
     activePlayer,
+    ...(ticked.turnInitialMs != null && (newTurn || activePlayer !== ticked.activePlayer)
+      ? { turnRemainingMs: ticked.turnInitialMs }
+      : {}),
     lastTickAt: ticked.status === 'running' ? nowMs : null,
   };
+}
+
+/** Time until either enabled limit expires for the active player. */
+export function activeClockRemainingMs(clock: Readonly<MatchClockSnapshot>): number {
+  return Math.min(
+    clock.initialMs === null ? Infinity : clock.remainingMs[clock.activePlayer],
+    clock.turnRemainingMs ?? Infinity,
+  );
 }
 
 /** Converts a timed-out clock into the canonical match result. */
@@ -98,16 +116,31 @@ export function clockOutcome(clock: Readonly<MatchClockSnapshot>): Outcome | nul
 /** Runtime validation for snapshots restored from JSON. */
 export function validateMatchClock(clock: Readonly<MatchClockSnapshot>): string[] {
   const errors: string[] = [];
-  if (!Number.isSafeInteger(clock.initialMs) || clock.initialMs <= 0)
+  if (clock.initialMs !== null && (!Number.isSafeInteger(clock.initialMs) || clock.initialMs <= 0))
     errors.push('La duración inicial del reloj no es válida.');
+  const hasTurnClock = clock.turnInitialMs != null;
+  if (hasTurnClock && (!Number.isSafeInteger(clock.turnInitialMs) || clock.turnInitialMs! <= 0))
+    errors.push('La duración inicial del turno no es válida.');
+  if (clock.initialMs === null && !hasTurnClock)
+    errors.push('El reloj necesita al menos un límite de tiempo.');
   if (
     !Array.isArray(clock.remainingMs) ||
     clock.remainingMs.length !== 2 ||
     clock.remainingMs.some(
-      (remaining) => !Number.isFinite(remaining) || remaining < 0 || remaining > clock.initialMs,
+      (remaining) =>
+        !Number.isFinite(remaining) || remaining < 0 || remaining > (clock.initialMs ?? 0),
     )
   )
     errors.push('El tiempo restante del reloj no es válido.');
+  if (
+    hasTurnClock
+      ? clock.turnRemainingMs == null ||
+        !Number.isFinite(clock.turnRemainingMs) ||
+        clock.turnRemainingMs < 0 ||
+        clock.turnRemainingMs > clock.turnInitialMs!
+      : clock.turnRemainingMs != null
+  )
+    errors.push('El tiempo restante del turno no es válido.');
   if (clock.activePlayer !== 0 && clock.activePlayer !== 1)
     errors.push('El jugador activo del reloj no es válido.');
   if (!['paused', 'running', 'timeout'].includes(clock.status))
@@ -121,14 +154,29 @@ export function validateMatchClock(clock: Readonly<MatchClockSnapshot>): string[
   if (clock.status === 'timeout') {
     if (clock.timedOutPlayer !== 0 && clock.timedOutPlayer !== 1)
       errors.push('El reloj agotado no identifica al jugador.');
-    else if (clock.remainingMs[clock.timedOutPlayer] !== 0)
+    else if (!(
+      (clock.initialMs !== null && clock.remainingMs?.[clock.timedOutPlayer] === 0) ||
+      (hasTurnClock && clock.turnRemainingMs === 0 && clock.timedOutPlayer === clock.activePlayer)
+    ))
       errors.push('El jugador agotado todavía tiene tiempo restante.');
   } else if (clock.timedOutPlayer !== null) {
     errors.push('Solo un reloj agotado puede identificar al jugador sin tiempo.');
-  } else if (clock.remainingMs.some((remaining) => remaining === 0)) {
+  } else if (
+    (clock.initialMs !== null &&
+      Array.isArray(clock.remainingMs) &&
+      clock.remainingMs.some((remaining) => remaining === 0)) ||
+    (hasTurnClock && clock.turnRemainingMs === 0)
+  ) {
     errors.push('Un reloj a cero debe figurar como agotado.');
   }
   return errors;
+}
+
+function clockDuration(seconds: number): number {
+  const milliseconds = Math.round(seconds * 1_000);
+  if (!Number.isFinite(seconds) || !Number.isSafeInteger(milliseconds) || milliseconds <= 0)
+    throw new RangeError('La duración del reloj debe ser positiva y estar dentro de rango.');
+  return milliseconds;
 }
 
 function assertClock(clock: Readonly<MatchClockSnapshot>): void {

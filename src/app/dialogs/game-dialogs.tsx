@@ -85,7 +85,7 @@ function ModeDialog({ initial }: { initial: boolean }) {
             ♙ ⬡
           </span>
           <strong>Partida libre vs IA</strong>
-          <small>Elige entre Fácil, Media, Difícil y Experto.</small>
+          <small>Elige entre Fácil, Medio, Difícil y Experto.</small>
         </button>
         <button
           type="button"

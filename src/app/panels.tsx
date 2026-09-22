@@ -12,6 +12,7 @@ import {
 } from '../engine';
 import { FloatingCommandPanel } from '../floating-command-panel';
 import { ALL_DIRECTIONS, DIRECTION_NAMES, equalHex, hexKey, isOnBoard } from '../hex';
+import { activeClockRemainingMs } from '../match-clock';
 import { actionsAtHex, pieceAccessibleLabel } from '../rendering/model';
 import { scenarioLessonAt } from '../scenarios';
 import type { Direction, GameAction, Piece, Player } from '../types';
@@ -83,7 +84,9 @@ export function MatchStatus() {
   const { state, activeScenario, scenarioProgress, machineThinking, machineSearch, isMachineTurn } =
     snapshot;
   const clock = snapshot.matchRecord?.clock;
-  const remaining = clock?.remainingMs[clock.activePlayer] ?? Infinity;
+  const remaining = clock ? activeClockRemainingMs(clock) : Infinity;
+  const hasTotalClock = clock?.initialMs != null;
+  const hasTurnClock = clock?.turnRemainingMs != null;
   const urgency = remaining <= 20_000 ? 'critical' : remaining <= 60_000 ? 'warning' : '';
   const commander = isMachineTurn
     ? machineThinking
@@ -126,11 +129,21 @@ export function MatchStatus() {
         hidden={!clock}
         aria-label={
           clock
-            ? `Reloj: Cian ${formatClock(clock.remainingMs[0])}, Ámbar ${formatClock(clock.remainingMs[1])}`
+            ? [
+                hasTotalClock
+                  ? `Tiempo total: Cian ${formatClock(clock.remainingMs[0])}, Ámbar ${formatClock(clock.remainingMs[1])}`
+                  : '',
+                hasTurnClock
+                  ? `Turno de ${PLAYER_NAMES[clock.activePlayer]}: ${formatClock(clock.turnRemainingMs!)}`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join('. ')
             : 'Reloj de partida'
         }
       >
         {clock &&
+          hasTotalClock &&
           ([0, 1] as const).map((player) => (
             <span
               key={player}
@@ -140,6 +153,12 @@ export function MatchStatus() {
               <strong>{formatClock(clock.remainingMs[player])}</strong>
             </span>
           ))}
+        {clock && hasTurnClock && (
+          <span className={`clock-side ${clock.status === 'running' ? 'active' : ''}`}>
+            <small>Turno {PLAYER_NAMES[clock.activePlayer]}</small>
+            <strong>{formatClock(clock.turnRemainingMs!)}</strong>
+          </span>
+        )}
       </output>
       <FortressStatus player={1} />
     </div>

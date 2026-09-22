@@ -276,4 +276,28 @@ describe('controlador de partida', () => {
     expect(switched?.activePlayer).toBe(1);
     expect(controller.record.clock).toEqual(switched);
   });
+
+  it.each(['pauseClock', 'resumeClock'] as const)(
+    '%s conserva una derrota por turno vencido entre actualizaciones',
+    (operation) => {
+      const controller = new MatchController(
+        createMatchRecord(
+          createClassicConfig({ mode: 'local', clockSeconds: 300, turnClockSeconds: 30 }),
+        ),
+      );
+      controller.resumeClock(1_000);
+      controller[operation](32_000);
+      expect(controller.store.getState().game.outcome).toEqual({
+        type: 'win',
+        winner: 1,
+        reason: 'timeout',
+      });
+      expect(controller.record.clock?.remainingMs).toEqual([270_000, 300_000]);
+      expect(controller.record.clock?.turnRemainingMs).toBe(0);
+      expect(replayRecord(controller.record).outcome).toEqual(
+        controller.store.getState().game.outcome,
+      );
+      expect(controller.canUndo()).toBe(false);
+    },
+  );
 });

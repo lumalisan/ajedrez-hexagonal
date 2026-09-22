@@ -40,16 +40,6 @@ function Header() {
         <SoundButton />
         <button
           className="icon-button"
-          id="achievements-button"
-          type="button"
-          aria-label="Abrir logros"
-          title="Logros"
-          onClick={() => commands.openDialog({ kind: 'achievements' })}
-        >
-          <AchievementsMenuIcon />
-        </button>
-        <button
-          className="icon-button"
           id="settings-button"
           type="button"
           aria-label="Abrir opciones"
@@ -67,6 +57,16 @@ function Header() {
           onClick={() => commands.openDialog({ kind: 'rules' })}
         >
           <span aria-hidden="true">?</span>
+        </button>
+        <button
+          className="icon-button"
+          id="achievements-button"
+          type="button"
+          aria-label="Abrir logros"
+          title="Logros"
+          onClick={() => commands.openDialog({ kind: 'achievements' })}
+        >
+          <AchievementsMenuIcon />
         </button>
         <button
           className="icon-button"
@@ -110,7 +110,17 @@ function Header() {
 
 function BoardToolbar() {
   const { snapshot, commands } = useGame();
-  const { logOpen, isLocalMatch, replayCursor, homeView, animating, canUndo, canRedo } = snapshot;
+  const {
+    logOpen,
+    isLocalMatch,
+    replayCursor,
+    homeView,
+    animating,
+    machineThinking,
+    matchRecord,
+    canUndo,
+    canRedo,
+  } = snapshot;
   const historyVisible = isLocalMatch && replayCursor === null && homeView === null;
   const toggleLog = () => {
     commands.setLogOpen(!logOpen);
@@ -153,6 +163,24 @@ function BoardToolbar() {
         </div>
         <button
           type="button"
+          id="replay-button"
+          data-open-replay
+          aria-label={replayCursor === null ? 'Ver repetición' : 'Cerrar repetición'}
+          title={replayCursor === null ? 'Ver repetición' : 'Cerrar repetición'}
+          aria-expanded={replayCursor !== null}
+          disabled={!matchRecord || animating || machineThinking}
+          onClick={() => {
+            if (replayCursor === null) commands.openReplay();
+            else commands.closeReplay();
+          }}
+        >
+          <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3" y="6" width="12" height="12" rx="2" />
+            <path d="m15 10 6-3v10l-6-3Z" />
+          </svg>
+        </button>
+        <button
+          type="button"
           id="log-toggle"
           aria-label={logOpen ? 'Ocultar registro de batalla' : 'Mostrar registro de batalla'}
           aria-controls="battle-log-panel"
@@ -165,30 +193,32 @@ function BoardToolbar() {
             <path d="M6 3h14v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 0v18M10 7h6m-6 5h6m-6 5h4" />
           </svg>
         </button>
-        <button
-          type="button"
-          id="zoom-out"
-          aria-label="Alejar"
-          onClick={() => commands.zoomBy(1 / 1.16)}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          id="reset-view"
-          aria-label="Centrar tablero"
-          onClick={commands.resetView}
-        >
-          ◎
-        </button>
-        <button
-          type="button"
-          id="zoom-in"
-          aria-label="Acercar"
-          onClick={() => commands.zoomBy(1.16)}
-        >
-          +
-        </button>
+        <div className="view-controls" role="group" aria-label="Vista del tablero">
+          <button
+            type="button"
+            id="zoom-out"
+            aria-label="Alejar"
+            onClick={() => commands.zoomBy(1 / 1.16)}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            id="reset-view"
+            aria-label="Centrar tablero"
+            onClick={commands.resetView}
+          >
+            ◎
+          </button>
+          <button
+            type="button"
+            id="zoom-in"
+            aria-label="Acercar"
+            onClick={() => commands.zoomBy(1.16)}
+          >
+            +
+          </button>
+        </div>
       </div>
     </div>
   );

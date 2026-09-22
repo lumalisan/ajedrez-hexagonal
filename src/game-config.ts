@@ -26,6 +26,7 @@ export interface MatchConfigInput {
   fixedBoard?: boolean;
   handoffScreen?: boolean;
   clockSeconds?: number | null;
+  turnClockSeconds?: number | null;
   noProgressPlyLimit?: number | null;
   playerNames?: [string, string];
   fortressHp?: FortressHp;
@@ -52,6 +53,7 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     fixedBoard: input.fixedBoard ?? true,
     handoffScreen: input.handoffScreen ?? false,
     clockSeconds: input.clockSeconds ?? null,
+    turnClockSeconds: input.turnClockSeconds ?? null,
     noProgressPlyLimit:
       input.noProgressPlyLimit === undefined ? CLASSIC_NO_PROGRESS_LIMIT : input.noProgressPlyLimit,
     allowUndo: true,
@@ -101,9 +103,19 @@ export function validateMatchConfig(config: MatchConfig): string[] {
     config.options.clockSeconds !== null &&
     (!Number.isFinite(config.options.clockSeconds) ||
       config.options.clockSeconds <= 0 ||
+      Math.round(config.options.clockSeconds * 1_000) <= 0 ||
       !Number.isSafeInteger(Math.round(config.options.clockSeconds * 1_000)))
   )
     errors.push('El reloj debe ser positivo.');
+  if (
+    config.options.turnClockSeconds !== undefined &&
+    config.options.turnClockSeconds !== null &&
+    (!Number.isFinite(config.options.turnClockSeconds) ||
+      config.options.turnClockSeconds <= 0 ||
+      Math.round(config.options.turnClockSeconds * 1_000) <= 0 ||
+      !Number.isSafeInteger(Math.round(config.options.turnClockSeconds * 1_000)))
+  )
+    errors.push('El tiempo por turno debe ser positivo.');
   if (
     config.options.noProgressPlyLimit !== undefined &&
     config.options.noProgressPlyLimit !== null &&

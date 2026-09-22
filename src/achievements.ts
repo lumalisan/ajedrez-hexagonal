@@ -76,7 +76,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'ai-tactical',
     'Tu algoritmo tiene goteras',
-    'Gana una partida contra la IA en dificultad Media.',
+    'Gana una partida contra la IA en nivel Medio.',
     'matches',
   ),
   achievement(
@@ -94,19 +94,19 @@ export const ACHIEVEMENTS = [
   achievement(
     'clock-5',
     'Me da tiempo antes del café',
-    'Gana una partida con el reloj configurado a 5 minutos por bando.',
+    'Gana una partida con el tiempo total configurado a 5 minutos por jugador.',
     'matches',
   ),
   achievement(
     'clock-10',
     'Diez minutos de gloria',
-    'Gana una partida con el reloj configurado a 10 minutos por bando.',
+    'Gana una partida con el tiempo total configurado a 10 minutos por jugador.',
     'matches',
   ),
   achievement(
     'clock-20',
     'Sin prisa, pero con conquista',
-    'Gana una partida con el reloj configurado a 20 minutos por bando.',
+    'Gana una partida con el tiempo total configurado a 20 minutos por jugador.',
     'matches',
   ),
   achievement(

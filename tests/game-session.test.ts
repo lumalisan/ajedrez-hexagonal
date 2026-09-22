@@ -7,7 +7,13 @@ import { createGameSession } from '../src/app/game-session';
 import { loadAchievementProgress } from '../src/achievements';
 import { getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
-import { appendAction, createMatchRecord, replayRecord } from '../src/match-record';
+import {
+  appendAction,
+  createMatchRecord,
+  parseRecord,
+  replayRecord,
+  serializeRecord,
+} from '../src/match-record';
 import { loadActiveMatch, loadPreferences, saveActiveMatch } from '../src/match-storage';
 import type { GameAction, GameState, MatchRecord } from '../src/types';
 import { installMemoryStorage } from './helpers/memory-storage';
@@ -117,6 +123,89 @@ describe('sesión que conecta React con el juego', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(['recruit', 'tactical', 'commander', 'expert'] as const)(
+    'asigna una semilla por partida y otra en la revancha para %s',
+    async (difficulty) => {
+      let nextSeed = 31;
+      vi.stubGlobal('crypto', {
+        getRandomValues: (values: Uint32Array) => {
+          values[0] = nextSeed++;
+          return values;
+        },
+      });
+      const config = createClassicConfig({
+        mode: 'machine',
+        difficulty,
+        personality: 'aggressive',
+      });
+      const session = createSession();
+      session.commands.startMatch(config);
+      const firstRecord = session.getSnapshot().matchRecord!;
+
+      expect(firstRecord.config.participants[1].seed).toBe(31);
+      expect(loadActiveMatch().record?.config.participants[1].seed).toBe(31);
+      expect(config.participants[1].seed).toBeUndefined();
+
+      session.commands.prepareAction(rotation(session.getSnapshot().state));
+      await session.commands.commitPending();
+      await vi.advanceTimersByTimeAsync(220);
+      expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+      expect(collaborators.chooseAction.mock.calls[0][1].participants[1].seed).toBe(31);
+
+      session.commands.resetGame();
+      const rematch = session.getSnapshot().matchRecord!;
+      expect(rematch.config.participants[1]).toEqual({
+        ...config.participants[1],
+        seed: 32,
+      });
+      expect(rematch.config.setup).toEqual(config.setup);
+      expect(rematch.config.options).toEqual(config.options);
+      expect(rematch.actions).toEqual([]);
+      expect(loadActiveMatch().record?.config.participants[1].seed).toBe(32);
+      expect(firstRecord.config.participants[1].seed).toBe(31);
+
+      session.commands.startMatch(config);
+      expect(session.getSnapshot().matchConfig?.participants[1].seed).toBe(33);
+    },
+  );
+
+  it.each([0, 42])(
+    'respeta la semilla explícita %s al iniciar una partida reproducible',
+    (seed) => {
+      const session = createSession();
+      const config = createClassicConfig({ mode: 'machine', seed });
+      session.commands.startMatch(config);
+      expect(session.getSnapshot().matchRecord?.config.participants[1].seed).toBe(seed);
+      session.commands.startMatch(config);
+      expect(loadActiveMatch().record?.config.participants[1].seed).toBe(seed);
+      expect(config.participants[1].seed).toBe(seed);
+    },
+  );
+
+  it.each([undefined, 0, 42])(
+    'conserva la semilla %s al continuar, reproducir e importar, incluidos guardados antiguos',
+    async (seed) => {
+      const record = savedRecord(2, 'machine');
+      if (seed !== undefined) record.config.participants[1].seed = seed;
+      const serialized = serializeRecord(record);
+      expect(parseRecord(serialized)).toEqual(record);
+      saveActiveMatch(record);
+      const session = createSession();
+      session.commands.continueMatch();
+      expect(session.getSnapshot().matchRecord?.config.participants[1].seed).toBe(seed);
+
+      session.commands.openReplay(0);
+      session.commands.setReplayCursor(1);
+      session.commands.closeReplay();
+      expect(session.getSnapshot().matchRecord?.config.participants[1].seed).toBe(seed);
+      expect(loadActiveMatch().record?.config.participants[1].seed).toBe(seed);
+
+      await session.commands.importMatch({ text: async () => serialized } as File);
+      expect(session.getSnapshot().matchRecord).toEqual(record);
+      expect(loadActiveMatch().record?.config.participants[1].seed).toBe(seed);
+    },
+  );
+
   it('continúa un guardado y publica snapshots estables para las suscripciones', () => {
     const record = savedRecord();
     saveActiveMatch(record);
@@ -174,6 +263,93 @@ describe('sesión que conecta React con el juego', () => {
     expect(loadActiveMatch().record).toMatchObject({ currentAction: 1, actions: [action] });
   });
 
+  it.each([null, 30])(
+    'salir conserva la posición y las órdenes deshechas para continuar (reloj: %s)',
+    async (clockSeconds) => {
+      const session = createSession();
+      session.start();
+      session.commands.startMatch(
+        createClassicConfig({
+          mode: 'local',
+          clockSeconds,
+          turnClockSeconds: clockSeconds === null ? null : 5,
+        }),
+      );
+      for (let turn = 0; turn < 2; turn++) {
+        session.commands.prepareAction(rotation(session.getSnapshot().state));
+        await session.commands.commitPending();
+      }
+      const afterRedo = structuredClone(session.getSnapshot().state);
+      session.commands.undo();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const beforeExit = structuredClone(session.getSnapshot());
+
+      browserWindow.addEventListener('click', session.commands.abandon, { once: true });
+      browserWindow.dispatchEvent(new Event('click'));
+
+      expect(session.getSnapshot().homeView).toBe('main');
+      expect(session.getSnapshot().matchRecord).toBeNull();
+      const saved = loadActiveMatch().record;
+      expect(saved).toMatchObject({
+        currentAction: 1,
+        actions: beforeExit.matchRecord!.actions,
+        conclusion: null,
+      });
+      expect(replayRecord(saved!)).toEqual(beforeExit.state);
+      if (clockSeconds !== null) {
+        expect(saved?.clock).toMatchObject({
+          status: 'paused',
+          lastTickAt: null,
+          remainingMs: [30_000, 28_000],
+          turnRemainingMs: 3_000,
+        });
+      }
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(loadActiveMatch().record).toEqual(saved);
+      session.dispose();
+
+      const resumed = createSession();
+      resumed.start();
+      resumed.commands.continueMatch();
+      expect(resumed.getSnapshot().homeView).toBeNull();
+      expect(resumed.getSnapshot().state).toEqual(beforeExit.state);
+      expect(resumed.getSnapshot().canRedo).toBe(true);
+      if (clockSeconds !== null) {
+        expect(resumed.getSnapshot().matchRecord?.clock).toMatchObject({
+          status: 'running',
+          remainingMs: saved!.clock!.remainingMs,
+          turnRemainingMs: 3_000,
+        });
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(resumed.getSnapshot().matchRecord?.clock).toMatchObject({
+          remainingMs: [30_000, 27_000],
+          turnRemainingMs: 2_000,
+        });
+      }
+      resumed.commands.redo();
+      expect(resumed.getSnapshot().state).toEqual(afterRedo);
+    },
+  );
+
+  it('salir después de rendirse mantiene la partida terminada sin continuación', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local', clockSeconds: 30 }));
+    session.commands.resign();
+    expect(session.getSnapshot().state.outcome).toEqual({
+      type: 'win',
+      winner: 1,
+      reason: 'resignation',
+    });
+
+    session.commands.abandon();
+
+    expect(session.getSnapshot().homeView).toBe('main');
+    expect(loadActiveMatch().record).toBeNull();
+    session.commands.continueMatch();
+    expect(session.getSnapshot().homeView).toBe('main');
+    expect(session.getSnapshot().matchRecord).toBeNull();
+  });
+
   it('rechaza una orden ilegal sin alterar la partida ni el registro', async () => {
     const session = createSession();
     session.commands.startMatch(createClassicConfig({ mode: 'local' }));
@@ -209,9 +385,14 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().pendingAction).toEqual(action);
   });
 
-  it.each(['unidad seleccionada', 'casilla vacía'])(
-    'pulsar %s cancela la orden sin deseleccionar la unidad',
-    (target) => {
+  it.each([
+    ['unidad seleccionada', false],
+    ['casilla vacía', false],
+    ['unidad seleccionada', true],
+    ['casilla vacía', true],
+  ])(
+    'pulsar %s deselecciona sin modificar la partida (orden preparada: %s)',
+    (target, prepared) => {
       const session = createSession();
       session.commands.startMatch(createClassicConfig({ mode: 'local' }));
       const before = structuredClone(session.getSnapshot().state);
@@ -224,21 +405,83 @@ describe('sesión que conecta React con el juego', () => {
       );
       if (!move) throw new Error('El soldado central debe poder moverse.');
       session.commands.selectPiece(piece.id);
-      session.commands.prepareAction(move);
+      if (prepared) session.commands.prepareAction(move);
 
       const hex = target === 'unidad seleccionada' ? piece.position : { q: 0, r: 0 };
       session.commands.selectHex(hex);
-      session.commands.selectHex(hex);
 
       expect(session.getSnapshot()).toMatchObject({
-        selectedId: piece.id,
+        selectedId: null,
         pendingAction: null,
         mode: { kind: 'default' },
+        focusedHex: hex,
+        visibleActions: [],
         state: before,
       });
       expect(loadActiveMatch().record?.actions).toEqual([]);
     },
   );
+
+  it.each(['unidad seleccionada', 'casilla vacía'])(
+    'pulsar %s también deselecciona una unidad rival inspeccionada',
+    (target) => {
+      const session = createSession();
+      session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+      const before = structuredClone(session.getSnapshot().state);
+      const rival = before.pieces.find((piece) => piece.owner !== before.activePlayer)!;
+      session.commands.selectHex(rival.position);
+      expect(session.getSnapshot().selectedId).toBe(rival.id);
+
+      session.commands.selectHex(
+        target === 'unidad seleccionada' ? rival.position : { q: 0, r: 0 },
+      );
+
+      expect(session.getSnapshot()).toMatchObject({
+        selectedId: null,
+        pendingAction: null,
+        visibleActions: [],
+        state: before,
+      });
+    },
+  );
+
+  it('pulsar un destino legal prepara la orden y repetirlo la confirma', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const before = structuredClone(session.getSnapshot().state);
+    session.commands.selectHex({ q: 0, r: -2 });
+    const selectedId = session.getSnapshot().selectedId;
+    const destination = { q: 0, r: -1 };
+
+    session.commands.selectHex(destination);
+
+    expect(session.getSnapshot()).toMatchObject({
+      selectedId,
+      pendingAction: { kind: 'move', pieceId: selectedId, to: destination },
+      state: before,
+    });
+    const action = session.getSnapshot().pendingAction;
+    session.commands.selectHex(destination);
+
+    expect(session.getSnapshot().state.ply).toBe(before.ply + 1);
+    expect(loadActiveMatch().record?.actions).toEqual([action]);
+  });
+
+  it('mantiene la confirmación de una rotación preparada sobre la propia casilla', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const before = structuredClone(session.getSnapshot().state);
+    const action = rotation(before);
+    const piece = before.pieces.find((candidate) => candidate.id === action.pieceId)!;
+    session.commands.selectPiece(piece.id);
+    session.commands.setMode({ kind: 'rotate' });
+    session.commands.prepareAction(action);
+
+    session.commands.selectHex(piece.position);
+
+    expect(session.getSnapshot().state.ply).toBe(before.ply + 1);
+    expect(loadActiveMatch().record?.actions).toEqual([action]);
+  });
 
   it('pulsar una casilla vacía conserva la elección entre unidades apiladas', () => {
     const session = createSession();
@@ -295,6 +538,172 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().state).toEqual(activeState);
     expect(session.getSnapshot().matchRecord).toEqual(activeRecord);
     expect(loadActiveMatch().record).toEqual(persistedRecord);
+  });
+
+  it.each([null, 300])(
+    'reanuda ambos límites desde el guardado sin contar tiempo offline (total %s)',
+    async (total) => {
+      const session = createSession();
+      session.start();
+      session.commands.startMatch(
+        createClassicConfig({ mode: 'local', clockSeconds: total, turnClockSeconds: 30 }),
+      );
+      await vi.advanceTimersByTimeAsync(4_000);
+      const saved = loadActiveMatch().record!;
+      expect(saved.clock?.turnRemainingMs).toBe(26_000);
+      session.dispose();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      const resumed = createSession();
+      resumed.start();
+      resumed.commands.loadRecord(saved);
+      expect(resumed.getSnapshot().state.outcome).toBeNull();
+      expect(resumed.getSnapshot().matchRecord?.clock?.turnRemainingMs).toBe(26_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(resumed.getSnapshot().matchRecord?.clock?.turnRemainingMs).toBe(25_000);
+      expect(loadActiveMatch().record?.clock?.turnRemainingMs).toBe(25_000);
+    },
+  );
+
+  it('pausa ambos límites en repetición y reinicia el turno al cambiar de jugador', async () => {
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(
+      createClassicConfig({ mode: 'local', clockSeconds: 300, turnClockSeconds: 30 }),
+    );
+    await vi.advanceTimersByTimeAsync(2_000);
+    session.commands.openReplay();
+    await vi.advanceTimersByTimeAsync(60_000);
+    session.commands.closeReplay();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      remainingMs: [297_000, 300_000],
+      turnRemainingMs: 27_000,
+    });
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      activePlayer: 1,
+      remainingMs: [297_000, 300_000],
+      turnRemainingMs: 30_000,
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    session.commands.undo();
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      activePlayer: 0,
+      remainingMs: [297_000, 295_000],
+      turnRemainingMs: 30_000,
+    });
+    session.commands.redo();
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      activePlayer: 1,
+      remainingMs: [297_000, 295_000],
+      turnRemainingMs: 30_000,
+    });
+  });
+
+  it('renueva el turno cuando el rival pasa automáticamente sin acciones legales', async () => {
+    const session = createSession();
+    session.start();
+    const config = createClassicConfig({ mode: 'local', clockSeconds: 300, turnClockSeconds: 30 });
+    const soldier = config.setup.find(
+      ({ piece }) => piece.owner === 0 && piece.type === 'soldier',
+    )!;
+    config.setup = config.setup.filter(
+      ({ piece }) => piece.type === 'fortress' || piece.id === soldier.id,
+    );
+    session.commands.startMatch(config);
+    await vi.advanceTimersByTimeAsync(29_000);
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+
+    await session.commands.commitPending();
+
+    expect(session.getSnapshot().lastEvents).toContainEqual({ type: 'pass', owner: 1 });
+    expect(session.getSnapshot().state).toMatchObject({ activePlayer: 0, ply: 1, outcome: null });
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      activePlayer: 0,
+      remainingMs: [271_000, 300_000],
+      turnRemainingMs: 30_000,
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(session.getSnapshot().state.outcome).toBeNull();
+    expect(session.getSnapshot().matchRecord?.clock?.turnRemainingMs).toBe(28_000);
+  });
+
+  it('cobra el reloj una sola vez al aceptar una orden justo antes del límite', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    const committedAt = Date.now() + 29_999;
+    const now = vi
+      .spyOn(Date, 'now')
+      .mockReturnValueOnce(committedAt)
+      .mockReturnValue(committedAt + 2);
+    try {
+      await session.commands.commitPending();
+      expect(session.getSnapshot().state).toMatchObject({ activePlayer: 1, ply: 1, outcome: null });
+      expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+        status: 'running',
+        activePlayer: 1,
+        turnRemainingMs: 30_000,
+      });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('suspende ambos límites durante la animación y el relevo', async () => {
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(
+      createClassicConfig({
+        mode: 'local',
+        clockSeconds: 300,
+        turnClockSeconds: 30,
+        handoffScreen: true,
+      }),
+    );
+    session.commands.updatePreferences({ handoffScreen: true });
+    const renderer = rendererDouble();
+    const animation = deferred<void>();
+    renderer.playEvents.mockReturnValue(animation.promise);
+    session.attachRenderer(renderer);
+    await vi.advanceTimersByTimeAsync(2_000);
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    const committed = session.commands.commitPending();
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      status: 'paused',
+      activePlayer: 1,
+      remainingMs: [298_000, 300_000],
+      turnRemainingMs: 30_000,
+    });
+    animation.resolve();
+    await committed;
+    expect(session.getSnapshot().dialog?.kind).toBe('handoff');
+    await vi.advanceTimersByTimeAsync(40_000);
+    session.commands.readyForTurn();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      status: 'running',
+      activePlayer: 1,
+      remainingMs: [298_000, 297_000],
+      turnRemainingMs: 27_000,
+    });
+  });
+
+  it('concluye y guarda la derrota al agotar un turno sin reloj total', async () => {
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    const outcome = { type: 'win', winner: 1, reason: 'timeout' };
+    expect(session.getSnapshot().state.outcome).toEqual(outcome);
+    expect(session.getSnapshot().dialog?.kind).toBe('outcome');
+    const portable = parseRecord(serializeRecord(session.getSnapshot().matchRecord!));
+    expect(replayRecord(portable).outcome).toEqual(outcome);
+    session.commands.undo();
+    expect(session.getSnapshot().state.outcome).toEqual(outcome);
   });
 
   it('pausa el reloj durante la repetición y lo reanuda desde el tiempo restante', async () => {

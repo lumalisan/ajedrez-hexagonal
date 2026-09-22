@@ -710,7 +710,6 @@ export function applyAction(
     return failure(state, 'Esa orden no es legal en la posición actual.');
   }
 
-  const before = cloneState(state);
   const next = cloneState(state);
   const events: GameEvent[] = [];
   const actor = getPiece(next, action.pieceId);
@@ -723,7 +722,7 @@ export function applyAction(
   next.history.push({
     id: next.ply,
     player: state.activePlayer,
-    text: describeResolvedAction(before, action, events),
+    text: describeResolvedAction(state, action, events),
   });
   if (next.history.length > 80) next.history.shift();
 
@@ -785,7 +784,13 @@ function canPlayerDestroyEnemyFortress(state: GameState, player: Player): boolea
 }
 
 function passTurnIfBlocked(state: GameState, events: GameEvent[]): void {
-  if (getAllLegalActions(state).length > 0) return;
+  if (
+    state.pieces.some(
+      (piece) =>
+        piece.owner === state.activePlayer && getLegalActionsForPiece(state, piece.id).length > 0,
+    )
+  )
+    return;
   const blockedPlayer = state.activePlayer;
   state.activePlayer = otherPlayer(blockedPlayer);
   events.push({ type: 'pass', owner: blockedPlayer });

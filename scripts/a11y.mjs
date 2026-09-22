@@ -86,25 +86,27 @@ try {
       await page.locator('[data-home-mode="local"]').click();
       await page.locator('[data-start-free]').waitFor({ state: 'visible' });
       await audit('match configuration');
-      await page.locator('[data-preset="custom"]').click();
       const fortressControl = await openSelect(page, 'Puntos de vida de la Fortaleza');
-      await audit('custom match / open fortress health menu');
+      await audit('match configuration / open fortress health menu');
       await fortressControl.press('Escape');
       await openSelect(page, 'Disposición inicial');
-      await audit('custom match / open layout menu');
+      await audit('match configuration / open layout menu');
       await chooseSelectOption(
         page,
         'Disposición inicial',
         profile.isMobile ? 'Frente de infantería' : 'Frente blindado',
       );
       await page.locator('[data-layout-preview]').waitFor({ state: 'visible' });
-      await audit('custom match / initial layout preview');
+      await audit('match configuration / initial layout preview');
       await chooseSelectOption(page, 'Disposición inicial', 'Frente extendido');
-      await audit('custom match / extended layout preview');
-      const clockControl = await openSelect(page, 'Tiempo');
-      await audit('match configuration / open time control menu');
+      await audit('match configuration / extended layout preview');
+      const turnClockControl = await openSelect(page, 'Tiempo por turno');
+      await audit('match configuration / open turn time menu');
+      await turnClockControl.press('Escape');
+      const clockControl = await openSelect(page, 'Tiempo total');
+      await audit('match configuration / open total time menu');
       await clockControl.press('Escape');
-      await page.locator('[data-preset="tactical"]').click();
+      await chooseSelectOption(page, 'Disposición inicial', 'Frente clásico');
       await page.locator('[data-start-free]').click();
       await page.locator('#game-canvas').waitFor({ state: 'visible' });
 
@@ -135,6 +137,11 @@ try {
       await page.locator('#battle-log-panel').waitFor({ state: 'visible' });
       await audit('match / battle log');
       await page.locator('#close-battle-log').click();
+
+      await page.locator('[data-open-replay]').click();
+      await page.locator('.replay-dock').waitFor({ state: 'visible' });
+      await audit('match / replay');
+      await page.locator('[data-replay-close]').click();
 
       await page.locator('#settings-button').click();
       await page.locator('.accessibility-settings').waitFor({ state: 'visible' });

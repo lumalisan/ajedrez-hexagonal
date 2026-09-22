@@ -122,7 +122,7 @@ describe('Worker AI strategy', () => {
     expect(worker.postMessage).toHaveBeenCalledWith({
       id: 1,
       state,
-      depth: 7,
+      depth: 9,
       budgetMs: 75,
       difficulty: 'expert',
       personality: 'balanced',
@@ -215,7 +215,7 @@ describe('Worker AI strategy', () => {
       expect(ai.searchMachineAction).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          depth: 7,
+          depth: 9,
           budgetMs: 400,
           difficulty: 'expert',
           seed: 81,

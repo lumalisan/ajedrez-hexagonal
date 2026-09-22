@@ -44,6 +44,10 @@ interface SearchContext {
   evaluation: WeakMap<GameState, number>;
   fortressThreats: WeakMap<GameState, Map<Player, boolean>>;
   variationWindow: number;
+  maxMoves: number;
+  maxRootMoves: number;
+  tacticalDepth: number;
+  rootMustDefend: boolean;
   resolutionRules?: Readonly<ActionResolutionRules>;
 }
 
@@ -159,8 +163,8 @@ const PERSONALITY_WEIGHTS: Record<AiPersonality, EvaluationWeights> = {
 const VARIATION: Record<AiDifficulty, { window: number; temperature: number; limit: number }> = {
   recruit: { window: 110, temperature: 55, limit: 6 },
   tactical: { window: 35, temperature: 18, limit: 4 },
-  commander: { window: 3, temperature: 1.5, limit: 2 },
-  expert: { window: 0, temperature: 0, limit: 1 },
+  commander: { window: 18, temperature: 8, limit: 4 },
+  expert: { window: 10, temperature: 4, limit: 4 },
 };
 
 /** Selects a legal move using a quick one-ply evaluation (Recluta). */
@@ -178,9 +182,6 @@ export function chooseMachineAction(
     actions,
     player,
     personality,
-    0,
-    undefined,
-    [],
     undefined,
     options.resolutionRules,
   );
@@ -248,18 +249,14 @@ export function searchMachineActionWithMetadata(
     evaluation: new WeakMap(),
     fortressThreats: new WeakMap(),
     variationWindow: VARIATION[options.difficulty ?? 'expert'].window,
+    maxMoves: (options.difficulty ?? 'expert') === 'expert' ? 28 : MAX_SEARCH_MOVES,
+    maxRootMoves: (options.difficulty ?? 'expert') === 'expert' ? 48 : MAX_ROOT_SEARCH_MOVES,
+    tacticalDepth: (options.difficulty ?? 'expert') === 'expert' ? 4 : 2,
+    rootMustDefend: false,
     resolutionRules: options.resolutionRules,
   };
-  const initial = orderActions(
-    state,
-    actions,
-    context.rootPlayer,
-    context.personality,
-    0,
-    undefined,
-    [],
-    context,
-  );
+  context.rootMustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
+  const initial = orderActions(state, actions, context.rootPlayer, context.personality, context);
   let ranked: ScoredAction[] = initial.map(({ action, score }) => ({ action, score }));
   let completedDepth = 0;
   let timedOut = false;
@@ -320,7 +317,13 @@ function searchRoot(
     .filter((candidate, index) => {
       const firstForPiece = !seenPieces.has(candidate.action.pieceId);
       seenPieces.add(candidate.action.pieceId);
-      return depth === 1 || candidate.tactical || firstForPiece || index < MAX_ROOT_SEARCH_MOVES;
+      return (
+        depth === 1 ||
+        context.rootMustDefend ||
+        candidate.tactical ||
+        firstForPiece ||
+        index < context.maxRootMoves
+      );
     });
   const ranked: ScoredAction[] = [];
   let alpha = Number.NEGATIVE_INFINITY;
@@ -358,7 +361,7 @@ function alphaBeta(
 ): number {
   checkTime(context);
   if (state.outcome) return terminalScore(state, context.rootPlayer, ply);
-  if (depth <= 0) return quiescence(state, alpha, beta, context, ply, 2);
+  if (depth <= 0) return quiescence(state, alpha, beta, context, ply, context.tacticalDepth);
 
   const key = positionKey(state);
   const cached = context.table.get(key);
@@ -375,44 +378,43 @@ function alphaBeta(
   if (!actions.length) return evaluateSearchState(state, context);
   const maximizing = state.activePlayer === context.rootPlayer;
   const killers = context.killers.get(ply) ?? [];
+  const mustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
   const candidates = selectSearchActions(
     state,
     actions,
     [...(cached?.actionKey ? [cached.actionKey] : []), ...killers],
     context.personality,
-  );
-  const ordered = orderActions(
-    state,
-    candidates,
-    context.rootPlayer,
-    context.personality,
-    ply,
-    cached?.actionKey,
-    killers,
-    context,
+    mustDefend ? Infinity : context.maxMoves,
   );
   let bestScore = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
   let bestActionKey: string | undefined;
 
-  for (let index = 0; index < ordered.length; index += 1) {
-    const candidate = ordered[index];
+  for (let index = 0; index < candidates.length; index += 1) {
+    checkTime(context);
+    const action = candidates[index];
+    const result = applyAction(state, action, context.resolutionRules);
+    if (!result.ok) continue;
+    const tactical =
+      result.events.some((event) =>
+        ['destroy', 'convert', 'fortressDamage', 'intercept'].includes(event.type),
+      ) || Boolean(result.state.outcome);
     let childDepth = depth - 1;
     // Search late, quiet moves one ply less, then re-search if they surprise us.
-    const reduce = depth >= 3 && index >= 8 && !candidate.tactical;
+    const reduce = depth >= 3 && index >= 8 && !tactical && !mustDefend;
     if (reduce) childDepth -= 1;
-    let score = alphaBeta(candidate.state, childDepth, alpha, beta, context, ply + 1);
+    let score = alphaBeta(result.state, childDepth, alpha, beta, context, ply + 1);
     if (reduce && ((maximizing && score > alpha) || (!maximizing && score < beta))) {
-      score = alphaBeta(candidate.state, depth - 1, alpha, beta, context, ply + 1);
+      score = alphaBeta(result.state, depth - 1, alpha, beta, context, ply + 1);
     }
 
     if (maximizing ? score > bestScore : score < bestScore) {
       bestScore = score;
-      bestActionKey = actionKey(candidate.action);
+      bestActionKey = actionKey(action);
     }
     if (maximizing) alpha = Math.max(alpha, bestScore);
     else beta = Math.min(beta, bestScore);
     if (alpha >= beta) {
-      if (!candidate.tactical) rememberKiller(context, ply, actionKey(candidate.action));
+      if (!tactical) rememberKiller(context, ply, actionKey(action));
       break;
     }
   }
@@ -434,12 +436,16 @@ function quiescence(
   if (state.outcome) return terminalScore(state, context.rootPlayer, ply);
 
   const maximizing = state.activePlayer === context.rootPlayer;
+  // Even at the extension limit, a legal winning hit is not a static advantage.
+  if (hasImmediateFortressWin(state, state.activePlayer, context)) {
+    return maximizing ? MATE_SCORE - ply - 1 : -MATE_SCORE + ply + 1;
+  }
   let value = evaluateSearchState(state, context);
-  if (remaining <= 0) return value;
 
   // A threatened last Fortress point is the equivalent of check: passing is
   // not a legal substitute for a defense, and a quiet block must be searched.
   const mustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
+  if (remaining <= 0 && !mustDefend) return value;
   if (mustDefend) {
     value = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
   } else if (maximizing) {
@@ -453,26 +459,25 @@ function quiescence(
   const tacticalActions = getAllLegalActions(state).filter(
     (action) => mustDefend || isTacticalAction(state, action),
   );
-  const tactical = orderActions(
-    state,
-    tacticalActions,
-    context.rootPlayer,
-    context.personality,
-    ply,
-    undefined,
-    [],
-    context,
-  ).filter((candidate) => mustDefend || candidate.tactical);
-  for (const candidate of tactical) {
+  const tactical = selectSearchActions(state, tacticalActions, [], context.personality, Infinity);
+  for (const action of tactical) {
+    checkTime(context);
+    const candidate = applyAction(state, action, context.resolutionRules);
+    if (!candidate.ok) continue;
     const leavesFortressLost =
       mustDefend &&
       !candidate.state.outcome &&
+      candidate.state.activePlayer !== state.activePlayer &&
       hasImmediateFortressWin(candidate.state, otherPlayer(state.activePlayer), context);
-    const score = leavesFortressLost
-      ? maximizing
-        ? -MATE_SCORE + ply + 2
-        : MATE_SCORE - ply - 2
-      : quiescence(candidate.state, alpha, beta, context, ply + 1, remaining - 1);
+    const score = candidate.state.outcome
+      ? terminalScore(candidate.state, context.rootPlayer, ply + 1)
+      : leavesFortressLost
+        ? maximizing
+          ? -MATE_SCORE + ply + 2
+          : MATE_SCORE - ply - 2
+        : remaining <= -2
+          ? evaluateSearchState(candidate.state, context)
+          : quiescence(candidate.state, alpha, beta, context, ply + 1, remaining - 1);
     value = maximizing ? Math.max(value, score) : Math.min(value, score);
     if (maximizing) alpha = Math.max(alpha, value);
     else beta = Math.min(beta, value);
@@ -514,9 +519,6 @@ function orderActions(
   actions: GameAction[],
   rootPlayer: Player,
   personality: AiPersonality,
-  ply: number,
-  preferred?: string,
-  killers: string[] = [],
   context?: SearchContext,
   resolutionRules: Readonly<ActionResolutionRules> | undefined = context?.resolutionRules,
 ): OrderedAction[] {
@@ -524,7 +526,6 @@ function orderActions(
   const weights = PERSONALITY_WEIGHTS[personality];
   return actions
     .map((action) => {
-      if (context && ply > 0) checkTime(context);
       const result = applyAction(state, action, resolutionRules);
       if (!result.ok) return null;
       const key = actionKey(action);
@@ -533,9 +534,7 @@ function orderActions(
         ? evaluateSearchState(result.state, context)
         : evaluateState(result.state, rootPlayer, personality);
       score += (maximizing ? tacticalScore : -tacticalScore) * weights.tactics;
-      if (key === preferred) score += maximizing ? 10_000_000 : -10_000_000;
-      else if (killers.includes(key)) score += maximizing ? 500_000 : -500_000;
-      score += (maximizing ? 1 : -1) * stableActionBias(action, ply);
+      score += (maximizing ? 1 : -1) * stableActionBias(action, state.ply);
       return {
         action,
         key,
@@ -607,9 +606,10 @@ function selectSearchActions(
   actions: GameAction[],
   forcedKeys: string[],
   personality: AiPersonality,
+  maxMoves: number,
 ): GameAction[] {
-  if (actions.length <= MAX_SEARCH_MOVES) return actions;
   const forced = new Set(forcedKeys);
+  const priorities = new Map<GameAction, number>();
   const tactical: GameAction[] = [];
   const quiet: Array<{ action: GameAction; score: number; group: string }> = [];
   const enemyFortress = fortressOf(state, otherPlayer(state.activePlayer));
@@ -618,12 +618,36 @@ function selectSearchActions(
 
   for (const action of actions) {
     const key = actionKey(action);
+    const actor = getPiece(state, action.pieceId);
     if (forced.has(key) || isTacticalAction(state, action)) {
+      // These are ordering hints only. The engine resolves every explored move;
+      // shields, conversion and sacrifices are never inferred as legal results.
+      const target =
+        'targetId' in action && action.targetId
+          ? getPiece(state, action.targetId)
+          : 'to' in action && action.to
+            ? state.pieces.find(
+                (piece) =>
+                  piece.owner !== state.activePlayer &&
+                  hexKey(piece.position) === hexKey(action.to!),
+              )
+            : undefined;
+      const gain =
+        target?.type === 'fortress'
+          ? 90_000
+          : target
+            ? materialValue(target) * (action.kind === 'convert' ? 24 : 12)
+            : 0;
+      priorities.set(
+        action,
+        forced.has(key)
+          ? 10_000_000 - forcedKeys.indexOf(key)
+          : 100_000 + gain - (actor ? materialValue(actor) : 0),
+      );
       tactical.push(action);
       continue;
     }
     let score = 0;
-    const actor = getPiece(state, action.pieceId);
     if ('to' in action && action.to) {
       score += enemyFortress
         ? (BOARD_RADIUS * 2 - hexDistance(action.to, enemyFortress.position)) * 20 * weights.advance
@@ -643,9 +667,15 @@ function selectSearchActions(
       });
     }
     score += stableActionBias(action, state.ply);
+    priorities.set(action, score);
     const destination = 'to' in action && action.to ? hexKey(action.to) : '-';
     quiet.push({ action, score, group: `${action.pieceId}:${action.kind}:${destination}` });
   }
+  const byPriority = (left: GameAction, right: GameAction): number =>
+    priorities.get(right)! - priorities.get(left)!;
+  // In check (and at tactical leaves) even alternative cannon facings may be
+  // the only defense. Infinity deliberately bypasses all grouping and pruning.
+  if (actions.length <= maxMoves) return [...actions].sort(byPriority);
   quiet.sort((left, right) => right.score - left.score);
   const selected: GameAction[] = [...tactical];
   const groups = new Set<string>();
@@ -654,18 +684,18 @@ function selectSearchActions(
   // destinations, choosing useful cannon facings before applying the cap.
   for (const candidate of quiet) {
     if (pieces.has(candidate.action.pieceId)) continue;
-    if (selected.length >= MAX_SEARCH_MOVES) break;
+    if (selected.length >= maxMoves) break;
     pieces.add(candidate.action.pieceId);
     groups.add(candidate.group);
     selected.push(candidate.action);
   }
   for (const candidate of quiet) {
-    if (selected.length >= MAX_SEARCH_MOVES) break;
+    if (selected.length >= maxMoves) break;
     if (groups.has(candidate.group)) continue;
     groups.add(candidate.group);
     selected.push(candidate.action);
   }
-  return selected;
+  return selected.sort(byPriority);
 }
 
 function isTacticalAction(state: GameState, action: GameAction): boolean {
@@ -877,6 +907,12 @@ function chooseNearBest(
   if (settings.limit === 1 || settings.temperature <= 0) return ranked[0].action;
 
   const bestScore = ranked[0].score;
+  // Preserve forced wins and their distance, and never randomize a sound move
+  // into a forced loss. Variety is for genuinely near-equivalent positions.
+  if (Math.abs(bestScore) >= MATE_SCORE / 2) {
+    const exact = ranked.filter(({ score }) => score === bestScore);
+    return exact[Math.floor(random() * exact.length)].action;
+  }
   const eligible = ranked
     .filter(({ score }) => bestScore - score <= settings.window)
     .slice(0, settings.limit);
@@ -894,7 +930,7 @@ function chooseNearBest(
   return eligible.at(-1)?.action ?? ranked[0].action;
 }
 
-/** Small, dependency-free PRNG used to make AI choices reproducible in replays. */
+/** Reproducible variety for a fixed position, seed and completed search depth. */
 export function createSeededRandom(seed: number): () => number {
   let value = normalizeSeed(seed);
   return () => {

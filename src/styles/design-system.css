@@ -1,8 +1,4 @@
 /* Cross-cutting behaviour that must survive contextual game selectors. */
-.preset-card[data-slot='radio-group-item'] strong {
-  padding-right: 0;
-}
-
 .ds-control:focus-visible,
 .ds-input:focus-visible,
 .ds-textarea:focus-visible,

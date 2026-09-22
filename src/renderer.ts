@@ -133,14 +133,14 @@ export class BoardRenderer {
     this.requestFrame();
   }
 
-  /** Stable close-up for instructional sequences, with one cell of context. */
-  setFrame(positions: readonly Hex[]): void {
+  /** Stable close-up for instructional sequences, with one cell of context by default. */
+  setFrame(positions: readonly Hex[], padding = 65): void {
     if (!positions.length) return;
     const points = positions.map((position) => projectHex(position, this.orientation, 0));
-    const minX = Math.min(...points.map((point) => point.x)) - 65;
-    const maxX = Math.max(...points.map((point) => point.x)) + 65;
-    const minY = Math.min(...points.map((point) => point.y)) - 65;
-    const maxY = Math.max(...points.map((point) => point.y)) + 65;
+    const minX = Math.min(...points.map((point) => point.x)) - padding;
+    const maxX = Math.max(...points.map((point) => point.x)) + padding;
+    const minY = Math.min(...points.map((point) => point.y)) - padding;
+    const maxY = Math.max(...points.map((point) => point.y)) + padding;
     this.frameBounds = {
       x: (minX + maxX) / 2,
       y: (minY + maxY) / 2,

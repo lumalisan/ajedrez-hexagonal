@@ -212,7 +212,15 @@ try {
 
   await page.locator('[data-home-action="new"]').click();
   await page.locator('[data-home-mode="local"]').click();
-  await page.locator('[data-preset="custom"]').click();
+  await chooseSelectOption(page, 'Puntos de vida de la Fortaleza', '3');
+  await chooseSelectOption(page, 'Tiempo por turno', '1 minuto');
+  await chooseSelectOption(page, 'Tiempo total', '10 minutos');
+  assert(
+    (await selectedOptionLabel(page, 'Puntos de vida de la Fortaleza')) === '3' &&
+      (await selectedOptionLabel(page, 'Tiempo por turno')) === '1 minuto' &&
+      (await selectedOptionLabel(page, 'Tiempo total')) === '10 minutos',
+    'Fortress health and both independent time limits must be selectable offline.',
+  );
   await chooseSelectOption(page, 'Disposición inicial', 'Frente blindado');
   assert(
     (await selectedOptionLabel(page, 'Disposición inicial')) === 'Frente blindado',

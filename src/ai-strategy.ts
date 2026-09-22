@@ -18,7 +18,7 @@ const DIFFICULTY: Record<AiDifficulty, { depth: number; maxMs: number }> = {
   recruit: { depth: 1, maxMs: 120 },
   tactical: { depth: 3, maxMs: 900 },
   commander: { depth: 5, maxMs: 2_500 },
-  expert: { depth: 7, maxMs: 5_000 },
+  expert: { depth: 9, maxMs: 8_000 },
 };
 
 const MAIN_THREAD_MAX_MS = 400;

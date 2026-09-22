@@ -74,7 +74,8 @@ export function ReplayDock() {
         </button>
       </div>
       {moments.length > 0 && (
-        <div className="key-moments">
+        <section className="key-moments replay-moments" aria-label="Momentos destacados">
+          <h3>Momentos destacados</h3>
           {moments.map((moment) => (
             <button
               key={moment.actionIndex}
@@ -83,7 +84,7 @@ export function ReplayDock() {
               data-replay-moment={moment.actionIndex}
               onClick={() => commands.setReplayCursor(moment.actionIndex)}
             >
-              <span>{moment.actionIndex}</span>
+              <span>Orden {moment.actionIndex}</span>
               <strong>{moment.title}</strong>
               <small>
                 {moment.suggestedAlternativeLabel
@@ -92,7 +93,7 @@ export function ReplayDock() {
               </small>
             </button>
           ))}
-        </div>
+        </section>
       )}
       <div className="inline-actions">
         <button

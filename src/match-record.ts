@@ -43,9 +43,13 @@ export function createMatchRecord(
     currentAction: 0,
     conclusion: null,
     clock:
-      config.options.clockSeconds === null
+      config.options.clockSeconds === null && config.options.turnClockSeconds == null
         ? null
-        : createMatchClock(config.options.clockSeconds, state.activePlayer),
+        : createMatchClock(
+            config.options.clockSeconds,
+            state.activePlayer,
+            config.options.turnClockSeconds ?? null,
+          ),
     createdAt: now,
     updatedAt: now,
   };
@@ -149,15 +153,9 @@ export function concludeMatch(record: MatchRecord, outcome: Outcome): MatchRecor
 /** Replaces the persisted clock snapshot after runtime validation. */
 export function setMatchClock(record: MatchRecord, clock: MatchClockSnapshot | null): MatchRecord {
   if (clock) {
-    const errors = validateMatchClock(clock);
-    if (errors.length) throw new ReplayError(errors.join(' '));
-    if (
-      record.config.options.clockSeconds === null ||
-      record.config.options.clockSeconds === undefined
-    )
-      throw new ReplayError('La partida no tiene reloj configurado.');
-    if (clock.initialMs !== Math.round(record.config.options.clockSeconds * 1_000))
-      throw new ReplayError('El reloj no coincide con la duración configurada.');
+    assertClockMatchesConfig(clock, record.config);
+  } else if (record.config.options.turnClockSeconds != null) {
+    throw new ReplayError('La partida necesita el reloj por turno configurado.');
   }
   return {
     ...record,
@@ -237,15 +235,22 @@ function validateRecordMetadata(record: MatchRecord): void {
       throw new ReplayError('La fecha de conclusión no es válida.');
   }
   if (record.clock) {
-    const errors = validateMatchClock(record.clock);
-    if (errors.length) throw new ReplayError(errors.join(' '));
-    if (
-      record.config.options.clockSeconds === null ||
-      record.config.options.clockSeconds === undefined ||
-      record.clock.initialMs !== Math.round(record.config.options.clockSeconds * 1_000)
-    )
-      throw new ReplayError('El reloj no coincide con la duración configurada.');
+    assertClockMatchesConfig(record.clock, record.config);
+  } else if (record.config.options.turnClockSeconds != null) {
+    throw new ReplayError('La partida necesita el reloj por turno configurado.');
   }
+}
+
+function assertClockMatchesConfig(clock: MatchClockSnapshot, config: MatchConfig): void {
+  const errors = validateMatchClock(clock);
+  if (errors.length) throw new ReplayError(errors.join(' '));
+  const totalSeconds = config.options.clockSeconds;
+  const turnSeconds = config.options.turnClockSeconds;
+  if (
+    clock.initialMs !== (totalSeconds == null ? null : Math.round(totalSeconds * 1_000)) ||
+    (clock.turnInitialMs ?? null) !== (turnSeconds == null ? null : Math.round(turnSeconds * 1_000))
+  )
+    throw new ReplayError('El reloj no coincide con la duración configurada.');
 }
 
 function validateAcademySession(value: unknown): asserts value is AcademySessionMetadata {

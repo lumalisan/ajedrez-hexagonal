@@ -247,7 +247,7 @@ export function mountRuleDemo(
     const scene = scenes[sceneIndex];
     // Keep the camera stable within an animation, then center the next independent sequence.
     if (framedSequence !== scene.sequence) {
-      renderer.setFrame(sequenceFrames[scene.sequence]);
+      renderer.setFrame(sequenceFrames[scene.sequence], demoId === 'fortaleza' ? 105 : undefined);
       framedSequence = scene.sequence;
     }
     const token = ++cycleToken;

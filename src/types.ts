@@ -180,6 +180,8 @@ export interface MatchOptions {
   fixedBoard: boolean;
   handoffScreen: boolean;
   clockSeconds: number | null;
+  /** Null or absent disables the independent per-turn countdown. */
+  turnClockSeconds?: number | null;
   /** Null disables the automatic draw. Defaults to 120 in classic games. */
   noProgressPlyLimit?: number | null;
   allowUndo: boolean;
@@ -199,8 +201,12 @@ export type MatchClockStatus = 'paused' | 'running' | 'timeout';
 
 /** Serializable state for a deterministic two-player countdown clock. */
 export interface MatchClockSnapshot {
-  initialMs: number;
+  /** Null disables total time; remainingMs is then [0, 0]. */
+  initialMs: number | null;
   remainingMs: [number, number];
+  /** Optional for compatibility with existing version 2 saves. */
+  turnInitialMs?: number | null;
+  turnRemainingMs?: number | null;
   activePlayer: Player;
   status: MatchClockStatus;
   lastTickAt: number | null;

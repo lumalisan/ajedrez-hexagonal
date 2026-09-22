@@ -40,7 +40,7 @@ export function UtilityDialogs() {
           confirmAttribute="data-confirm-abandon"
           onConfirm={commands.abandon}
         >
-          <p>La partida en curso se descartará y volverás al inicio.</p>
+          <p>Volverás al inicio. La partida quedará guardada para que puedas continuarla.</p>
         </ConfirmationDialog>
       );
     case 'resign':
@@ -177,7 +177,7 @@ function ConfirmationDialog({
 
 function SettingsDialog() {
   const { snapshot, commands } = useGame();
-  const { preferences, matchRecord, animating, machineThinking } = snapshot;
+  const { preferences, matchRecord, animating } = snapshot;
   const importInput = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -280,15 +280,6 @@ function SettingsDialog() {
             onClick={() => importInput.current?.click()}
           >
             Importar partida
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            data-open-replay
-            disabled={!matchRecord || animating || machineThinking}
-            onClick={() => commands.openReplay()}
-          >
-            Ver repetición
           </Button>
           <Button
             type="button"
@@ -548,53 +539,101 @@ function OutcomeDialog() {
 
 function ScenarioBriefingDialog({ scenario }: { scenario: ScenarioDefinition }) {
   const { snapshot, commands } = useGame();
+  const hintsId = useId();
   const hints = revealedScenarioHints(scenario, snapshot.scenarioHintsRevealed);
   const allHintsRevealed = hints.length >= scenario.hints.length;
   return (
-    <>
-      <span className="eyebrow">INSTRUCCIÓN TÁCTICA</span>
-      <h2>{scenario.title}</h2>
-      <p className="scenario-objective">
-        <strong>Objetivo:</strong> {scenario.summary}
-      </p>
-      <div className="scenario-progress">
-        <strong>{scenarioLessonAt(scenario, 0)}</strong>
-        <span>
-          {scenario.maxPlies ? `Límite: ${scenario.maxPlies} órdenes` : 'Sin límite estricto'}
-        </span>
-      </div>
-      <div className="scenario-hint">
-        <p>Intenta leer la posición primero. Si te atascas, revela las pistas de una en una.</p>
-        <ol className="scenario-steps" data-hint-list>
-          {hints.map((hint, index) => (
-            <li key={`${index}-${hint}`}>{hint}</li>
-          ))}
-        </ol>
-        <button
-          type="button"
-          className="text-button"
-          data-reveal-scenario-hint
-          disabled={allHintsRevealed}
-          onClick={() => commands.revealHint(scenario)}
+    <div className="scenario-briefing">
+      <div
+        className="scenario-briefing-content flex min-h-0 flex-col gap-7 overflow-y-auto overscroll-contain p-6 sm:p-8"
+        role="region"
+        aria-label="Instrucciones del ejercicio"
+        tabIndex={0}
+      >
+        <div className="flex flex-col gap-3">
+          <span className="eyebrow">INSTRUCCIÓN TÁCTICA</span>
+          <h2 className="m-0 font-heading text-2xl leading-tight font-semibold text-balance sm:text-3xl">
+            {scenario.title}
+          </h2>
+        </div>
+
+        <section aria-label="Objetivo del ejercicio" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+            <h3 className="m-0 text-sm font-semibold text-accent">Objetivo</h3>
+            <span className="text-sm text-muted">
+              {scenario.maxPlies ? `Límite: ${scenario.maxPlies} órdenes` : 'Sin límite estricto'}
+            </span>
+          </div>
+          <p className="m-0 text-lg leading-relaxed font-medium text-ink">{scenario.summary}</p>
+          <p className="m-0 text-base leading-relaxed text-muted">
+            {scenarioLessonAt(scenario, 0)}
+          </p>
+        </section>
+
+        <section
+          aria-label="Pistas opcionales"
+          className="flex flex-col items-start gap-4 border-0 border-t border-solid border-line pt-6"
         >
-          {allHintsRevealed
-            ? 'Todas las pistas reveladas'
-            : hints.length
-              ? 'Revelar otra pista'
-              : 'Revelar primera pista'}
-        </button>
+          <div className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+            <h3 className="m-0 text-base font-semibold text-ink">Pistas opcionales</h3>
+            <span className="text-sm text-muted">
+              {hints.length} de {scenario.hints.length} reveladas
+            </span>
+          </div>
+          <p className="m-0 text-sm leading-relaxed text-muted">
+            Intenta leer la posición primero. Si te atascas, revela las pistas de una en una.
+          </p>
+          <div
+            id={hintsId}
+            aria-live="polite"
+            aria-relevant="additions"
+            className="w-full empty:hidden"
+          >
+            {hints.length > 0 && (
+              <ol
+                className="scenario-steps m-0 gap-3 pl-6 text-sm leading-relaxed text-ink marker:text-accent"
+                data-hint-list
+              >
+                {hints.map((hint, index) => (
+                  <li key={`${index}-${hint}`} className="pl-1">
+                    {hint}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <Button
+            variant="secondary"
+            data-reveal-scenario-hint
+            aria-controls={hintsId}
+            disabled={allHintsRevealed}
+            onClick={() => commands.revealHint(scenario)}
+          >
+            {allHintsRevealed
+              ? 'Todas las pistas reveladas'
+              : hints.length
+                ? 'Revelar otra pista'
+                : 'Revelar primera pista'}
+          </Button>
+        </section>
+
+        <p className="m-0 text-sm leading-relaxed text-muted">
+          El objetivo y la etapa vigente seguirán visibles sobre el tablero. Una orden alternativa
+          ya no reinicia la misión.
+        </p>
       </div>
-      <p className="dialog-note">
-        El objetivo y la etapa vigente seguirán visibles sobre el tablero. Una orden alternativa ya
-        no reinicia la misión.
-      </p>
-      <div className="dialog-actions">
+      <footer className="scenario-briefing-actions flex shrink-0 flex-wrap items-center justify-between gap-3 border-0 border-t border-solid border-line bg-panel px-6 py-5 sm:px-8">
         <AcademyMenuButton>Volver</AcademyMenuButton>
-        <Button type="button" variant="primary" data-dialog-close onClick={commands.closeDialog}>
+        <Button
+          variant="primary"
+          className="flex-1 sm:flex-none"
+          data-dialog-close
+          onClick={commands.closeDialog}
+        >
           Empezar ejercicio
         </Button>
-      </div>
-    </>
+      </footer>
+    </div>
   );
 }
 

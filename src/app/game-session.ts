@@ -36,6 +36,7 @@ import {
   setAcademySession,
 } from '../match-record';
 import { MatchController } from '../match-controller';
+import { activeClockRemainingMs } from '../match-clock';
 import type { UiMode } from '../match-store';
 import {
   appendMatchHistory,
@@ -475,7 +476,7 @@ export function createGameSession(): GameSession {
     }
     const selected = selectedId ? getPiece(state, selectedId) : undefined;
     if (selected && equalHex(selected.position, hex)) {
-      cancelDraft();
+      clearSelection();
       return;
     }
     if (!state.outcome && selected?.owner === state.activePlayer) {
@@ -498,7 +499,7 @@ export function createGameSession(): GameSession {
       Boolean(piece),
     );
     if (pieces.length === 0) {
-      if (selected) cancelDraft();
+      if (selected) clearSelection();
       else render();
     } else if (pieces.length === 1) {
       selectPiece(pieces[0].id);
@@ -592,8 +593,9 @@ export function createGameSession(): GameSession {
     if (disposed || animating || isHomeScreenActive()) return;
     const epoch = operationEpoch;
     const controller = matchController;
+    const committedAt = Date.now();
     if (matchController?.record.clock && !state.outcome) {
-      matchController.tickClock(Date.now());
+      matchController.tickClock(committedAt);
       matchRecord = matchController.record;
       state = matchController.store.getState().game;
       if (state.outcome) {
@@ -617,7 +619,10 @@ export function createGameSession(): GameSession {
       : null;
     if (activeScenario) state = { ...state, outcome: null };
     if (matchController) {
-      if (matchController.record.clock) matchController.pauseClock(Date.now());
+      if (matchController.record.clock) {
+        matchController.pauseClock(committedAt);
+        matchController.switchClock(state.activePlayer, committedAt, true);
+      }
       matchRecord = matchController.record;
     } else if (matchRecord) matchRecord = appendAction(matchRecord, action);
     persistCurrentMatch();
@@ -803,7 +808,7 @@ export function createGameSession(): GameSession {
     if (!clock) return;
     matchRecord = matchController.record;
     state = matchController.store.getState().game;
-    const currentSecond = Math.ceil(clock.remainingMs[clock.activePlayer] / 1_000);
+    const currentSecond = Math.ceil(activeClockRemainingMs(clock) / 1_000);
     if (currentSecond !== lastClockPersistSecond || state.outcome) {
       lastClockPersistSecond = currentSecond;
       persistCurrentMatch();
@@ -1057,7 +1062,8 @@ export function createGameSession(): GameSession {
     if (!result.ok) return;
     if (matchController && result.state.outcome) {
       if (matchController.record.clock) matchController.pauseClock(Date.now());
-      matchController.conclude(result.state.outcome);
+      if (!matchController.store.getState().game.outcome)
+        matchController.conclude(result.state.outcome);
       matchRecord = matchController.record;
       state = matchController.store.getState().game;
       persistCurrentMatch();
@@ -1082,7 +1088,7 @@ export function createGameSession(): GameSession {
     if (!disposed && epoch === operationEpoch) presentOutcome();
   }
 
-  function resetGame(): void {
+  function resetGame(preserveConfiguredSeed = false): void {
     operationEpoch++;
     currentDialog = null;
     dialogError = null;
@@ -1099,6 +1105,22 @@ export function createGameSession(): GameSession {
       fixedBoard: preferences.fixedBoard,
       handoffScreen: preferences.handoffScreen,
     });
+    const participants: MatchConfig['participants'] = [
+      { ...matchConfig.participants[0] },
+      { ...matchConfig.participants[1] },
+    ];
+    for (const participant of participants) {
+      if (
+        participant.kind === 'machine' &&
+        (!preserveConfiguredSeed || participant.seed === undefined)
+      ) {
+        participant.seed = createMatchSeed();
+      }
+    }
+    // New matches store their seed once; rematches draw again. Loading a record
+    // preserves its seed. Matching state, seed and completed search depth reproduce
+    // the choice; a time limit can change the depth completed on different devices.
+    matchConfig = { ...matchConfig, participants };
     matchRecord = createMatchRecord(matchConfig);
     registerCurrentAchievementMatch();
     matchController = new MatchController(matchRecord);
@@ -1170,7 +1192,12 @@ export function createGameSession(): GameSession {
       ...matchConfig,
       definitionId: `scenario:${scenario.id}`,
       setup: scenario.initialState.pieces.map((piece) => ({ id: piece.id, piece })),
-      options: { ...matchConfig.options, allowUndo: true, clockSeconds: null },
+      options: {
+        ...matchConfig.options,
+        allowUndo: true,
+        clockSeconds: null,
+        turnClockSeconds: null,
+      },
     };
     matchRecord = setAcademySession(createMatchRecord(matchConfig, scenario.initialState), {
       scenarioId: scenario.id,
@@ -1242,6 +1269,11 @@ export function createGameSession(): GameSession {
         config: { ...record.config, options: { ...record.config.options, allowUndo: true } },
       };
     }
+    // A portable snapshot records time already consumed, not time spent with
+    // the app closed or the file in transit. Resume both limits from that point.
+    if (record.clock?.status === 'running') {
+      record = { ...record, clock: { ...record.clock, status: 'paused', lastTickAt: null } };
+    }
     matchRecord = record;
     matchController = new MatchController(record);
     matchConfig = record.config;
@@ -1280,6 +1312,7 @@ export function createGameSession(): GameSession {
     machineSearch = null;
     lastClockPersistSecond = -1;
     if (matchController.record.clock && !state.outcome) {
+      matchController.switchClock(state.activePlayer, Date.now());
       matchController.resumeClock(Date.now());
       matchRecord = matchController.record;
       state = matchController.store.getState().game;
@@ -1465,8 +1498,6 @@ export function createGameSession(): GameSession {
     },
     abandon() {
       showHomeScreen();
-      clearActiveMatch();
-      render();
     },
     startMatch(config) {
       operationEpoch++;
@@ -1476,11 +1507,13 @@ export function createGameSession(): GameSession {
         : 'local';
       currentDialog = null;
       dialogError = null;
-      resetGame();
+      resetGame(true);
       if (isMachineTurn()) void runMachineTurn();
     },
     startScenario,
-    resetGame,
+    resetGame() {
+      resetGame();
+    },
     loadRecord(record) {
       excludeImportedAchievements(record);
       loadRecordIntoMatch(record);
@@ -1580,7 +1613,8 @@ export function createGameSession(): GameSession {
       )
         return;
       if (matchController.record.clock) matchController.pauseClock(Date.now());
-      matchController.resign(state.activePlayer);
+      if (!matchController.store.getState().game.outcome)
+        matchController.resign(state.activePlayer);
       matchRecord = matchController.record;
       state = matchController.store.getState().game;
       selectedId = null;

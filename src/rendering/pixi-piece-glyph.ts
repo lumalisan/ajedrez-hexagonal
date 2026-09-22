@@ -14,11 +14,13 @@ export function createPieceGlyph(piece: Piece, highContrast: boolean): PieceGlyp
   const container = new Container({ label: `glyph-${piece.type}` });
   const color = piece.owner === 0 ? 0x36b9ff : 0xffb547;
   const width = highContrast ? 2.25 : 1.9;
+  // Soft joins keep the small silhouettes legible without sharp miter spikes.
+  const stroke = { color, width, cap: 'round', join: 'round' } as const;
   const motions: Animate[] = [];
   const missiles: Graphics[] = [];
   const graphic = (label: string, parent: Container = container): Graphics => {
     const node = new Graphics({ label });
-    node.setFillStyle({ color }).setStrokeStyle({ color, width });
+    node.setFillStyle({ color }).setStrokeStyle(stroke);
     parent.addChild(node);
     return node;
   };
@@ -67,7 +69,7 @@ export function createPieceGlyph(piece: Piece, highContrast: boolean): PieceGlyp
           smoke
             .clear()
             .arc(0, 0, 0.8 + progress * 1.6, 0, Math.PI * 1.6)
-            .stroke({ color: 0x9fb0b1, width: 1.6 });
+            .stroke({ ...stroke, color: 0x9fb0b1, width: 1.6 });
         });
       }
       graphic('tank-hull')
@@ -116,7 +118,7 @@ export function createPieceGlyph(piece: Piece, highContrast: boolean): PieceGlyp
       const scanner = graphic('missile-scanner')
         .moveTo(-7.5, 0)
         .lineTo(-3.5, 0)
-        .stroke({ color, width: 2 });
+        .stroke({ ...stroke, width: 2 });
       graphic('missile-sensor').circle(-2, 0, 2.4).fill();
       motions.push((phase) => {
         scanner.visible = phase !== null;
@@ -166,7 +168,7 @@ export function createPieceGlyph(piece: Piece, highContrast: boolean): PieceGlyp
         const rotor = graphic(`drone-rotor-${x}-${y}`)
           .moveTo(-1.8, 0)
           .lineTo(1.8, 0)
-          .stroke({ color, width: width * 0.55 });
+          .stroke({ ...stroke, width: width * 0.55 });
         rotor.position.set(x, y);
         motions.push((phase) => {
           rotor.rotation = phase === null ? 0 : phase * 3;
@@ -271,7 +273,7 @@ export function createPieceGlyph(piece: Piece, highContrast: boolean): PieceGlyp
         const bar = graphic(`fortress-gate-bar-${x}`, gate)
           .moveTo(0, 0)
           .lineTo(0, 1)
-          .stroke({ color, width: 1 });
+          .stroke({ ...stroke, width: 1 });
         bar.position.set(x, 4);
         return bar;
       });

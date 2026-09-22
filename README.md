@@ -54,9 +54,10 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 
 ## Modos y datos
 
-- **Partida libre:** local o contra IA con un único selector de dificultad: Fácil, Media, Difícil y Experto. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil.
-- **Presets:** Escaramuza, Táctica, Asedio y configuración Personalizada. Ajustan despliegue, ritmo e integridad inicial sin alterar el movimiento ni el combate de las unidades.
-- **Disposiciones iniciales:** en Nueva partida → Personalizada puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques), Frente de infantería (7 soldados y 2 tanques) o Frente extendido (11 soldados y 2 tanques retrasados). Las cuatro primeras tienen 18 piezas por jugador; Frente extendido tiene 22. Las variantes blindada, de infantería y extendida tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando. Disponibles en partida local y contra la IA.
+- **Partida libre:** local o contra IA. Contra la IA puedes elegir la dificultad: Fácil, Medio, Difícil o Experto. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil.
+- **Puntos de vida de la Fortaleza:** elige 1, 2 o 3 al crear cualquier partida libre.
+- **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 1 minuto o 2 minutos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites; agotar cualquiera concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes se conservan al guardar y continuar.
+- **Disposiciones iniciales:** en Nueva partida puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques), Frente de infantería (7 soldados y 2 tanques) o Frente extendido (11 soldados y 2 tanques retrasados). Las cuatro primeras tienen 18 piezas por jugador; Frente extendido tiene 22. Las variantes blindada, de infantería y extendida tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando. Disponibles en partida local y contra la IA.
 - Al elegir una disposición, la vista previa muestra el ejército de Cian con los símbolos del tablero, su composición y una breve descripción. Se actualiza también al cambiar la vida de la Fortaleza; Ámbar utiliza la formación reflejada.
 - En **Reglas → Desarrollo de la partida**, el tablero real muestra ambos ejércitos y permite comparar las cinco disposiciones, con **Frente clásico** seleccionado por defecto. El selector solo cambia la vista del manual.
 - **Academia táctica:** fundamentos, misión guiada de varios turnos, retos estratégicos y un reto diario determinista que usan `classic-v2`.
@@ -65,6 +66,10 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 - PWA instalable con caché offline del shell.
 
 Los guardados declaran versión y ruleset. Una repetición importada se reconstruye acción por acción y se rechaza si contiene una orden ilegal. El desenlace terminal también forma parte del registro: victoria por Fortaleza, tiempo o rendición, y tablas por bloqueo, repetición o falta de progreso sobreviven al autoguardado, la exportación y la reproducción.
+
+Cada partida contra la IA y cada revancha generan una semilla nueva. Todos los niveles, incluido Experto, pueden elegir entre órdenes de valoración muy próxima; el margen se estrecha al subir la dificultad y se respetan las victorias forzadas y su distancia. Si una jugada es claramente superior, puede repetirse aunque cambie la semilla. Continuar o importar una partida conserva su semilla, y las repeticiones reproducen las acciones registradas.
+
+Experto dispone de hasta 8 segundos por turno y busca hasta 9 medias jugadas, con extensiones para resolver intercambios y amenazas a la Fortaleza. Solo utiliza iteraciones terminadas: la profundidad efectiva depende de la posición y del dispositivo. La búsqueda se ejecuta en un Worker; si no está disponible, el respaldo limita su tiempo para mantener la respuesta de la interfaz. Una semilla explícita permite repetir las decisiones con el mismo estado y profundidad completada; no garantiza que equipos distintos alcancen la misma profundidad dentro del límite de tiempo.
 
 ## Logros
 
@@ -77,7 +82,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 ## Reglas canónicas (`classic-v2`)
 
 - El Lanzamisiles dispone de dos misiles por partida. Cada disparo consume uno; cambiar de bando no repone la munición. Agotados los misiles, conserva el movimiento y la transformación en Soldado.
-- La Fortaleza puede comenzar con 1, 2 o 3 puntos de vida, según el preset o la configuración. Cada impacto siempre causa exactamente 1 punto de daño.
+- La Fortaleza puede comenzar con 1, 2 o 3 puntos de vida, según la configuración. Cada impacto siempre causa exactamente 1 punto de daño.
 - Soldado, Capturador y Embestidor se sacrifican después de impactar contra la Fortaleza. Tanque, Lanzamisiles, Dron y Avión sobreviven si no usan un ataque kamikaze; el Avión kamikaze se destruye por su propia regla.
 - Cada casilla admite una capa terrestre y una aérea, con una unidad como máximo en cada capa. Al atacar una casilla compartida se elige un único objetivo.
 - El Escudo antiaéreo protege su propia casilla y las seis adyacentes. Las aeronaves enemigas que entran o cruzan esa zona son interceptadas en la primera casilla protegida. Tanque y Lanzamisiles no pueden disparar por una trayectoria protegida; el Avión no puede disparar contra una casilla protegida.
@@ -111,7 +116,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - `src/engine.ts`: reglas puras, turnos, combate y finales.
 - `src/classic-rules.ts`: constantes canónicas de daño, sacrificio, repetición y falta de progreso.
 - `src/game-config.ts`: configuración validada y contrato `classic-v2`.
-- `src/match-presets.ts`: ritmos de partida y despliegue de Escaramuza.
+- `src/match-presets.ts`: compatibilidad con las configuraciones predefinidas anteriores.
 - `src/match-record.ts`: diario versionado, replay y estadísticas.
 - `src/match-clock.ts`: reloj persistente y desenlace por tiempo.
 - `src/action-identity.ts` y `src/tactical-analysis.ts`: identidad canónica y consulta táctica pura.

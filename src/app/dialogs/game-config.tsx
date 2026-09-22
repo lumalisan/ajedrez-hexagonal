@@ -1,28 +1,28 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PIECE_NAMES } from '../../engine';
+import { createClassicConfig } from '../../game-config';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
-import { MATCH_PRESETS, createPresetConfig, type MatchPresetId } from '../../match-presets';
 import { recordTelemetry } from '../../playtest-telemetry';
 import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
 import type { AiDifficulty, FortressHp } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
 import { Button, IconButton } from '../components/ui/button';
-import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { useGame } from '../game-context';
 
 type MatchClockValue = '' | 300 | 600 | 1200;
+type TurnClockValue = '' | 30 | 60 | 120;
 
 const FORTRESS_HP_OPTIONS: readonly { value: FortressHp; label: string }[] = [
-  { value: 1, label: '1 · partida explosiva' },
-  { value: 2, label: '2 · equilibrio recomendado' },
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
   { value: 3, label: '3' },
 ];
 const INITIAL_LAYOUT_OPTIONS: readonly { value: InitialLayout; label: string }[] =
   INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
 const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'recruit', label: 'Fácil' },
-  { value: 'tactical', label: 'Media' },
+  { value: 'tactical', label: 'Medio' },
   { value: 'commander', label: 'Difícil' },
   { value: 'expert', label: 'Experto' },
 ];
@@ -32,36 +32,25 @@ const MATCH_CLOCK_OPTIONS: readonly { value: MatchClockValue; label: string }[] 
   { value: 600, label: '10 minutos' },
   { value: 1200, label: '20 minutos' },
 ];
+const TURN_CLOCK_OPTIONS: readonly { value: TurnClockValue; label: string }[] = [
+  { value: '', label: 'Sin límite' },
+  { value: 30, label: '30 segundos' },
+  { value: 60, label: '1 minuto' },
+  { value: 120, label: '2 minutos' },
+];
 
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   const { snapshot, commands } = useGame();
   const { preferences } = snapshot;
-  const [preset, setPreset] = useState<MatchPresetId>('tactical');
   const [fortressHp, setFortressHp] = useState<FortressHp>(2);
   const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('tactical');
   const [clock, setClock] = useState<MatchClockValue>('');
-  const presetId = useId();
-  const customOptionsRef = useRef<HTMLDivElement>(null);
+  const [turnClock, setTurnClock] = useState<TurnClockValue>('');
   const layout = INITIAL_LAYOUTS.find((candidate) => candidate.id === initialLayout)!;
   const pieces = createInitialPieces(fortressHp, initialLayout).filter(
     (piece) => piece.owner === 0,
   );
-
-  useEffect(() => {
-    if (preset !== 'custom') return;
-    const frame = window.requestAnimationFrame(() => {
-      customOptionsRef.current?.scrollIntoView({
-        behavior: preferences.reducedMotion ? 'auto' : 'smooth',
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [preset, preferences.reducedMotion]);
-
-  function selectPreset(id: MatchPresetId) {
-    setPreset(id);
-    if (id === 'skirmish' && !clock) setClock(600);
-  }
 
   function goBack() {
     if (snapshot.homeView) {
@@ -73,22 +62,24 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   }
 
   function startMatch() {
-    const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-    const config = createPresetConfig(preset, {
+    const config = createClassicConfig({
       mode,
       difficulty,
-      seed,
       confirmation: preferences.confirmation,
       contextualHints: preferences.contextualHints,
       fixedBoard: preferences.fixedBoard,
       handoffScreen: preferences.handoffScreen,
       clockSeconds: clock || null,
+      turnClockSeconds: turnClock || null,
       fortressHp,
       initialLayout,
     });
     recordTelemetry('match-start', {
       mode,
-      preset,
+      fortressHp,
+      initialLayout,
+      clockSeconds: clock || null,
+      turnClockSeconds: turnClock || null,
       difficulty: config.participants[1].difficulty ?? 'human',
       personality: config.participants[1].personality ?? 'human',
     });
@@ -107,130 +98,106 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
       </IconButton>
       <span className="eyebrow">NUEVA PARTIDA</span>
       <h2>{mode === 'machine' ? 'Individual vs. IA' : 'Dos jugadores'}</h2>
-      <p>Elige el ritmo primero. Siempre podrás afinar los detalles con la opción personalizada.</p>
-      <RadioGroup
-        className="preset-grid"
-        aria-label="Ritmo de partida"
-        value={preset}
-        onValueChange={(value) => {
-          const selected = MATCH_PRESETS.find((candidate) => candidate.id === value);
-          if (selected) selectPreset(selected.id);
-        }}
-      >
-        {MATCH_PRESETS.map((candidate) => (
-          <RadioGroupItem
-            key={candidate.id}
-            value={candidate.id}
-            variant="card"
-            className="preset-card"
-            aria-labelledby={`${presetId}-${candidate.id}-name`}
-            aria-describedby={`${presetId}-${candidate.id}-duration ${presetId}-${candidate.id}-description`}
-            data-preset={candidate.id}
-          >
-            <span id={`${presetId}-${candidate.id}-duration`} className="preset-badge">
-              {candidate.duration}
-            </span>
-            <strong id={`${presetId}-${candidate.id}-name`}>{candidate.name}</strong>
-            <small id={`${presetId}-${candidate.id}-description`}>{candidate.description}</small>
-          </RadioGroupItem>
-        ))}
-      </RadioGroup>
-      <div
-        ref={customOptionsRef}
-        className="match-options"
-        data-custom-options
-        hidden={preset !== 'custom'}
-      >
-        <span className="eyebrow">AJUSTES PERSONALIZADOS</span>
-        <div className="field-row">
-          <label htmlFor="fortress-hp">Puntos de vida de la Fortaleza</label>
-          <GameSelect
-            inputId="fortress-hp"
-            options={FORTRESS_HP_OPTIONS}
-            value={fortressHp}
-            onChange={setFortressHp}
-          />
-        </div>
-        <div className="layout-picker">
-          <div className="layout-picker-choice">
-            <div className="layout-picker-label">
-              <label htmlFor="initial-layout">Disposición inicial</label>
+      <div className="match-configuration mt-6 grid gap-6 text-sm">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {mode === 'machine' && (
+            <div className="grid min-w-0 content-start gap-2">
+              <label htmlFor="ai-difficulty">Dificultad</label>
               <GameSelect
-                inputId="initial-layout"
-                options={INITIAL_LAYOUT_OPTIONS}
-                value={initialLayout}
-                onChange={setInitialLayout}
-                describedBy="layout-description"
+                inputId="ai-difficulty"
+                options={DIFFICULTY_OPTIONS}
+                value={difficulty}
+                onChange={setDifficulty}
               />
             </div>
-            <p
-              id="layout-description"
-              className="layout-description"
-              data-layout-description
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              {layout.description}
-            </p>
-          </div>
-          <figure className="layout-preview">
-            <figcaption id="layout-preview-title">Vista previa · {layout.name}</figcaption>
-            <LayoutPreviewCanvas
-              active={preset === 'custom'}
-              initialLayout={initialLayout}
-              fortressHp={fortressHp}
-              highContrast={preferences.highContrast}
-            />
-            <p id="layout-preview-orientation">
-              Vista de Cian. Ámbar tiene la formación reflejada.
-            </p>
-          </figure>
-          <div className="layout-composition">
-            <h3 data-layout-count>{pieces.length} piezas por bando</h3>
-            <dl id="layout-preview-roster" className="layout-roster">
-              {Object.entries(PIECE_NAMES).map(([type, name]) => (
-                <div key={type}>
-                  <dt>{name}</dt>
-                  <dd>{pieces.filter((piece) => piece.type === type).length}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-      </div>
-      {mode === 'machine' && (
-        <div className="match-options">
-          <span className="eyebrow">MANDO RIVAL</span>
-          <div className="field-row">
-            <label htmlFor="ai-difficulty">Dificultad</label>
+          )}
+          <div className="grid min-w-0 content-start gap-2">
+            <label htmlFor="fortress-hp">Puntos de vida de la Fortaleza</label>
             <GameSelect
-              inputId="ai-difficulty"
-              options={DIFFICULTY_OPTIONS}
-              describedBy="ai-difficulty-description"
-              value={difficulty}
-              onChange={setDifficulty}
+              inputId="fortress-hp"
+              options={FORTRESS_HP_OPTIONS}
+              value={fortressHp}
+              onChange={setFortressHp}
             />
           </div>
-          <p className="dialog-note" id="ai-difficulty-description">
-            Cuanto mayor sea la dificultad, más tiempo dedica la IA a anticipar tus respuestas.
+        </div>
+        <fieldset className="m-0 min-w-0 border-0 border-t border-solid border-line p-0 pt-5">
+          <legend className="sr-only">Límites de tiempo</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-2">
+              <label htmlFor="turn-clock-setting">Tiempo por turno</label>
+              <GameSelect
+                inputId="turn-clock-setting"
+                options={TURN_CLOCK_OPTIONS}
+                value={turnClock}
+                onChange={setTurnClock}
+                describedBy="clock-description"
+              />
+            </div>
+            <div className="grid min-w-0 gap-2">
+              <label htmlFor="match-clock-setting">Tiempo total</label>
+              <GameSelect
+                inputId="match-clock-setting"
+                options={MATCH_CLOCK_OPTIONS}
+                value={clock}
+                onChange={setClock}
+                describedBy="clock-description"
+              />
+            </div>
+          </div>
+          <p id="clock-description" className="mb-0 mt-3 text-xs leading-relaxed text-muted">
+            El tiempo por turno se renueva en cada turno. El total es por jugador. Puedes combinar
+            ambos límites; agotar cualquiera supone perder la partida.
           </p>
+        </fieldset>
+        <div className="border-0 border-t border-solid border-line pt-5">
+          <div className="layout-picker">
+            <div className="layout-picker-choice">
+              <div className="layout-picker-label">
+                <label htmlFor="initial-layout">Disposición inicial</label>
+                <GameSelect
+                  inputId="initial-layout"
+                  options={INITIAL_LAYOUT_OPTIONS}
+                  value={initialLayout}
+                  onChange={setInitialLayout}
+                  describedBy="layout-description"
+                />
+              </div>
+              <p
+                id="layout-description"
+                className="layout-description"
+                data-layout-description
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {layout.description}
+              </p>
+            </div>
+            <figure className="layout-preview">
+              <figcaption id="layout-preview-title">Vista previa · {layout.name}</figcaption>
+              <LayoutPreviewCanvas
+                initialLayout={initialLayout}
+                fortressHp={fortressHp}
+                highContrast={preferences.highContrast}
+              />
+              <p id="layout-preview-orientation">
+                Vista de Cian. Ámbar tiene la formación reflejada.
+              </p>
+            </figure>
+            <div className="layout-composition">
+              <h3 data-layout-count>{pieces.length} piezas por bando</h3>
+              <dl id="layout-preview-roster" className="layout-roster">
+                {Object.entries(PIECE_NAMES).map(([type, name]) => (
+                  <div key={type}>
+                    <dt>{name}</dt>
+                    <dd>{pieces.filter((piece) => piece.type === type).length}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
         </div>
-      )}
-      <div className="match-options">
-        <span className="eyebrow">RELOJ POR JUGADOR</span>
-        <div className="field-row">
-          <label htmlFor="match-clock-setting">Tiempo</label>
-          <GameSelect
-            inputId="match-clock-setting"
-            options={MATCH_CLOCK_OPTIONS}
-            value={clock}
-            onChange={setClock}
-          />
-        </div>
-        <p className="dialog-note">
-          El reloj es real, se guarda con la partida y la derrota por tiempo queda registrada.
-        </p>
       </div>
       <div className="dialog-actions">
         <Button data-back-menu onClick={goBack}>
@@ -245,12 +212,10 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
 }
 
 function LayoutPreviewCanvas({
-  active,
   initialLayout,
   fortressHp,
   highContrast,
 }: {
-  active: boolean;
   initialLayout: InitialLayout;
   fortressHp: FortressHp;
   highContrast: boolean;
@@ -258,16 +223,11 @@ function LayoutPreviewCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<LayoutPreview | null>(null);
   useEffect(() => {
-    if (!active) {
-      previewRef.current?.destroy();
-      previewRef.current = null;
-      return;
-    }
     if (!canvasRef.current) return;
     const options = { initialLayout, fortressHp, highContrast };
     if (previewRef.current) previewRef.current.update(options);
     else previewRef.current = mountLayoutPreview(canvasRef.current, options);
-  }, [active, initialLayout, fortressHp, highContrast]);
+  }, [initialLayout, fortressHp, highContrast]);
   useEffect(
     () => () => {
       previewRef.current?.destroy();

@@ -248,8 +248,6 @@ class MarkerView {
     this.board.addChild(this.fill, this.glyph);
     this.glyph.addChild(this.range, this.moveRing, this.moveDot, this.danger);
     this.target.addChild(this.targetHalo, this.targetDotHalo, this.targetShape, this.targetDot);
-    this.targetHalo.alpha = 0.72;
-    this.targetDotHalo.alpha = 0.72;
   }
 
   configure(marker: ActionMarker, highContrast: boolean, target: TargetKind | null): void {
@@ -297,15 +295,29 @@ class MarkerView {
     const width = highContrast ? 3.2 : 2.65;
     if (target === 'move' || target === 'capture') {
       this.targetShape.circle(0, 0, 10.2).stroke({ color, width });
-      this.targetHalo.circle(0, 0, 10.2).stroke({ color: 0x000000, width: width + 4 });
       this.targetDot.circle(0, 0, 5.2).fill(color);
-      this.targetDotHalo.circle(0, 0, 6.7).fill(0x000000);
+      drawSoftShadow((spread, alpha) => {
+        this.targetHalo
+          .beginPath()
+          .circle(0, 0, 10.2)
+          .stroke({ color: 0x000000, width: width + spread, alpha });
+        this.targetDotHalo
+          .beginPath()
+          .circle(0, 0, 5.2 + spread / 2)
+          .fill({ color: 0x000000, alpha });
+      });
     } else if (target === 'shoot') {
       drawCross(this.targetShape, 11.5, color, width);
-      drawCross(this.targetHalo, 11.5, 0x000000, width + 4);
+      drawSoftShadow((spread, alpha) => {
+        drawCross(this.targetHalo, 11.5, 0x000000, width + spread, alpha);
+      });
     } else {
-      drawWeb(this.targetShape, color, width);
-      drawWeb(this.targetHalo, 0x000000, width + 3);
+      // Fine strands leave the three curved rings open at the token's actual size.
+      const strandWidth = highContrast ? 1.7 : 1.3;
+      drawWeb(this.targetShape, color, strandWidth);
+      drawSoftShadow((spread, alpha) => {
+        drawWeb(this.targetHalo, 0x000000, strandWidth + spread, alpha);
+      });
     }
   }
 
@@ -328,7 +340,7 @@ class MarkerView {
     this.targetShape.scale.set(scale);
     this.targetHalo.scale.set(scale);
     this.targetDot.scale.set(circle ? radius / 5.2 : 1);
-    this.targetDotHalo.scale.set(circle ? (radius + 1.5) / 6.7 : 1);
+    this.targetDotHalo.scale.set(circle ? radius / 5.2 : 1);
   }
 }
 
@@ -374,19 +386,34 @@ function drawCross(
   radius: number,
   color: string | number,
   width: number,
+  alpha = 1,
 ): void {
   graphics
+    .beginPath()
     .moveTo(-radius, -radius)
     .lineTo(radius, radius)
     .moveTo(radius, -radius)
     .lineTo(-radius, radius)
-    .stroke({ color, width, cap: 'round' });
+    .stroke({ color, width, alpha, cap: 'round' });
 }
 
-function drawWeb(graphics: Graphics, color: string | number, width: number): void {
+/** Approximate the original soft Canvas shadow with retained, fading strokes. */
+function drawSoftShadow(draw: (spread: number, alpha: number) => void): void {
+  for (const [spread, alpha] of [
+    [4, 0.04],
+    [2.5, 0.08],
+    [1.2, 0.16],
+    [0, 0.28],
+  ]) {
+    draw(spread, alpha);
+  }
+}
+
+function drawWeb(graphics: Graphics, color: string | number, width: number, alpha = 1): void {
   const angles = [-1.57, -0.82, -0.08, 0.7, 1.52, 2.31, 3.08, 3.88];
   const radii = [10.5, 9.6, 10.2, 9.8, 10.6, 9.7, 10.3, 9.5];
-  const style = { color, width, cap: 'round' as const, join: 'round' as const };
+  const style = { color, width, alpha, cap: 'round' as const, join: 'round' as const };
+  graphics.beginPath();
   for (let index = 0; index < angles.length; index++) {
     graphics
       .moveTo(Math.cos(angles[index]) * 1.1, Math.sin(angles[index]) * 1.1)
@@ -412,7 +439,7 @@ function drawWeb(graphics: Graphics, color: string | number, width: number): voi
     }
     graphics.stroke(style);
   }
-  graphics.beginPath().circle(0, 0, 1.25).fill(color);
+  graphics.beginPath().circle(0, 0, 1.25).fill({ color, alpha });
 }
 
 const protectionHex = hexPoints(27.1);

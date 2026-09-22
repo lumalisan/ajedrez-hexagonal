@@ -6,6 +6,7 @@ import {
   createInitialState,
   declareBlockade,
   describeAction,
+  getAllLegalActions,
   getFiringRangeCells,
   getLegalActionsForPiece,
   getPiece,
@@ -14,6 +15,7 @@ import {
 } from '../src/engine';
 import { allBoardHexes, directionAtOffset, hexDistance, isOnBoard, stepHex } from '../src/hex';
 import { markerKind } from '../src/rendering/model';
+import { SCENARIOS } from '../src/scenarios';
 import type {
   Direction,
   FortressHp,
@@ -67,6 +69,63 @@ function perform(state: GameState, action: GameAction): GameState {
   expect(result.ok).toBe(true);
   return result.state;
 }
+
+function freezeRecursively<T>(value: T): T {
+  if (value !== null && typeof value === 'object') {
+    for (const child of Object.values(value)) freezeRecursively(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+describe('inmutabilidad de la resolución', () => {
+  it('resuelve todas las clases de acción con estados y órdenes congelados', () => {
+    const positions = [
+      { id: 'initial', state: createInitialState() },
+      {
+        id: 'attack-above',
+        state: base([
+          soldier('ground', 0, hex(0, 0), 0),
+          { id: 'air', type: 'drone', owner: 1, position: hex(0, 0) },
+        ]),
+      },
+      {
+        id: 'attack-below',
+        state: base([
+          { id: 'air', type: 'drone', owner: 0, position: hex(0, 0) },
+          soldier('ground', 1, hex(0, 0), 0),
+        ]),
+      },
+      ...SCENARIOS.map((scenario) => ({
+        id: scenario.id,
+        state: structuredClone(scenario.initialState),
+      })),
+    ];
+    const resolvedKinds = new Set<GameAction['kind']>();
+    for (const { id, state } of positions) {
+      freezeRecursively(state);
+      for (const action of getAllLegalActions(state)) {
+        freezeRecursively(action);
+        const result = applyAction(state, action);
+        expect(result.ok, `${id}: ${action.kind}`).toBe(true);
+        expect(result.state).not.toBe(state);
+        resolvedKinds.add(action.kind);
+      }
+    }
+    expect(resolvedKinds).toEqual(
+      new Set([
+        'move',
+        'rotate',
+        'orient',
+        'shoot',
+        'convert',
+        'attackAbove',
+        'attackBelow',
+        'transform',
+      ]),
+    );
+  });
+});
 
 describe('geometría y despliegue', () => {
   it('genera exactamente 91 hexágonos de radio 5', () => {
@@ -1050,6 +1109,8 @@ describe('Fortaleza, transformación y finales', () => {
     expect(transformed?.type).toBe('soldier');
     expect(transformed?.position).toEqual(hex(0, -1));
     if (transformed?.type === 'soldier') expect(transformed.facing).toBe(0);
+    expect(next.history[0].text).toContain('Tanque fue abandonado; el Soldado avanzó');
+    expect(getPiece(state, 'medium')?.type).toBe('medium');
   });
 
   it('tanque transformado puede contraatacar al Dron superior', () => {
@@ -1158,6 +1219,35 @@ describe('Fortaleza, transformación y finales', () => {
     const result = declareBlockade(state);
     expect(result.state.outcome).toEqual({ type: 'draw', reason: 'blockade' });
     expect(result.events).toContainEqual({ type: 'draw' });
+  });
+
+  it('conserva el turno rival aunque su única orden disponible sea girar un Soldado', () => {
+    const state = base([
+      soldier('blue-soldier', 0, hex(0, 0), 0),
+      { id: 'amber-aa', type: 'antiAir', owner: 1, position: hex(4, 0) },
+      soldier('amber-soldier', 1, hex(0, -5), 0),
+    ]);
+    const result = applyAction(state, findAction(state, 'blue-soldier', 'rotate'));
+
+    expect(result.state.activePlayer).toBe(1);
+    expect(result.events.some((event) => event.type === 'pass')).toBe(false);
+    expect(getAllLegalActions(result.state).map((action) => action.kind)).toEqual([
+      'rotate',
+      'rotate',
+      'rotate',
+      'rotate',
+      'rotate',
+    ]);
+  });
+
+  it('pasa el turno del rival sin órdenes aunque el jugador anterior pueda seguir actuando', () => {
+    const state = base([soldier('blue-soldier', 0, hex(0, 0), 0)]);
+    const result = applyAction(state, findAction(state, 'blue-soldier', 'rotate'));
+
+    expect(result.state.activePlayer).toBe(0);
+    expect(result.state.outcome).toBeNull();
+    expect(result.events).toContainEqual({ type: 'pass', owner: 1 });
+    expect(result.state.history.at(-1)?.text).toContain('Ámbar no tiene acciones legales');
   });
 
   it('declara tablas si, tras pasar un jugador, ninguno puede destruir la Fortaleza rival', () => {
