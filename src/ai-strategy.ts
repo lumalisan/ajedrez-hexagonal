@@ -1,4 +1,4 @@
-import { chooseMachineAction, searchMachineAction } from './ai';
+import { searchMachineAction } from './ai';
 import type { SearchMetadata } from './ai';
 import { resolutionRulesForConfig } from './match-record';
 import type { AiDifficulty, GameAction, GameState, MatchConfig } from './types';
@@ -15,10 +15,10 @@ export interface AiStrategy {
 }
 
 const DIFFICULTY: Record<AiDifficulty, { depth: number; maxMs: number }> = {
-  recruit: { depth: 1, maxMs: 120 },
-  tactical: { depth: 3, maxMs: 900 },
-  commander: { depth: 5, maxMs: 2_500 },
-  expert: { depth: 9, maxMs: 8_000 },
+  recruit: { depth: 1, maxMs: 250 },
+  tactical: { depth: 3, maxMs: 2_000 },
+  commander: { depth: 5, maxMs: 5_000 },
+  expert: { depth: 9, maxMs: 15_000 },
 };
 
 const MAIN_THREAD_MAX_MS = 400;
@@ -49,7 +49,6 @@ export class WorkerAiStrategy implements AiStrategy {
       seed,
       resolutionRules: resolutionRulesForConfig(config),
     };
-    if (difficulty === 'recruit') return chooseMachineAction(state, choiceOptions);
     const settings = DIFFICULTY[difficulty];
     const budgetMs = Math.min(settings.maxMs, budget.maxMs);
     const searchLocally = (): GameAction | null => {

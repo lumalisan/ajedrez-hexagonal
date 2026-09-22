@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ai from '../src/ai';
-import { WorkerAiStrategy } from '../src/ai-strategy';
+import { WorkerAiStrategy, difficultyBudget } from '../src/ai-strategy';
 import { createGameState } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
 import type { GameAction } from '../src/types';
@@ -91,7 +91,33 @@ describe('Worker AI strategy', () => {
     },
   );
 
-  it('passes the match draw rules to the Recruit evaluation', async () => {
+  it.each([
+    ['recruit', 250, 1],
+    ['tactical', 2_000, 3],
+    ['commander', 5_000, 5],
+    ['expert', 15_000, 9],
+  ] as const)(
+    'uses the increased %s budget for a bounded Worker search',
+    async (difficulty, maxMs, depth) => {
+      expect(difficultyBudget(difficulty)).toBe(maxMs);
+      const config = createClassicConfig({ mode: 'machine', difficulty, seed: 17 });
+      const pending = strategy.chooseAction(position(), config, { maxMs: 30_000 });
+      const worker = lastWorker();
+      expect(worker.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          difficulty,
+          budgetMs: maxMs,
+          depth,
+          seed: 17,
+        }),
+      );
+      worker.message({ id: 1, type: 'result', action, metadata });
+      await expect(pending).resolves.toEqual(action);
+      expect(ai.chooseMachineAction).not.toHaveBeenCalled();
+    },
+  );
+
+  it('passes the match draw rules and available budget to the Recruit Worker', async () => {
     const config = createClassicConfig({
       mode: 'machine',
       difficulty: 'recruit',
@@ -99,12 +125,17 @@ describe('Worker AI strategy', () => {
     });
     config.victory.repetition = 0;
 
-    await strategy.chooseAction(position(), config, { maxMs: 120 });
-
-    expect(ai.chooseMachineAction).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ resolutionRules: { repetition: null, noProgressPlyLimit: 60 } }),
+    const pending = strategy.chooseAction(position(), config, { maxMs: 120 });
+    const worker = lastWorker();
+    expect(worker.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        depth: 1,
+        budgetMs: 120,
+        resolutionRules: { repetition: null, noProgressPlyLimit: 60 },
+      }),
     );
+    worker.message({ id: 1, type: 'result', action, metadata });
+    await expect(pending).resolves.toEqual(action);
   });
 
   it('sends the difficulty, available budget and match rules to the Worker', async () => {
@@ -186,7 +217,7 @@ describe('Worker AI strategy', () => {
   });
 
   it.each(['unavailable', 'constructor', 'runtime', 'messageerror', 'postMessage'] as const)(
-    'keeps Expert search and match rules in a bounded fallback after %s failure',
+    'keeps the 15-second Expert profile in a bounded fallback after %s failure',
     async (failure) => {
       if (failure === 'unavailable') vi.stubGlobal('Worker', undefined);
       if (failure === 'constructor') {
@@ -207,7 +238,10 @@ describe('Worker AI strategy', () => {
         noProgressPlyLimit: null,
       });
       const onProgress = vi.fn();
-      const pending = strategy.chooseAction(position(), config, { maxMs: 5_000, onProgress });
+      const pending = strategy.chooseAction(position(), config, {
+        maxMs: difficultyBudget('expert'),
+        onProgress,
+      });
       if (failure === 'runtime') lastWorker().dispatchEvent(new Event('error'));
       if (failure === 'messageerror') lastWorker().dispatchEvent(new Event('messageerror'));
 

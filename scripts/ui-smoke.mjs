@@ -1901,7 +1901,7 @@ try {
   );
   await clickHex(solo, 0, -2);
   await doubleClickHex(solo, 0, -1);
-  await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 10_000 });
+  await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 25_000 });
   await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
   assert(
     (await solo.locator('#battle-log li').count()) >= 2,

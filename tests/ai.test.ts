@@ -61,7 +61,7 @@ describe('machine player', () => {
     expect(result?.state.pieces.some((piece) => piece.id === 'human-soldier')).toBe(false);
   });
 
-  it('advanced search sees a recapture that the recruit overlooks', () => {
+  it('advanced search sees a recapture that the quick one-ply evaluation overlooks', () => {
     const pieces: Piece[] = [
       { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
       { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
@@ -76,10 +76,14 @@ describe('machine player', () => {
       { id: 'human-capturer', type: 'capturer', owner: 0, position: { q: 1, r: -2 } },
     ];
     const state = createGameState(pieces, 1);
-    const recruit = chooseMachineAction(state);
+    const quickChoice = chooseMachineAction(state);
     const advanced = searchMachineAction(state, { depth: 3, budgetMs: 1_000 });
 
-    expect(recruit).toMatchObject({ kind: 'move', pieceId: 'machine-fast', to: { q: 0, r: -2 } });
+    expect(quickChoice).toMatchObject({
+      kind: 'move',
+      pieceId: 'machine-fast',
+      to: { q: 0, r: -2 },
+    });
     expect(advanced).not.toMatchObject({
       kind: 'move',
       pieceId: 'machine-fast',
@@ -242,10 +246,7 @@ describe('machine player', () => {
           difficulty,
           seed,
         };
-        const choose = () =>
-          difficulty === 'recruit'
-            ? chooseMachineAction(state, options)
-            : searchMachineAction(state, options);
+        const choose = () => searchMachineAction(state, options);
         const choice = choose();
         expect(getAllLegalActions(state)).toContainEqual(choice);
         expect(choose()).toEqual(choice);

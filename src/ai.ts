@@ -2,10 +2,12 @@ import {
   applyAction,
   getAllLegalActions,
   getFiringRangeCells,
+  getLegalActionsForPiece,
   getPiece,
   type ActionResolutionRules,
 } from './engine';
 import { actionKey } from './action-identity';
+import { airplanePositionScore } from './ai-airplane';
 import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
 import type {
   AiDifficulty,
@@ -167,7 +169,7 @@ const VARIATION: Record<AiDifficulty, { window: number; temperature: number; lim
   expert: { window: 10, temperature: 4, limit: 4 },
 };
 
-/** Selects a legal move using a quick one-ply evaluation (Recluta). */
+/** Quick one-ply choice for demonstrations and lightweight callers. */
 export function chooseMachineAction(
   state: GameState,
   options: ActionChoiceOptions = {},
@@ -530,10 +532,14 @@ function orderActions(
       if (!result.ok) return null;
       const key = actionKey(action);
       const tacticalScore = tacticalDelta(state, result.state, state.activePlayer);
+      const transformationRisk =
+        !result.state.outcome && result.state.activePlayer !== state.activePlayer
+          ? bestTransformationGain(result.state, resolutionRules)
+          : 0;
       let score = context
         ? evaluateSearchState(result.state, context)
         : evaluateState(result.state, rootPlayer, personality);
-      score += (maximizing ? tacticalScore : -tacticalScore) * weights.tactics;
+      score += (maximizing ? 1 : -1) * (tacticalScore - transformationRisk * 12) * weights.tactics;
       score += (maximizing ? 1 : -1) * stableActionBias(action, state.ply);
       return {
         action,
@@ -585,6 +591,7 @@ function evaluateState(state: GameState, player: Player, personality: AiPersonal
     const centerDistance = hexDistance(piece.position, { q: 0, r: 0 });
     score += sign * (BOARD_RADIUS - centerDistance) * 2 * weights.center;
     score += sign * supportScore(state, piece) * weights.support;
+    if (piece.type === 'airplane') score += sign * airplanePositionScore(state, piece);
     if (weights.ambushPressure > 0)
       score += sign * ambushPressureScore(state, piece) * weights.ambushPressure;
     if (piece.type === 'airplane' || piece.type === 'medium' || piece.type === 'long')
@@ -723,23 +730,59 @@ function tacticalDelta(before: GameState, after: GameState, mover: Player): numb
   if (after.outcome?.type === 'win')
     return after.outcome.winner === mover ? MATE_SCORE : -MATE_SCORE;
   const enemy = otherPlayer(mover);
-  const afterIds = new Set(after.pieces.map((piece) => piece.id));
-  let score = before.pieces
-    .filter((piece) => piece.owner === enemy && !afterIds.has(piece.id))
-    .reduce((total, piece) => total + materialValue(piece) * 12, 0);
-  score -= before.pieces
-    .filter((piece) => piece.owner === mover && !afterIds.has(piece.id))
-    .reduce((total, piece) => total + materialValue(piece) * 12, 0);
-  for (const piece of after.pieces) {
-    const previous = getPiece(before, piece.id);
-    if (previous && previous.owner !== piece.owner) {
-      score += (piece.owner === mover ? 1 : -1) * materialValue(piece) * 24;
-    }
-  }
+  // A transformed vehicle keeps its id, but its material value is no longer
+  // that of a vehicle. Count the actual change, including ammunition spent.
+  let score = (materialBalance(after, mover) - materialBalance(before, mover)) * 12;
   const oldFortress = fortressOf(before, enemy);
   const newFortress = fortressOf(after, enemy);
   score += ((oldFortress?.hp ?? 0) - (newFortress?.hp ?? 0)) * 90_000;
   return score;
+}
+
+function materialBalance(state: GameState, player: Player): number {
+  return state.pieces.reduce(
+    (total, piece) => total + (piece.owner === player ? 1 : -1) * materialValue(piece),
+    0,
+  );
+}
+
+/**
+ * The initial ranking is also the fallback when no search iteration completes.
+ * Inspect immediate transformation attacks through the engine so that a tank's
+ * firing arc never becomes a false safe zone, even on a short search budget.
+ */
+function bestTransformationGain(
+  state: GameState,
+  rules: Readonly<ActionResolutionRules> | undefined,
+): number {
+  const player = state.activePlayer;
+  const enemies = state.pieces.filter((piece) => piece.owner !== player);
+  let bestGain = 0;
+  let before: number | undefined;
+  for (const piece of state.pieces) {
+    if (
+      piece.owner !== player ||
+      !['medium', 'long', 'fast'].includes(piece.type) ||
+      !enemies.some((target) => hexDistance(piece.position, target.position) <= 1)
+    )
+      continue;
+    const examined = new Set<string>();
+    for (const action of getLegalActionsForPiece(state, piece.id)) {
+      if (action.kind !== 'transform' || !isTacticalAction(state, action)) continue;
+      // Facings can alter the resulting position, but not this immediate
+      // material exchange. Keep target/layer variants distinct.
+      const exchange = `${action.to ? hexKey(action.to) : '-'}:${action.attackAboveId ?? '-'}`;
+      if (examined.has(exchange)) continue;
+      examined.add(exchange);
+      const result = applyAction(state, action, rules);
+      if (!result.ok) continue;
+      if (result.state.outcome?.type === 'win' && result.state.outcome.winner === player)
+        return MATE_SCORE;
+      before ??= materialBalance(state, player);
+      bestGain = Math.max(bestGain, materialBalance(result.state, player) - before);
+    }
+  }
+  return bestGain;
 }
 
 function supportScore(state: GameState, piece: Piece): number {
