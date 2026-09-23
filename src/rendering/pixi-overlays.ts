@@ -12,7 +12,7 @@ import {
 } from './model';
 import { hexPoints, strokeDashedPath } from './shapes';
 
-type TargetKind = 'move' | 'capture' | 'shoot' | 'convert';
+type TargetKind = 'move' | 'capture' | 'shoot' | 'convert' | 'danger';
 
 /** Tactical graphics are retained; animation only changes transforms and opacity. */
 export class PixiOverlays {
@@ -86,7 +86,7 @@ export class PixiOverlays {
     for (const [key, marker] of this.markers) {
       const view = this.markerViews.get(key);
       if (!view) continue;
-      view.animate(pulse, orientation);
+      view.animate(pulse);
       if (view.target.visible) {
         const point = projectHex(marker.hex, orientation, depth);
         view.target.position.set(point.x, point.y);
@@ -233,7 +233,6 @@ class MarkerView {
   private readonly range = new Graphics();
   private readonly moveDot = new Graphics();
   private readonly moveRing = new Graphics();
-  private readonly danger = new Graphics();
   private readonly targetShape = new Graphics();
   private readonly targetHalo = new Graphics();
   private readonly targetDot = new Graphics();
@@ -246,7 +245,7 @@ class MarkerView {
 
   constructor() {
     this.board.addChild(this.fill, this.glyph);
-    this.glyph.addChild(this.range, this.moveRing, this.moveDot, this.danger);
+    this.glyph.addChild(this.range, this.moveRing, this.moveDot);
     this.target.addChild(this.targetHalo, this.targetDotHalo, this.targetShape, this.targetDot);
   }
 
@@ -266,11 +265,9 @@ class MarkerView {
       this.moving = combined || marker.kind === 'move';
       this.moveDot.visible = this.moving;
       this.moveRing.visible = this.moving;
-      this.danger.visible = !combined && marker.kind === 'danger';
       this.range.clear();
       this.moveDot.clear();
       this.moveRing.clear();
-      this.danger.clear();
       if (this.range.visible) {
         strokeDashedPath(this.range, hexPoints(20.5), 3, 4, { color: COLORS.range, width }, true);
         this.range.beginPath().circle(0, 0, 3.2).stroke({ color: COLORS.range, width });
@@ -278,11 +275,6 @@ class MarkerView {
       if (this.moving) {
         this.moveDot.circle(0, 0, 5.2).fill(COLORS.move);
         this.moveRing.circle(0, 0, 10.2).stroke({ color: COLORS.move, width });
-      }
-      if (this.danger.visible) {
-        this.danger.poly([0, -12.5, 12.5, 9.75, -12.5, 9.75], true).stroke({ color, width });
-        this.danger.beginPath().roundRect(-1.05, -2.5, 2.1, 5.2, 0.6).fill(color);
-        this.danger.beginPath().circle(0, 5.4, 1.15).fill(color);
       }
     }
     const targetKey = `${target}:${color}:${highContrast}`;
@@ -293,7 +285,22 @@ class MarkerView {
     this.targetDot.clear();
     this.targetDotHalo.clear();
     const width = highContrast ? 3.2 : 2.65;
-    if (target === 'move' || target === 'capture') {
+    if (target === 'danger') {
+      // The warning shares the upper target layer so occupied cells cannot hide it.
+      // An opaque interior keeps the exclamation legible over the unit's glyph.
+      this.targetShape
+        .poly([0, -12.5, 12.5, 9.75, -12.5, 9.75], true)
+        .fill(COLORS.background)
+        .stroke({ color, width });
+      this.targetShape.beginPath().roundRect(-1.05, -2.5, 2.1, 5.2, 0.6).fill(color);
+      this.targetShape.beginPath().circle(0, 5.4, 1.15).fill(color);
+      drawSoftShadow((spread, alpha) => {
+        this.targetHalo
+          .beginPath()
+          .poly([0, -12.5, 12.5, 9.75, -12.5, 9.75], true)
+          .stroke({ color: 0x000000, width: width + spread, alpha });
+      });
+    } else if (target === 'move' || target === 'capture') {
       this.targetShape.circle(0, 0, 10.2).stroke({ color, width });
       this.targetDot.circle(0, 0, 5.2).fill(color);
       drawSoftShadow((spread, alpha) => {
@@ -321,9 +328,7 @@ class MarkerView {
     }
   }
 
-  animate(pulse: number, orientation: number): void {
-    // Keep the warning upright while its cell follows the board's perspective.
-    this.danger.rotation = -orientation;
+  animate(pulse: number): void {
     this.fill.alpha = this.isRange ? 0.2 : 0.22 + pulse * 0.06;
     const radius = 5.2 + pulse * 1.2;
     if (this.moving) {
@@ -332,11 +337,14 @@ class MarkerView {
     }
     if (!this.target.visible) return;
     const circle = this.targetKind === 'move' || this.targetKind === 'capture';
-    const scale = circle
-      ? (radius + 5) / 10.2
-      : this.targetKind === 'shoot'
-        ? (11.5 + pulse) / 11.5
-        : (12 + pulse) / 12;
+    const scale =
+      this.targetKind === 'danger'
+        ? 1
+        : circle
+          ? (radius + 5) / 10.2
+          : this.targetKind === 'shoot'
+            ? (11.5 + pulse) / 11.5
+            : (12 + pulse) / 12;
     this.targetShape.scale.set(scale);
     this.targetHalo.scale.set(scale);
     this.targetDot.scale.set(circle ? radius / 5.2 : 1);
@@ -349,6 +357,7 @@ function targetKind(
   marker: ActionMarker,
   selected: Piece | undefined,
 ): TargetKind | null {
+  if (marker.kind === 'danger') return 'danger';
   const occupancy = occupancyAt(model.state, marker.hex);
   const occupiedLayer =
     marker.canMove &&

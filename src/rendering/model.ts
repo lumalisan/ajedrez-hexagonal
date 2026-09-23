@@ -10,6 +10,7 @@ import {
 import {
   PIECE_SHORT_NAMES,
   actionDestination,
+  firstAirInterception,
   getPiece,
   isAirPiece,
   isProtectedByPlayer,
@@ -59,6 +60,8 @@ export interface RenderModel {
   highContrast: boolean;
   /** Ambient motion is opt-in so instructional scenes and previews remain still. */
   idleAnimations?: boolean;
+  /** Explicit tutorial target; the screen label supplements the persistent cell outline. */
+  tutorialCue?: { hex: Hex; label: string } | null;
 }
 
 export type MarkerKind = 'range' | 'move' | 'capture' | 'shoot' | 'convert' | 'danger';
@@ -167,7 +170,7 @@ export function markerKind(state: GameState, action: GameAction): MarkerKind {
     return 'move';
   }
   if (action.kind === 'rotate' || action.kind === 'orient') return 'convert';
-  if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayerOf(piece.owner))) {
+  if (firstAirInterception(state, piece, action.to)) {
     return 'danger';
   }
   if (piece.type === 'airplane' && action.kind === 'move') {

@@ -51,6 +51,7 @@ export interface GameSnapshot {
   activeScenario: ScenarioDefinition | null;
   scenarioProgress: ScenarioProgress | null;
   scenarioHintsRevealed: number;
+  tutorial: { stepIndex: number; completed: boolean } | null;
   machineThinking: boolean;
   machineSearch: SearchMetadata | null;
   isMachineTurn: boolean;
@@ -78,6 +79,9 @@ export interface GameCommands {
   abandon(): void;
   startMatch(config: MatchConfig): void;
   startScenario(scenario: ScenarioDefinition): void;
+  startTutorial(): void;
+  navigateTutorial(delta: 1 | -1): void;
+  exitTutorial(): void;
   continueMatch(): void;
   resetGame(): void;
   loadRecord(record: MatchRecord): void;
@@ -86,6 +90,7 @@ export interface GameCommands {
   updatePreferences(preferences: Partial<GamePreferences>): void;
   toggleSound(): void;
   selectPiece(pieceId: string): void;
+  selectNextPiece(backward: boolean): void;
   selectHex(hex: Hex): void;
   clearSelection(): void;
   cancelDraft(): void;

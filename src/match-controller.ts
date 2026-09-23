@@ -125,6 +125,7 @@ export class MatchController {
 
   private canNavigateHistory(): boolean {
     if (!this.record.config.options.allowUndo) return false;
+    if (this.record.clock?.status === 'turn-expired') return false;
     const reason = this.record.conclusion?.outcome.reason;
     return reason !== 'resignation' && reason !== 'timeout' && reason !== 'blockade';
   }

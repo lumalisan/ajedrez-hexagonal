@@ -198,12 +198,7 @@ export class PixiPiece extends Container {
           .rect(-totalWidth / 2 + index * 8, 12, 6, 2.5)
           .fill({ color, alpha: index < piece.hp ? 1 : 0.18 });
       }
-      return;
     }
-    if (piece.owner === 0) this.marks.circle(0, 12, 1.6);
-    else this.marks.poly([0, 9.2373, 2.2627, 11.5, 0, 13.7627, -2.2627, 11.5]);
-    if (piece.type === 'airplane') this.marks.stroke({ color: 0x061118, width: 1.1 });
-    this.marks.fill(color);
   }
 
   override destroy(options?: DestroyOptions): void {

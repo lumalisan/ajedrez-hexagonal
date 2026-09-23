@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { describeAction } from '../engine';
 import { analyzeMatchMoments } from '../match-insights';
-import { replayRecord } from '../match-record';
 import { useGame } from './game-context';
 
 export function ReplayDock() {
   const { snapshot, commands } = useGame();
-  const { matchRecord: record, replayCursor: cursor } = snapshot;
+  const { matchRecord: record, replayCursor: cursor, state } = snapshot;
   const closeRef = useRef<HTMLButtonElement>(null);
   const moments = useMemo(() => (record ? analyzeMatchMoments(record) : []), [record]);
   useEffect(() => {
@@ -20,7 +18,7 @@ export function ReplayDock() {
   const description =
     cursor === 0
       ? 'Posición inicial'
-      : describeAction(replayRecord(record, cursor - 1), record.actions[cursor - 1]);
+      : (state.history.find((entry) => entry.id === state.ply)?.text ?? 'Orden completada.');
   return (
     <section className="replay-dock" aria-label="Controles de repetición de partida">
       <div className="replay-heading">

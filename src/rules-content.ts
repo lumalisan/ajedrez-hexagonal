@@ -1,4 +1,5 @@
 import type { RuleDemoId } from './rules-demo';
+import { TURN_TIMEOUT_LIMIT } from './match-clock';
 import {
   CLASSIC_NO_PROGRESS_LIMIT,
   CLASSIC_REPETITION_LIMIT,
@@ -48,7 +49,7 @@ export const RULE_SECTIONS: RuleSection[] = [
         'El objetivo del juego es destruir la fortaleza rival.',
         'destruir la fortaleza rival.',
       ),
-      'La fortaleza no se desplaza ni realiza acciones. Al crear una partida puedes elegir si comienza con 1, 2 o 3 puntos de vida.',
+      'La fortaleza no se desplaza ni realiza acciones. Al crear una partida puedes elegir si comienza con 1, 2 o 3 puntos de vida; la opción predeterminada es 1.',
       emphasize(
         `Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto de daño, con independencia de sus puntos de vida iniciales. Cuando estos llegan a cero, la fortaleza es destruida y su propietario pierde la partida.`,
         `Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto de daño`,
@@ -243,9 +244,9 @@ export const RULE_SECTIONS: RuleSection[] = [
         `La configuración estándar declara tablas tras ${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies) consecutivas sin una baja, una intercepción ni daño a una fortaleza. Una conversión del Capturador cambia de bando a la unidad, pero no reinicia este contador.`,
         `${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies)`,
       ),
-      'Puedes configurar dos límites de tiempo independientes: por turno (sin límite, 30 segundos, 1 minuto o 2 minutos) y total por jugador (sin límite, 5 minutos, 10 minutos o 20 minutos). El tiempo por turno se reinicia al comenzar cada turno; el total solo se consume mientras juega ese bando. Si activas ambos, agotar cualquiera concede la victoria al rival. Una rendición también concede la victoria al otro bando.',
+      `Puedes configurar dos límites de tiempo independientes: por turno (sin límite, 30 segundos, 1 minuto o 2 minutos) y total por jugador (sin límite, 5 minutos, 10 minutos o 20 minutos). El tiempo por turno se reinicia al comenzar cada turno; el total solo se consume mientras juega ese bando. Al agotar el tiempo de turno, la IA realiza una jugada por ese jugador. Si un mismo jugador lo agota ${TURN_TIMEOUT_LIMIT} veces durante la partida, pierde. Agotar el tiempo total o rendirse también concede la victoria al rival.`,
       peerHeading('Registro y continuidad'),
-      'Cada orden confirmada y el desenlace quedan guardados en el registro de partida. Al guardar y continuar se conserva el tiempo restante de ambos relojes. La destrucción de una fortaleza, las tablas, el tiempo agotado y la rendición se conservan al continuar, exportar, importar o reproducir la partida; una partida concluida no vuelve a abrirse como si siguiera activa.',
+      'Cada orden confirmada y el desenlace quedan guardados en el registro de partida. Al guardar y continuar se conservan el tiempo restante de ambos relojes y las veces que cada jugador ha agotado el tiempo de turno. La destrucción de una fortaleza, las tablas, el tiempo agotado y la rendición se conservan al continuar, exportar, importar o reproducir la partida; una partida concluida no vuelve a abrirse como si siguiera activa.',
     ],
     layoutPreview: true,
   },

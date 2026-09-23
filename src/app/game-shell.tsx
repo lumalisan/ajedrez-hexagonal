@@ -9,8 +9,9 @@ import {
   SelectionSummary,
 } from './panels';
 import { ReplayDock } from './replay-dock';
-import { SettingsIcon, SoundButton } from './shell-icons';
+import { SettingsIcon, SoundButton, WarningIcon } from './shell-icons';
 import { AchievementsMenuIcon } from './components/achievement-icon';
+import { TutorialPanel } from './tutorial-panel';
 
 function Header() {
   const { snapshot, commands } = useGame();
@@ -21,7 +22,8 @@ function Header() {
     animating ||
     machineThinking ||
     replayCursor !== null ||
-    Boolean(activeScenario);
+    Boolean(activeScenario) ||
+    Boolean(snapshot.tutorial);
   return (
     <header className="topbar" inert={snapshot.homeView !== null}>
       <div
@@ -88,7 +90,7 @@ function Header() {
           aria-label="Proponer tablas"
           title="Proponer tablas"
           disabled={disabled || gameMode === 'machine'}
-          hidden={gameMode === 'machine' || Boolean(activeScenario)}
+          hidden={gameMode === 'machine' || Boolean(activeScenario) || Boolean(snapshot.tutorial)}
           onClick={() => commands.openDialog({ kind: 'draw-offer' })}
         >
           <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -99,9 +101,11 @@ function Header() {
           className="menu-button"
           id="new-game-button"
           type="button"
-          onClick={() => commands.openDialog({ kind: 'abandon' })}
+          onClick={() =>
+            snapshot.tutorial ? commands.exitTutorial() : commands.openDialog({ kind: 'abandon' })
+          }
         >
-          Abandonar partida
+          {snapshot.tutorial ? 'Salir del tutorial' : 'Abandonar partida'}
         </button>
       </div>
     </header>
@@ -121,7 +125,8 @@ function BoardToolbar() {
     canUndo,
     canRedo,
   } = snapshot;
-  const historyVisible = isLocalMatch && replayCursor === null && homeView === null;
+  const historyVisible =
+    isLocalMatch && replayCursor === null && homeView === null && snapshot.tutorial === null;
   const toggleLog = () => {
     commands.setLogOpen(!logOpen);
   };
@@ -165,6 +170,7 @@ function BoardToolbar() {
           type="button"
           id="replay-button"
           data-open-replay
+          hidden={Boolean(snapshot.tutorial)}
           aria-label={replayCursor === null ? 'Ver repetición' : 'Cerrar repetición'}
           title={replayCursor === null ? 'Ver repetición' : 'Cerrar repetición'}
           aria-expanded={replayCursor !== null}
@@ -182,6 +188,7 @@ function BoardToolbar() {
         <button
           type="button"
           id="log-toggle"
+          hidden={Boolean(snapshot.tutorial)}
           aria-label={logOpen ? 'Ocultar registro de batalla' : 'Mostrar registro de batalla'}
           aria-controls="battle-log-panel"
           aria-expanded={logOpen}
@@ -247,11 +254,7 @@ function BoardLegend() {
         Conversión
       </span>
       <span>
-        <svg className="legend-danger" viewBox="-15 -15 30 30" aria-hidden="true" focusable="false">
-          <path d="M0-12.5 12.5 9.75H-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.7" />
-          <rect x="-1.05" y="-2.5" width="2.1" height="5.2" rx="0.6" fill="currentColor" />
-          <circle cx="0" cy="5.4" r="1.15" fill="currentColor" />
-        </svg>
+        <WarningIcon className="legend-danger" />
         Intercepción
       </span>
     </div>
@@ -262,13 +265,17 @@ export function GameShell() {
   const { snapshot } = useGame();
   const { homeView, replayCursor } = snapshot;
   return (
-    <div id="app" className={`app-shell${homeView !== null ? ' home-active' : ''}`}>
+    <div
+      id="app"
+      className={`app-shell${homeView !== null ? ' home-active' : ''}${snapshot.tutorial ? ' tutorial-active' : ''}`}
+    >
       <HomeScreen />
       <Header />
       <main className="game-layout" inert={homeView !== null}>
         <section className="board-stage" aria-label="Tablero de juego">
           <BoardToolbar />
           <div className="board-arena" id="board-arena">
+            <TutorialPanel />
             <BoardCanvas />
             <CommandPanel />
             <BattleLog />
@@ -276,8 +283,8 @@ export function GameShell() {
           <BoardLegend />
           {replayCursor !== null && <ReplayDock />}
         </section>
+        <ScreenReaderBoard />
       </main>
-      <ScreenReaderBoard />
       <div id="announcer" className="sr-only" aria-live="assertive">
         <span key={snapshot.announcementId}>{snapshot.announcement}</span>
       </div>

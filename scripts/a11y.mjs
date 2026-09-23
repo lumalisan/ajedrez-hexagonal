@@ -132,10 +132,24 @@ try {
       await page.keyboard.press('Enter');
       await page.locator('#pending-card').waitFor({ state: 'visible' });
       await audit('match / pending order');
-      await page.locator('#cancel-selection').click();
       await page.locator('#log-toggle').click();
       await page.locator('#battle-log-panel').waitFor({ state: 'visible' });
-      await audit('match / battle log');
+      await page.locator('#pending-card').waitFor({ state: 'visible' });
+      await audit('match / pending order and battle log together');
+      if (!profile.isMobile) {
+        await page.locator('#battle-log-window-titlebar').focus();
+        await page.keyboard.press('ArrowRight');
+        await page.locator('#minimize-battle-log').click();
+        await page.locator('#battle-log-restore').waitFor({ state: 'visible' });
+        await audit('match / battle log minimized and pending order');
+        await page.locator('#minimize-command-panel').click();
+        await page.locator('#command-panel-restore').waitFor({ state: 'visible' });
+        await audit('match / both windows minimized');
+        await page.locator('#battle-log-restore').click();
+        await page.locator('#command-panel-restore').click();
+      }
+      await page.locator('#cancel-selection').click();
+      await audit('match / selected unit and battle log together');
       await page.locator('#close-battle-log').click();
 
       await page.locator('[data-open-replay]').click();

@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:a11y": "node scripts/a11y.mjs",
+    "test:tutorial": "node scripts/tutorial-smoke.mjs",
     "test:design-system": "node scripts/design-system-smoke.mjs",
     "test:offline": "node scripts/offline-smoke.mjs",
     "test:watch": "vitest",

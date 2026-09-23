@@ -121,6 +121,42 @@ describe('integración de la escena Pixi', () => {
     { orientation: Math.PI, depth: 0 },
     { orientation: 0, depth: 1 },
     { orientation: Math.PI, depth: 1 },
+  ])(
+    'pinta la advertencia de intercepción sobre todas las unidades ($orientation, $depth)',
+    (camera) => {
+      const state = position([
+        { id: 'drone', type: 'drone', owner: 0, position: { q: 0, r: 0 } },
+        { id: 'shield', type: 'antiAir', owner: 1, position: { q: 2, r: 0 } },
+        { id: 'protected', type: 'medium', owner: 1, position: { q: 1, r: 0 }, cannon: 3 },
+      ]);
+      const { scene, stage } = board(state);
+      scene.update(
+        {
+          ...modelFor(state),
+          selectedId: 'drone',
+          actions: getLegalActionsForPiece(state, 'drone'),
+        },
+        100,
+        { ...view, ...camera },
+        null,
+      );
+      const order = paintOrder(stage);
+      for (const [id, key] of [
+        ['protected', '1,0'],
+        ['shield', '2,0'],
+      ]) {
+        const warning = child(stage, `target-marker-${key}`);
+        expect(warning.visible).toBe(true);
+        expect(order.indexOf(warning)).toBeGreaterThan(order.indexOf(child(stage, `piece-${id}`)));
+      }
+    },
+  );
+
+  it.each([
+    { orientation: 0, depth: 0 },
+    { orientation: Math.PI, depth: 0 },
+    { orientation: 0, depth: 1 },
+    { orientation: Math.PI, depth: 1 },
   ])('pinta aire sobre tierra en una casilla compartida ($orientation, $depth)', (camera) => {
     const state = position([
       { id: 'air', type: 'drone', owner: 0, position: { q: 1, r: 0 } },

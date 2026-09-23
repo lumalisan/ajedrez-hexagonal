@@ -197,7 +197,7 @@ export interface MatchConfig {
   options: MatchOptions;
 }
 
-export type MatchClockStatus = 'paused' | 'running' | 'timeout';
+export type MatchClockStatus = 'paused' | 'running' | 'turn-expired' | 'timeout';
 
 /** Serializable state for a deterministic two-player countdown clock. */
 export interface MatchClockSnapshot {
@@ -207,6 +207,8 @@ export interface MatchClockSnapshot {
   /** Optional for compatibility with existing version 2 saves. */
   turnInitialMs?: number | null;
   turnRemainingMs?: number | null;
+  /** Per-player expired turns; absent in legacy version 2 saves means zero. */
+  turnTimeouts?: [number, number];
   activePlayer: Player;
   status: MatchClockStatus;
   lastTickAt: number | null;

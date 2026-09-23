@@ -121,7 +121,8 @@ button:disabled {
 }
 
 .match-status {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   justify-content: center;
   min-width: 480px;
@@ -133,6 +134,7 @@ button:disabled {
 }
 
 .fortress-status {
+  --clock-color: var(--blue);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -141,26 +143,46 @@ button:disabled {
 }
 
 .fortress-status.player-amber {
+  --clock-color: var(--amber);
   flex-direction: row-reverse;
   text-align: right;
 }
 
-.fortress-status div {
+.faction-identity {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   line-height: 1.05;
 }
 
-.fortress-status small {
-  color: var(--muted);
-  font-size: 9px;
+.player-amber .faction-identity {
+  flex-direction: row-reverse;
+}
+
+.faction-identity strong {
+  font-size: 11px;
+  font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.fortress-status strong {
-  font-size: 11px;
-  font-weight: 600;
+.faction-vitals {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.player-amber .faction-vitals {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.turn-timeouts {
+  color: var(--threat);
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .faction-mark {
@@ -210,12 +232,6 @@ button:disabled {
 .hp {
   display: flex;
   gap: 3px;
-  margin-left: auto;
-}
-
-.player-amber .hp {
-  margin-right: auto;
-  margin-left: 0;
 }
 
 .hp i {
@@ -254,9 +270,11 @@ button:disabled {
 }
 
 .turn-chip {
+  --clock-color: var(--text);
   display: flex;
   min-width: 178px;
   flex-direction: column;
+  gap: 2px;
   justify-content: center;
   padding: 5px 17px;
   border-right: 1px solid var(--line);
@@ -280,8 +298,16 @@ button:disabled {
   color: var(--blue);
 }
 
+.turn-chip.blue {
+  --clock-color: var(--blue);
+}
+
 .turn-chip.amber strong {
   color: var(--amber);
+}
+
+.turn-chip.amber {
+  --clock-color: var(--amber);
 }
 
 .turn-chip.finished strong {
@@ -729,6 +755,7 @@ button:disabled {
   background: rgba(12, 30, 38, 0.72);
 }
 
+.control-section h2,
 .control-section h3 {
   margin: 0;
   font-family: 'Bahnschrift', sans-serif;
@@ -1724,10 +1751,6 @@ button:disabled {
   .fortress-status {
     min-width: 112px;
     padding-inline: 8px;
-  }
-
-  .fortress-status div {
-    display: none;
   }
 }
 
@@ -3317,19 +3340,16 @@ a:focus-visible {
 }
 
 .match-clock {
-  display: flex;
-  min-width: 70px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  place-items: center;
-  padding: 5px 9px;
+  display: block;
+  min-width: 5ch;
+  justify-self: center;
+  align-self: center;
+  padding: 2px 4px;
   border: 0;
-  border-right: 1px solid var(--line);
-  background: rgba(5, 18, 24, 0.34);
-  color: #d9e7e4;
+  border-radius: 3px;
+  color: var(--clock-color);
   font-family: ui-monospace, 'Cascadia Code', 'SFMono-Regular', monospace;
-  font-size: 11px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   font-weight: 750;
   letter-spacing: 0.035em;
@@ -3337,8 +3357,8 @@ a:focus-visible {
   text-align: center;
 }
 
-.match-clock:empty::before {
-  content: '--:--';
+.match-clock.active {
+  background: rgba(162, 188, 190, 0.08);
 }
 
 .match-clock.warning,
@@ -3355,39 +3375,8 @@ a:focus-visible {
   animation: clock-critical 850ms ease-in-out infinite;
 }
 
-.match-clock .clock-side {
-  display: grid;
-  gap: 1px;
-}
-
-.match-clock .clock-side small {
-  font-size: 7px;
-  font-weight: 650;
-  opacity: 0.72;
-}
-
-.match-clock .clock-side.active {
-  color: var(--move);
-}
-
-@media (max-width: 600px) {
-  .match-status:has(.match-clock:not([hidden])) {
-    flex-wrap: wrap;
-  }
-
-  .match-status .match-clock:not([hidden]) {
-    order: 4;
-    flex: 1 0 100%;
-    gap: 16px;
-    padding: 6px;
-    border-top: 1px solid var(--line);
-    border-right: 0;
-    font-size: 12px;
-  }
-
-  .match-status .match-clock .clock-side small {
-    font-size: 9px;
-  }
+.match-clock.critical:not(.active) {
+  animation: none;
 }
 
 .game-dialog:has(.academy-shell) {
@@ -4156,21 +4145,11 @@ body.match-climax .match-status {
   .match-status {
     min-width: 448px;
   }
-
-  .match-clock {
-    min-width: 64px;
-    padding-inline: 6px;
-    font-size: 10px;
-  }
 }
 
 @media (max-width: 900px) {
   .match-status {
     min-width: 0;
-  }
-
-  .match-clock {
-    min-width: 60px;
   }
 }
 
@@ -4371,11 +4350,6 @@ body.match-climax .match-status {
   .icon-button {
     min-width: 44px;
     width: 44px;
-  }
-
-  .match-clock {
-    min-width: 56px;
-    font-size: 9px;
   }
 
   .turn-chip {
@@ -5023,10 +4997,6 @@ html {
   overflow: hidden;
 }
 
-.board-arena:has(> .battle-log-panel:not([hidden])) {
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 25vw, 360px);
-}
-
 .command-panel,
 .battle-log-panel {
   align-self: center;
@@ -5044,7 +5014,7 @@ html {
 }
 
 .command-panel > *,
-.battle-log-panel > .panel-heading {
+.battle-log-panel > .command-window-titlebar {
   flex-shrink: 0;
 }
 
@@ -5057,6 +5027,7 @@ html {
 }
 
 .command-window-title {
+  margin: 0;
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 650;
@@ -5091,7 +5062,7 @@ html {
   background: var(--surface-3);
 }
 
-.command-window-controls #close-command-panel:hover {
+.command-window-controls [data-window-close]:hover {
   background: #a92d43;
 }
 
@@ -5120,7 +5091,7 @@ html {
 
 .command-panel-restore {
   position: absolute;
-  z-index: 5;
+  z-index: 7;
   right: 24px;
   bottom: 16px;
   display: inline-flex;
@@ -5141,6 +5112,11 @@ html {
   background: var(--surface-3);
 }
 
+.battle-log-restore {
+  right: auto;
+  left: 24px;
+}
+
 .command-restore-label {
   margin-left: 8px;
   color: var(--muted);
@@ -5149,11 +5125,11 @@ html {
 }
 
 @media (min-width: 901px) {
-  .command-panel {
+  .floating-panel {
     position: absolute;
     z-index: 5;
-    top: var(--command-window-y, 24px);
-    left: var(--command-window-x, calc(100% - 344px));
+    top: var(--floating-window-y, 24px);
+    left: var(--floating-window-x, calc(100% - 344px));
     width: 320px;
     max-width: calc(100% - 32px);
     max-height: calc(100% - 32px);
@@ -5165,6 +5141,10 @@ html {
     overflow: hidden;
   }
 
+  .floating-panel.is-front {
+    z-index: 6;
+  }
+
   .command-window-titlebar {
     min-height: 42px;
     padding-left: 16px;
@@ -5174,7 +5154,7 @@ html {
     user-select: none;
   }
 
-  .command-panel.is-dragging .command-window-titlebar {
+  .floating-panel.is-dragging .command-window-titlebar {
     cursor: grabbing;
   }
 
@@ -5186,7 +5166,12 @@ html {
     scrollbar-width: thin;
   }
 
-  .high-contrast .command-panel {
+  .floating-panel.battle-log-panel .battle-log {
+    max-height: 360px;
+    margin: 12px;
+  }
+
+  .high-contrast .floating-panel {
     outline: 2px solid var(--line-strong);
     outline-offset: -2px;
   }
@@ -5260,10 +5245,21 @@ html {
 }
 
 .transform-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   margin: 12px 0 0;
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
+  text-align: justify;
+}
+
+.transform-warning-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--danger);
 }
 
 .battle-log-panel {
@@ -5326,15 +5322,21 @@ html {
 }
 
 .match-status {
-  min-width: 440px;
+  min-width: 504px;
 }
 
 .fortress-status {
   min-width: 115px;
 }
 
-.turn-chip {
-  min-width: 142px;
+.match-status .turn-chip {
+  min-width: 0;
+}
+
+.match-status .turn-chip strong {
+  max-width: none;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .fullscreen-control {
@@ -5393,15 +5395,27 @@ html {
 
   .match-status {
     min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
   }
 
   .fortress-status {
+    flex-direction: column;
     min-width: 70px;
+    gap: 4px;
     padding-inline: 8px;
   }
 
-  .fortress-status div {
-    display: none;
+  .fortress-status.player-amber {
+    flex-direction: column;
+  }
+
+  .faction-identity {
+    gap: 4px;
+  }
+
+  .faction-vitals,
+  .player-amber .faction-vitals {
+    margin: 0;
   }
 
   .turn-chip {
@@ -5411,7 +5425,7 @@ html {
 }
 
 @media (max-width: 900px) {
-  #minimize-command-panel,
+  .command-window-controls [data-window-minimize],
   .command-panel-restore {
     display: none;
   }
@@ -5469,14 +5483,18 @@ html {
     padding-inline: 5px;
   }
 
+  .faction-identity strong {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+
   .turn-chip {
     min-width: 100px;
     padding-inline: 6px;
   }
 
   .match-clock {
-    min-width: 44px;
-    padding-inline: 4px;
+    font-size: 12px;
   }
 
   .fullscreen-control {
@@ -5496,6 +5514,21 @@ html {
   .command-panel,
   .battle-log-panel {
     padding: 16px 16px 16px 4px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .board-arena:has(> .command-panel:not([hidden])):has(> .battle-log-panel:not([hidden])) {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .board-arena > .canvas-wrap {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  .board-arena > aside {
+    grid-column: 2;
   }
 }
 
@@ -5653,4 +5686,237 @@ html {
 
 .scenario-briefing-actions {
   padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+/* The lesson and its controls leave the whole tutorial board available for play. */
+.tutorial-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  align-self: stretch;
+  background: var(--surface);
+}
+
+.tutorial-titlebar {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--surface-2);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.tutorial-progress {
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+.tutorial-content {
+  min-height: 0;
+  padding: 24px 20px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.tutorial-content h1 {
+  margin: 0 0 20px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.tutorial-content p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.tutorial-content .tutorial-instruction {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-strong);
+  font-weight: 650;
+}
+
+.tutorial-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 16px 20px 20px;
+}
+
+.tutorial-navigation {
+  display: flex;
+  gap: 10px;
+}
+
+.tutorial-navigation > button {
+  min-width: 0;
+  flex: 1;
+  padding-inline: 10px;
+}
+
+.tutorial-navigation-hint {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tutorial-academy-link {
+  min-height: 44px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.tutorial-panel-emphasis {
+  outline: 2px solid var(--move);
+  outline-offset: -2px;
+}
+
+[data-tutorial-highlight='true'] {
+  outline: 3px solid var(--threat);
+  outline-offset: 3px;
+}
+
+.compass-direction[data-tutorial-highlight='true'] {
+  background: var(--threat);
+  color: var(--bg);
+  --compass-scale: 1.12;
+}
+
+.tutorial-active .command-window-controls,
+.tutorial-active .command-panel-restore {
+  display: none;
+}
+
+.tutorial-active .command-window-titlebar {
+  cursor: default;
+}
+
+.tutorial-active .board-arena {
+  grid-template-columns: minmax(240px, 290px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.tutorial-active .board-arena:has(> .command-panel:not([hidden])) {
+  grid-template-columns: minmax(240px, 290px) minmax(0, 1fr) 300px;
+}
+
+.tutorial-active .board-arena > .tutorial-panel {
+  grid-column: 1;
+  grid-row: 1;
+  border-right: 1px solid var(--line);
+}
+
+.tutorial-active .board-arena > .canvas-wrap {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.tutorial-active .board-arena > .command-panel {
+  position: static;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  width: auto;
+  max-width: none;
+  max-height: 100%;
+  margin: 12px;
+  padding: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 1199px) {
+  .app-shell.tutorial-active {
+    height: auto;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .tutorial-active .board-stage {
+    grid-template-rows: auto auto auto;
+  }
+
+  .tutorial-active .board-arena,
+  .tutorial-active .board-arena:has(> .command-panel:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .tutorial-active .board-arena > .tutorial-panel,
+  .tutorial-active .board-arena > .canvas-wrap,
+  .tutorial-active .board-arena > .command-panel {
+    grid-column: 1;
+    grid-row: auto;
+    border-right: 0;
+  }
+
+  .tutorial-active .board-arena > .canvas-wrap {
+    height: clamp(330px, 65vw, 640px);
+  }
+
+  .tutorial-content {
+    padding-top: 20px;
+    overflow: visible;
+  }
+
+  .tutorial-content h1 {
+    margin-bottom: 14px;
+  }
+
+  .tutorial-content .tutorial-instruction {
+    margin-top: 18px;
+    padding-top: 16px;
+  }
+
+  .tutorial-footer {
+    padding-top: 4px;
+    padding-bottom: 12px;
+  }
+
+  .tutorial-navigation {
+    max-width: 420px;
+  }
+
+  .tutorial-active .board-arena > .command-panel {
+    align-self: stretch;
+    margin: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+
+  .tutorial-active .command-window-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .tutorial-active .board-toolbar {
+    padding-block: 4px;
+  }
+
+  .tutorial-active .board-toolbar .selection-summary {
+    display: none;
+  }
+
+  .tutorial-content,
+  .tutorial-titlebar,
+  .tutorial-footer {
+    padding-inline: 16px;
+  }
+
+  .tutorial-content h1 {
+    font-size: 20px;
+  }
 }

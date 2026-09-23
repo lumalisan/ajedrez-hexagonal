@@ -158,15 +158,7 @@ export function BoardCanvas() {
         }
         if (shortcut === 'u') {
           event.preventDefault();
-          const units = current.state.pieces
-            .filter((piece) => piece.owner === current.state.activePlayer)
-            .sort((a, b) => a.id.localeCompare(b.id));
-          if (units.length) {
-            const index = units.findIndex((piece) => piece.id === current.selectedId);
-            commands.selectPiece(
-              units[(index + (event.shiftKey ? -1 : 1) + units.length) % units.length].id,
-            );
-          }
+          commands.selectNextPiece(event.shiftKey);
           return;
         }
         const directions: Record<string, Direction> = {

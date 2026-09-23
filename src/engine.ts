@@ -228,6 +228,17 @@ export function isProtectedByPlayer(state: GameState, position: Hex, owner: Play
   );
 }
 
+export function firstAirInterception(state: GameState, piece: Piece, to: Hex): Hex | null {
+  if (!isAirPiece(piece)) return null;
+  const line = findLine(piece.position, to, piece.type === 'drone' ? 3 : 2);
+  if (!line) return null;
+  for (let distance = 1; distance <= line.distance; distance += 1) {
+    const at = stepHex(piece.position, line.direction, distance);
+    if (isProtectedByPlayer(state, at, otherPlayer(piece.owner))) return at;
+  }
+  return null;
+}
+
 export function getLegalActionsForPiece(state: GameState, pieceId: string): GameAction[] {
   const piece = getPiece(state, pieceId);
   if (!piece || state.outcome || piece.owner !== state.activePlayer) return [];
@@ -529,7 +540,9 @@ function droneActions(state: GameState, piece: Extract<Piece, { type: 'drone' }>
 
       if (isProtectedByPlayer(state, to, enemy)) {
         actions.push({ kind: 'move', pieceId: piece.id, to });
-        break;
+        // The order keeps its chosen destination; resolution stops at the first interception.
+        if (occupancyAt(state, to).air) break;
+        continue;
       }
 
       const air = occupancyAt(state, to).air;
@@ -910,9 +923,8 @@ function resolveAirplaneMove(
   const from = { ...piece.position };
   const line = findLine(from, to, 2);
   if (!line) return;
-  for (let distance = 1; distance <= line.distance; distance += 1) {
-    const at = stepHex(from, line.direction, distance);
-    if (!isProtectedByPlayer(state, at, otherPlayer(piece.owner))) continue;
+  const at = firstAirInterception(state, piece, to);
+  if (at) {
     events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...at } });
     removePiece(state, piece.id);
     events.push({
@@ -1020,22 +1032,18 @@ function resolveDroneMove(
   events: GameEvent[],
 ): void {
   const from = { ...piece.position };
-  const line = findLine(from, to, 3);
-  if (line) {
-    for (let distance = 1; distance <= line.distance; distance += 1) {
-      const at = stepHex(from, line.direction, distance);
-      if (!isProtectedByPlayer(state, at, otherPlayer(piece.owner))) continue;
-      events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...at } });
-      removePiece(state, piece.id);
-      events.push({
-        type: 'intercept',
-        pieceId: piece.id,
-        targetId: piece.id,
-        owner: otherPlayer(piece.owner),
-        at: { ...at },
-      });
-      return;
-    }
+  const at = firstAirInterception(state, piece, to);
+  if (at) {
+    events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...at } });
+    removePiece(state, piece.id);
+    events.push({
+      type: 'intercept',
+      pieceId: piece.id,
+      targetId: piece.id,
+      owner: otherPlayer(piece.owner),
+      at: { ...at },
+    });
+    return;
   }
 
   events.push({ type: 'move', pieceId: piece.id, owner: piece.owner, from, to: { ...to } });
@@ -1256,8 +1264,11 @@ export function describeAction(state: GameState, action: GameAction): string {
           : isAirPiece(piece)
             ? (enemyAir ?? enemyGround)
             : (enemyGround ?? (enemyAir?.type === 'drone' ? enemyAir : undefined));
-      if (isAirPiece(piece) && isProtectedByPlayer(state, action.to, otherPlayer(piece.owner))) {
-        return `Incursión de ${name}: intercepción AA en ${formatHex(action.to)}`;
+      const interception = firstAirInterception(state, piece, action.to);
+      if (interception) {
+        return equalHex(interception, action.to)
+          ? `${name} será interceptado en ${formatHex(interception)}`
+          : `${name} se moverá hacia ${formatHex(action.to)} y será interceptado en ${formatHex(interception)}`;
       }
       if (piece.type === 'airplane' && action.kamikaze && target) {
         return `${name} realizará un kamikaze contra ${PIECE_NAMES[target.type]} en ${formatHex(action.to)}`;
@@ -1305,7 +1316,11 @@ function describeResolvedAction(
   const name = piece ? PIECE_NAMES[piece.type] : 'Unidad';
   let base: string;
   switch (action.kind) {
-    case 'move':
+    case 'move': {
+      const interception = events.find(
+        (event) => event.type === 'intercept' && event.targetId === action.pieceId,
+      );
+      if (interception?.at) return `${name} fue interceptado en ${formatHex(interception.at)}.`;
       base =
         piece?.type === 'airplane' && action.kamikaze
           ? `${name} ejecutó un ataque kamikaze en ${formatHex(action.to)}`
@@ -1313,6 +1328,7 @@ function describeResolvedAction(
             ? `${name} sobrevoló una unidad en ${formatHex(action.to)}`
             : `${name} avanzó a ${formatHex(action.to)}`;
       break;
+    }
     case 'rotate':
       base = `${name} giró hacia ${directionNameForPlayer(action.facing, piece?.owner ?? before.activePlayer)}`;
       break;

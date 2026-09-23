@@ -278,7 +278,7 @@ describe('controlador de partida', () => {
   });
 
   it.each(['pauseClock', 'resumeClock'] as const)(
-    '%s conserva una derrota por turno vencido entre actualizaciones',
+    '%s conserva la jugada automática pendiente entre actualizaciones',
     (operation) => {
       const controller = new MatchController(
         createMatchRecord(
@@ -287,10 +287,11 @@ describe('controlador de partida', () => {
       );
       controller.resumeClock(1_000);
       controller[operation](32_000);
-      expect(controller.store.getState().game.outcome).toEqual({
-        type: 'win',
-        winner: 1,
-        reason: 'timeout',
+      expect(controller.store.getState().game.outcome).toBeNull();
+      expect(controller.record.conclusion).toBeNull();
+      expect(controller.record.clock).toMatchObject({
+        status: 'turn-expired',
+        turnTimeouts: [1, 0],
       });
       expect(controller.record.clock?.remainingMs).toEqual([270_000, 300_000]);
       expect(controller.record.clock?.turnRemainingMs).toBe(0);
@@ -298,6 +299,50 @@ describe('controlador de partida', () => {
         controller.store.getState().game.outcome,
       );
       expect(controller.canUndo()).toBe(false);
+      expect(controller.canRedo()).toBe(false);
     },
   );
+
+  it('impide deshacer una orden anterior mientras la IA debe resolver el turno agotado', () => {
+    const controller = new MatchController(
+      createMatchRecord(createClassicConfig({ mode: 'local', turnClockSeconds: 1 })),
+    );
+    expect(controller.commit(rotationForActivePlayer(controller)).ok).toBe(true);
+    controller.switchClock(1, 0, true);
+    expect(controller.canUndo()).toBe(true);
+    controller.resumeClock(0);
+    controller.tickClock(1_000);
+    expect(controller.undo()).toBe(false);
+    expect(controller.record.currentAction).toBe(1);
+    expect(controller.record.clock?.turnTimeouts).toEqual([0, 1]);
+  });
+
+  it('concluye por tres agotamientos del mismo jugador y conserva el resultado en replay', () => {
+    const controller = new MatchController(
+      createMatchRecord(createClassicConfig({ mode: 'local', turnClockSeconds: 1 })),
+    );
+    for (let turn = 0; turn < 5; turn += 1) {
+      controller.resumeClock(turn * 1_000);
+      controller.tickClock((turn + 1) * 1_000);
+      if (turn === 4) break;
+      expect(controller.store.getState().game.outcome).toBeNull();
+      const action = getAllLegalActions(controller.store.getState().game)[0];
+      expect(controller.commit(action).ok).toBe(true);
+      controller.switchClock(
+        controller.store.getState().game.activePlayer,
+        (turn + 1) * 1_000,
+        true,
+      );
+    }
+    expect(controller.record.clock?.turnTimeouts).toEqual([3, 2]);
+    expect(controller.record.conclusion?.outcome).toEqual({
+      type: 'win',
+      winner: 1,
+      reason: 'timeout',
+    });
+    expect(replayRecord(controller.record).outcome).toEqual(
+      controller.store.getState().game.outcome,
+    );
+    expect(controller.canUndo()).toBe(false);
+  });
 });

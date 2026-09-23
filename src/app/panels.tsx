@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { sameAction } from '../action-identity';
 import {
   PIECE_NAMES,
   PLAYER_NAMES,
@@ -10,19 +11,67 @@ import {
   occupancyAt,
   outcomeText,
 } from '../engine';
-import { FloatingCommandPanel } from '../floating-command-panel';
+import type { FloatingPanel } from '../floating-panel';
 import { ALL_DIRECTIONS, DIRECTION_NAMES, equalHex, hexKey, isOnBoard } from '../hex';
-import { activeClockRemainingMs } from '../match-clock';
+import { TURN_TIMEOUT_LIMIT } from '../match-clock';
 import { actionsAtHex, pieceAccessibleLabel } from '../rendering/model';
 import { scenarioLessonAt } from '../scenarios';
+import { getTutorialActions, TUTORIAL_STEPS } from '../tutorial';
 import type { Direction, GameAction, Piece, Player } from '../types';
 import { captureAboveCommandLabel, selectedUnitInstruction } from '../ui-copy';
 import { useGame } from './game-context';
 import { accessibleCellId, fortressMaximumHp } from './shell-selectors';
+import { FloatingPanelWindow } from './components/floating-panel-window';
+import { WarningIcon } from './shell-icons';
+
+function useTutorialControls() {
+  const { snapshot } = useGame();
+  const step = snapshot.tutorial ? TUTORIAL_STEPS[snapshot.tutorial.stepIndex] : undefined;
+  const restricted = Boolean(step && step.interaction !== 'free');
+  const actions =
+    restricted && snapshot.tutorial
+      ? getTutorialActions(snapshot.state, snapshot.tutorial.stepIndex)
+      : [];
+  return {
+    step,
+    restricted,
+    guided: Boolean(step && step.guided !== false && step.interaction !== 'free'),
+    actionAllowed: (action: GameAction) =>
+      !restricted || actions.some((candidate) => sameAction(candidate, action)),
+    modeAllowed: (kind: 'rotate' | 'orient' | 'transform') => !restricted || step?.mode === kind,
+  };
+}
 
 function formatClock(milliseconds: number): string {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1_000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function ClockTime({
+  id,
+  remainingMs,
+  label,
+  active,
+}: {
+  id: string;
+  remainingMs: number;
+  label: string;
+  active: boolean;
+}) {
+  const time = formatClock(remainingMs);
+  const urgency = remainingMs <= 20_000 ? 'critical' : remainingMs <= 60_000 ? 'warning' : '';
+  return (
+    <output
+      id={id}
+      className={`match-clock ${active ? 'active' : ''} ${urgency}`.trim()}
+      role="timer"
+      aria-live="off"
+      aria-label={`${label}: ${time}`}
+      title={label}
+    >
+      {time}
+    </output>
+  );
 }
 
 function FactionMark({ player }: { player: Player }) {
@@ -59,22 +108,45 @@ function FortressStatus({ player }: { player: Player }) {
   const hp = fortress?.type === 'fortress' ? fortress.hp : 0;
   const maximum = fortressMaximumHp(snapshot, player);
   const faction = player === 0 ? 'blue' : 'amber';
+  const clock = snapshot.matchRecord?.clock;
+  const turnTimeouts = clock?.turnTimeouts?.[player] ?? 0;
   return (
     <div className={`fortress-status player-${faction}`} id={`${faction}-fortress`}>
-      <FactionMark player={player} />
-      <div>
-        <small>{PLAYER_NAMES[player]}</small>
-        <strong>Fortaleza</strong>
+      <div className="faction-identity">
+        <FactionMark player={player} />
+        <strong>{PLAYER_NAMES[player]}</strong>
       </div>
-      <span className="hp" role="img" aria-label={`${hp} de ${maximum} puntos de vida`}>
-        {Array.from({ length: maximum }, (_, index) => (
-          <i key={index} className={hp > index ? 'active' : ''} aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 21s-8.5-5.2-8.5-12A4.5 4.5 0 0 1 12 6.9 4.5 4.5 0 0 1 20.5 9c0 6.8-8.5 12-8.5 12Z" />
-            </svg>
-          </i>
-        ))}
-      </span>
+      <div className="faction-vitals">
+        <span
+          className="hp"
+          role="img"
+          aria-label={`Fortaleza de ${PLAYER_NAMES[player]}: ${hp} de ${maximum} puntos de vida`}
+        >
+          {Array.from({ length: maximum }, (_, index) => (
+            <i key={index} className={hp > index ? 'active' : ''} aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 21s-8.5-5.2-8.5-12A4.5 4.5 0 0 1 12 6.9 4.5 4.5 0 0 1 20.5 9c0 6.8-8.5 12-8.5 12Z" />
+              </svg>
+            </i>
+          ))}
+        </span>
+        {clock?.initialMs != null && (
+          <ClockTime
+            id={`${faction}-clock`}
+            remainingMs={clock.remainingMs[player]}
+            label={`Tiempo total de ${PLAYER_NAMES[player]}`}
+            active={clock.activePlayer === player && clock.status === 'running'}
+          />
+        )}
+        {turnTimeouts > 0 && (
+          <small
+            className="turn-timeouts"
+            title={`Turnos agotados de ${PLAYER_NAMES[player]}. Al llegar a ${TURN_TIMEOUT_LIMIT}, pierdes la partida.`}
+          >
+            Agotados {turnTimeouts}/{TURN_TIMEOUT_LIMIT}
+          </small>
+        )}
+      </div>
     </div>
   );
 }
@@ -84,17 +156,16 @@ export function MatchStatus() {
   const { state, activeScenario, scenarioProgress, machineThinking, machineSearch, isMachineTurn } =
     snapshot;
   const clock = snapshot.matchRecord?.clock;
-  const remaining = clock ? activeClockRemainingMs(clock) : Infinity;
-  const hasTotalClock = clock?.initialMs != null;
-  const hasTurnClock = clock?.turnRemainingMs != null;
-  const urgency = remaining <= 20_000 ? 'critical' : remaining <= 60_000 ? 'warning' : '';
-  const commander = isMachineTurn
-    ? machineThinking
-      ? machineSearch
-        ? `IA · profundidad ${machineSearch.completedDepth}/${machineSearch.requestedDepth}`
-        : 'Máquina pensando…'
-      : 'Máquina en mando'
-    : `${PLAYER_NAMES[state.activePlayer]} en mando`;
+  const commander =
+    clock?.status === 'turn-expired'
+      ? `IA juega por ${PLAYER_NAMES[state.activePlayer]}`
+      : isMachineTurn
+        ? machineThinking
+          ? machineSearch
+            ? `IA · profundidad ${machineSearch.completedDepth}/${machineSearch.requestedDepth}`
+            : 'Máquina pensando…'
+          : 'Máquina en mando'
+        : `${PLAYER_NAMES[state.activePlayer]} en mando`;
   return (
     <div className="match-status" aria-live="polite">
       <FortressStatus player={0} />
@@ -109,8 +180,8 @@ export function MatchStatus() {
           </>
         ) : (
           <>
-            <span>TURNO {Math.floor(state.ply / 2) + 1}</span>
-            <strong>{commander}</strong>
+            <span>{snapshot.tutorial ? 'TUTORIAL' : `TURNO ${Math.floor(state.ply / 2) + 1}`}</span>
+            <strong>{snapshot.tutorial ? 'Práctica con Cian' : commander}</strong>
             {activeScenario && (
               <small>
                 {scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}
@@ -120,46 +191,15 @@ export function MatchStatus() {
             )}
           </>
         )}
-      </div>
-      <output
-        className={`match-clock ${clock?.status ?? ''} ${urgency}`.trim()}
-        id="match-clock"
-        role="timer"
-        aria-live="off"
-        hidden={!clock}
-        aria-label={
-          clock
-            ? [
-                hasTotalClock
-                  ? `Tiempo total: Cian ${formatClock(clock.remainingMs[0])}, Ámbar ${formatClock(clock.remainingMs[1])}`
-                  : '',
-                hasTurnClock
-                  ? `Turno de ${PLAYER_NAMES[clock.activePlayer]}: ${formatClock(clock.turnRemainingMs!)}`
-                  : '',
-              ]
-                .filter(Boolean)
-                .join('. ')
-            : 'Reloj de partida'
-        }
-      >
-        {clock &&
-          hasTotalClock &&
-          ([0, 1] as const).map((player) => (
-            <span
-              key={player}
-              className={`clock-side ${clock.activePlayer === player && clock.status === 'running' ? 'active' : ''}`}
-            >
-              <small>{PLAYER_NAMES[player]}</small>
-              <strong>{formatClock(clock.remainingMs[player])}</strong>
-            </span>
-          ))}
-        {clock && hasTurnClock && (
-          <span className={`clock-side ${clock.status === 'running' ? 'active' : ''}`}>
-            <small>Turno {PLAYER_NAMES[clock.activePlayer]}</small>
-            <strong>{formatClock(clock.turnRemainingMs!)}</strong>
-          </span>
+        {clock?.turnRemainingMs != null && (
+          <ClockTime
+            id="turn-clock"
+            remainingMs={clock.turnRemainingMs}
+            label={`Turno de ${PLAYER_NAMES[clock.activePlayer]}`}
+            active={clock.status === 'running'}
+          />
         )}
-      </output>
+      </div>
       <FortressStatus player={1} />
     </div>
   );
@@ -172,13 +212,13 @@ export function SelectionSummary() {
   const text = state.outcome
     ? outcomeText(state.outcome)
     : pendingAction
-      ? 'Confirma la acción en el panel de mando'
+      ? 'Confirma la acción en el panel de mando.'
       : mode.kind === 'rotate' || mode.kind === 'orient' || mode.kind === 'transform'
-        ? 'Elige un rumbo en la brújula del panel de mando'
+        ? 'Elige un rumbo en la brújula del panel de mando.'
         : mode.kind === 'pieceChoice'
-          ? 'Elige una unidad en el panel de mando'
+          ? 'Casilla apilada. Elige una unidad en el panel de mando.'
           : mode.kind === 'actionChoice'
-            ? 'Elige una acción en el panel de mando'
+            ? 'Elige una acción en el panel de mando.'
             : piece
               ? piece.owner === state.activePlayer
                 ? selectedUnitInstruction(piece)
@@ -188,7 +228,7 @@ export function SelectionSummary() {
                 : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
   return (
     <div id="selection-summary" className="selection-summary">
-      {text}
+      {snapshot.tutorial ? TUTORIAL_STEPS[snapshot.tutorial.stepIndex]?.instruction : text}
     </div>
   );
 }
@@ -279,6 +319,7 @@ function DirectionCompass({
   onDirection,
 }: CompassProps) {
   const { snapshot } = useGame();
+  const { step, restricted, guided } = useTutorialControls();
   const highlighted = selected ?? current;
   const centerLabel =
     selected !== null ? 'SELECCIONADA' : current !== null ? 'ACTUAL' : 'ELIGE RUMBO';
@@ -307,7 +348,10 @@ function DirectionCompass({
             {...{ [`data-${dataName}`]: direction }}
             className={`compass-direction ${isCurrent ? 'current' : ''} ${active ? 'active' : ''}`}
             style={{ '--direction': viewDirection } as CSSProperties}
-            disabled={isCurrent}
+            disabled={isCurrent || (restricted && step?.direction !== direction)}
+            data-tutorial-highlight={
+              guided && step?.direction === direction && selected !== direction ? true : undefined
+            }
             aria-label={`${label}${isCurrent ? ', orientación actual' : ''}`}
             aria-pressed={active || isCurrent}
             onClick={() => onDirection(direction)}
@@ -336,6 +380,7 @@ function DirectionPanel({ title, ...props }: CompassProps & { title: string }) {
 }
 
 function ActionChoice({ action, index }: { action: GameAction; index: number }) {
+  const { actionAllowed } = useTutorialControls();
   const {
     snapshot: { state },
     commands,
@@ -379,7 +424,12 @@ function ActionChoice({ action, index }: { action: GameAction; index: number }) 
     detail = `Atacar ${target ? PIECE_NAMES[target.type] : 'objetivo'}`;
   }
   return (
-    <button type="button" data-action-choice={index} onClick={() => commands.prepareAction(action)}>
+    <button
+      type="button"
+      data-action-choice={index}
+      disabled={!actionAllowed(action)}
+      onClick={() => commands.prepareAction(action)}
+    >
       <span>{label}</span>
       <strong>{detail}</strong>
     </button>
@@ -388,11 +438,12 @@ function ActionChoice({ action, index }: { action: GameAction; index: number }) 
 
 function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: GameAction[] }) {
   const { snapshot, commands } = useGame();
+  const { step, guided, actionAllowed, modeAllowed } = useTutorialControls();
   const { mode, state, pendingAction, machineSearch } = snapshot;
   if (mode.kind === 'pieceChoice')
     return (
       <div className="control-section">
-        <h3>Casilla apilada</h3>
+        <h2>Casilla apilada</h2>
         <p>Selecciona capa para inspeccionar.</p>
         <div className="choice-list">
           {mode.pieceIds.map((id) => {
@@ -511,6 +562,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
             type="button"
             className="stacked-response"
             data-transform-attack
+            disabled={!actionAllowed(attackAbove)}
             onClick={() => commands.prepareAction(attackAbove)}
           >
             Transformarse y atacar al Dron superior
@@ -545,6 +597,8 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
         <button
           type="button"
           data-command="rotate"
+          disabled={!modeAllowed('rotate')}
+          data-tutorial-highlight={guided && step?.mode === 'rotate' ? true : undefined}
           onClick={() => commands.setMode({ kind: 'rotate' })}
         >
           Cambiar orientación
@@ -554,18 +608,36 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
         <button
           type="button"
           data-command="orient"
+          disabled={!modeAllowed('orient')}
+          data-tutorial-highlight={guided && step?.mode === 'orient' ? true : undefined}
           onClick={() => commands.setMode({ kind: 'orient' })}
         >
           Orientar cañón
         </button>
       )}
       {above && (
-        <button type="button" data-command="above" onClick={() => commands.prepareAction(above)}>
+        <button
+          type="button"
+          data-command="above"
+          disabled={!actionAllowed(above)}
+          data-tutorial-highlight={
+            guided && actionAllowed(above) && !pendingAction ? true : undefined
+          }
+          onClick={() => commands.prepareAction(above)}
+        >
           Atacar aeronave superior
         </button>
       )}
       {below && (
-        <button type="button" data-command="below" onClick={() => commands.prepareAction(below)}>
+        <button
+          type="button"
+          data-command="below"
+          disabled={!actionAllowed(below)}
+          data-tutorial-highlight={
+            guided && actionAllowed(below) && !pendingAction ? true : undefined
+          }
+          onClick={() => commands.prepareAction(below)}
+        >
           Atacar unidad inferior
         </button>
       )}
@@ -573,6 +645,10 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
         <button
           type="button"
           data-command="capture-above"
+          disabled={!actionAllowed(captureAbove)}
+          data-tutorial-highlight={
+            guided && actionAllowed(captureAbove) && !pendingAction ? true : undefined
+          }
           onClick={() => commands.prepareAction(captureAbove)}
         >
           {captureAboveCommandLabel(target.type)}
@@ -583,6 +659,8 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
           type="button"
           className="danger-command"
           data-command="transform"
+          disabled={!modeAllowed('transform')}
+          data-tutorial-highlight={guided && step?.mode === 'transform' ? true : undefined}
           onClick={() => commands.setMode({ kind: 'transform', facing: null })}
         >
           Abandonar vehículo
@@ -593,6 +671,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
 }
 
 function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: GameAction[] }) {
+  const { guided, actionAllowed } = useTutorialControls();
   const {
     snapshot: { state, pendingAction: action, animating },
     commands,
@@ -630,8 +709,11 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
           )}
           {action.kind === 'transform' && !action.to && !action.attackAboveId && (
             <p className="transform-warning">
-              Para realizar un desplazamiento o ataque como soldado en este mismo turno, selecciona
-              la casilla de destino antes de confirmar
+              <WarningIcon className="transform-warning-icon" />
+              <span>
+                Para realizar un desplazamiento o ataque como soldado en este mismo turno,
+                selecciona la casilla de destino antes de confirmar
+              </span>
             </p>
           )}
           <div className="pending-actions">
@@ -647,7 +729,8 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
             <button
               type="button"
               className="confirm-button"
-              disabled={animating}
+              disabled={animating || !actionAllowed(action)}
+              data-tutorial-highlight={guided && actionAllowed(action) ? true : undefined}
               onClick={() => void commands.commitPending()}
             >
               Confirmar acción
@@ -661,54 +744,26 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
 
 export function CommandPanel() {
   const { snapshot, commands } = useGame();
+  const tutorialStep = snapshot.tutorial ? TUTORIAL_STEPS[snapshot.tutorial.stepIndex] : undefined;
   const panelRef = useRef<HTMLElement>(null);
-  const titleRef = useRef<HTMLDivElement>(null);
-  const minimizeRef = useRef<HTMLButtonElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const restoreRef = useRef<HTMLButtonElement>(null);
-  const floatingRef = useRef<FloatingCommandPanel | null>(null);
+  const floatingRef = useRef<FloatingPanel | null>(null);
   const focusedControl = useRef<HTMLElement | null>(null);
   const piece = snapshot.selectedId ? getPiece(snapshot.state, snapshot.selectedId) : undefined;
   const legalActions =
     piece?.owner === snapshot.state.activePlayer
       ? getLegalActionsForPiece(snapshot.state, piece.id)
       : [];
-  const visible = !snapshot.logOpen && (Boolean(piece) || snapshot.mode.kind === 'pieceChoice');
-  useLayoutEffect(() => {
-    const arena = panelRef.current?.parentElement;
-    if (
-      !arena ||
-      !panelRef.current ||
-      !titleRef.current ||
-      !minimizeRef.current ||
-      !closeRef.current ||
-      !restoreRef.current
-    )
-      return;
-    const floating = new FloatingCommandPanel(
-      {
-        arena,
-        panel: panelRef.current,
-        titlebar: titleRef.current,
-        minimize: minimizeRef.current,
-        close: closeRef.current,
-        restore: restoreRef.current,
-      },
-      () => {
-        commands.clearSelection();
-        document.getElementById('game-canvas')?.focus({ preventScroll: true });
-        commands.announce('Panel de mando cerrado. Unidad deseleccionada.');
-      },
-    );
-    floatingRef.current = floating;
-    return () => {
-      floating.destroy();
-      floatingRef.current = null;
-    };
+  const visible =
+    (!tutorialStep || tutorialStep.section >= 3) &&
+    (Boolean(piece) || snapshot.mode.kind === 'pieceChoice');
+  const closePanel = useCallback(() => {
+    commands.clearSelection();
+    document.getElementById('game-canvas')?.focus({ preventScroll: true });
+    commands.announce('Panel de mando cerrado. Unidad deseleccionada.');
   }, [commands]);
   useLayoutEffect(() => {
-    floatingRef.current?.setVisible(visible);
-  }, [visible]);
+    if (panelRef.current) panelRef.current.inert = tutorialStep?.id === '3.1';
+  }, [tutorialStep?.id]);
   useLayoutEffect(() => {
     floatingRef.current?.reveal();
   }, [snapshot.selectedId, snapshot.pendingAction, snapshot.mode]);
@@ -726,110 +781,54 @@ export function CommandPanel() {
     const fallback =
       panelRef.current?.querySelector<HTMLElement>('#pending-card:not([hidden]) .confirm-button') ??
       panelRef.current?.querySelector<HTMLElement>('#action-controls button:not(:disabled)') ??
-      closeRef.current;
+      panelRef.current?.querySelector<HTMLElement>('#close-command-panel');
     (replacement ?? fallback)?.focus();
   }, [snapshot.selectedId, snapshot.pendingAction, snapshot.mode]);
   return (
-    <>
-      <aside
-        ref={panelRef}
-        className="command-panel"
-        id="command-panel"
-        aria-label="Panel de mando"
-        hidden
-        onFocusCapture={(event) => {
-          if (event.target instanceof HTMLElement) focusedControl.current = event.target;
-        }}
-        onBlurCapture={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) focusedControl.current = null;
-        }}
+    <FloatingPanelWindow
+      kind="command"
+      visible={visible}
+      panelRef={panelRef}
+      controllerRef={floatingRef}
+      onClose={closePanel}
+      onFocusCapture={(event) => {
+        if (event.target instanceof HTMLElement) focusedControl.current = event.target;
+      }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) focusedControl.current = null;
+      }}
+    >
+      <div
+        id="command-window-content"
+        className={`command-window-content${tutorialStep?.id === '3.2' ? ' tutorial-panel-emphasis' : ''}`}
+        inert={tutorialStep?.id === '3.1'}
       >
-        <div
-          ref={titleRef}
-          className="command-window-titlebar"
-          id="command-window-titlebar"
-          role="group"
-          tabIndex={0}
-          aria-label="Panel de mando. Arrastra para mover o usa las teclas de flecha."
-        >
-          <span className="command-window-title">Panel de mando</span>
-          <div className="command-window-controls" role="group" aria-label="Controles del panel">
-            <button
-              ref={minimizeRef}
-              type="button"
-              id="minimize-command-panel"
-              aria-label="Minimizar panel de mando"
-              title="Minimizar panel de mando"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M3 8h10" />
-              </svg>
-            </button>
-            <button
-              ref={closeRef}
-              type="button"
-              id="close-command-panel"
-              aria-label="Cerrar panel de mando"
-              title="Cerrar panel de mando"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="m4 4 8 8m0-8-8 8" />
-              </svg>
-            </button>
-          </div>
+        <PieceCard piece={piece} />
+        <div id="action-controls" className="action-controls">
+          <ActionControls piece={piece} legalActions={legalActions} />
         </div>
-        <div id="command-window-content" className="command-window-content">
-          <PieceCard piece={piece} />
-          <div id="action-controls" className="action-controls">
-            <ActionControls piece={piece} legalActions={legalActions} />
-          </div>
-          <PendingCard piece={piece} legalActions={legalActions} />
-        </div>
-      </aside>
-      <button
-        ref={restoreRef}
-        type="button"
-        className="command-panel-restore"
-        id="command-panel-restore"
-        aria-label="Restaurar panel de mando"
-        title="Restaurar panel de mando"
-        hidden
-      >
-        <svg viewBox="0 0 20 20" aria-hidden="true">
-          <path d="M3 5h14v11H3Zm0 3h14M5 3h14v11" />
-        </svg>
-        <span>Panel de mando</span>
-        <span className="command-restore-label">Restaurar</span>
-      </button>
-    </>
+        <PendingCard piece={piece} legalActions={legalActions} />
+      </div>
+    </FloatingPanelWindow>
   );
 }
 
 export function BattleLog() {
   const { snapshot, commands } = useGame();
+  const panelRef = useRef<HTMLElement>(null);
+  const floatingRef = useRef<FloatingPanel | null>(null);
+  const closePanel = useCallback(() => {
+    commands.setLogOpen(false);
+    document.getElementById('log-toggle')?.focus({ preventScroll: true });
+  }, [commands]);
   return (
-    <aside
-      className="battle-log-panel"
-      id="battle-log-panel"
-      aria-labelledby="battle-log-heading"
-      hidden={!snapshot.logOpen}
+    <FloatingPanelWindow
+      kind="battle-log"
+      visible={snapshot.logOpen}
+      panelRef={panelRef}
+      controllerRef={floatingRef}
+      onClose={closePanel}
     >
-      <div className="panel-heading">
-        <h2 id="battle-log-heading">Registro de batalla</h2>
-        <button
-          type="button"
-          className="icon-button"
-          id="close-battle-log"
-          aria-label="Cerrar registro de batalla"
-          title="Cerrar registro de batalla"
-          onClick={() => {
-            commands.setLogOpen(false);
-            document.getElementById('log-toggle')?.focus();
-          }}
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-      </div>
       <ol id="battle-log" className="battle-log">
         {snapshot.state.history.length ? (
           [...snapshot.state.history].reverse().map((entry) => (
@@ -845,7 +844,7 @@ export function BattleLog() {
           <li className="empty-log">Todavía no hay órdenes ejecutadas.</li>
         )}
       </ol>
-    </aside>
+    </FloatingPanelWindow>
   );
 }
 

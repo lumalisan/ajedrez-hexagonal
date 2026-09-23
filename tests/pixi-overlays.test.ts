@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createGameState, getLegalActionsForPiece } from '../src/engine';
 import { hexToWorld } from '../src/hex';
-import { projectHex, type RenderModel } from '../src/rendering/model';
+import { actionMarkers, projectHex, type RenderModel } from '../src/rendering/model';
 import { PixiOverlays } from '../src/rendering/pixi-overlays';
 import { createRuleDemoScenes } from '../src/rules-demo';
 import type { GameState, Piece } from '../src/types';
@@ -44,6 +44,50 @@ function graphicsIn(container: Container): Graphics[] {
 }
 
 describe('overlays tácticos nativos de Pixi', () => {
+  it('señala todos los destinos interceptados, ocupados o más allá de la zona protegida', () => {
+    const state = position([
+      { id: 'drone', type: 'drone', owner: 0, position: { q: 0, r: 0 } },
+      { id: 'shield', type: 'antiAir', owner: 1, position: { q: 2, r: 0 } },
+      { id: 'edge-shield', type: 'antiAir', owner: 1, position: { q: 2, r: -1 } },
+      { id: 'protected', type: 'medium', owner: 1, position: { q: 1, r: 0 }, cannon: 3 },
+    ]);
+    const model: RenderModel = {
+      ...modelFor(state),
+      selectedId: 'drone',
+      actions: getLegalActionsForPiece(state, 'drone'),
+    };
+    const overlays = new PixiOverlays();
+    try {
+      overlays.update(model, 0, Math.PI, 0);
+      const markers = actionMarkers(model);
+      for (const key of ['1,0', '2,0', '3,0', '2,-2', '3,-3']) {
+        // The diagonal leaves the shield again, but still crosses its protected edge.
+        expect(markers.get(key)?.kind).toBe('danger');
+        const target = overlays.targets.getChildByLabel(`target-marker-${key}`)!;
+        expect(target.visible).toBe(true);
+      }
+      expect(markers.get('-1,0')?.kind).toBe('move');
+      expect(overlays.targets.getChildByLabel('target-marker--1,0')?.visible).toBe(false);
+
+      const warning = overlays.targets.getChildByLabel('target-marker-2,0')!;
+      const graphics = graphicsIn(overlays.targets);
+      const geometryUpdated = vi.fn();
+      for (const graphic of graphics) graphic.context.on('update', geometryUpdated);
+      overlays.update(model, 360, 0, 1);
+      expect(warning.position).toMatchObject(projectHex({ q: 2, r: 0 }, 0, 1));
+      expect(warning.rotation).toBe(0);
+      expect(geometryUpdated).not.toHaveBeenCalled();
+
+      overlays.update({ ...model, actions: [], selectedId: null }, 400, 0, 1);
+      expect(warning.visible).toBe(false);
+      overlays.update({ ...model, reducedMotion: true }, 500, 0, 1);
+      expect(overlays.targets.getChildByLabel('target-marker-2,0')).toBe(warning);
+      expect(warning.visible).toBe(true);
+    } finally {
+      overlays.destroy();
+    }
+  });
+
   it('selecciona el destino previsto del Dron antes de su intercepción en la demo', () => {
     const overlays = new PixiOverlays();
     const scene = createRuleDemoScenes('fortaleza')[2];

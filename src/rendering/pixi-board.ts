@@ -14,6 +14,7 @@ import {
 } from './model';
 import { PixiOverlays } from './pixi-overlays';
 import { PixiPiece } from './pixi-piece';
+import { PixiTutorialCue } from './pixi-tutorial-cue';
 import { boardOutlinePoints, hexPoints, strokeDashedPath } from './shapes';
 
 export interface BoardAnimation {
@@ -53,6 +54,7 @@ export class PixiBoard {
   private readonly coordinates = new Container();
   private readonly tileContexts: GraphicsContext[] = [];
   private readonly overlays = new PixiOverlays();
+  private readonly tutorialCue = new PixiTutorialCue();
   private readonly stackBases = new Graphics();
   private readonly pieces = new Container({ sortableChildren: true });
   private readonly badges = new Container();
@@ -66,7 +68,7 @@ export class PixiBoard {
   constructor(stage: Container) {
     stage.eventMode = 'none';
     stage.interactiveChildren = false;
-    stage.addChild(this.backdrop, this.camera);
+    stage.addChild(this.backdrop, this.camera, this.tutorialCue.screen);
     this.camera.addChild(this.content, this.frameMask);
     this.content.addChild(
       this.tilt,
@@ -78,7 +80,14 @@ export class PixiBoard {
       this.effects,
     );
     this.tilt.addChild(this.board);
-    this.board.addChild(this.shadow, this.sides, this.tiles, this.coordinates, this.overlays.board);
+    this.board.addChild(
+      this.shadow,
+      this.sides,
+      this.tiles,
+      this.coordinates,
+      this.overlays.board,
+      this.tutorialCue.board,
+    );
     const outline = boardOutlinePoints();
     // Feather the actual perimeter: strongest at the tile edge, transparent 24 units outside.
     // The tiles cover the inward half of each stroke; no filled hexagon bridges the notches.
@@ -119,6 +128,7 @@ export class PixiBoard {
   ): void {
     this.updateBackdrop(view.width, view.height);
     this.content.visible = model !== null;
+    this.tutorialCue.update(model, view);
     if (!model) return;
     this.camera.position.set(view.x, view.y);
     this.camera.scale.set(view.scale);

@@ -95,6 +95,11 @@ function DialogHost() {
     if (isOpen) {
       focusReturn.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (
+        session.getSnapshot().dialog?.kind === 'academy' &&
+        session.getSnapshot().homeView !== null
+      )
+        focusReturn.current = document.querySelector<HTMLElement>('[data-home-action="tutorial"]');
       document.documentElement.classList.add('modal-open');
       if (!element.open) element.showModal();
     } else {

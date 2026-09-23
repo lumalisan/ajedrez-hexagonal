@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   activeClockRemainingMs,
+  TURN_TIMEOUT_LIMIT,
   clockOutcome,
   createMatchClock,
   pauseMatchClock,
@@ -50,20 +51,110 @@ describe('reloj de partida puro', () => {
   it.each([
     [null, 30, [0, 0], 0],
     [300, 30, [270_000, 300_000], 0],
-    [5, 30, [0, 5_000], 25_000],
   ] as const)(
-    'pierde al agotar el primer límite (total %s, turno %s)',
+    'cede a la IA al agotar el turno (total %s, turno %s)',
     (total, turn, remaining, turnRemaining) => {
       const running = resumeMatchClock(createMatchClock(total, 0, turn), 100);
       const expired = tickMatchClock(running, 100_000);
       expect(expired.remainingMs).toEqual(remaining);
       expect(expired.turnRemainingMs).toBe(turnRemaining);
-      expect(expired.status).toBe('timeout');
-      expect(clockOutcome(expired)).toEqual({ type: 'win', winner: 1, reason: 'timeout' });
-      expect(switchMatchClock(expired, 1, 200_000)).toEqual(expired);
+      expect(expired).toMatchObject({
+        status: 'turn-expired',
+        turnTimeouts: [1, 0],
+        lastTickAt: null,
+        timedOutPlayer: null,
+      });
+      expect(clockOutcome(expired)).toBeNull();
+      expect(tickMatchClock(expired, 200_000)).toEqual(expired);
+      expect(pauseMatchClock(expired, 200_000)).toEqual(expired);
+      expect(resumeMatchClock(expired, 200_000)).toEqual(expired);
+      expect(switchMatchClock(expired, 0, 200_000)).toEqual(expired);
+      expect(switchMatchClock(expired, 1, 200_000)).toMatchObject({
+        status: 'paused',
+        activePlayer: 1,
+        turnRemainingMs: 30_000,
+        turnTimeouts: [1, 0],
+        lastTickAt: null,
+      });
+      expect(running.turnTimeouts).toEqual([0, 0]);
       expect(validateMatchClock(expired)).toEqual([]);
     },
   );
+
+  it.each([5, 30])('pierde si el tiempo total de %s s se agota antes o a la vez', (total) => {
+    const running = resumeMatchClock(createMatchClock(total, 0, 30), 100);
+    const expired = tickMatchClock(running, 100_000);
+    expect(expired.remainingMs).toEqual([0, total * 1_000]);
+    expect(expired.turnRemainingMs).toBe((30 - total) * 1_000);
+    expect(expired.turnTimeouts).toEqual([0, 0]);
+    expect(clockOutcome(expired)).toEqual({ type: 'win', winner: 1, reason: 'timeout' });
+    expect(switchMatchClock(expired, 1, 200_000)).toEqual(expired);
+  });
+
+  it('acumula por jugador y pierde al agotar su tercer turno, aunque no sean consecutivos', () => {
+    let clock = createMatchClock(null, 0, 1);
+    let now = 0;
+    for (let count = 1; count <= TURN_TIMEOUT_LIMIT; count += 1) {
+      clock = resumeMatchClock(clock, now);
+      clock = tickMatchClock(clock, (now += 1_000));
+      expect(clock.turnTimeouts).toEqual([count, count - 1]);
+      if (count === TURN_TIMEOUT_LIMIT) break;
+      clock = resumeMatchClock(switchMatchClock(clock, 1, now), now);
+      clock = tickMatchClock(clock, (now += 1_000));
+      expect(clock.turnTimeouts).toEqual([count, count]);
+      expect(clock.status).toBe('turn-expired');
+      expect(clockOutcome(clock)).toBeNull();
+      clock = switchMatchClock(clock, 0, now);
+    }
+    expect(clock).toMatchObject({ status: 'timeout', timedOutPlayer: 0, turnTimeouts: [3, 2] });
+    expect(clockOutcome(clock)).toEqual({ type: 'win', winner: 1, reason: 'timeout' });
+    expect(resumeMatchClock(clock, now + 1_000)).toEqual(clock);
+  });
+
+  it('renueva un turno agotado del mismo jugador tras el pase automático del rival', () => {
+    const expired = tickMatchClock(resumeMatchClock(createMatchClock(null, 1, 1), 0), 1_000);
+    const next = switchMatchClock(expired, 1, 2_000, true);
+    expect(next).toMatchObject({
+      activePlayer: 1,
+      turnRemainingMs: 1_000,
+      status: 'paused',
+      turnTimeouts: [0, 1],
+    });
+    expect(validateMatchClock(next)).toEqual([]);
+  });
+
+  it('valida contadores y no permite reanudar una tercera expiración', () => {
+    const clock = createMatchClock(null, 0, 1);
+    for (const turnTimeouts of [[-1, 0], [0.5, 0], [4, 0], [0], [0, 0, 0]]) {
+      const malformed = JSON.parse(JSON.stringify({ ...clock, turnTimeouts })) as typeof clock;
+      expect(validateMatchClock(malformed)).toContain(
+        'El contador de turnos agotados no es válido.',
+      );
+    }
+    expect(validateMatchClock({ ...clock, turnTimeouts: [3, 0] })).toContain(
+      'Tres turnos agotados deben finalizar la partida.',
+    );
+    expect(validateMatchClock({ ...clock, status: 'turn-expired', turnRemainingMs: 0 })).toContain(
+      'El turno agotado necesita una expiración pendiente no terminal.',
+    );
+    expect(
+      validateMatchClock({
+        ...clock,
+        status: 'timeout',
+        turnRemainingMs: 0,
+        turnTimeouts: [1, 0],
+        timedOutPlayer: 0,
+      }),
+    ).toContain('La derrota por turnos agotados requiere tres expiraciones.');
+  });
+
+  it('inicializa el contador al primer agotamiento de un reloj antiguo', () => {
+    const legacy = createMatchClock(null, 1, 1);
+    delete legacy.turnTimeouts;
+    const expired = tickMatchClock(resumeMatchClock(legacy, 0), 1_000);
+    expect(expired).toMatchObject({ status: 'turn-expired', turnTimeouts: [0, 1] });
+    expect(legacy.turnTimeouts).toBeUndefined();
+  });
 
   it('rechaza un reloj sin límites y reservas por turno incoherentes', () => {
     expect(() => createMatchClock(null)).toThrow(RangeError);

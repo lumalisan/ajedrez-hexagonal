@@ -501,7 +501,7 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().state.ply).toBe(0);
   });
 
-  it('abrir el registro cancela la selección y la orden preparada', () => {
+  it('abrir y cerrar el registro conserva la selección y la orden preparada', () => {
     const session = createSession();
     session.commands.startMatch(createClassicConfig({ mode: 'local' }));
     const action = rotation(session.getSnapshot().state);
@@ -510,12 +510,48 @@ describe('sesión que conecta React con el juego', () => {
     session.commands.prepareAction(action);
 
     session.commands.setLogOpen(true);
+    expect(session.getSnapshot().logOpen).toBe(true);
+    expect(session.getSnapshot().selectedId).toBe(action.pieceId);
+    expect(session.getSnapshot().pendingAction).toEqual(action);
     session.commands.setLogOpen(false);
 
-    expect(session.getSnapshot().selectedId).toBeNull();
-    expect(session.getSnapshot().pendingAction).toBeNull();
-    expect(session.getSnapshot().mode).toEqual({ kind: 'default' });
+    expect(session.getSnapshot().selectedId).toBe(action.pieceId);
+    expect(session.getSnapshot().pendingAction).toEqual(action);
+    expect(session.getSnapshot().mode).toEqual({ kind: 'rotate' });
     expect(session.getSnapshot().state.ply).toBe(0);
+  });
+
+  it('mantiene el registro abierto al elegir una unidad apilada y ejecutar su orden', async () => {
+    const session = createSession();
+    const config = createClassicConfig({ mode: 'local' });
+    const drone = config.setup.find(({ piece }) => piece.type === 'drone' && piece.owner === 0);
+    if (!drone) throw new Error('La posición de prueba debe contener un dron.');
+    drone.piece.position = { q: 0, r: -2 };
+    session.commands.startMatch(config);
+    session.commands.setLogOpen(true);
+    session.commands.selectHex({ q: 0, r: -2 });
+    expect(session.getSnapshot().mode.kind).toBe('pieceChoice');
+    expect(session.getSnapshot().logOpen).toBe(true);
+    // Alternar el registro tampoco debe cancelar la elección de capa.
+    const choice = session.getSnapshot().mode;
+    session.commands.setLogOpen(false);
+    session.commands.setLogOpen(true);
+    expect(session.getSnapshot().mode).toEqual(choice);
+    const soldier = session
+      .getSnapshot()
+      .state.pieces.find(
+        (piece) => piece.type === 'soldier' && piece.position.q === 0 && piece.position.r === -2,
+      )!;
+    session.commands.selectPiece(soldier.id);
+    expect(session.getSnapshot().logOpen).toBe(true);
+    const action = getAllLegalActions(session.getSnapshot().state).find(
+      (candidate) => candidate.kind === 'rotate' && candidate.pieceId === soldier.id,
+    )!;
+    session.commands.prepareAction(action);
+    await session.commands.commitPending();
+    expect(session.getSnapshot().logOpen).toBe(true);
+    expect(session.getSnapshot().state.history.at(-1)?.text).toContain('giró');
+    expect(session.getSnapshot().state.ply).toBe(1);
   });
 
   it('reproduce otras posiciones y restaura la partida sin modificar su registro', () => {
@@ -692,19 +728,263 @@ describe('sesión que conecta React con el juego', () => {
     });
   });
 
-  it('concluye y guarda la derrota al agotar un turno sin reloj total', async () => {
+  it('la IA juega los dos primeros turnos agotados de cada jugador y el tercero termina la partida', async () => {
+    collaborators.chooseAction.mockImplementation(async (state) => rotation(state));
     const session = createSession();
     session.start();
     session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
-    await vi.advanceTimersByTimeAsync(30_000);
+    expect(session.getSnapshot().matchRecord?.clock?.turnTimeouts).toEqual([0, 0]);
+
+    for (let expiration = 1; expiration <= 4; expiration++) {
+      const before = structuredClone(session.getSnapshot().state);
+      await vi.advanceTimersByTimeAsync(30_500);
+      expect(collaborators.chooseAction).toHaveBeenCalledTimes(expiration);
+      expect(collaborators.chooseAction.mock.calls[expiration - 1][0]).toEqual(before);
+      expect(session.getSnapshot().state).toMatchObject({
+        activePlayer: expiration % 2,
+        ply: expiration,
+        outcome: null,
+      });
+      expect(session.getSnapshot().matchRecord?.actions.at(-1)).toEqual(rotation(before));
+      expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+        status: 'running',
+        turnTimeouts: [Math.ceil(expiration / 2), Math.floor(expiration / 2)],
+      });
+    }
+
+    await vi.advanceTimersByTimeAsync(30_500);
     const outcome = { type: 'win', winner: 1, reason: 'timeout' };
     expect(session.getSnapshot().state.outcome).toEqual(outcome);
     expect(session.getSnapshot().dialog?.kind).toBe('outcome');
+    expect(session.getSnapshot().matchRecord?.clock?.turnTimeouts).toEqual([3, 2]);
+    expect(session.getSnapshot().matchRecord?.actions).toHaveLength(4);
+    expect(collaborators.chooseAction).toHaveBeenCalledTimes(4);
     const portable = parseRecord(serializeRecord(session.getSnapshot().matchRecord!));
     expect(replayRecord(portable).outcome).toEqual(outcome);
     session.commands.undo();
     expect(session.getSnapshot().state.outcome).toEqual(outcome);
   });
+
+  it.each([null, 30])(
+    'agotar el tiempo total termina la partida sin autojugada (límite de turno: %s)',
+    async (turnClockSeconds) => {
+      const session = createSession();
+      session.start();
+      session.commands.startMatch(
+        createClassicConfig({ mode: 'local', clockSeconds: 30, turnClockSeconds }),
+      );
+      await vi.advanceTimersByTimeAsync(30_500);
+
+      expect(session.getSnapshot().state.outcome).toEqual({
+        type: 'win',
+        winner: 1,
+        reason: 'timeout',
+      });
+      expect(session.getSnapshot().dialog?.kind).toBe('outcome');
+      expect(session.getSnapshot().matchRecord?.actions).toEqual([]);
+      expect(collaborators.chooseAction).not.toHaveBeenCalled();
+    },
+  );
+
+  it('vacía la orden preparada y bloquea la elección humana durante la autojugada pendiente', async () => {
+    const search = deferred<GameAction | null>();
+    collaborators.chooseAction.mockReturnValueOnce(search.promise);
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(
+      createClassicConfig({ mode: 'local', clockSeconds: 300, turnClockSeconds: 30 }),
+    );
+    const before = structuredClone(session.getSnapshot().state);
+    const action = rotation(before);
+    session.commands.selectPiece(action.pieceId);
+    session.commands.setMode({ kind: 'rotate' });
+    session.commands.prepareAction(action);
+
+    await vi.advanceTimersByTimeAsync(30_500);
+
+    expect(session.getSnapshot()).toMatchObject({
+      state: before,
+      selectedId: null,
+      pendingAction: null,
+      mode: { kind: 'default' },
+      isMachineTurn: true,
+      machineThinking: true,
+      matchRecord: { clock: { status: 'turn-expired', turnTimeouts: [1, 0] } },
+    });
+    session.commands.selectPiece(action.pieceId);
+    session.commands.setMode({ kind: 'rotate' });
+    session.commands.prepareAction(action);
+    await session.commands.commitPending();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(session.getSnapshot().selectedId).toBeNull();
+    expect(session.getSnapshot().pendingAction).toBeNull();
+    expect(session.getSnapshot().mode).toEqual({ kind: 'default' });
+    expect(session.getSnapshot().state).toEqual(before);
+    expect(session.getSnapshot().matchRecord?.clock?.turnTimeouts).toEqual([1, 0]);
+    expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+
+    search.resolve(action);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().state).toMatchObject({ activePlayer: 1, ply: 1, outcome: null });
+    expect(session.getSnapshot().isMachineTurn).toBe(false);
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      status: 'running',
+      activePlayer: 1,
+      turnRemainingMs: 30_000,
+      turnTimeouts: [1, 0],
+    });
+  });
+
+  it('la IA sustituye una orden humana que llega después del límite aunque aún no haya tick', async () => {
+    collaborators.chooseAction.mockImplementation(async (state) => rotation(state));
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    const before = structuredClone(session.getSnapshot().state);
+    const humanAction = getAllLegalActions(before).find((action) => action.kind === 'move');
+    if (!humanAction) throw new Error('La posición de prueba debe permitir un movimiento.');
+    session.commands.prepareAction(humanAction);
+    vi.setSystemTime(Date.now() + 30_001);
+
+    await session.commands.commitPending();
+
+    expect(session.getSnapshot().state).toEqual(before);
+    expect(session.getSnapshot().pendingAction).toBeNull();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(session.getSnapshot().matchRecord?.actions).toEqual([rotation(before)]);
+    expect(session.getSnapshot().state).toMatchObject({ activePlayer: 1, ply: 1, outcome: null });
+    expect(session.getSnapshot().matchRecord?.clock?.turnTimeouts).toEqual([1, 0]);
+    expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+  });
+
+  it('deshacer contra la máquina después del límite humano conserva la posición y ejecuta su autojugada', async () => {
+    const search = deferred<GameAction | null>();
+    collaborators.chooseAction.mockReturnValueOnce(search.promise);
+    let record = createMatchRecord(createClassicConfig({ mode: 'machine', turnClockSeconds: 30 }));
+    for (let ply = 0; ply < 2; ply++) {
+      record = appendAction(record, rotation(replayRecord(record)));
+    }
+    const session = createSession();
+    session.commands.loadRecord(record);
+    const before = structuredClone(session.getSnapshot().state);
+    expect(before).toMatchObject({ activePlayer: 0, ply: 2 });
+    expect(session.getSnapshot().canUndo).toBe(true);
+    vi.setSystemTime(Date.now() + 30_001);
+
+    session.commands.undo();
+
+    expect(session.getSnapshot().state).toEqual(before);
+    expect(session.getSnapshot().matchRecord?.actions).toEqual(record.actions);
+    expect(session.getSnapshot().matchRecord?.currentAction).toBe(2);
+    expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
+      status: 'turn-expired',
+      turnTimeouts: [1, 0],
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+    expect(collaborators.chooseAction.mock.calls[0][0]).toEqual(before);
+
+    search.resolve(rotation(before));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().state).toMatchObject({ activePlayer: 1, ply: 3, outcome: null });
+    expect(session.getSnapshot().matchRecord?.actions).toEqual([
+      ...record.actions,
+      rotation(before),
+    ]);
+    expect(session.getSnapshot().matchRecord?.clock?.turnTimeouts).toEqual([1, 0]);
+  });
+
+  it.each(['sin resultado', 'error'] as const)(
+    'resuelve el turno agotado con una acción legal si la IA devuelve %s',
+    async (failure) => {
+      if (failure === 'error')
+        collaborators.chooseAction.mockRejectedValueOnce(new Error('Worker no disponible'));
+      const session = createSession();
+      session.start();
+      session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+      const legalActions = getAllLegalActions(session.getSnapshot().state);
+
+      await vi.advanceTimersByTimeAsync(30_500);
+
+      const record = session.getSnapshot().matchRecord!;
+      expect(record.actions).toHaveLength(1);
+      expect(legalActions).toContainEqual(record.actions[0]);
+      expect(session.getSnapshot().state).toMatchObject({ activePlayer: 1, ply: 1, outcome: null });
+      expect(record.clock).toMatchObject({ status: 'running', turnTimeouts: [1, 0] });
+    },
+  );
+
+  it('continuar un turno agotado guardado reanuda una sola autojugada sin sumar otra falta', async () => {
+    const abandonedSearch = deferred<GameAction | null>();
+    collaborators.chooseAction
+      .mockReturnValueOnce(abandonedSearch.promise)
+      .mockImplementation(async (state) => rotation(state));
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    const before = structuredClone(session.getSnapshot().state);
+    await vi.advanceTimersByTimeAsync(30_500);
+    expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+    session.dispose();
+    const saved = parseRecord(serializeRecord(loadActiveMatch().record!));
+    expect(saved.clock).toMatchObject({ status: 'turn-expired', turnTimeouts: [1, 0] });
+    expect(saved.actions).toEqual([]);
+    saveActiveMatch(saved);
+
+    const resumed = createSession();
+    resumed.start();
+    resumed.commands.continueMatch();
+    await vi.advanceTimersByTimeAsync(500);
+    abandonedSearch.resolve(rotation(before));
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(collaborators.chooseAction).toHaveBeenCalledTimes(2);
+    expect(resumed.getSnapshot().state).toMatchObject({ activePlayer: 1, ply: 1, outcome: null });
+    expect(resumed.getSnapshot().matchRecord?.actions).toEqual([rotation(before)]);
+    expect(resumed.getSnapshot().matchRecord?.clock).toMatchObject({
+      status: 'running',
+      turnTimeouts: [1, 0],
+    });
+    expect(loadActiveMatch().record?.actions).toEqual([rotation(before)]);
+  });
+
+  it.each(['otra partida', 'desmontar'] as const)(
+    'descarta la autojugada por tiempo y su progreso tardío al ir a %s',
+    async (destination) => {
+      const search = deferred<GameAction | null>();
+      collaborators.chooseAction.mockReturnValueOnce(search.promise);
+      const session = createSession();
+      session.start();
+      session.commands.startMatch(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+      await vi.advanceTimersByTimeAsync(30_500);
+      expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+      const [searchState, , budget] = collaborators.chooseAction.mock.calls[0];
+      if (destination === 'otra partida')
+        session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+      else session.dispose();
+      const current = structuredClone(session.getSnapshot().state);
+      const currentRecord = structuredClone(session.getSnapshot().matchRecord);
+      const saved = loadActiveMatch().record;
+
+      expect(budget.signal?.aborted).toBe(true);
+      budget.onProgress?.({
+        requestedDepth: 3,
+        completedDepth: 3,
+        nodes: 100,
+        elapsedMs: 50,
+        timedOut: false,
+        score: 1,
+        candidatesConsidered: 10,
+      });
+      search.resolve(rotation(searchState));
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(session.getSnapshot().state).toEqual(current);
+      expect(session.getSnapshot().matchRecord).toEqual(currentRecord);
+      expect(session.getSnapshot().machineSearch).toBeNull();
+      expect(loadActiveMatch().record).toEqual(saved);
+      expect(collaborators.chooseAction).toHaveBeenCalledOnce();
+    },
+  );
 
   it('pausa el reloj durante la repetición y lo reanuda desde el tiempo restante', async () => {
     const session = createSession();

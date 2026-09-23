@@ -28,6 +28,7 @@ pnpm test:coverage
 pnpm test:design-system
 pnpm test:ui
 pnpm test:a11y
+pnpm test:tutorial
 ```
 
 `pnpm test:types` comprueba todos los archivos TypeScript y TSX del proyecto, incluidos el código, las pruebas y la configuración, sin generar archivos. También se ejecuta al hacer el build.
@@ -55,12 +56,13 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 ## Modos y datos
 
 - **Partida libre:** local o contra IA. Contra la IA puedes elegir la dificultad: Fácil, Medio, Difícil o Experto. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil.
-- **Puntos de vida de la Fortaleza:** elige 1, 2 o 3 al crear cualquier partida libre.
-- **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 1 minuto o 2 minutos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites; agotar cualquiera concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes se conservan al guardar y continuar.
+- **Puntos de vida de la Fortaleza:** elige 1, 2 o 3 al crear cualquier partida libre; la opción predeterminada es 1.
+- **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 1 minuto o 2 minutos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites. Al agotar el tiempo de turno, la IA realiza una jugada por ti; la tercera vez que un mismo jugador lo agota durante la partida, pierde. Agotar el tiempo total concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes y las veces que cada jugador ha agotado el tiempo de turno se conservan al guardar y continuar.
 - **Disposiciones iniciales:** en Nueva partida puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques), Frente de infantería (7 soldados y 2 tanques) o Frente extendido (11 soldados y 2 tanques retrasados). Las cuatro primeras tienen 18 piezas por jugador; Frente extendido tiene 22. Las variantes blindada, de infantería y extendida tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando. Disponibles en partida local y contra la IA.
 - Al elegir una disposición, la vista previa muestra el ejército de Cian con los símbolos del tablero, su composición y una breve descripción. Se actualiza también al cambiar la vida de la Fortaleza; Ámbar utiliza la formación reflejada.
 - En **Reglas → Desarrollo de la partida**, el tablero real muestra ambos ejércitos y permite comparar las cinco disposiciones, con **Frente clásico** seleccionado por defecto. El selector solo cambia la vista del manual.
 - **Academia táctica:** fundamentos, misión guiada de varios turnos, retos estratégicos y un reto diario determinista que usan `classic-v2`.
+- **Tutorial:** 14 apartados y 37 pasos sobre el tablero, con objetivos señalados, órdenes restringidas y respuestas enemigas programadas. Anterior y Siguiente cambian de apartado; los ejercicios avanzan al realizarlos. Termina con una práctica libre en la que solo juega Cian hasta destruir la Fortaleza enemiga. La Academia sigue disponible desde el panel del tutorial. Entrar o salir del tutorial conserva la partida guardada.
 - Autoguardado después de cada orden y continuación desde el inicio. Ajustes ofrece directamente Exportar partida, Importar partida, Ver repetición e Historial de resultados.
 - El visor de repetición permite recorrer la partida sin modificarla.
 - PWA instalable con caché offline del shell.
@@ -98,7 +100,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - En escritorio, el panel de mando es una ventana flotante a la derecha, que no desplaza el tablero. Arrastra la cabecera para moverla o enfócala y usa las flechas (Mayús acelera el movimiento). «−» la minimiza abajo y Restaurar recupera su posición y orden pendiente. «×» cierra y deselecciona; la siguiente selección abre la ventana en su posición inicial.
 - En pantallas estrechas, el panel sigue integrado junto al tablero o debajo; puedes desplazarte para consultar las órdenes. «×» también permite cerrarlo.
 - Cancelar aparece junto a Confirmar acción y descarta la orden preparada manteniendo la unidad seleccionada y el panel abierto. Pulsar la unidad seleccionada o una casilla vacía sin orden legal tampoco cierra el panel; usa «×» para cerrarlo.
-- El botón de registro de batalla alterna entre el registro y el panel de mando.
+- El botón de registro de batalla abre o cierra su ventana sin cambiar la selección ni la orden preparada. Puede verse junto al panel de mando; en escritorio, ambas ventanas se pueden mover, minimizar y restaurar de forma independiente.
 - Cambiar orientación y Orientar cañón abren la brújula. El movimiento del tanque permite elegir la orientación final del cañón antes de confirmar, también en modo Rápida.
 - Al abandonar un vehículo, elige la orientación y, si quieres avanzar o atacar como Soldado ese mismo turno, selecciona el destino antes de confirmar.
 - La cabecera permite rendirse, proponer tablas en partidas locales y abandonar la partida, siempre con confirmación. Abandonar descarta la partida en curso y vuelve al inicio.

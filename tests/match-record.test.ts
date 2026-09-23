@@ -8,7 +8,12 @@ import {
   validateState,
 } from '../src/engine';
 import { createClassicConfig, validateMatchConfig } from '../src/game-config';
-import { clockOutcome, resumeMatchClock, tickMatchClock } from '../src/match-clock';
+import {
+  clockOutcome,
+  resumeMatchClock,
+  switchMatchClock,
+  tickMatchClock,
+} from '../src/match-clock';
 import {
   ReplayError,
   appendAction,
@@ -38,7 +43,25 @@ describe('configuración, invariantes y diario', () => {
       expect(restored).toEqual(record);
       expect(restored.clock?.turnRemainingMs).toBe(25_000);
       const expired = tickMatchClock(restored.clock!, 31_000);
-      record = concludeMatch(setMatchClock(restored, expired), clockOutcome(expired)!);
+      record = parseRecord(serializeRecord(setMatchClock(restored, expired)));
+      expect(record.clock).toMatchObject({ status: 'turn-expired', turnTimeouts: [1, 0] });
+      expect(clockOutcome(record.clock!)).toBeNull();
+      expect(replayRecord(record).outcome).toBeNull();
+      expect(resumeMatchClock(record.clock!, 90_000)).toEqual(record.clock);
+      for (let turn = 1; turn < 5; turn += 1) {
+        const state = replayRecord(record);
+        record = appendAction(record, getAllLegalActions(state)[0]);
+        const nextPlayer = replayRecord(record).activePlayer;
+        const now = turn * 30_000 + 1_000;
+        const nextClock = switchMatchClock(record.clock!, nextPlayer, now, true);
+        record = setMatchClock(
+          record,
+          tickMatchClock(resumeMatchClock(nextClock, now), now + 30_000),
+        );
+        record = parseRecord(serializeRecord(record));
+      }
+      expect(record.clock?.turnTimeouts).toEqual([3, 2]);
+      record = concludeMatch(record, clockOutcome(record.clock!)!);
       expect(replayRecord(parseRecord(serializeRecord(record))).outcome).toEqual({
         type: 'win',
         winner: 1,
@@ -46,6 +69,42 @@ describe('configuración, invariantes y diario', () => {
       });
     },
   );
+
+  it('conserva como terminal una derrota por turno guardada antes de las penalizaciones', () => {
+    let record = createMatchRecord(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    const legacyClock = {
+      ...record.clock!,
+      turnRemainingMs: 0,
+      status: 'timeout' as const,
+      timedOutPlayer: 0 as const,
+    };
+    delete legacyClock.turnTimeouts;
+    record = concludeMatch(setMatchClock(record, legacyClock), {
+      type: 'win',
+      winner: 1,
+      reason: 'timeout',
+    });
+    const restored = parseRecord(serializeRecord(record));
+    expect(restored.clock?.turnTimeouts).toBeUndefined();
+    expect(resumeMatchClock(restored.clock!, 90_000)).toEqual(legacyClock);
+    expect(replayRecord(restored).outcome).toEqual(record.conclusion?.outcome);
+  });
+
+  it('clona las penalizaciones y rechaza contadores importados que eviten una derrota', () => {
+    const record = createMatchRecord(createClassicConfig({ mode: 'local', turnClockSeconds: 30 }));
+    const expired = tickMatchClock(resumeMatchClock(record.clock!, 0), 30_000);
+    const saved = setMatchClock(record, expired);
+    expired.turnTimeouts![0] = 2;
+    expect(saved.clock?.turnTimeouts).toEqual([1, 0]);
+    expect(() =>
+      parseRecord(
+        JSON.stringify({
+          ...saved,
+          clock: { ...saved.clock, turnTimeouts: [3, 0] },
+        }),
+      ),
+    ).toThrow(/Tres turnos agotados/u);
+  });
 
   it('valida límites por turno y rechaza alteraciones del reloj configurado', () => {
     for (const turnClockSeconds of [0, -1, Infinity, 0.00001]) {
@@ -175,6 +234,45 @@ describe('configuración, invariantes y diario', () => {
     expect(record.actions).toHaveLength(0);
     expect(parseRecord(serializeRecord(nextRecord))).toEqual(nextRecord);
   });
+
+  it.each([
+    { destination: { q: 2, r: 0 }, shield: { q: 2, r: 0 }, zone: 'dentro' },
+    { destination: { q: 3, r: 0 }, shield: { q: 1, r: 1 }, zone: 'fuera' },
+  ])(
+    'guarda el destino $zone del escudo y reproduce la intercepción real del Dron',
+    ({ destination, shield }) => {
+      const initial = createGameState([
+        { id: 'fort-blue', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+        { id: 'fort-amber', type: 'fortress', owner: 1, position: { q: 5, r: 0 }, hp: 2 },
+        { id: 'drone', type: 'drone', owner: 0, position: { q: 0, r: 0 } },
+        { id: 'aa', type: 'antiAir', owner: 1, position: shield },
+        { id: 'ground', type: 'soldier', owner: 1, position: { q: 1, r: 0 }, facing: 3 },
+      ]);
+      const action = getLegalActionsForPiece(initial, 'drone').find(
+        (candidate) =>
+          candidate.kind === 'move' &&
+          candidate.to.q === destination.q &&
+          candidate.to.r === destination.r,
+      );
+      expect(action).toBeDefined();
+      const result = applyAction(initial, action!);
+      expect(result.ok).toBe(true);
+      const config = createClassicConfig({ mode: 'local' });
+      config.setup = initial.pieces.map((piece) => ({ id: piece.id, piece }));
+      const record = appendAction(createMatchRecord(config, initial), action!);
+      const imported = parseRecord(serializeRecord(record));
+
+      expect(imported.actions).toEqual([{ kind: 'move', pieceId: 'drone', to: destination }]);
+      expect(replayRecord(imported, 0)).toEqual(initial);
+      expect(replayRecord(imported, 1)).toEqual(result.state);
+      expect(replayRecord(imported, 1).pieces).toEqual(
+        initial.pieces.filter((piece) => piece.id !== 'drone'),
+      );
+      expect(replayRecord(imported, 1).history.find((entry) => entry.id === 1)?.text).toBe(
+        'Dron fue interceptado en [+1, +0].',
+      );
+    },
+  );
 
   it('rechaza versiones incompatibles y acciones manipuladas', () => {
     const record = createMatchRecord(createClassicConfig({ mode: 'local' }));

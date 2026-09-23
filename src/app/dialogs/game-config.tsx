@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PIECE_NAMES } from '../../engine';
 import { createClassicConfig } from '../../game-config';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
+import { TURN_TIMEOUT_LIMIT } from '../../match-clock';
 import { recordTelemetry } from '../../playtest-telemetry';
 import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
 import type { AiDifficulty, FortressHp } from '../../types';
@@ -42,7 +43,7 @@ const TURN_CLOCK_OPTIONS: readonly { value: TurnClockValue; label: string }[] = 
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   const { snapshot, commands } = useGame();
   const { preferences } = snapshot;
-  const [fortressHp, setFortressHp] = useState<FortressHp>(2);
+  const [fortressHp, setFortressHp] = useState<FortressHp>(1);
   const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('tactical');
   const [clock, setClock] = useState<MatchClockValue>('');
@@ -146,8 +147,9 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
             </div>
           </div>
           <p id="clock-description" className="mb-0 mt-3 text-xs leading-relaxed text-muted">
-            El tiempo por turno se renueva en cada turno. El total es por jugador. Puedes combinar
-            ambos límites; agotar cualquiera supone perder la partida.
+            Si agotas el tiempo de turno, la IA juega por ti. Si te ocurre {TURN_TIMEOUT_LIMIT}{' '}
+            veces durante la partida, pierdes. El tiempo total es por jugador; agotarlo supone
+            perder la partida. Puedes combinar ambos límites.
           </p>
         </fieldset>
         <div className="border-0 border-t border-solid border-line pt-5">

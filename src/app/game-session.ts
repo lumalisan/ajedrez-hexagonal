@@ -12,6 +12,14 @@ import {
   type AchievementProgress,
 } from '../achievements';
 import { createClassicConfig } from '../game-config';
+import { sameAction } from '../action-identity';
+import {
+  TUTORIAL_STEPS,
+  createTutorialCheckpoint,
+  getTutorialActions,
+  getTutorialReply,
+  nextTutorialSection,
+} from '../tutorial';
 import { directionBetween, equalHex } from '../hex';
 import {
   PLAYER_NAMES,
@@ -20,6 +28,7 @@ import {
   createInitialState,
   declareBlockade,
   describeAction,
+  getAllLegalActions,
   getFiringRangeCells,
   getLegalActionsForPiece,
   getPiece,
@@ -36,7 +45,7 @@ import {
   setAcademySession,
 } from '../match-record';
 import { MatchController } from '../match-controller';
-import { activeClockRemainingMs } from '../match-clock';
+import { activeClockRemainingMs, TURN_TIMEOUT_LIMIT } from '../match-clock';
 import type { UiMode } from '../match-store';
 import {
   appendMatchHistory,
@@ -106,6 +115,7 @@ export function createGameSession(): GameSession {
   let matchRecord: MatchRecord | null = null;
   let matchController: MatchController | null = null;
   let activeScenario: ScenarioDefinition | null = null;
+  let tutorial: GameSnapshot['tutorial'] = null;
   let aiAbortController: AbortController | null = null;
   let replayCursor: number | null = null;
   let replayClockWasRunning = false;
@@ -138,6 +148,7 @@ export function createGameSession(): GameSession {
   let clockTimer: ReturnType<typeof setInterval> | null = null;
   let operationEpoch = 0;
   let clockWasRunningBeforeDispose = false;
+  let tutorialWasAnimatingBeforeDispose = false;
 
   function later(callback: () => void, delay: number): ReturnType<typeof setTimeout> {
     const timer = setTimeout(() => {
@@ -193,6 +204,7 @@ export function createGameSession(): GameSession {
       activeScenario,
       scenarioProgress,
       scenarioHintsRevealed,
+      tutorial: tutorial ? { ...tutorial } : null,
       machineThinking,
       machineSearch,
       isMachineTurn: isMachineTurn(),
@@ -230,6 +242,7 @@ export function createGameSession(): GameSession {
       reducedMotion: preferences.reducedMotion,
       highContrast: preferences.highContrast,
       idleAnimations: preferences.idleAnimations && currentDialog === null,
+      tutorialCue: tutorialCue(),
     });
   }
 
@@ -371,6 +384,7 @@ export function createGameSession(): GameSession {
     matchRecord = null;
     matchController = null;
     activeScenario = null;
+    tutorial = null;
     selectedId = null;
     pendingAction = null;
     mode = { kind: 'default' };
@@ -464,8 +478,223 @@ export function createGameSession(): GameSession {
     render();
   }
 
+  function tutorialStep() {
+    return tutorial ? TUTORIAL_STEPS[tutorial.stepIndex] : undefined;
+  }
+
+  function tutorialCue(): { hex: Hex; label: string } | null {
+    const step = tutorialStep();
+    if (!step || tutorial?.completed || animating || step.interaction === 'free') return null;
+    if (step.guided === false)
+      return step.target && (step.section === 10 || step.id === '12.2')
+        ? { hex: step.target, label: 'Objetivo' }
+        : null;
+    const piece = step.pieceId ? getPiece(state, step.pieceId) : undefined;
+    if (piece && selectedId !== piece.id)
+      return { hex: piece.position, label: step.interaction === 'next' ? 'Observa' : 'Selecciona' };
+    if (step.mode === 'transform' && (mode.kind !== 'transform' || mode.facing === null))
+      return null;
+    if (step.target) return { hex: step.target, label: 'Objetivo' };
+    return piece ? { hex: piece.position, label: 'Unidad del tutorial' } : null;
+  }
+
+  function tutorialAllowsAction(action: GameAction, draft = false): boolean {
+    if (!tutorial) return true;
+    if (tutorial.completed) return false;
+    const step = tutorialStep();
+    if (step?.interaction === 'free') return true;
+    const allowed = getTutorialActions(state, tutorial.stepIndex);
+    return allowed.some(
+      (candidate) =>
+        sameAction(candidate, action) ||
+        (draft &&
+          (step?.id === '5.1' || step?.id === '5.2') &&
+          candidate.kind === 'move' &&
+          action.kind === 'move' &&
+          candidate.pieceId === action.pieceId &&
+          equalHex(candidate.to, action.to)),
+    );
+  }
+
+  function tutorialAllowsPiece(pieceId: string): boolean {
+    const step = tutorialStep();
+    if (!tutorial || !step) return true;
+    if (tutorial.completed) return false;
+    if (step.interaction === 'free') return true;
+    if (step.interaction === 'next' || step.interaction === 'inspect') {
+      const piece = getPiece(state, pieceId);
+      return (
+        step.section === 10 &&
+        Boolean(piece && step.target && equalHex(piece.position, step.target))
+      );
+    }
+    return (
+      step.pieceId === pieceId ||
+      getTutorialActions(state, tutorial.stepIndex).some((action) => action.pieceId === pieceId)
+    );
+  }
+
+  function enterTutorialStep(index: number, checkpoint: boolean, preserveDraft = false): void {
+    const step = TUTORIAL_STEPS[index];
+    if (!step) return;
+    tutorial = { stepIndex: index, completed: false };
+    if (checkpoint) {
+      const entry = createTutorialCheckpoint(index);
+      state = entry.state;
+      selectedId = entry.selectedId;
+      pendingAction = entry.pendingAction;
+      mode = { kind: 'default' };
+      if (step.id === '10.2' && step.target) {
+        const occupancy = occupancyAt(state, step.target);
+        mode = {
+          kind: 'pieceChoice',
+          pieceIds: [occupancy.ground, occupancy.air]
+            .filter((piece): piece is Piece => Boolean(piece))
+            .map((piece) => piece.id),
+        };
+      }
+      lastEvents = [];
+    } else if (!preserveDraft) {
+      selectedId = step.selectedId ?? (step.autoSelect ? (step.pieceId ?? null) : null);
+      pendingAction = null;
+      mode = { kind: 'default' };
+    }
+    hoveredHex = null;
+    focusedHex = tutorialCue()?.hex ??
+      step.target ??
+      (selectedId ? getPiece(state, selectedId)?.position : null) ?? { q: 0, r: 0 };
+    render();
+    announce(`${step.title}. ${step.instruction}`);
+  }
+
+  function advanceTutorial(preserveDraft = false): void {
+    if (!tutorial) return;
+    const next = tutorial.stepIndex + 1;
+    const step = TUTORIAL_STEPS[next];
+    if (!step) return;
+    const changesScene = step.id === '10.1' || step.id === '12.1' || step.id === '14.1';
+    enterTutorialStep(next, changesScene, preserveDraft);
+  }
+
+  function startTutorial(): void {
+    // Keep the user's saved match available when leaving this disposable lesson.
+    if (matchController?.record.clock && !state.outcome) {
+      matchController.pauseClock(Date.now());
+      matchRecord = matchController.record;
+      persistCurrentMatch();
+    }
+    leaveHomeScreen();
+    aiAbortController?.abort();
+    aiStrategy.dispose();
+    matchController = null;
+    matchRecord = null;
+    matchConfig = null;
+    activeScenario = null;
+    scenarioProgress = null;
+    scenarioHintsRevealed = 0;
+    machineThinking = false;
+    machineSearch = null;
+    gameMode = 'academy';
+    logOpen = false;
+    renderer?.resetView();
+    renderer?.snapToPlayer(0);
+    enterTutorialStep(0, true);
+  }
+
+  function navigateTutorial(delta: 1 | -1): void {
+    if (!tutorial || animating) return;
+    operationEpoch++;
+    const next =
+      delta === 1 && tutorialStep()?.id === '10.2'
+        ? tutorial.stepIndex + 1
+        : nextTutorialSection(tutorial.stepIndex, delta);
+    enterTutorialStep(next, true);
+  }
+
+  async function executeTutorialAction(action: GameAction): Promise<void> {
+    if (!tutorial || !tutorialAllowsAction(action) || animating || disposed) return;
+    const epoch = operationEpoch;
+    const stepIndex = tutorial.stepIndex;
+    const free = tutorialStep()?.interaction === 'free';
+    const play = async (order: GameAction): Promise<boolean> => {
+      const before = state;
+      const result = applyAction(before, order);
+      if (!result.ok) return false;
+      state = result.state;
+      lastEvents = result.events;
+      selectedId = null;
+      pendingAction = null;
+      mode = { kind: 'default' };
+      audio.playEvents(result.events, before);
+      render();
+      await renderer?.playEvents(result.events, before, preferences.reducedMotion);
+      return !disposed && operationEpoch === epoch && tutorial?.stepIndex === stepIndex;
+    };
+    animating = true;
+    try {
+      if (!(await play(action))) return;
+      if (!free) {
+        const reply = getTutorialReply(state, stepIndex);
+        if (reply) {
+          state = { ...state, activePlayer: 1, outcome: null };
+          selectedId = reply.pieceId;
+          render();
+          await delay(preferences.reducedMotion ? 0 : 1_000);
+          if (disposed || operationEpoch !== epoch || !tutorial) return;
+          if (!(await play(reply))) return;
+        }
+      }
+      if (disposed || operationEpoch !== epoch || !tutorial) return;
+      if (free && state.outcome?.type === 'win' && state.outcome.winner === 0) {
+        tutorial = { ...tutorial, completed: true };
+        announce('Tutorial completado. Has destruido la fortaleza enemiga.');
+      } else {
+        // Scripted lessons have no opposing turns, clocks, repetitions or draws.
+        state = {
+          ...state,
+          activePlayer: 0,
+          outcome: null,
+          positionCounts: {},
+          noProgressPlyCount: 0,
+        };
+        if (!free) advanceTutorial();
+        else announce('Turno de Cian. Continúa practicando.');
+      }
+    } finally {
+      if (!disposed && operationEpoch === epoch) {
+        animating = false;
+        render();
+      }
+    }
+  }
+
   function handleCell(hex: Hex): void {
     if (animating || isMachineTurn() || replayCursor !== null) return;
+    const step = tutorialStep();
+    if (tutorial?.completed || step?.interaction === 'next') return;
+    // The engine truncates a drone's path at the first interception. The lesson
+    // asks for the intended destination beyond it, then demonstrates that stop.
+    if (tutorial && step?.id === '12.2' && step.target && equalHex(hex, step.target)) {
+      const interceptedMove = getTutorialActions(state, tutorial.stepIndex)[0];
+      if (interceptedMove) {
+        if (pendingAction && sameAction(pendingAction, interceptedMove)) void commitPending();
+        else setPending(interceptedMove);
+      }
+      return;
+    }
+    if (step?.interaction === 'inspect') {
+      if (!step.target || !equalHex(hex, step.target)) return;
+      const occupancy = occupancyAt(state, hex);
+      mode = {
+        kind: 'pieceChoice',
+        pieceIds: [occupancy.ground, occupancy.air]
+          .filter((piece): piece is Piece => Boolean(piece))
+          .map((piece) => piece.id),
+      };
+      focusedHex = hex;
+      advanceTutorial(true);
+      return;
+    }
     focusedHex = hex;
     if (pendingAction) {
       const destination = actionDestination(state, pendingAction);
@@ -480,7 +709,9 @@ export function createGameSession(): GameSession {
       return;
     }
     if (!state.outcome && selected?.owner === state.activePlayer) {
-      const matching = actionsAtHex(state, visibleActions, hex);
+      const matching = actionsAtHex(state, visibleActions, hex).filter((action) =>
+        tutorialAllowsAction(action, true),
+      );
       if (matching.length === 1) {
         setPending(matching[0]);
         return;
@@ -498,6 +729,7 @@ export function createGameSession(): GameSession {
     const pieces = [occupancy.ground, occupancy.air].filter((piece): piece is Piece =>
       Boolean(piece),
     );
+    if (tutorial && !pieces.some((piece) => tutorialAllowsPiece(piece.id))) return;
     if (pieces.length === 0) {
       if (selected) clearSelection();
       else render();
@@ -505,7 +737,6 @@ export function createGameSession(): GameSession {
       selectPiece(pieces[0].id);
     } else {
       selectedId = null;
-      logOpen = false;
       mode = { kind: 'pieceChoice', pieceIds: pieces.map((piece) => piece.id) };
       pendingAction = null;
       render();
@@ -515,14 +746,18 @@ export function createGameSession(): GameSession {
 
   function selectPiece(pieceId: string): void {
     if (replayCursor !== null || animating || isMachineTurn()) return;
+    if (!tutorialAllowsPiece(pieceId)) return;
     const piece = getPiece(state, pieceId);
     if (!piece) return;
-    logOpen = false;
     selectedId = pieceId;
     focusedHex = { ...piece.position };
     pendingAction = null;
     mode = { kind: 'default' };
     audio.playSelect();
+    if (tutorialStep()?.interaction === 'select' && tutorialStep()?.pieceId === pieceId) {
+      advanceTutorial();
+      return;
+    }
     render();
     announce(
       `${pieceAccessibleLabel(state, piece, viewPlayer())}. ${piece.owner === state.activePlayer ? 'Unidad lista.' : 'Unidad rival.'}`,
@@ -530,6 +765,7 @@ export function createGameSession(): GameSession {
   }
 
   function clearSelection(): void {
+    if (tutorialStep()?.interaction === 'prepare' || tutorialStep()?.interaction === 'next') return;
     selectedId = null;
     pendingAction = null;
     mode = { kind: 'default' };
@@ -537,6 +773,7 @@ export function createGameSession(): GameSession {
   }
 
   function cancelDraft(): void {
+    if (tutorial && animating) return;
     if (pendingAction) {
       recordTelemetry('action-cancelled', {
         kind: pendingAction.kind,
@@ -551,7 +788,17 @@ export function createGameSession(): GameSession {
   }
 
   function setPending(action: GameAction): void {
+    if (animating || state.outcome || isMachineTurn() || replayCursor !== null) return;
+    if (
+      tutorial &&
+      (animating || selectedId !== action.pieceId || !tutorialAllowsAction(action, true))
+    )
+      return;
     pendingAction = action;
+    if (tutorialStep()?.interaction === 'prepare') {
+      advanceTutorial(true);
+      return;
+    }
     recordTelemetry('action-prepared', {
       kind: action.kind,
       ply: state.ply,
@@ -567,6 +814,7 @@ export function createGameSession(): GameSession {
   }
 
   function shouldConfirmAction(action: GameAction): boolean {
+    if (tutorial) return true;
     if (preferences.confirmation === 'always') return true;
     if (action.kind === 'move' && getPiece(state, action.pieceId)?.type === 'medium') return true;
     if (preferences.confirmation === 'quick') return action.kind === 'transform';
@@ -589,8 +837,12 @@ export function createGameSession(): GameSession {
     await executeTurn(pendingAction);
   }
 
-  async function executeTurn(action: GameAction): Promise<void> {
-    if (disposed || animating || isHomeScreenActive()) return;
+  async function executeTurn(action: GameAction, automatic = false): Promise<void> {
+    if (disposed || animating || state.outcome || isHomeScreenActive()) return;
+    if (tutorial) {
+      await executeTutorialAction(action);
+      return;
+    }
     const epoch = operationEpoch;
     const controller = matchController;
     const committedAt = Date.now();
@@ -602,6 +854,11 @@ export function createGameSession(): GameSession {
         persistCurrentMatch();
         render();
         presentOutcome();
+        return;
+      }
+      if (matchRecord.clock?.status === 'turn-expired' && !automatic) {
+        persistCurrentMatch();
+        void runMachineTurn();
         return;
       }
     }
@@ -699,20 +956,39 @@ export function createGameSession(): GameSession {
   }
 
   async function runMachineTurn(): Promise<void> {
-    if (disposed || !isMachineTurn() || state.outcome || animating || machineThinking) return;
+    if (
+      disposed ||
+      !isMachineTurn() ||
+      state.outcome ||
+      animating ||
+      machineThinking ||
+      replayCursor !== null ||
+      isHomeScreenActive()
+    )
+      return;
     const epoch = operationEpoch;
     const controller = matchController;
+    const expiredTurn = matchRecord?.clock?.status === 'turn-expired';
+    aiAbortController?.abort();
+    aiAbortController = new AbortController();
+    const searchSignal = aiAbortController.signal;
     machineThinking = true;
     machineSearch = null;
     selectedId = null;
     pendingAction = null;
     mode = { kind: 'default' };
     render();
-    announce('Turno de la máquina. Pensando jugada.');
+    if (expiredTurn) {
+      const count = matchRecord?.clock?.turnTimeouts?.[state.activePlayer] ?? 0;
+      const message = `${PLAYER_NAMES[state.activePlayer]} ha agotado el tiempo de turno (${count}/${TURN_TIMEOUT_LIMIT}). La IA juega este turno.`;
+      announce(message);
+      showToast(message);
+    } else announce('Turno de la máquina. Pensando jugada.');
     await delay(preferences.reducedMotion ? 60 : 220);
     if (
       disposed ||
       epoch !== operationEpoch ||
+      searchSignal.aborted ||
       controller !== matchController ||
       isHomeScreenActive()
     )
@@ -722,14 +998,13 @@ export function createGameSession(): GameSession {
       render();
       return;
     }
-    aiAbortController?.abort();
-    aiAbortController = new AbortController();
-    const searchSignal = aiAbortController.signal;
     const participant = matchConfig?.participants[state.activePlayer];
     const difficulty = participant?.difficulty ?? 'recruit';
-    const action = matchConfig
-      ? await aiStrategy.chooseAction(state, matchConfig, {
-          maxMs: difficultyBudget(difficulty),
+    let action: GameAction | null = null;
+    try {
+      if (matchConfig) {
+        action = await aiStrategy.chooseAction(state, matchConfig, {
+          maxMs: expiredTurn ? difficultyBudget('recruit') : difficultyBudget(difficulty),
           signal: searchSignal,
           onProgress: (metadata) => {
             if (
@@ -742,8 +1017,12 @@ export function createGameSession(): GameSession {
             machineSearch = { ...metadata };
             render();
           },
-        })
-      : null;
+        });
+      }
+    } catch {
+      // An expired turn still needs a legal move if the search cannot finish.
+      action = null;
+    }
     if (
       disposed ||
       epoch !== operationEpoch ||
@@ -753,14 +1032,28 @@ export function createGameSession(): GameSession {
     )
       return;
     machineThinking = false;
+    machineSearch = null;
+    if (state.outcome) {
+      render();
+      return;
+    }
+    if (matchRecord?.clock?.status === 'turn-expired') {
+      const legalActions = getAllLegalActions(state);
+      action =
+        legalActions.find((candidate) => action !== null && sameAction(candidate, action)) ??
+        legalActions[0] ??
+        null;
+    }
     if (!action) {
       render();
       return;
     }
-    await executeTurn(action);
+    await executeTurn(action, true);
   }
 
   function isMachineTurn(): boolean {
+    if (tutorial) return false;
+    if (!state.outcome && matchRecord?.clock?.status === 'turn-expired') return true;
     if (gameMode === 'academy' && activeScenario) {
       return state.activePlayer !== activeScenario.controlledPlayer;
     }
@@ -817,6 +1110,8 @@ export function createGameSession(): GameSession {
     if (state.outcome) {
       render();
       presentOutcome();
+    } else if (clock.status === 'turn-expired') {
+      void runMachineTurn();
     }
   }
 
@@ -941,6 +1236,7 @@ export function createGameSession(): GameSession {
   }
 
   function viewPlayer(): 0 | 1 {
+    if (tutorial) return 0;
     if (gameMode === 'academy' && activeScenario) return activeScenario.controlledPlayer;
     if (gameMode === 'machine') {
       const human = matchConfig?.participants.findIndex(
@@ -1089,6 +1385,7 @@ export function createGameSession(): GameSession {
   }
 
   function resetGame(preserveConfiguredSeed = false): void {
+    tutorial = null;
     operationEpoch++;
     currentDialog = null;
     dialogError = null;
@@ -1157,6 +1454,7 @@ export function createGameSession(): GameSession {
   }
 
   function startScenario(scenario: ScenarioDefinition): void {
+    tutorial = null;
     operationEpoch++;
     currentDialog = null;
     dialogError = null;
@@ -1234,6 +1532,7 @@ export function createGameSession(): GameSession {
   }
 
   function loadRecordIntoMatch(record: MatchRecord): void {
+    tutorial = null;
     operationEpoch++;
     currentDialog = null;
     dialogError = null;
@@ -1338,7 +1637,7 @@ export function createGameSession(): GameSession {
   }
 
   function undoLastAction(): void {
-    if (animating || replayCursor !== null) return;
+    if (animating || replayCursor !== null || matchRecord?.clock?.status === 'turn-expired') return;
     if (isLocalMatch()) {
       navigateLocalHistory('undo');
       return;
@@ -1346,6 +1645,22 @@ export function createGameSession(): GameSession {
     if (state.outcome) {
       showToast('La partida ha concluido. Puedes revisar su desarrollo en Ver repetición.');
       return;
+    }
+    if (matchController?.record.clock) {
+      matchController.tickClock(Date.now());
+      matchRecord = matchController.record;
+      state = matchController.store.getState().game;
+      if (state.outcome) {
+        persistCurrentMatch();
+        render();
+        presentOutcome();
+        return;
+      }
+      if (matchRecord.clock?.status === 'turn-expired') {
+        persistCurrentMatch();
+        void runMachineTurn();
+        return;
+      }
     }
     operationEpoch++;
     aiAbortController?.abort();
@@ -1400,6 +1715,11 @@ export function createGameSession(): GameSession {
         persistCurrentMatch();
         render();
         presentOutcome();
+        return;
+      }
+      if (matchRecord.clock?.status === 'turn-expired') {
+        persistCurrentMatch();
+        void runMachineTurn();
         return;
       }
     }
@@ -1511,6 +1831,9 @@ export function createGameSession(): GameSession {
       if (isMachineTurn()) void runMachineTurn();
     },
     startScenario,
+    startTutorial,
+    navigateTutorial,
+    exitTutorial: showHomeScreen,
     resetGame() {
       resetGame();
     },
@@ -1554,12 +1877,39 @@ export function createGameSession(): GameSession {
       render();
     },
     selectPiece,
+    selectNextPiece(backward) {
+      const units = state.pieces
+        .filter((piece) => piece.owner === state.activePlayer && tutorialAllowsPiece(piece.id))
+        .sort((a, b) => a.id.localeCompare(b.id));
+      if (!units.length) return;
+      const index = units.findIndex((piece) => piece.id === selectedId);
+      const next =
+        index < 0
+          ? backward
+            ? units.length - 1
+            : 0
+          : (index + (backward ? -1 : 1) + units.length) % units.length;
+      selectPiece(units[next].id);
+    },
     selectHex: handleCell,
     clearSelection,
     cancelDraft,
     prepareAction: setPending,
     commitPending,
     setMode(nextMode) {
+      if (animating || state.outcome || isMachineTurn() || replayCursor !== null) return;
+      if (tutorial) {
+        const step = tutorialStep();
+        if (animating || tutorial.completed || !step || !selectedId) return;
+        if (
+          step.interaction !== 'free' &&
+          (nextMode.kind !== step.mode ||
+            (nextMode.kind === 'transform' &&
+              nextMode.facing !== null &&
+              nextMode.facing !== step.direction))
+        )
+          return;
+      }
       mode = nextMode;
       pendingAction = null;
       if (nextMode.kind === 'transform' && nextMode.facing !== null && selectedId) {
@@ -1571,6 +1921,7 @@ export function createGameSession(): GameSession {
               !action.to &&
               !action.attackAboveId,
           ) ?? null;
+        if (pendingAction && !tutorialAllowsAction(pendingAction)) pendingAction = null;
       }
       render();
     },
@@ -1589,11 +1940,6 @@ export function createGameSession(): GameSession {
     showToast,
     setLogOpen(open) {
       logOpen = open;
-      if (open) {
-        selectedId = null;
-        pendingAction = null;
-        mode = { kind: 'default' };
-      }
       render();
     },
     undo: undoLastAction,
@@ -1641,6 +1987,7 @@ export function createGameSession(): GameSession {
 
   function dispose(): void {
     if (disposed) return;
+    tutorialWasAnimatingBeforeDispose = Boolean(tutorial && animating);
     clockWasRunningBeforeDispose = matchController?.record.clock?.status === 'running';
     if (clockWasRunningBeforeDispose && matchController) {
       matchController.pauseClock(Date.now());
@@ -1705,7 +2052,10 @@ export function createGameSession(): GameSession {
         machineThinking = false;
         animating = false;
         homeDemoBusy = false;
+        if (tutorial && tutorialWasAnimatingBeforeDispose)
+          enterTutorialStep(tutorial.stepIndex, true);
       }
+      tutorialWasAnimatingBeforeDispose = false;
       lifecycle?.abort();
       lifecycle = new AbortController();
       const activateAudio = (): void => {

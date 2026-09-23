@@ -29,7 +29,7 @@ assert(executablePath, 'No browser found. Set PLAYWRIGHT_BROWSER_PATH to Chrome 
 
 const server = await createServer({
   logLevel: 'silent',
-  server: { host: '127.0.0.1', port: 4174, strictPort: true },
+  server: { host: '127.0.0.1', port: 4174, strictPort: true, hmr: false },
 });
 await server.listen();
 
@@ -131,6 +131,10 @@ try {
         `${label} must offer exactly the requested choices.`,
       );
     }
+    assert(
+      (await selectedOptionLabel(page, 'Puntos de vida de la Fortaleza')) === '1',
+      'New local and AI matches must default to 1 fortress HP.',
+    );
     assert(
       (await selectedOptionLabel(page, 'Tiempo por turno')) === 'Sin límite' &&
         (await selectedOptionLabel(page, 'Tiempo total')) === 'Sin límite',
@@ -330,7 +334,7 @@ try {
     'Setting a turn clock must leave total time unlimited.',
   );
   await turnOnly.locator('[data-start-free]').click();
-  await turnOnly.locator('#match-clock').waitFor({ state: 'visible' });
+  await turnOnly.locator('#turn-clock').waitFor({ state: 'visible' });
   assert(
     await turnOnly.evaluate(() => {
       const { config, clock } = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
@@ -344,10 +348,9 @@ try {
     'A turn-only match must persist its 30-second clock without enabling a total clock.',
   );
   assert(
-    (await turnOnly.locator('#match-clock .clock-side').count()) === 1 &&
-      (await turnOnly.locator('#match-clock small').textContent()) === 'Turno Cian' &&
-      (await turnOnly.locator('#match-clock strong').textContent()) === '0:30' &&
-      (await turnOnly.locator('#match-clock').getAttribute('aria-label')) === 'Turno de Cian: 0:30',
+    (await turnOnly.locator('.match-status .match-clock').count()) === 1 &&
+      (await turnOnly.locator('#turn-chip #turn-clock').textContent()) === '0:30' &&
+      (await turnOnly.locator('#turn-clock').getAttribute('aria-label')) === 'Turno de Cian: 0:30',
     'A turn-only match must display and announce only the current turn countdown, without zero total clocks.',
   );
   await assertNoHorizontalOverflow(turnOnly, 'Mobile turn-only match');
@@ -501,8 +504,8 @@ try {
     'Opening a modal must lock background scrolling.',
   );
   assert(
-    (await selectedOptionLabel(desktop, 'Puntos de vida de la Fortaleza')) === '2',
-    'Fortress health must default to the balanced 2 HP.',
+    (await selectedOptionLabel(desktop, 'Puntos de vida de la Fortaleza')) === '1',
+    'Fortress health must default to 1 HP.',
   );
   assert(
     (await selectedOptionLabel(desktop, 'Disposición inicial')) === 'Frente clásico',
@@ -540,9 +543,9 @@ try {
     'Accessible cell labels contain stray template characters.',
   );
   const healthBars = await desktop.locator('.hp i').all();
-  assert(healthBars.length === 4, 'The default 2 HP match must expose four health indicators.');
+  assert(healthBars.length === 2, 'The default 1 HP match must expose two health indicators.');
   assert(
-    (await desktop.locator('.hp svg path').count()) === 4,
+    (await desktop.locator('.hp svg path').count()) === 2,
     'Fortress health must use heart icons.',
   );
   for (const bar of healthBars) {
@@ -636,16 +639,18 @@ try {
   );
   await desktop.locator('#log-toggle').click();
   assert(
-    (await desktop.locator('#command-panel').isHidden()) &&
-      (await desktop.locator('#battle-log-panel').isVisible()),
-    'Opening the battle log must deselect the unit and replace its command panel.',
+    (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#battle-log-panel').isVisible()) &&
+      (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
+    'Opening the battle log must preserve the selected unit and its command panel.',
   );
-  await clickHex(desktop, 0, -2);
+  await clickHex(desktop, 2, -3);
   assert(
     (await desktop.locator('#command-panel').isVisible()) &&
-      (await desktop.locator('#battle-log-panel').isHidden()),
-    'Selecting a unit must replace the battle log with its command panel.',
+      (await desktop.locator('#battle-log-panel').isVisible()),
+    'Selecting another unit must keep both independent windows open.',
   );
+  await clickHex(desktop, 0, -2);
   assert(
     await desktop.locator('#cancel-selection').isHidden(),
     'Cancel must appear beside confirmation only when an order is prepared.',
@@ -657,6 +662,7 @@ try {
   await desktop.locator('#cancel-selection').click();
   assert(
     (await desktop.locator('#command-panel').isVisible()) &&
+      (await desktop.locator('#battle-log-panel').isVisible()) &&
       (await desktop.locator('#pending-card').isHidden()) &&
       (await desktop.locator('#battle-log li:not(.empty-log)').count()) === 0 &&
       (await desktop.locator('#selection-summary').textContent()) ===
@@ -669,6 +675,7 @@ try {
       .evaluate((panel) => panel.contains(document.activeElement)),
     'Cancelling an order from its button must keep keyboard focus in the command panel.',
   );
+  await desktop.locator('#close-battle-log').click();
   await clickHex(desktop, 0, -2);
   assert(
     (await desktop.locator('#command-panel').isHidden()) &&
@@ -722,7 +729,7 @@ try {
   assert(
     (await desktop.locator('#action-controls h3').textContent()) === 'Cambiar orientación' &&
       (await desktop.locator('#selection-summary').textContent()) ===
-        'Elige un rumbo en la brújula del panel de mando',
+        'Elige un rumbo en la brújula del panel de mando.',
     'Soldier orientation must use the requested label and compass instruction.',
   );
   const visualNorth = desktop.locator('.hex-compass button[aria-label="N, orientación actual"]');
@@ -745,7 +752,7 @@ try {
   await visualSouth.click();
   assert(
     (await desktop.locator('#selection-summary').textContent()) ===
-      'Confirma la acción en el panel de mando',
+      'Confirma la acción en el panel de mando.',
     'Choosing a direction must ask for confirmation.',
   );
   assert(
@@ -883,6 +890,145 @@ try {
   await assertCommandWindowInsideArena(windowPage, 'Resizing the desktop');
   await windowPage.close();
 
+  const logPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(logPage, runtimeErrors);
+  await logPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await selectMode(logPage, 'local');
+  const canvasBeforeLog = await logPage.locator('#game-canvas').boundingBox();
+  await logPage.locator('#log-toggle').click();
+  const defaultLogWindow = await logPage.locator('#battle-log-panel').boundingBox();
+  await assertCanvasBounds(logPage, canvasBeforeLog, 'Opening the battle log');
+  await clickHex(logPage, 0, -2);
+  const commandBesideLog = await logPage.locator('#command-panel').boundingBox();
+  assert(
+    defaultLogWindow &&
+      commandBesideLog &&
+      defaultLogWindow.x + defaultLogWindow.width <= commandBesideLog.x,
+    'The battle log must open on the left and the command panel on the right.',
+  );
+  await clickHex(logPage, 0, -1);
+  await logPage.locator('#pending-card .confirm-button').waitFor();
+  await logPage.locator('#close-battle-log').click();
+  assert(
+    (await logPage.locator('#battle-log-panel').isHidden()) &&
+      (await logPage.locator('#pending-card .confirm-button').isVisible()),
+    'Closing the battle log must preserve the selected unit and its prepared order.',
+  );
+  await logPage.locator('#log-toggle').click();
+  assert(
+    (await logPage.locator('#command-panel').isVisible()) &&
+      (await logPage.locator('#pending-card .confirm-button').isVisible()),
+    'Opening the battle log must preserve an existing prepared order.',
+  );
+  await assertCanvasBounds(logPage, canvasBeforeLog, 'Preparing an order with both windows open');
+  await dragFloatingWindow(logPage, '#battle-log-window-titlebar', 90, 35);
+  const draggedLogWindow = await logPage.locator('#battle-log-panel').boundingBox();
+  assert(
+    draggedLogWindow.x > defaultLogWindow.x + 60 && draggedLogWindow.y > defaultLogWindow.y + 20,
+    'Dragging the battle log titlebar must move its window independently.',
+  );
+  const commandAfterLogDrag = await logPage.locator('#command-panel').boundingBox();
+  assert(
+    Math.abs(commandAfterLogDrag.x - commandBesideLog.x) <= 1 &&
+      Math.abs(commandAfterLogDrag.y - commandBesideLog.y) <= 1,
+    'Dragging the battle log must preserve the command window position.',
+  );
+  const logTitlebar = logPage.locator('#battle-log-window-titlebar');
+  await logTitlebar.focus();
+  await logTitlebar.press('ArrowRight');
+  const logAfterArrow = await logPage.locator('#battle-log-panel').boundingBox();
+  await logTitlebar.press('Shift+ArrowDown');
+  const logBeforeMinimize = await logPage.locator('#battle-log-panel').boundingBox();
+  assert(
+    logAfterArrow.x > draggedLogWindow.x &&
+      Math.abs(logAfterArrow.y - draggedLogWindow.y) <= 1 &&
+      logBeforeMinimize.y - logAfterArrow.y > logAfterArrow.x - draggedLogWindow.x,
+    'The battle log titlebar must support arrow movement and larger Shift steps.',
+  );
+  await logPage.locator('#minimize-battle-log').click();
+  assert(
+    (await logPage.locator('#battle-log-panel').isHidden()) &&
+      (await logPage.locator('#battle-log-restore').isVisible()) &&
+      (await logPage.locator('#pending-card .confirm-button').isVisible()),
+    'Minimizing the battle log must leave the command window and its prepared order available.',
+  );
+  await logPage.locator('#battle-log-restore').click();
+  const restoredLogWindow = await logPage.locator('#battle-log-panel').boundingBox();
+  assert(
+    Math.abs(restoredLogWindow.x - logBeforeMinimize.x) <= 1 &&
+      Math.abs(restoredLogWindow.y - logBeforeMinimize.y) <= 1 &&
+      (await logPage.locator('#pending-card .confirm-button').isVisible()),
+    'Restoring the battle log must preserve its position and the pending command.',
+  );
+  await logPage.locator('#minimize-command-panel').click();
+  assert(
+    (await logPage.locator('#battle-log-panel').isVisible()) &&
+      (await logPage.locator('#command-panel-restore').isVisible()),
+    'Minimizing the command window must leave the battle log visible.',
+  );
+  await logPage.locator('#command-panel-restore').click();
+  await assertCanvasBounds(
+    logPage,
+    canvasBeforeLog,
+    'Moving, minimizing and restoring both windows',
+  );
+  if (process.env.UI_SCREENSHOT)
+    await logPage.screenshot({ path: `${process.env.UI_SCREENSHOT}-both-windows-desktop.png` });
+  await logPage.locator('#cancel-selection').click();
+  assert(
+    (await logPage.locator('#battle-log-panel').isVisible()) &&
+      (await logPage.locator('#command-panel').isVisible()) &&
+      (await logPage.locator('#pending-card').isHidden()),
+    'Cancelling an order must keep both independent windows open.',
+  );
+  await logPage.locator('#close-command-panel').click();
+  assert(
+    (await logPage.locator('#battle-log-panel').isVisible()) &&
+      (await logPage.locator('#command-panel').isHidden()),
+    'Closing the command window must leave the battle log visible.',
+  );
+  await logPage.locator('#close-battle-log').click();
+  assert(
+    (await logPage.locator('#battle-log-restore').isHidden()) &&
+      (await logPage.locator('#battle-log-panel').isHidden()),
+    'Closing the battle log must remove its restore control too.',
+  );
+  await logPage.locator('#log-toggle').click();
+  const reopenedLogWindow = await logPage.locator('#battle-log-panel').boundingBox();
+  assert(
+    Math.abs(reopenedLogWindow.x - defaultLogWindow.x) <= 1 &&
+      Math.abs(reopenedLogWindow.y - defaultLogWindow.y) <= 1,
+    'Reopening a closed battle log must reset it to its default position.',
+  );
+  await clickHex(logPage, 1, -5);
+  await clickHex(logPage, 1, -3);
+  await logPage.locator('#pending-card .confirm-button').click();
+  await logPage.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  assert(
+    (await logPage.locator('#battle-log-panel').isVisible()) &&
+      (await logPage.locator('#battle-log li:not(.empty-log)').count()) === 1,
+    'Confirming an order must keep the battle log visible and update its history.',
+  );
+  await logPage.locator('#undo-action:not([disabled])').waitFor();
+  await clickHex(logPage, 1, -3);
+  assert(
+    (await logPage.locator('#selection-summary').textContent()) ===
+      'Casilla apilada. Elige una unidad en el panel de mando.' &&
+      (await logPage.locator('#command-panel').isVisible()) &&
+      (await logPage.locator('#battle-log-panel').isVisible()),
+    'A stacked cell must explain the unit choice and preserve the open battle log.',
+  );
+  await assertCanvasBounds(logPage, canvasBeforeLog, 'Confirming and inspecting a stacked cell');
+  await dragFloatingWindow(logPage, '#battle-log-window-titlebar', 1_200, 800);
+  await assertFloatingWindowInsideArena(
+    logPage,
+    '#battle-log-panel',
+    'Dragging the log to the edge',
+  );
+  await logPage.setViewportSize({ width: 1000, height: 700 });
+  await assertFloatingWindowInsideArena(logPage, '#battle-log-panel', 'Resizing with the log open');
+  await logPage.close();
+
   const cannonPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(cannonPage, runtimeErrors);
   await cannonPage.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
@@ -918,7 +1064,7 @@ try {
   await cannonPage.locator('[data-command="transform"]').click();
   assert(
     (await cannonPage.locator('#selection-summary').textContent()) ===
-      'Elige un rumbo en la brújula del panel de mando',
+      'Elige un rumbo en la brújula del panel de mando.',
     'Abandoning a vehicle must begin by asking for its soldier orientation.',
   );
   await cannonPage.locator('[data-transform-facing="3"]').click();
@@ -939,7 +1085,7 @@ try {
   assert(
     (await cannonPage.locator('.transform-warning').count()) === 0 &&
       (await cannonPage.locator('#selection-summary').textContent()) ===
-        'Confirma la acción en el panel de mando',
+        'Confirma la acción en el panel de mando.',
     'Selecting the transformed soldier destination must remove the reminder and ask for confirmation.',
   );
   await cannonPage.locator('#cancel-selection').click();
@@ -981,6 +1127,23 @@ try {
       chosenCannon,
     ),
     'Confirmed tank movement must save the chosen cannon orientation.',
+  );
+  const tankMoveLog = await cannonPage.locator('#battle-log li p').first().textContent();
+  assert(tankMoveLog.startsWith('Tanque avanzó a '), 'Executed tank movement must use past tense.');
+  await cannonPage.locator('[data-open-replay]').click();
+  assert(
+    (await cannonPage.locator('[data-replay-description]').textContent()) === tankMoveLog,
+    'Replay must describe the completed tank move with the same past-tense text as the battle log.',
+  );
+  await cannonPage.locator('[data-replay-step="-1"]').click();
+  assert(
+    (await cannonPage.locator('[data-replay-description]').textContent()) === 'Posición inicial',
+    'Replay must describe the initial position without a completed action.',
+  );
+  await cannonPage.locator('[data-replay-step="1"]').click();
+  assert(
+    (await cannonPage.locator('[data-replay-description]').textContent()) === tankMoveLog,
+    'Stepping forward through replay must recover the executed action description.',
   );
   await cannonPage.close();
 
@@ -1355,14 +1518,43 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile.locator('#pending-card:not([hidden])').waitFor();
   await assertPendingActionsTogether(mobile);
+  await mobile.locator('#log-toggle').click();
+  assert(
+    (await mobile.locator('#battle-log-panel').isVisible()) &&
+      (await mobile.locator('#command-panel').isVisible()) &&
+      (await mobile.locator('#pending-card .confirm-button').isVisible()) &&
+      (await mobile.locator('#minimize-battle-log').isHidden()) &&
+      (await mobile.locator('#battle-log-restore').isHidden()),
+    'Mobile must show both panels and preserve a pending order without desktop log controls.',
+  );
+  const mobilePanels = await mobile.evaluate(() => {
+    const canvas = document.querySelector('#game-canvas').getBoundingClientRect();
+    const command = document.querySelector('#command-panel').getBoundingClientRect();
+    const log = document.querySelector('#battle-log-panel').getBoundingClientRect();
+    return {
+      belowBoard: command.top >= canvas.bottom - 1 && log.top >= canvas.bottom - 1,
+      separate: command.bottom <= log.top + 1 || log.bottom <= command.top + 1,
+    };
+  });
+  assert(
+    mobilePanels.belowBoard && mobilePanels.separate,
+    'On a phone both panels must stay in document flow below the board without overlap.',
+  );
+  await assertNoHorizontalOverflow(mobile, 'Mobile command panel and battle log together');
+  if (process.env.UI_SCREENSHOT)
+    await mobile.screenshot({
+      path: `${process.env.UI_SCREENSHOT}-both-windows-mobile.png`,
+      fullPage: true,
+    });
   await mobile.locator('#pending-card .confirm-button').scrollIntoViewIfNeeded();
   if (process.env.UI_SCREENSHOT)
     await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-cancel-mobile.png` });
   await mobile.locator('#cancel-selection').click();
   assert(
     (await mobile.locator('#command-panel').isVisible()) &&
+      (await mobile.locator('#battle-log-panel').isVisible()) &&
       (await mobile.locator('#pending-card').isHidden()),
-    'Cancel on a portrait phone must preserve the selected unit and command panel.',
+    'Cancel on a portrait phone must preserve the selected unit and both open panels.',
   );
   await mobile.locator('#game-canvas').focus();
   await mobile.keyboard.press('Enter');
@@ -1370,8 +1562,22 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
   assert(
-    (await mobile.locator('#battle-log li').count()) >= 1,
-    'Second Enter on the prepared destination must execute the order.',
+    (await mobile.locator('#battle-log li').count()) >= 1 &&
+      (await mobile.locator('#battle-log-panel').isVisible()),
+    'Second Enter must execute the order while keeping the mobile battle log open.',
+  );
+  await mobile.locator('#undo-action:not([disabled])').waitFor();
+  await tapHex(mobile, 0, 2);
+  assert(
+    (await mobile.locator('#command-panel').isVisible()) &&
+      (await mobile.locator('#battle-log-panel').isVisible()),
+    'Selecting a unit on the next turn must preserve the mobile battle log.',
+  );
+  await mobile.locator('#close-battle-log').click();
+  assert(
+    (await mobile.locator('#battle-log-panel').isHidden()) &&
+      (await mobile.locator('#command-panel').isVisible()),
+    'Closing the mobile log must preserve the selected unit and command panel.',
   );
 
   const narrow = await browser.newPage({
@@ -1488,6 +1694,7 @@ try {
 
   const tutorialControl = compactPortrait.locator('[data-home-action="tutorial"]');
   await tutorialControl.click();
+  await compactPortrait.locator('[data-tutorial-academy]').click();
   await compactPortrait.locator('.academy-shell').waitFor();
   await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait Academy', '#game-dialog');
   const academyViewport = await compactPortrait.evaluate(() => {
@@ -1764,6 +1971,7 @@ try {
     'Home navigation should use a compact, scannable height.',
   );
   await academy.locator('[data-home-action="tutorial"]').click();
+  await academy.locator('[data-tutorial-academy]').click();
   assert(
     await academy
       .locator('[data-scenario="movement"]')
@@ -1990,9 +2198,13 @@ async function assertCanvasBounds(page, expected, action) {
 }
 
 async function dragCommandWindow(page, deltaX, deltaY) {
-  const titlebar = page.locator('#command-window-titlebar');
+  await dragFloatingWindow(page, '#command-window-titlebar', deltaX, deltaY);
+}
+
+async function dragFloatingWindow(page, titlebarSelector, deltaX, deltaY) {
+  const titlebar = page.locator(titlebarSelector);
   const box = await titlebar.boundingBox();
-  assert(box, 'The command window titlebar must be visible for dragging.');
+  assert(box, `${titlebarSelector} must be visible for dragging.`);
   const viewport = page.viewportSize();
   const x = box.x + 24;
   const y = box.y + box.height / 2;
@@ -2007,9 +2219,13 @@ async function dragCommandWindow(page, deltaX, deltaY) {
 }
 
 async function assertCommandWindowInsideArena(page, action) {
+  await assertFloatingWindowInsideArena(page, '#command-panel', action);
+}
+
+async function assertFloatingWindowInsideArena(page, selector, action) {
   await page.evaluate(() => new Promise(requestAnimationFrame));
   const arena = await page.locator('#board-arena').boundingBox();
-  const panel = await page.locator('#command-panel').boundingBox();
+  const panel = await page.locator(selector).boundingBox();
   assert(
     arena &&
       panel &&
@@ -2017,7 +2233,7 @@ async function assertCommandWindowInsideArena(page, action) {
       panel.y >= arena.y - 1 &&
       panel.x + panel.width <= arena.x + arena.width + 1 &&
       panel.y + panel.height <= arena.y + arena.height + 1,
-    `${action} must keep the floating command window inside the arena: ${JSON.stringify({ arena, panel })}.`,
+    `${action} must keep ${selector} inside the arena: ${JSON.stringify({ arena, panel })}.`,
   );
 }
 

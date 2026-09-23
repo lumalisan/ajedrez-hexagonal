@@ -94,7 +94,9 @@ export function HomeScreen() {
                   onClick={() => commands.openDialog({ kind: 'academy' })}
                 >
                   <span>Academia táctica</span>
-                  <small>Aprende, practica y afronta el reto diario</small>
+                  <small>
+                    {completed} de {SCENARIOS.length} desafíos completados
+                  </small>
                 </button>
               </nav>
             </>
@@ -135,12 +137,10 @@ export function HomeScreen() {
                   type="button"
                   className="home-nav-button"
                   data-home-action="tutorial"
-                  onClick={() => commands.openDialog({ kind: 'academy' })}
+                  onClick={commands.startTutorial}
                 >
                   <span>Tutorial</span>
-                  <small>
-                    {completed} de {SCENARIOS.length} desafíos completados
-                  </small>
+                  <small>Aprende paso a paso sobre el tablero</small>
                 </button>
                 <button
                   type="button"

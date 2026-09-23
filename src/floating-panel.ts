@@ -10,7 +10,7 @@ interface Drag {
   previousPosition: Position | null;
 }
 
-interface FloatingCommandPanelElements {
+interface FloatingPanelElements {
   arena: HTMLElement;
   panel: HTMLElement;
   titlebar: HTMLElement;
@@ -19,8 +19,8 @@ interface FloatingCommandPanelElements {
   restore: HTMLButtonElement;
 }
 
-/** Keeps desktop window placement separate from the selected unit and its draft order. */
-export class FloatingCommandPanel {
+/** Keeps desktop window placement separate from each panel's content and visibility. */
+export class FloatingPanel {
   private readonly desktop = window.matchMedia('(min-width: 901px)');
   private readonly events = new AbortController();
   private readonly observer: ResizeObserver;
@@ -30,20 +30,19 @@ export class FloatingCommandPanel {
   private drag: Drag | null = null;
 
   constructor(
-    private readonly elements: FloatingCommandPanelElements,
+    private readonly elements: FloatingPanelElements,
     private readonly onClose: () => void,
+    private readonly defaultSide: 'left' | 'right' = 'right',
   ) {
-    const { titlebar, minimize, close, restore, arena, panel } = elements;
+    const { titlebar, arena, panel } = elements;
     const options = { signal: this.events.signal };
+    panel.dataset.floatingPanel = '';
     titlebar.addEventListener('pointerdown', this.startDrag, options);
     titlebar.addEventListener('pointermove', this.moveDrag, options);
     titlebar.addEventListener('pointerup', this.endDrag, options);
     titlebar.addEventListener('pointercancel', this.cancelDrag, options);
     titlebar.addEventListener('lostpointercapture', this.endDrag, options);
     titlebar.addEventListener('keydown', this.moveWithKeyboard, options);
-    minimize.addEventListener('click', this.minimize, options);
-    close.addEventListener('click', this.close, options);
-    restore.addEventListener('click', this.restore, options);
     this.desktop.addEventListener('change', this.changeLayout, options);
     this.observer = new ResizeObserver(() => this.place());
     this.observer.observe(arena);
@@ -52,23 +51,36 @@ export class FloatingCommandPanel {
   }
 
   setVisible(visible: boolean): void {
+    const opening = visible && !this.visible;
     if (!visible) {
       this.finishDrag();
       this.minimized = false;
     }
     this.visible = visible;
     this.sync();
+    if (opening) this.bringToFront();
   }
 
   reveal(): void {
     this.minimized = false;
     this.sync();
+    if (this.visible) this.bringToFront();
+  }
+
+  bringToFront(): void {
+    const { arena, panel } = this.elements;
+    for (const sibling of arena.children) {
+      if (sibling.hasAttribute('data-floating-panel')) sibling.classList.remove('is-front');
+    }
+    panel.classList.add('is-front');
   }
 
   destroy(): void {
     this.finishDrag();
     this.events.abort();
     this.observer.disconnect();
+    delete this.elements.panel.dataset.floatingPanel;
+    this.elements.panel.classList.remove('is-front');
   }
 
   private sync(): void {
@@ -87,15 +99,15 @@ export class FloatingCommandPanel {
     const maxX = Math.max(margin, arena.clientWidth - panel.offsetWidth - margin);
     const maxY = Math.max(margin, arena.clientHeight - panel.offsetHeight - margin);
     const desired = this.position ?? {
-      x: arena.clientWidth - panel.offsetWidth - 24,
+      x: this.defaultSide === 'left' ? 24 : arena.clientWidth - panel.offsetWidth - 24,
       y: 24,
     };
     const x = Math.max(margin, Math.min(maxX, desired.x));
     const y = Math.max(margin, Math.min(maxY, desired.y));
-    // A default window remains right-aligned on resize until the user moves it.
+    // A default window remains aligned to its side on resize until the user moves it.
     if (this.position) this.position = { x, y };
-    panel.style.setProperty('--command-window-x', `${x}px`);
-    panel.style.setProperty('--command-window-y', `${y}px`);
+    panel.style.setProperty('--floating-window-x', `${x}px`);
+    panel.style.setProperty('--floating-window-y', `${y}px`);
   }
 
   private currentPosition(): Position {
@@ -103,7 +115,7 @@ export class FloatingCommandPanel {
     return { x: panel.offsetLeft, y: panel.offsetTop };
   }
 
-  private minimize = (): void => {
+  minimize = (): void => {
     if (!this.visible || !this.desktop.matches) return;
     this.finishDrag();
     this.position = this.currentPosition();
@@ -112,12 +124,12 @@ export class FloatingCommandPanel {
     this.elements.restore.focus({ preventScroll: true });
   };
 
-  private restore = (): void => {
+  restore = (): void => {
     this.reveal();
     this.elements.titlebar.focus({ preventScroll: true });
   };
 
-  private close = (): void => {
+  close = (): void => {
     this.finishDrag();
     this.position = null;
     this.minimized = false;
