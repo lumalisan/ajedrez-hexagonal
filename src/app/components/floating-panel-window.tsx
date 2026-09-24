@@ -31,6 +31,7 @@ const WINDOWS = {
 interface FloatingPanelWindowProps {
   kind: keyof typeof WINDOWS;
   visible: boolean;
+  controlsDisabled?: boolean;
   panelRef: RefObject<HTMLElement | null>;
   controllerRef: RefObject<FloatingPanel | null>;
   onClose(): void;
@@ -42,6 +43,7 @@ interface FloatingPanelWindowProps {
 export function FloatingPanelWindow({
   kind,
   visible,
+  controlsDisabled = false,
   panelRef,
   controllerRef,
   onClose,
@@ -117,6 +119,7 @@ export function FloatingPanelWindow({
               type="button"
               id={config.minimize}
               data-window-minimize
+              disabled={controlsDisabled}
               aria-label={`Minimizar ${config.label.toLowerCase()}`}
               title={`Minimizar ${config.label.toLowerCase()}`}
               onClick={() => controllerRef.current?.minimize()}
@@ -130,6 +133,7 @@ export function FloatingPanelWindow({
               type="button"
               id={config.close}
               data-window-close
+              disabled={controlsDisabled}
               aria-label={`Cerrar ${config.label.toLowerCase()}`}
               title={`Cerrar ${config.label.toLowerCase()}`}
               onClick={() => controllerRef.current?.close()}

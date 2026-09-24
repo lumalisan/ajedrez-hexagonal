@@ -5058,12 +5058,16 @@ html {
   transition: background-color 140ms ease;
 }
 
-.command-window-controls button:hover {
+.command-window-controls button:hover:not(:disabled) {
   background: var(--surface-3);
 }
 
-.command-window-controls [data-window-close]:hover {
+.command-window-controls [data-window-close]:hover:not(:disabled) {
   background: #a92d43;
+}
+
+.command-window-controls button:disabled {
+  cursor: not-allowed;
 }
 
 .command-window-controls svg,
@@ -5736,6 +5740,11 @@ html {
   text-wrap: balance;
 }
 
+.tutorial-content:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -4px;
+}
+
 .tutorial-content p {
   margin: 0 0 14px;
   font-size: 14px;
@@ -5795,22 +5804,9 @@ html {
   --compass-scale: 1.12;
 }
 
-.tutorial-active .command-window-controls,
-.tutorial-active .command-panel-restore {
-  display: none;
-}
-
-.tutorial-active .command-window-titlebar {
-  cursor: default;
-}
-
 .tutorial-active .board-arena {
   grid-template-columns: minmax(240px, 290px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-}
-
-.tutorial-active .board-arena:has(> .command-panel:not([hidden])) {
-  grid-template-columns: minmax(240px, 290px) minmax(0, 1fr) 300px;
 }
 
 .tutorial-active .board-arena > .tutorial-panel {
@@ -5824,20 +5820,7 @@ html {
   grid-row: 1;
 }
 
-.tutorial-active .board-arena > .command-panel {
-  position: static;
-  grid-column: 3;
-  grid-row: 1;
-  align-self: center;
-  width: auto;
-  max-width: none;
-  max-height: 100%;
-  margin: 12px;
-  padding: 0;
-  box-shadow: none;
-}
-
-@media (max-width: 1199px) {
+@media (max-width: 900px) {
   .app-shell.tutorial-active {
     height: auto;
     min-height: 100svh;
@@ -5892,12 +5875,21 @@ html {
   .tutorial-active .board-arena > .command-panel {
     align-self: stretch;
     margin: 0;
+    padding: 0;
     border-top: 1px solid var(--line);
     border-radius: 0;
   }
 
   .tutorial-active .command-window-content {
     padding: 16px;
+  }
+
+  .tutorial-active .command-window-titlebar {
+    padding-left: 16px;
+  }
+
+  .tutorial-active .command-window-controls [data-window-minimize] {
+    display: grid;
   }
 }
 

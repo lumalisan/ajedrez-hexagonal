@@ -762,9 +762,6 @@ export function CommandPanel() {
     commands.announce('Panel de mando cerrado. Unidad deseleccionada.');
   }, [commands]);
   useLayoutEffect(() => {
-    if (panelRef.current) panelRef.current.inert = tutorialStep?.id === '3.1';
-  }, [tutorialStep?.id]);
-  useLayoutEffect(() => {
     floatingRef.current?.reveal();
   }, [snapshot.selectedId, snapshot.pendingAction, snapshot.mode]);
   useLayoutEffect(() => {
@@ -781,13 +778,15 @@ export function CommandPanel() {
     const fallback =
       panelRef.current?.querySelector<HTMLElement>('#pending-card:not([hidden]) .confirm-button') ??
       panelRef.current?.querySelector<HTMLElement>('#action-controls button:not(:disabled)') ??
-      panelRef.current?.querySelector<HTMLElement>('#close-command-panel');
+      panelRef.current?.querySelector<HTMLElement>('#close-command-panel:not(:disabled)') ??
+      panelRef.current?.querySelector<HTMLElement>('#command-window-titlebar');
     (replacement ?? fallback)?.focus();
   }, [snapshot.selectedId, snapshot.pendingAction, snapshot.mode]);
   return (
     <FloatingPanelWindow
       kind="command"
       visible={visible}
+      controlsDisabled={Boolean(snapshot.tutorial)}
       panelRef={panelRef}
       controllerRef={floatingRef}
       onClose={closePanel}

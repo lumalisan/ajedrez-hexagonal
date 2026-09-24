@@ -26,7 +26,7 @@ export function TutorialPanel() {
           {completed ? 'Completado' : `${step.section} de 14`}
         </span>
       </div>
-      <div className="tutorial-content" ref={contentRef}>
+      <div className="tutorial-content" ref={contentRef} tabIndex={0}>
         <h1 id="tutorial-heading" aria-live="polite" aria-atomic="true">
           {completed ? 'Tutorial completado' : step.title}
         </h1>

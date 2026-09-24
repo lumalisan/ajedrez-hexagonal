@@ -116,7 +116,7 @@ export class FloatingPanel {
   }
 
   minimize = (): void => {
-    if (!this.visible || !this.desktop.matches) return;
+    if (!this.visible || !this.desktop.matches || this.elements.minimize.disabled) return;
     this.finishDrag();
     this.position = this.currentPosition();
     this.minimized = true;
@@ -130,6 +130,7 @@ export class FloatingPanel {
   };
 
   close = (): void => {
+    if (this.elements.close.disabled) return;
     this.finishDrag();
     this.position = null;
     this.minimized = false;
@@ -143,7 +144,8 @@ export class FloatingPanel {
     this.finishDrag();
     this.sync();
     if (!this.desktop.matches && this.visible && focusWasInWindowControls) {
-      this.elements.close.focus({ preventScroll: true });
+      const focusTarget = this.elements.close.disabled ? titlebar : this.elements.close;
+      focusTarget.focus({ preventScroll: true });
     }
   };
 
