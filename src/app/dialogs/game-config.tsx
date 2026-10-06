@@ -1,3 +1,4 @@
+import { DialogClose } from '../components/dialog-close';
 import { useEffect, useRef, useState } from 'react';
 import { PIECE_NAMES } from '../../engine';
 import { createClassicConfig } from '../../game-config';
@@ -8,7 +9,7 @@ import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../
 import type { AiDifficulty, FortressHp } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
-import { Button, IconButton } from '../components/ui/button';
+import { Button } from '../components/ui/button';
 import { useGame } from '../game-context';
 
 type MatchClockValue = '' | 300 | 600 | 1200;
@@ -89,14 +90,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
 
   return (
     <>
-      <IconButton
-        className="config-close"
-        data-dialog-close
-        label="Cerrar configuración"
-        onClick={commands.closeDialog}
-      >
-        ×
-      </IconButton>
+      <DialogClose label="Cerrar configuración" className="dialog-corner-close config-close" />
       <span className="eyebrow">NUEVA PARTIDA</span>
       <h2>{mode === 'machine' ? 'Individual vs. IA' : 'Dos jugadores'}</h2>
       <div className="match-configuration mt-6 grid gap-6 text-sm">

@@ -26,6 +26,8 @@ export interface MatchHistoryEntry {
   plies: number;
   durationSeconds: number;
   completedAt: string;
+  /** Older history entries contain only a summary. */
+  record?: MatchRecord;
 }
 
 export const DEFAULT_PREFERENCES: GamePreferences = {

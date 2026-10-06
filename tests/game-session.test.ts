@@ -14,7 +14,12 @@ import {
   replayRecord,
   serializeRecord,
 } from '../src/match-record';
-import { loadActiveMatch, loadPreferences, saveActiveMatch } from '../src/match-storage';
+import {
+  loadActiveMatch,
+  loadMatchHistory,
+  loadPreferences,
+  saveActiveMatch,
+} from '../src/match-storage';
 import type { GameAction, GameState, MatchRecord } from '../src/types';
 import { installMemoryStorage } from './helpers/memory-storage';
 import { BASIC_SCENARIOS } from '../src/scenarios';
@@ -467,20 +472,85 @@ describe('sesión que conecta React con el juego', () => {
     expect(loadActiveMatch().record?.actions).toEqual([action]);
   });
 
-  it('mantiene la confirmación de una rotación preparada sobre la propia casilla', () => {
+  it.each(['rotate', 'orient', 'medium', 'fast', 'long'] as const)(
+    'deselecciona al pulsar la propia casilla con una orden preparada de %s',
+    (kind) => {
+      const session = createSession();
+      session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+      const before = structuredClone(session.getSnapshot().state);
+      const action = getAllLegalActions(before).find((candidate) => {
+        if (kind === 'rotate' || kind === 'orient') return candidate.kind === kind;
+        return (
+          candidate.kind === 'transform' &&
+          !candidate.to &&
+          !candidate.attackAboveId &&
+          before.pieces.find((piece) => piece.id === candidate.pieceId)?.type === kind
+        );
+      })!;
+      expect(action).toBeDefined();
+      const piece = before.pieces.find((candidate) => candidate.id === action.pieceId)!;
+      session.commands.selectPiece(piece.id);
+      session.commands.prepareAction(action);
+      session.commands.selectHex(piece.position);
+      expect(session.getSnapshot()).toMatchObject({
+        state: before,
+        selectedId: null,
+        pendingAction: null,
+        mode: { kind: 'default' },
+      });
+      expect(loadActiveMatch().record?.actions).toEqual([]);
+    },
+  );
+
+  it('guarda en el historial un registro completo con el resultado terminal', () => {
     const session = createSession();
     session.commands.startMatch(createClassicConfig({ mode: 'local' }));
-    const before = structuredClone(session.getSnapshot().state);
-    const action = rotation(before);
-    const piece = before.pieces.find((candidate) => candidate.id === action.pieceId)!;
-    session.commands.selectPiece(piece.id);
-    session.commands.setMode({ kind: 'rotate' });
-    session.commands.prepareAction(action);
+    session.commands.resign();
+    const entry = loadMatchHistory()[0];
+    expect(entry?.record).toBeDefined();
+    const restored = parseRecord(serializeRecord(entry!.record!));
+    expect(replayRecord(restored).outcome).toEqual(session.getSnapshot().state.outcome);
+    session.commands.openHistoryReplay(restored);
+    session.commands.setReplayCursor(restored.actions.length);
+    expect(session.getSnapshot().state.outcome).toEqual(entry?.outcome);
+  });
 
-    session.commands.selectHex(piece.position);
+  it('reproduce un registro histórico y recupera la partida en curso sin sobrescribirla', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    const previous = session.getSnapshot();
+    const saved = loadActiveMatch().record;
+    const record = savedRecord(2);
+    session.commands.openHistoryReplay(record);
+    expect(session.getSnapshot()).toMatchObject({
+      replayCursor: 0,
+      matchRecord: record,
+      homeView: null,
+      dialog: null,
+    });
+    session.commands.setReplayCursor(2);
+    expect(session.getSnapshot().state).toEqual(replayRecord(record));
+    expect(loadActiveMatch().record).toEqual(saved);
+    session.commands.closeReplay();
+    expect(session.getSnapshot()).toMatchObject({
+      state: previous.state,
+      matchRecord: previous.matchRecord,
+      replayCursor: null,
+      dialog: { kind: 'history' },
+    });
+  });
 
-    expect(session.getSnapshot().state.ply).toBe(before.ply + 1);
-    expect(loadActiveMatch().record?.actions).toEqual([action]);
+  it('regresa al historial del inicio después de una repetición', () => {
+    const session = createSession();
+    session.commands.openHistoryReplay(savedRecord(1));
+    expect(session.getSnapshot().homeView).toBeNull();
+    session.commands.closeReplay();
+    expect(session.getSnapshot()).toMatchObject({
+      homeView: 'main',
+      matchRecord: null,
+      replayCursor: null,
+      dialog: { kind: 'history' },
+    });
   });
 
   it('pulsar una casilla vacía conserva la elección entre unidades apiladas', () => {

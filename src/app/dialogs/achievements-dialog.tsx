@@ -1,3 +1,4 @@
+import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import {
@@ -53,17 +54,7 @@ export function AchievementsDialog() {
           <h2>Logros</h2>
           <p>Perfil compartido: en local cuentan ambos bandos; contra la IA, solo el humano.</p>
         </div>
-        <button
-          type="button"
-          className="icon-button achievement-close"
-          aria-label="Cerrar logros"
-          data-dialog-close
-          onClick={commands.closeDialog}
-        >
-          <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M6 18 18 6" />
-          </svg>
-        </button>
+        <DialogClose label="Cerrar logros" />
       </header>
       <div className="achievements-collection">
         <div>

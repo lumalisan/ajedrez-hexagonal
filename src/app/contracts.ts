@@ -1,4 +1,5 @@
 import type { SearchMetadata } from '../ai';
+import type { UserProfile } from '../user-profile';
 import type { AchievementId, AchievementProgress } from '../achievements';
 import type { UiMode } from '../match-store';
 import type { BoardRenderer } from '../renderer';
@@ -19,6 +20,8 @@ export type DialogState =
   | { kind: 'config'; mode: 'local' | 'machine' }
   | { kind: 'rules'; sectionId?: string }
   | { kind: 'settings' }
+  | { kind: 'profile' }
+  | { kind: 'story' }
   | { kind: 'history' }
   | { kind: 'achievements' }
   | { kind: 'abandon' }
@@ -35,6 +38,7 @@ export type DialogState =
 export interface GameSnapshot {
   state: GameState;
   preferences: GamePreferences;
+  profile: UserProfile;
   selectedId: string | null;
   pendingAction: GameAction | null;
   mode: UiMode;
@@ -87,6 +91,7 @@ export interface GameCommands {
   importMatch(file: File): Promise<void>;
   exportMatch(): void;
   updatePreferences(preferences: Partial<GamePreferences>): void;
+  updateProfile(profile: UserProfile): void;
   toggleSound(): void;
   selectPiece(pieceId: string): void;
   selectNextPiece(backward: boolean): void;
@@ -105,6 +110,7 @@ export interface GameCommands {
   undo(): void;
   redo(): void;
   openReplay(initialAction?: number): void;
+  openHistoryReplay(record: MatchRecord): void;
   setReplayCursor(cursor: number): void;
   closeReplay(): void;
   resign(): void;

@@ -1,3 +1,4 @@
+import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { Field, FieldControl, FieldLabel } from '../components/ui/field';
@@ -11,6 +12,8 @@ import type { GamePreferences, ScenarioDefinition } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { useGame } from '../game-context';
 import { AchievementsDialog } from './achievements-dialog';
+import { ProfileDialog } from './profile-dialog';
+import { StoryDialog } from './story-dialog';
 
 const CONFIRMATION_OPTIONS: readonly {
   value: GamePreferences['confirmation'];
@@ -25,6 +28,10 @@ export function UtilityDialogs() {
   const { snapshot, commands } = useGame();
   const dialog = snapshot.dialog;
   switch (dialog?.kind) {
+    case 'story':
+      return <StoryDialog />;
+    case 'profile':
+      return <ProfileDialog />;
     case 'settings':
       return <SettingsDialog />;
     case 'history':
@@ -384,24 +391,38 @@ function TogglePreference({
 }
 
 function HistoryDialog() {
-  const { snapshot, commands } = useGame();
+  const { commands } = useGame();
   const [history] = useState(loadMatchHistory);
   return (
     <>
+      <DialogClose label="Cerrar historial" className="dialog-corner-close " />
       <span className="eyebrow">HISTORIAL LOCAL</span>
       <h2>Batallas concluidas</h2>
-      <p>Un registro breve de resultados; las repeticiones completas se exportan por separado.</p>
+      <p>
+        Selecciona una partida para ver su repetición. Los registros antiguos pueden contener solo
+        el resultado.
+      </p>
       <div className="history-list">
         {history.length ? (
           history.map((entry) => (
-            <article className="history-card" key={entry.id}>
+            <button
+              type="button"
+              className="history-card"
+              key={entry.id}
+              disabled={!entry.record}
+              data-history-replay={entry.id}
+              onClick={() => {
+                if (entry.record) commands.openHistoryReplay(entry.record);
+              }}
+            >
               <span>{new Date(entry.completedAt).toLocaleDateString('es-ES')}</span>
               <strong>{outcomeText(entry.outcome)}</strong>
               <small>
                 {entry.participants.join(' vs. ')} · {entry.plies} órdenes ·{' '}
                 {formatDuration(entry.durationSeconds)}
               </small>
-            </article>
+              <small>{entry.record ? 'Ver repetición' : 'Repetición no disponible'}</small>
+            </button>
           ))
         ) : (
           <div className="empty-state">
@@ -409,24 +430,6 @@ function HistoryDialog() {
             <p>Termina una partida libre para inaugurar el archivo.</p>
           </div>
         )}
-      </div>
-      <div className="dialog-actions">
-        <Button
-          type="button"
-          variant="secondary"
-          data-history-back
-          onClick={() => {
-            if (snapshot.homeView) {
-              commands.closeDialog();
-              commands.setHomeView('main');
-            } else commands.openDialog({ kind: 'settings' });
-          }}
-        >
-          Volver
-        </Button>
-        <Button type="button" variant="primary" data-dialog-close onClick={commands.closeDialog}>
-          Listo
-        </Button>
       </div>
     </>
   );

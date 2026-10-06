@@ -3,6 +3,8 @@ import { loadActiveMatch, loadMatchHistory } from '../match-storage';
 import { VISIBLE_ACHIEVEMENTS, achievementProgressFor } from '../achievements';
 import { useGame } from './game-context';
 import { SettingsIcon, SoundButton } from './shell-icons';
+import { MenuIcon } from './components/menu-icon';
+import { ProfileAvatar } from './components/profile-avatar';
 
 function readMenuSummary() {
   return {
@@ -110,70 +112,104 @@ export function HomeScreen() {
                   <span>Continuar partida</span>
                   <small id="home-continue-detail">{continueDetail}</small>
                 </button>
+              </nav>
+              <nav className="home-shortcuts" aria-label="Explorar y personalizar">
                 <button
                   type="button"
-                  className="home-nav-button"
+                  className="home-shortcut"
                   data-home-action="rules"
+                  title="Consulta unidades, acciones y victoria"
                   onClick={() => commands.openDialog({ kind: 'rules' })}
                 >
+                  <MenuIcon kind="rules" />
                   <span>Reglas</span>
-                  <small>Consulta unidades, acciones y victoria</small>
                 </button>
                 <button
                   type="button"
-                  className="home-nav-button"
+                  className="home-shortcut"
                   data-home-action="tutorial"
+                  title="Aprende paso a paso sobre el tablero"
                   onClick={commands.startTutorial}
                 >
+                  <MenuIcon kind="tutorial" />
                   <span>Tutorial</span>
-                  <small>Aprende paso a paso sobre el tablero</small>
                 </button>
                 <button
                   type="button"
-                  className="home-nav-button"
+                  className="home-shortcut"
                   data-home-action="achievements"
+                  title={`${VISIBLE_ACHIEVEMENTS.filter((entry) => achievementProgressFor(entry, snapshot.achievements).unlocked).length} de ${VISIBLE_ACHIEVEMENTS.length} hazañas desbloqueadas`}
                   onClick={() => commands.openDialog({ kind: 'achievements' })}
                 >
+                  <MenuIcon kind="achievements" />
                   <span>Logros</span>
-                  <small>
-                    {
-                      VISIBLE_ACHIEVEMENTS.filter(
-                        (entry) => achievementProgressFor(entry, snapshot.achievements).unlocked,
-                      ).length
-                    }{' '}
-                    de {VISIBLE_ACHIEVEMENTS.length} hazañas desbloqueadas
-                  </small>
                 </button>
                 <button
                   type="button"
-                  className="home-nav-button"
+                  className="home-shortcut"
                   data-home-action="history"
+                  title={
+                    history.length
+                      ? `${history.length} batallas concluidas`
+                      : 'Tus resultados aparecerán aquí'
+                  }
                   onClick={() => commands.openDialog({ kind: 'history' })}
                 >
+                  <MenuIcon kind="history" />
                   <span>Historial</span>
-                  <small>
-                    {history.length
-                      ? `${history.length} batallas concluidas`
-                      : 'Tus resultados aparecerán aquí'}
-                  </small>
+                </button>
+                <button
+                  type="button"
+                  className="home-shortcut"
+                  id="home-settings-button"
+                  aria-label="Abrir ajustes"
+                  onClick={() => commands.openDialog({ kind: 'settings' })}
+                >
+                  <SettingsIcon />
+                  <span>Ajustes</span>
+                </button>
+                <button type="button" className="home-shortcut" disabled>
+                  <MenuIcon kind="ranking" />
+                  <span>Clasificación</span>
+                  <small>Próximamente</small>
+                </button>
+                <button
+                  type="button"
+                  className="home-shortcut home-shortcut-story"
+                  data-home-action="story"
+                  onClick={() => commands.openDialog({ kind: 'story' })}
+                >
+                  <MenuIcon kind="dilemma" />
+                  <span>El dilema de Hexfortia</span>
                 </button>
               </nav>
             </>
           )}
         </div>
+        <button
+          type="button"
+          className="home-profile"
+          data-home-action="profile"
+          aria-label={`Editar perfil de ${snapshot.profile.name}`}
+          onClick={() => commands.openDialog({ kind: 'profile' })}
+        >
+          <ProfileAvatar profile={snapshot.profile} />
+          <span className="home-profile-copy">
+            <strong>{snapshot.profile.name}</strong>
+            <small>Editar perfil</small>
+          </span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            aria-hidden="true"
+          >
+            <path d="m15 4 5 5-11 11H4v-5L15 4Zm-3 3 5 5" />
+          </svg>
+        </button>
       </aside>
       <div className="home-utility-actions" aria-label="Accesos rápidos">
-        <button
-          className="icon-button"
-          id="home-settings-button"
-          type="button"
-          aria-label="Abrir ajustes"
-          title="Ajustes"
-          onClick={() => commands.openDialog({ kind: 'settings' })}
-        >
-          <SettingsIcon />
-          <span className="home-utility-label">Ajustes</span>
-        </button>
         <SoundButton home />
       </div>
       <div className="demo-status" aria-hidden="true">

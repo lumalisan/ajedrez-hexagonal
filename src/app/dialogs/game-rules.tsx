@@ -1,3 +1,4 @@
+import { DialogClose } from '../components/dialog-close';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules-content';
 import { mountRuleDemo, type RuleDemoController, type RuleDemoId } from '../../rules-demo';
@@ -7,7 +8,6 @@ import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../
 import { useGame } from '../game-context';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
-import { IconButton } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 
@@ -15,7 +15,6 @@ const HORIZONTAL_RULE_TABS = '(max-width: 760px) and (orientation: portrait)';
 const LAYOUT_OPTIONS = INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
 
 export function RulesDialog({ sectionId }: { sectionId?: string }) {
-  const { commands } = useGame();
   const [selectedId, setSelectedId] = useState(
     () => RULE_SECTIONS.find((section) => section.id === sectionId)?.id ?? RULE_SECTIONS[0].id,
   );
@@ -74,20 +73,13 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
       onValueChange={(id) => activate(id, false)}
       orientation={horizontal ? 'horizontal' : 'vertical'}
     >
+      <DialogClose label="Cerrar reglas" className="dialog-corner-close rules-close" />
       <aside className="rules-sidebar">
         <div className="rules-heading">
           <div>
             <span className="rules-kicker">MANUAL DE CAMPO</span>
             <h2>Reglas</h2>
           </div>
-          <IconButton
-            className="rules-close"
-            data-dialog-close
-            label="Cerrar reglas"
-            onClick={commands.closeDialog}
-          >
-            ×
-          </IconButton>
         </div>
         <p>Selecciona una sección para consultar las reglas de Protocolo Hexagonal.</p>
         <label className="rules-search">

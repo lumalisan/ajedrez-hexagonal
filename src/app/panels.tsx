@@ -160,19 +160,9 @@ function FortressStatus({ player }: { player: Player }) {
 
 export function MatchStatus() {
   const { snapshot } = useGame();
-  const { state, activeScenario, scenarioProgress, machineThinking, machineSearch, isMachineTurn } =
-    snapshot;
+  const { state, activeScenario, scenarioProgress } = snapshot;
   const clock = snapshot.matchRecord?.clock;
-  const commander =
-    clock?.status === 'turn-expired'
-      ? `IA juega por ${PLAYER_NAMES[state.activePlayer]}`
-      : isMachineTurn
-        ? machineThinking
-          ? machineSearch
-            ? `IA · profundidad ${machineSearch.completedDepth}/${machineSearch.requestedDepth}`
-            : 'Máquina pensando…'
-          : 'Máquina en mando'
-        : `${PLAYER_NAMES[state.activePlayer]} en mando`;
+  const commander = `${PLAYER_NAMES[state.activePlayer]} en mando`;
   return (
     <div className="match-status" aria-live="polite">
       <FortressStatus player={0} />
@@ -372,12 +362,17 @@ function DirectionCompass({
   );
 }
 
-function DirectionPanel({ title, ...props }: CompassProps & { title: string }) {
+function DirectionPanel({
+  title,
+  children,
+  ...props
+}: CompassProps & { title: string; children?: ReactNode }) {
   const { commands } = useGame();
   return (
     <div className="control-section direction-section">
       <h3>{title}</h3>
       <p>Elige un rumbo en la brújula.</p>
+      {children}
       <DirectionCompass {...props} />
       <button type="button" className="text-button cancel-mode" onClick={commands.cancelDraft}>
         Volver
@@ -547,37 +542,34 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
     );
   }
   if (mode.kind === 'transform') {
-    const attackAbove =
-      mode.facing === null
-        ? undefined
-        : legalActions.find(
-            (action) =>
-              action.kind === 'transform' &&
-              action.facing === mode.facing &&
-              Boolean(action.attackAboveId),
-          );
+    const attackAbove = legalActions.find(
+      (action) =>
+        action.kind === 'transform' &&
+        action.facing === (mode.facing ?? 0) &&
+        Boolean(action.attackAboveId),
+    );
     return (
-      <>
-        <DirectionPanel
-          title="Abandonar vehículo"
-          current={null}
-          selected={mode.facing}
-          dataName="transform-facing"
-          onDirection={(facing) => commands.setMode({ kind: 'transform', facing })}
-        />
+      <DirectionPanel
+        title="Abandonar vehículo"
+        current={null}
+        selected={mode.facing}
+        dataName="transform-facing"
+        onDirection={(facing) => commands.setMode({ kind: 'transform', facing })}
+      >
         {attackAbove && (
-          <button
-            type="button"
-            className="stacked-response"
-            data-transform-attack
-            data-tutorial-highlight={guided && actionAllowed(attackAbove) ? true : undefined}
-            disabled={!actionAllowed(attackAbove)}
-            onClick={() => commands.prepareAction(attackAbove)}
-          >
-            Transformarse y atacar al Dron superior
-          </button>
+          <div className="command-buttons">
+            <button
+              type="button"
+              data-transform-attack
+              data-tutorial-highlight={guided && actionAllowed(attackAbove) ? true : undefined}
+              disabled={!actionAllowed(attackAbove)}
+              onClick={() => commands.prepareAction(attackAbove)}
+            >
+              Atacar aeronave superior
+            </button>
+          </div>
         )}
-      </>
+      </DirectionPanel>
     );
   }
   if (piece.owner !== state.activePlayer || state.outcome)
@@ -590,7 +582,10 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
         </p>
       </div>
     );
-  const above = legalActions.find((action) => action.kind === 'attackAbove');
+  const above =
+    piece.type === 'soldier'
+      ? legalActions.find((action) => action.kind === 'attackAbove')
+      : undefined;
   const below = legalActions.find((action) => action.kind === 'attackBelow');
   const captureAbove = legalActions.find(
     (action): action is Extract<GameAction, { kind: 'convert' }> => {

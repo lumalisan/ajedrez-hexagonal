@@ -1,6 +1,7 @@
 import { chooseMachineAction, type SearchMetadata } from '../ai';
 import { WorkerAiStrategy, difficultyBudget } from '../ai-strategy';
 import { AudioDirector } from '../audio';
+import { loadUserProfile, normalizeProfile, saveUserProfile } from '../user-profile';
 import {
   VISIBLE_ACHIEVEMENTS,
   evaluateAcademyAchievements,
@@ -93,6 +94,7 @@ import type {
 /** Owns one local game session. React subscribes; rules and rendering stay independent. */
 export function createGameSession(): GameSession {
   const preferences = loadPreferences();
+  let profile = loadUserProfile();
   preferences.boardDepth = false;
   preferences.tacticalThreats = false;
   preferences.contextualHints = false;
@@ -120,6 +122,7 @@ export function createGameSession(): GameSession {
   let aiAbortController: AbortController | null = null;
   let replayCursor: number | null = null;
   let replayClockWasRunning = false;
+  let restoreHistoryReplay: (() => void) | null = null;
   let machineThinking = false;
   let machineSearch: SearchMetadata | null = null;
   let logOpen = false;
@@ -190,6 +193,7 @@ export function createGameSession(): GameSession {
     snapshot = {
       state,
       preferences: { ...preferences },
+      profile: { ...profile },
       selectedId,
       pendingAction,
       mode,
@@ -381,6 +385,7 @@ export function createGameSession(): GameSession {
     currentDialog = null;
     dialogError = null;
     replayCursor = null;
+    restoreHistoryReplay = null;
     replayClockWasRunning = false;
     gameMode = null;
     matchConfig = null;
@@ -437,10 +442,81 @@ export function createGameSession(): GameSession {
     announce('Repetición abierta. El tablero permanece visible.');
   }
 
+  function openHistoryReplay(record: MatchRecord): void {
+    if (animating || restoreHistoryReplay) return;
+    try {
+      record = parseRecord(serializeRecord(record));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo abrir la repetición.');
+      return;
+    }
+    const previous = {
+      state,
+      matchRecord,
+      matchConfig,
+      gameMode,
+      homeView,
+      activeScenario,
+      selectedId,
+      pendingAction,
+      mode,
+      lastEvents,
+      tutorial,
+    };
+    replayClockWasRunning = matchController?.record.clock?.status === 'running';
+    if (replayClockWasRunning && matchController) {
+      matchController.pauseClock(Date.now());
+      previous.matchRecord = matchController.record;
+      matchRecord = matchController.record;
+      persistCurrentMatch();
+    }
+    operationEpoch++;
+    aiAbortController?.abort();
+    machineThinking = false;
+    machineSearch = null;
+    stopHomeDemo();
+    homeDemoBusy = false;
+    restoreHistoryReplay = () => {
+      ({
+        state,
+        matchRecord,
+        matchConfig,
+        gameMode,
+        homeView,
+        activeScenario,
+        selectedId,
+        pendingAction,
+        mode,
+        lastEvents,
+        tutorial,
+      } = previous);
+    };
+    homeView = null;
+    activeScenario = null;
+    tutorial = null;
+    matchRecord = record;
+    matchConfig = record.config;
+    gameMode = record.config.participants[1].kind === 'machine' ? 'machine' : 'local';
+    currentDialog = null;
+    dialogError = null;
+    logOpen = false;
+    lastEvents = [];
+    replayCursor = 0;
+    renderer?.resetView();
+    setReplayCursor(0);
+    announce('Repetición del historial abierta.');
+  }
+
   function closeReplay(): void {
     if (replayCursor === null) return;
     replayCursor = null;
-    if (matchRecord) state = replayForDisplay(matchRecord);
+    const fromHistory = restoreHistoryReplay !== null;
+    if (restoreHistoryReplay) {
+      restoreHistoryReplay();
+      restoreHistoryReplay = null;
+      currentDialog = { kind: 'history' };
+      renderer?.resetView();
+    } else if (matchRecord) state = replayForDisplay(matchRecord);
     if (replayClockWasRunning && matchController && !state.outcome) {
       matchController.resumeClock(Date.now());
       matchRecord = matchController.record;
@@ -448,6 +524,10 @@ export function createGameSession(): GameSession {
     }
     replayClockWasRunning = false;
     render();
+    if (fromHistory) {
+      if (isHomeScreenActive()) startHomeDemo();
+      else if (isMachineTurn()) void runMachineTurn();
+    }
   }
 
   function revealHint(scenario: ScenarioDefinition): void {
@@ -723,17 +803,17 @@ export function createGameSession(): GameSession {
       return;
     }
     focusedHex = hex;
+    const selected = selectedId ? getPiece(state, selectedId) : undefined;
+    if (selected && equalHex(selected.position, hex)) {
+      clearSelection();
+      return;
+    }
     if (pendingAction) {
       const destination = actionDestination(state, pendingAction);
       if (destination && equalHex(destination, hex)) {
         void commitPending();
         return;
       }
-    }
-    const selected = selectedId ? getPiece(state, selectedId) : undefined;
-    if (selected && equalHex(selected.position, hex)) {
-      clearSelection();
-      return;
     }
     if (!state.outcome && selected?.owner === state.activePlayer) {
       const matching = actionsAtHex(state, visibleActions, hex).filter((action) =>
@@ -1171,6 +1251,7 @@ export function createGameSession(): GameSession {
         Math.round((Date.parse(completedAt) - Date.parse(matchRecord.createdAt)) / 1_000),
       ),
       completedAt,
+      record: matchRecord,
     });
     clearActiveMatch();
     recordTelemetry('match-finished', {
@@ -1417,6 +1498,7 @@ export function createGameSession(): GameSession {
     currentDialog = null;
     dialogError = null;
     replayCursor = null;
+    restoreHistoryReplay = null;
     replayClockWasRunning = false;
     animating = false;
     if (isHomeScreenActive()) leaveHomeScreen();
@@ -1486,6 +1568,7 @@ export function createGameSession(): GameSession {
     currentDialog = null;
     dialogError = null;
     replayCursor = null;
+    restoreHistoryReplay = null;
     replayClockWasRunning = false;
     animating = false;
     machineThinking = false;
@@ -1564,6 +1647,7 @@ export function createGameSession(): GameSession {
     currentDialog = null;
     dialogError = null;
     replayCursor = null;
+    restoreHistoryReplay = null;
     replayClockWasRunning = false;
     animating = false;
     if (isHomeScreenActive()) leaveHomeScreen();
@@ -1875,6 +1959,14 @@ export function createGameSession(): GameSession {
     },
     importMatch: importMatchFile,
     exportMatch: exportCurrentMatch,
+    updateProfile(update) {
+      profile = normalizeProfile(update, profile);
+      const saved = saveUserProfile(profile);
+      closeDialog();
+      showToast(
+        saved ? 'Perfil guardado.' : 'Perfil actualizado. No se pudo guardar en este navegador.',
+      );
+    },
     updatePreferences(update) {
       const wasFixed = preferences.fixedBoard;
       Object.assign(preferences, update);
@@ -1974,6 +2066,7 @@ export function createGameSession(): GameSession {
       navigateLocalHistory('redo');
     },
     openReplay,
+    openHistoryReplay,
     setReplayCursor,
     closeReplay,
     resign() {
