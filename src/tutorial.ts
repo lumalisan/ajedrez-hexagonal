@@ -22,6 +22,8 @@ export interface TutorialStep {
   /** Initial selection can differ from the piece the learner must select. */
   selectedId?: string;
   guided?: boolean;
+  /** Limited hints in exercises that otherwise require independent play. */
+  cue?: 'piece' | 'target';
   mode?: 'rotate' | 'orient' | 'transform';
   /** World direction; the Cian camera rotates the board by half a turn. */
   direction?: Direction;
@@ -33,6 +35,18 @@ const NORTH_EAST: Direction = 4;
 const NORTH_WEST: Direction = 2;
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    id: '0.1',
+    section: 0,
+    title: '¡Bienvenido!',
+    paragraphs: [
+      'En este tutorial aprenderás las reglas básicas del juego y descubrirás cómo utilizar las distintas unidades de tu ejército.',
+      'A lo largo del tutorial tendrás que realizar diferentes acciones para poner en práctica lo aprendido.',
+    ],
+    instruction: 'Pulsa «Siguiente» para comenzar.',
+    interaction: 'next',
+    guided: false,
+  },
   {
     id: '1.1',
     section: 1,
@@ -61,10 +75,22 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: '3.1',
     section: 3,
-    title: 'El soldado (1/4)',
+    title: 'El soldado (1/5)',
     paragraphs: [
       'Este es un soldado.',
       'Puede desplazarse o atacar a una unidad enemiga situada en cualquiera de las tres casillas que tiene delante.',
+    ],
+    instruction: 'Selecciona la casilla indicada para continuar.',
+    interaction: 'select',
+    pieceId: 'tutorial-cian-soldier',
+  },
+  {
+    id: '3.2',
+    section: 3,
+    title: 'El soldado (2/5)',
+    paragraphs: [
+      'Al seleccionar una unidad, se indican mediante puntos verdes las casillas a las que puede desplazarse.',
+      'Además, se muestra el panel de mando, donde se pueden consultar las características de la unidad seleccionada.',
     ],
     instruction: 'Selecciona la casilla indicada para desplazar al soldado hacia el norte.',
     interaction: 'prepare',
@@ -73,26 +99,24 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     autoSelect: true,
   },
   {
-    id: '3.2',
+    id: '3.3',
     section: 3,
-    title: 'El soldado (2/4)',
+    title: 'El soldado (3/5)',
     paragraphs: [
-      'Este es el panel de mando.',
-      'Muestra las características de la unidad seleccionada. Para realizar una acción, debes confirmarla en el panel de mando pulsando el botón «Confirmar acción». También puedes hacer doble clic en la casilla de destino para confirmar un desplazamiento o un ataque.',
+      'Para realizar una acción, debes confirmarla en el panel de mando pulsando el botón «Confirmar acción». También puedes hacer doble clic en la casilla de destino.',
     ],
-    instruction: 'Confirma la acción para continuar.',
+    instruction: 'Confirma la acción para completar el desplazamiento.',
     interaction: 'action',
     pieceId: 'tutorial-cian-soldier',
     target: hex(4, -3),
     autoSelect: true,
   },
   {
-    id: '3.3',
+    id: '3.4',
     section: 3,
-    title: 'El soldado (3/4)',
+    title: 'El soldado (4/5)',
     paragraphs: [
-      'Soldado enemigo a tiro.',
-      'Ahora, el soldado enemigo está dentro de la zona de ataque de tu soldado. Al seleccionar a tu soldado, un punto rojo indicará que puedes atacarlo desplazándote hasta su casilla.',
+      'Ahora, el soldado enemigo está dentro de la zona de ataque de tu soldado. Al seleccionar a tu soldado, un punto rojo indicará que puedes atacar al soldado enemigo desplazándote hasta su casilla.',
     ],
     instruction:
       'Selecciona a tu soldado y ataca al soldado enemigo desplazándote hasta su casilla. No olvides confirmar la acción en el panel de mando o haciendo doble clic en la casilla de destino.',
@@ -101,12 +125,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     target: hex(4, -2),
   },
   {
-    id: '3.4',
+    id: '3.5',
     section: 3,
-    title: 'El soldado (4/4)',
+    title: 'El soldado (5/5)',
     paragraphs: [
-      'Orientación del soldado.',
-      'El soldado puede cambiar su orientación sin desplazarse. Al hacerlo, cambia la dirección en la que puede desplazarse y atacar, pero consume su turno.',
+      'El soldado también puede cambiar su orientación sin desplazarse. Al hacerlo, cambia la dirección en la que puede desplazarse y atacar, pero consume su turno.',
       'Para cambiar la orientación del soldado, utiliza el botón «Cambiar orientación» del panel de mando.',
     ],
     instruction: 'Selecciona al soldado y cambia su orientación hacia el noreste (NE).',
@@ -124,21 +147,19 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       'Puede desplazarse a cualquiera de las seis casillas que lo rodean y capturar una unidad enemiga situada en una de ellas.',
     ],
     instruction:
-      'Selecciona la casilla indicada para desplazar al capturador hacia el norte y confirma la acción para continuar.',
+      'Selecciona la casilla indicada y desplaza al capturador hacia el norte para continuar.',
     interaction: 'action',
     pieceId: 'tutorial-cian-capturer',
     target: hex(2, -2),
-    autoSelect: true,
   },
   {
     id: '4.2',
     section: 4,
     title: 'El capturador (2/2)',
     paragraphs: [
-      'Soldado enemigo capturable.',
       'Ahora, el soldado enemigo está dentro de la zona de captura de tu capturador. Al seleccionar al capturador, una red de color cian indicará que puedes capturar al soldado enemigo para convertirlo en aliado.',
     ],
-    instruction: 'Selecciona a tu capturador y captura al soldado enemigo para continuar.',
+    instruction: 'Selecciona al capturador y captura al soldado enemigo para continuar.',
     interaction: 'action',
     pieceId: 'tutorial-cian-capturer',
     target: hex(2, -1),
@@ -146,10 +167,22 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: '5.1',
     section: 5,
-    title: 'El tanque (1/5)',
+    title: 'El tanque (1/6)',
     paragraphs: [
       'Este es un tanque.',
       'Puede desplazarse a cualquiera de las seis casillas que lo rodean y disparar a las casillas situadas a dos hexágonos de distancia, en la dirección a la que apunta su cañón.',
+    ],
+    instruction: 'Selecciona la casilla indicada para continuar.',
+    interaction: 'select',
+    pieceId: 'tutorial-cian-medium',
+  },
+  {
+    id: '5.2',
+    section: 5,
+    title: 'El tanque (2/6)',
+    paragraphs: [
+      'Al seleccionar una unidad con disparo a distancia, se indican mediante círculos rojos las casillas a las que puede disparar.',
+      'Al seleccionar una casilla de desplazamiento, los círculos rojos se desplazan para mostrar la nueva zona de disparo de la unidad si se confirma el desplazamiento.',
     ],
     instruction: 'Selecciona la casilla indicada para desplazar al tanque hacia el norte.',
     interaction: 'prepare',
@@ -159,11 +192,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     direction: NORTH_EAST,
   },
   {
-    id: '5.2',
+    id: '5.3',
     section: 5,
-    title: 'El tanque (2/5)',
+    title: 'El tanque (3/6)',
     paragraphs: [
-      'Orientación del cañón con desplazamiento.',
       'El tanque puede cambiar la orientación de su cañón y desplazarse en el mismo turno.',
       'Para ello, una vez seleccionada la casilla de desplazamiento, selecciona la nueva orientación del cañón en la brújula del panel de mando.',
     ],
@@ -176,12 +208,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     direction: NORTH_EAST,
   },
   {
-    id: '5.3',
+    id: '5.4',
     section: 5,
-    title: 'El tanque (3/5)',
+    title: 'El tanque (4/6)',
     paragraphs: [
-      'Soldado enemigo a tiro.',
-      'Ahora, el soldado enemigo está dentro de la zona de disparo de tu tanque. Al seleccionar al tanque, una cruz roja indicará que puedes dispararle desde su posición.',
+      'Ahora, un soldado enemigo está dentro de la zona de disparo de tu tanque. Al seleccionar al tanque, una cruz roja indicará que puedes dispararle desde su posición.',
     ],
     instruction: 'Selecciona a tu tanque y dispara al soldado enemigo para continuar.',
     interaction: 'action',
@@ -189,11 +220,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     target: hex(-2, 1),
   },
   {
-    id: '5.4',
+    id: '5.5',
     section: 5,
-    title: 'El tanque (4/5)',
+    title: 'El tanque (5/6)',
     paragraphs: [
-      'Orientación del cañón sin desplazamiento.',
       'El tanque también puede cambiar la orientación de su cañón sin desplazarse, pero esto consume su turno. Para hacerlo, utiliza el botón «Orientar cañón» del panel de mando.',
     ],
     instruction: 'Selecciona al tanque y cambia la orientación de su cañón hacia el norte (N).',
@@ -203,11 +233,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     direction: NORTH,
   },
   {
-    id: '5.5',
+    id: '5.6',
     section: 5,
-    title: 'El tanque (5/5)',
+    title: 'El tanque (6/6)',
     paragraphs: [
-      'Abandonar el vehículo.',
       'El tanque puede ser abandonado para convertirse en soldado. El soldado que aparece al abandonar un vehículo puede elegir su orientación y realizar una acción inmediatamente.',
       'Para hacerlo, utiliza el botón «Abandonar vehículo» del panel de mando, elige la orientación del soldado y ejecuta la acción.',
     ],
@@ -227,18 +256,17 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       'Puede desplazarse a cualquiera de las seis casillas que lo rodean y disparar a cualquier casilla situada a tres hexágonos de distancia.',
       'Solo tiene dos misiles, por lo que puede disparar un máximo de dos veces durante la partida.',
     ],
-    instruction: 'Selecciona la casilla indicada para desplazar al lanzamisiles hacia el norte.',
+    instruction:
+      'Selecciona la casilla indicada y desplaza al lanzamisiles hacia el norte para continuar.',
     interaction: 'action',
     pieceId: 'tutorial-cian-long',
     target: hex(-2, 0),
-    autoSelect: true,
   },
   {
     id: '6.2',
     section: 6,
     title: 'El lanzamisiles (2/4)',
     paragraphs: [
-      'Tanque enemigo a tiro.',
       'Ahora, el tanque enemigo está dentro de la zona de disparo de tu lanzamisiles. Al seleccionarlo, una cruz roja indicará que puedes dispararle desde su posición.',
     ],
     instruction: 'Selecciona al lanzamisiles y dispara al tanque enemigo para continuar.',
@@ -251,7 +279,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 6,
     title: 'El lanzamisiles (3/4)',
     paragraphs: [
-      'Segundo misil.',
       'Has gastado un misil, pero todavía te queda otro con el que puedes disparar al embestidor enemigo, que ahora está dentro de tu zona de disparo.',
     ],
     instruction: 'Selecciona al lanzamisiles y dispara al embestidor enemigo para continuar.',
@@ -264,7 +291,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 6,
     title: 'El lanzamisiles (4/4)',
     paragraphs: [
-      'No te quedan misiles.',
+      'Ahora ya no te quedan misiles.',
       'Cuando el lanzamisiles se queda sin misiles, puede seguir desplazándose con normalidad, pero ya no puede disparar. Sin embargo, al igual que el tanque, puede ser abandonado en cualquier momento para convertirse en soldado, incluso después de quedarse sin misiles.',
     ],
     instruction: 'Selecciona al lanzamisiles y abandónalo desplazándote hacia el noreste (NE).',
@@ -293,7 +320,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 7,
     title: 'El embestidor (2/2)',
     paragraphs: [
-      'Abandonar el vehículo.',
       'El embestidor, al igual que el tanque y el lanzamisiles, puede ser abandonado para convertirse en soldado.',
     ],
     instruction: 'Selecciona al embestidor y abandónalo desplazándote hacia el noroeste (NO).',
@@ -312,18 +338,16 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
       'Puede desplazarse hasta tres hexágonos en cualquier dirección y sobrevolar otras unidades, excepto drones y aviones.',
     ],
     instruction:
-      'Selecciona la casilla indicada para desplazar al dron hacia el noroeste y confirma la acción para continuar.',
+      'Selecciona la casilla indicada y desplaza al dron hacia el noroeste para continuar.',
     interaction: 'action',
     pieceId: 'tutorial-cian-drone',
     target: hex(3, -5),
-    autoSelect: true,
   },
   {
     id: '8.2',
     section: 8,
     title: 'El dron (2/2)',
     paragraphs: [
-      'Dron enemigo a tiro.',
       'Ahora, el dron enemigo está dentro de la zona de ataque de tu dron. Al seleccionarlo, un punto rojo indicará que puedes atacarlo desplazándote hasta su casilla.',
     ],
     instruction: 'Selecciona a tu dron y ataca al dron enemigo desplazándote hasta su casilla.',
@@ -334,25 +358,34 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: '9.1',
     section: 9,
-    title: 'El avión (1/3)',
+    title: 'El avión (1/4)',
     paragraphs: [
       'Este es un avión.',
       'Puede desplazarse hasta dos hexágonos hacia delante y sobrevolar otras unidades, excepto drones y aviones. También puede disparar a distancia a un total de ocho casillas.',
+    ],
+    instruction: 'Selecciona la casilla indicada para continuar.',
+    interaction: 'select',
+    pieceId: 'tutorial-cian-airplane',
+  },
+  {
+    id: '9.2',
+    section: 9,
+    title: 'El avión (2/4)',
+    paragraphs: [
       'La casilla indicada con un punto verde rodeado en rojo puede alcanzarse mediante un disparo o un desplazamiento, pero no permite realizar ambas acciones en el mismo turno.',
     ],
     instruction:
-      'Selecciona la casilla indicada para desplazar al avión dos casillas hacia el norte y confirma la acción para continuar.',
+      'Selecciona la casilla indicada y desplaza al avión dos casillas hacia el norte para continuar.',
     interaction: 'action',
     pieceId: 'tutorial-cian-airplane',
     target: hex(-2, -1),
     autoSelect: true,
   },
   {
-    id: '9.2',
+    id: '9.3',
     section: 9,
-    title: 'El avión (2/3)',
+    title: 'El avión (3/4)',
     paragraphs: [
-      'Dron enemigo a tiro.',
       'Ahora, el dron enemigo está dentro de la zona de disparo de tu avión. Al seleccionarlo, una cruz roja indicará que puedes dispararle desde su posición.',
     ],
     instruction: 'Selecciona a tu avión y dispara al dron enemigo para continuar.',
@@ -361,11 +394,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     target: hex(-3, 1),
   },
   {
-    id: '9.3',
+    id: '9.4',
     section: 9,
-    title: 'El avión (3/3)',
+    title: 'El avión (4/4)',
     paragraphs: [
-      'Ataque kamikaze.',
       'El avión también puede realizar un ataque kamikaze. Para ello, se desplaza hasta la casilla ocupada por una unidad enemiga. El avión y la unidad enemiga son destruidos.',
     ],
     instruction:
@@ -379,7 +411,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 10,
     title: 'Ataques sobre casillas compartidas (1/5)',
     paragraphs: [
-      'Suelo y aire.',
       'Cada casilla tiene dos capas: suelo y aire.',
       'Una misma casilla puede contener a la vez una unidad terrestre y una unidad aérea, pero nunca dos unidades en la misma capa.',
     ],
@@ -392,7 +423,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 10,
     title: 'Ataques sobre casillas compartidas (2/5)',
     paragraphs: [
-      'Unidades enemigas a tiro.',
       'El panel de mando indica que la casilla seleccionada contiene un dron y un soldado enemigos.',
       'Cuando dos unidades enemigas comparten una misma casilla y esta puede ser atacada por una unidad aliada, solo puede atacarse una de las dos unidades en cada acción. En ningún caso un mismo ataque puede destruir o afectar a ambas unidades.',
     ],
@@ -405,7 +435,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 10,
     title: 'Ataques sobre casillas compartidas (3/5)',
     paragraphs: [
-      'Ataques terrestres sobre casillas compartidas.',
       'Las unidades terrestres cuyo ataque implica ocupar la casilla enemiga —soldado y embestidor— solo pueden atacar a la unidad terrestre situada debajo de un dron o avión enemigo.',
       'Del mismo modo, el capturador solo puede capturar a la unidad terrestre situada debajo de un dron o avión enemigo.',
     ],
@@ -420,7 +449,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 10,
     title: 'Ataques sobre casillas compartidas (4/5)',
     paragraphs: [
-      'Ataques aéreos sobre casillas compartidas.',
       'Cuando el ataque sobre una casilla compartida lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre.',
     ],
     instruction: 'Elige al dron para atacar al avión enemigo situado en la casilla indicada.',
@@ -434,8 +462,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 10,
     title: 'Ataques sobre casillas compartidas (5/5)',
     paragraphs: [
-      'Ataques a distancia sobre casillas compartidas.',
-      'Por último, las unidades que realizan sus ataques a distancia —tanque, lanzamisiles y avión— pueden elegir cuál de las dos unidades enemigas atacar, pero no pueden atacar a ambas en el mismo turno. El avión también puede realizar un ataque kamikaze contra cualquiera de las dos unidades enemigas.',
+      'Por último, las unidades que realizan sus ataques a distancia —tanque, lanzamisiles y avión— pueden elegir cuál de las dos unidades enemigas atacar, pero no pueden atacar a ambas en el mismo turno.',
     ],
     instruction:
       'Elige al tanque, lanzamisiles o avión para atacar a cualquiera de las dos unidades situadas en la casilla indicada.',
@@ -448,8 +475,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 11,
     title: 'Ataques entre unidades situadas en la misma casilla (1/2)',
     paragraphs: [
-      'Dron aliado sobre unidad terrestre enemiga.',
-      'En la casilla señalada, un dron aliado ha quedado situado sobre una unidad terrestre enemiga tras atacar al avión enemigo que estaba situado encima. En esta situación, en el siguiente turno el dron puede atacar a la unidad terrestre inferior. Un avión, en cambio, no puede atacar a una unidad terrestre inferior.',
+      'En la casilla señalada, un dron aliado ha quedado situado sobre una unidad terrestre enemiga tras atacar al avión enemigo que estaba situado encima.',
+      'En esta situación, en el siguiente turno el dron puede atacar a la unidad terrestre inferior. Un avión, en cambio, no puede atacar a una unidad terrestre inferior.',
     ],
     instruction:
       'Selecciona al dron situado en la casilla señalada y ataca a la unidad terrestre inferior.',
@@ -462,8 +489,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 11,
     title: 'Ataques entre unidades situadas en la misma casilla (2/2)',
     paragraphs: [
-      'Unidad terrestre aliada bajo dron enemigo.',
-      'En la casilla señalada, una unidad terrestre aliada ha quedado situada bajo un dron enemigo tras atacar o capturar al soldado enemigo que estaba bajo el dron. En esta situación, en el siguiente turno la unidad terrestre aliada puede atacar o capturar a la aeronave superior, tanto si es un dron como si es un avión.',
+      'En la casilla señalada, una unidad terrestre aliada ha quedado situada bajo un dron enemigo tras atacar o capturar al soldado enemigo que estaba bajo el dron.',
+      'En esta situación, en el siguiente turno la unidad terrestre aliada puede atacar o capturar a la aeronave superior, tanto si es un dron como si es un avión.',
       'El soldado, el embestidor y el capturador pueden realizar el ataque o la captura directamente. En cambio, el tanque y el lanzamisiles no pueden atacar directamente a la aeronave superior, pero pueden ser abandonados para convertirse en soldados y realizar el ataque como tales en el mismo turno.',
     ],
     instruction:
@@ -474,9 +501,19 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: '12.1',
     section: 12,
-    title: 'Destruir el escudo antiaéreo (1/3)',
+    title: 'Destruir el escudo antiaéreo (1/4)',
     paragraphs: [
-      'Protección del escudo.',
+      'Estás muy cerca de ganar la partida, pero la fortaleza enemiga está protegida por el escudo antiaéreo enemigo.',
+    ],
+    instruction: 'Selecciona al avión para continuar.',
+    interaction: 'select',
+    pieceId: 'tutorial-cian-airplane',
+  },
+  {
+    id: '12.2',
+    section: 12,
+    title: 'Destruir el escudo antiaéreo (2/4)',
+    paragraphs: [
       'Las casillas marcadas en ámbar están protegidas por el escudo antiaéreo. No es posible disparar a ninguna de estas casillas, aunque se encuentren dentro del área de disparo de una unidad aliada, como ocurre en este caso con el avión.',
     ],
     instruction: 'Selecciona al dron para continuar.',
@@ -484,13 +521,14 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     pieceId: 'tutorial-cian-drone',
     selectedId: 'tutorial-cian-airplane',
     guided: false,
+    autoSelect: true,
+    cue: 'piece',
   },
   {
-    id: '12.2',
+    id: '12.3',
     section: 12,
-    title: 'Destruir el escudo antiaéreo (2/3)',
+    title: 'Destruir el escudo antiaéreo (3/4)',
     paragraphs: [
-      'Intercepción de aeronaves.',
       'Al seleccionar al dron, una señal indica que, si atraviesa la zona protegida por el escudo antiaéreo, será interceptado. El dron tampoco puede destruir el escudo antiaéreo.',
     ],
     instruction:
@@ -500,13 +538,13 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     target: hex(0, 5),
     autoSelect: true,
     guided: false,
+    cue: 'target',
   },
   {
-    id: '12.3',
+    id: '12.4',
     section: 12,
-    title: 'Destruir el escudo antiaéreo (3/3)',
+    title: 'Destruir el escudo antiaéreo (4/4)',
     paragraphs: [
-      'Ataque terrestre al escudo antiaéreo.',
       'Por lo tanto, el escudo antiaéreo enemigo solo puede ser destruido mediante un ataque terrestre de un soldado o un embestidor, o capturado por un capturador.',
       'Destruir el escudo antiaéreo enemigo permite atacar la fortaleza enemiga con cualquier unidad, aunque no es imprescindible para ganar la partida.',
     ],
@@ -514,13 +552,13 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     interaction: 'action',
     pieceId: 'tutorial-cian-fast',
     guided: false,
+    cue: 'piece',
   },
   {
     id: '13.1',
     section: 13,
     title: 'Destruir la fortaleza enemiga (1/2)',
     paragraphs: [
-      'Sacrificar una unidad.',
       'Cuando la fortaleza recibe un ataque, pierde un punto de vida. Sin embargo, si el ataque lo realiza un soldado, un capturador o un embestidor, la unidad atacante es sacrificada tras realizar el ataque.',
       'El capturador no puede capturar la fortaleza enemiga; solo puede atacarla.',
     ],
@@ -535,7 +573,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 13,
     title: 'Destruir la fortaleza enemiga (2/2)',
     paragraphs: [
-      'Último punto de vida.',
       'Ahora la fortaleza enemiga solo tiene un punto de vida. Al no haber escudo antiaéreo, puedes atacarla con el avión, ya sea mediante un disparo o un ataque kamikaze.',
     ],
     instruction: 'Selecciona al avión y destruye la fortaleza enemiga.',
@@ -623,9 +660,7 @@ function sharedScene(): GameState {
       id: 'tutorial-cian-airplane',
       type: 'airplane',
       owner: 0,
-      // Sharing the tank's cell keeps both shot and kamikaze choices within the
-      // real aircraft range; the reference image put this plane out of reach.
-      position: hex(-3, 0),
+      position: hex(-4, 0),
       facing: NORTH,
     },
     {
@@ -677,17 +712,17 @@ function siegeScene(): GameState {
 }
 
 const ACTION_KINDS: Record<string, GameAction['kind'][]> = {
-  '3.1': ['move'],
   '3.2': ['move'],
   '3.3': ['move'],
-  '3.4': ['rotate'],
+  '3.4': ['move'],
+  '3.5': ['rotate'],
   '4.1': ['move'],
   '4.2': ['convert'],
-  '5.1': ['move'],
   '5.2': ['move'],
-  '5.3': ['shoot'],
-  '5.4': ['orient'],
-  '5.5': ['transform'],
+  '5.3': ['move'],
+  '5.4': ['shoot'],
+  '5.5': ['orient'],
+  '5.6': ['transform'],
   '6.1': ['move'],
   '6.2': ['shoot'],
   '6.3': ['shoot'],
@@ -696,16 +731,16 @@ const ACTION_KINDS: Record<string, GameAction['kind'][]> = {
   '7.2': ['transform'],
   '8.1': ['move'],
   '8.2': ['move'],
-  '9.1': ['move'],
-  '9.2': ['shoot'],
-  '9.3': ['move'],
+  '9.2': ['move'],
+  '9.3': ['shoot'],
+  '9.4': ['move'],
   '10.3': ['move', 'convert'],
   '10.4': ['move'],
-  '10.5': ['shoot', 'move'],
+  '10.5': ['shoot'],
   '11.1': ['attackBelow'],
   '11.2': ['attackAbove', 'convert'],
-  '12.2': ['move'],
   '12.3': ['move'],
+  '12.4': ['move'],
   '13.1': ['move'],
   '13.2': ['shoot', 'move'],
 };
@@ -722,10 +757,10 @@ export function getTutorialActions(state: GameState, stepIndex: number): GameAct
   // The engine terminates aircraft movement at the first protected cell. The
   // lesson still points to the intended destination behind that interception.
   const target =
-    step.id === '12.2'
+    step.id === '12.3'
       ? hex(1, 4)
       : (step.target ??
-        (step.id === '12.3' ? hex(0, 5) : step.section === 13 ? hex(0, 4) : undefined));
+        (step.id === '12.4' ? hex(0, 5) : step.section === 13 ? hex(0, 4) : undefined));
   return actions.filter((action) => {
     if (!ACTION_KINDS[step.id]?.includes(action.kind)) return false;
     if (target) {
@@ -737,7 +772,7 @@ export function getTutorialActions(state: GameState, stepIndex: number): GameAct
         'facing' in action ? action.facing : 'cannon' in action ? action.cannon : undefined;
       if (direction !== step.direction) return false;
     }
-    if (step.id === '9.3') return action.kind === 'move' && action.kamikaze === true;
+    if (step.id === '9.4') return action.kind === 'move' && action.kamikaze === true;
     if (step.id === '13.2')
       return action.kind === 'shoot' || (action.kind === 'move' && action.kamikaze === true);
     if (step.id === '10.3') {
@@ -751,10 +786,7 @@ export function getTutorialActions(state: GameState, stepIndex: number): GameAct
     if (step.id === '10.5') {
       const actor = state.pieces.find((piece) => piece.id === action.pieceId);
       return (
-        !!actor &&
-        ['medium', 'long', 'airplane'].includes(actor.type) &&
-        (action.kind === 'shoot' ||
-          (actor.type === 'airplane' && action.kind === 'move' && action.kamikaze === true))
+        !!actor && ['medium', 'long', 'airplane'].includes(actor.type) && action.kind === 'shoot'
       );
     }
     if (step.id === '11.2') return occupancyAt(state, hex(3, -1)).ground?.id === action.pieceId;
@@ -763,15 +795,15 @@ export function getTutorialActions(state: GameState, stepIndex: number): GameAct
 }
 
 const REPLIES: Record<string, { pieceId: string; to: Hex }> = {
-  '3.2': { pieceId: 'tutorial-amber-soldier-4', to: hex(4, -2) },
+  '3.3': { pieceId: 'tutorial-amber-soldier-4', to: hex(4, -2) },
   '4.1': { pieceId: 'tutorial-amber-soldier-2', to: hex(2, -1) },
   '4.2': { pieceId: 'tutorial-amber-soldier--2', to: hex(-2, 1) },
-  '5.4': { pieceId: 'tutorial-amber-soldier-0', to: hex(0, 0) },
+  '5.5': { pieceId: 'tutorial-amber-soldier-0', to: hex(0, 0) },
   '6.1': { pieceId: 'tutorial-amber-medium', to: hex(-1, 2) },
   '6.2': { pieceId: 'tutorial-amber-fast-left', to: hex(1, -3) },
   '8.1': { pieceId: 'tutorial-amber-drone-left', to: hex(3, -2) },
-  '9.1': { pieceId: 'tutorial-amber-drone-right', to: hex(-3, 1) },
-  '9.2': { pieceId: 'tutorial-amber-fast-right', to: hex(-1, -1) },
+  '9.2': { pieceId: 'tutorial-amber-drone-right', to: hex(-3, 1) },
+  '9.3': { pieceId: 'tutorial-amber-fast-right', to: hex(-1, -1) },
 };
 
 /** The only Amber action authorized after this exercise has been completed. */
@@ -827,8 +859,8 @@ export function createTutorialCheckpoint(index: number): TutorialCheckpoint {
   const step = TUTORIAL_STEPS[index];
   const selectedId = step.selectedId ?? (step.autoSelect ? (step.pieceId ?? null) : null);
   let pendingAction: GameAction | null = null;
-  if (step.id === '3.2') pendingAction = getTutorialActions(state, index)[0] ?? null;
-  if (step.id === '5.2' && step.pieceId && step.target) {
+  if (step.id === '3.3') pendingAction = getTutorialActions(state, index)[0] ?? null;
+  if (step.id === '5.3' && step.pieceId && step.target) {
     pendingAction =
       getLegalActionsForPiece(state, step.pieceId).find(
         (action) =>
@@ -842,6 +874,6 @@ export function createTutorialCheckpoint(index: number): TutorialCheckpoint {
 export function nextTutorialSection(index: number, delta: 1 | -1): number {
   const safeIndex = Math.max(0, Math.min(TUTORIAL_STEPS.length - 1, index));
   const section = TUTORIAL_STEPS[safeIndex].section;
-  const nextSection = Math.max(1, Math.min(14, section + delta));
+  const nextSection = Math.max(0, Math.min(14, section + delta));
   return TUTORIAL_STEPS.findIndex((step) => step.section === nextSection);
 }

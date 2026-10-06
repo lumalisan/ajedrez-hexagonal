@@ -255,6 +255,9 @@ export const ACHIEVEMENTS = [
   ),
 ] as const;
 
+/** Retired Academy achievements remain readable in existing profiles. */
+export const VISIBLE_ACHIEVEMENTS = ACHIEVEMENTS.filter((entry) => entry.category !== 'academy');
+
 export type AchievementId = (typeof ACHIEVEMENTS)[number]['id'];
 
 export interface AchievementDefinition {

@@ -490,9 +490,9 @@ try {
 
   await desktop.locator('[data-home-action="new"]').click();
   assert(
-    (await desktop.locator('[data-home-mode]').count()) === 3 &&
+    (await desktop.locator('[data-home-mode]').count()) === 2 &&
       (await desktop.locator('.home-nav-button.unavailable').count()) === 0,
-    'New game menu must expose local, machine and Academy as playable modes.',
+    'New game menu must expose local and machine as playable modes.',
   );
   await desktop.locator('[data-home-mode="local"]').click();
   assert(
@@ -1694,31 +1694,11 @@ try {
 
   const tutorialControl = compactPortrait.locator('[data-home-action="tutorial"]');
   await tutorialControl.click();
-  await compactPortrait.locator('[data-tutorial-academy]').click();
-  await compactPortrait.locator('.academy-shell').waitFor();
-  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait Academy', '#game-dialog');
-  const academyViewport = await compactPortrait.evaluate(() => {
-    const dialog = document.querySelector('#game-dialog')?.getBoundingClientRect();
-    const catalog = document.querySelector('.academy-catalog')?.getBoundingClientRect();
-    return {
-      dialog: dialog ? { width: dialog.width, height: dialog.height } : null,
-      catalog: catalog ? { width: catalog.width, height: catalog.height } : null,
-    };
-  });
   assert(
-    academyViewport.dialog?.width >= 300 &&
-      academyViewport.dialog.height >= 500 &&
-      academyViewport.catalog?.width >= 270 &&
-      academyViewport.catalog.height >= 200,
-    'Academy must retain a useful catalog area at 320x568.',
+    (await compactPortrait.locator('[data-tutorial-academy]').count()) === 0,
+    'Tutorial must not link to the retired Academy.',
   );
-  await compactPortrait.locator('.academy-close').click();
-  await compactPortrait.locator('#game-dialog').waitFor({ state: 'hidden' });
-  await compactPortrait.waitForFunction(
-    () => document.activeElement?.matches('[data-home-action="tutorial"]'),
-    undefined,
-    { timeout: 2_000 },
-  );
+  await compactPortrait.getByRole('button', { name: 'Abandonar tutorial', exact: true }).click();
 
   await compactPortrait.locator('[data-home-action="rules"]').click();
   await compactPortrait.locator('[data-rule-search]').waitFor();
@@ -1960,143 +1940,33 @@ try {
   );
   await clocked.close();
 
-  const academy = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  watchErrors(academy, runtimeErrors);
-  await academy.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
-  const modeCardHeights = await academy
-    .locator('.home-nav-button')
-    .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().height));
+  const tutorialMenu = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  watchErrors(tutorialMenu, runtimeErrors);
+  await tutorialMenu.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+  await tutorialMenu.locator('[data-home-action="tutorial"]').click();
   assert(
-    modeCardHeights.every((height) => height <= 140),
-    'Home navigation should use a compact, scannable height.',
-  );
-  await academy.locator('[data-home-action="tutorial"]').click();
-  await academy.locator('[data-tutorial-academy]').click();
-  assert(
-    await academy
-      .locator('[data-scenario="movement"]')
-      .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
-    'Scenario cards must expose a pointer cursor.',
-  );
-  await academy.locator('[data-scenario="movement"]').hover();
-  assert(
-    await academy
-      .locator('[data-scenario="movement"]')
-      .evaluate((element) => getComputedStyle(element).transform !== 'none'),
-    'Scenario cards must animate on hover.',
-  );
-  await academy.locator('[data-scenario="movement"]').click();
-  assert(
-    (await academy.locator('.scenario-steps li').count()) === 0,
-    'Academy briefing should not expose the solution before asking for help.',
-  );
-  await academy.locator('[data-reveal-scenario-hint]').click();
-  assert(
-    (await academy.locator('.scenario-steps li').count()) === 1,
-    'Academy must reveal hints progressively.',
+    (await tutorialMenu.locator('[data-tutorial-academy]').count()) === 0,
+    'Academy link must be removed.',
   );
   assert(
-    await academy.evaluate(() => {
-      const record = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
-      return (
-        record.academySession?.scenarioId === 'movement' &&
-        record.academySession?.hintsRevealed === 1
-      );
-    }),
-    'Academy hint usage must persist with the active match.',
-  );
-  await academy.locator('[data-dialog-close]').click();
-  await assertHistoryControlsHidden(academy, 'Academy');
-  await academy.locator('#game-canvas').focus();
-  await academy.keyboard.press('Enter');
-  await academy.keyboard.press('s');
-  await academy.keyboard.press('Enter');
-  await academy.keyboard.press('Enter');
-  await academy.getByText('OBJETIVO COMPLETADO').waitFor();
-  assert(
-    (await academy.getByText('Tablas por bloqueo').count()) === 0,
-    'Academy completion must not report a classical blockade draw.',
-  );
-  const achievementNotice = academy.locator('[data-achievement-notification="academy-first"]');
-  await achievementNotice.waitFor({ state: 'visible' });
-  assert(
-    (await achievementNotice.locator('.achievement-icon').count()) === 1 &&
-      (await achievementNotice.locator('strong').textContent()) === 'Yo he venido a aprender' &&
-      (await achievementNotice.locator('p, button, progress').count()) === 0,
-    'Completing a lesson must show an achievement notification with only its icon and title.',
+    (await tutorialMenu.locator('.tutorial-navigation-hint').count()) === 0,
+    'Redundant navigation hints must be removed.',
   );
   assert(
-    await achievementNotice.evaluate((notice) => {
-      const liveRegion = notice.closest('[role="status"]');
-      return (
-        liveRegion?.getAttribute('aria-live') === 'polite' &&
-        !notice.contains(document.activeElement)
-      );
-    }),
-    'Achievement notifications must announce the unlock without taking keyboard focus.',
+    await tutorialMenu
+      .locator('.tutorial-content p')
+      .evaluateAll((paragraphs) =>
+        paragraphs.every((p) => getComputedStyle(p).textAlign === 'justify'),
+      ),
+    'Tutorial paragraphs must be justified.',
   );
-  if (process.env.UI_SCREENSHOT)
-    await academy.screenshot({ path: `${process.env.UI_SCREENSHOT}-achievement-notification.png` });
-  await academy.locator('[data-academy-menu]').click();
-  await academy.keyboard.press('Escape');
-  await academy.locator('[data-open-replay]').click();
+  await tutorialMenu.getByRole('button', { name: 'Abandonar tutorial', exact: true }).click();
+  await tutorialMenu.locator('[data-home-action="achievements"]').click();
   assert(
-    await academy.locator('.replay-dock').isVisible(),
-    'Replay controls must use a board dock.',
+    (await tutorialMenu.locator('[data-achievement-id^="academy-"]').count()) === 0,
+    'Retired Academy achievements must not appear.',
   );
-  assert(
-    await academy.locator('#game-canvas').isVisible(),
-    'The board must remain visible while reviewing history.',
-  );
-  assert(
-    !(await academy.locator('#game-dialog').isVisible()),
-    'Replay must not occupy the screen as a modal dialog.',
-  );
-  await academy.locator('[data-replay-step="-1"]').click();
-  assert(
-    (await academy.locator('[data-replay-output]').textContent()) === '0',
-    'Replay dock must navigate to the initial position.',
-  );
-  await academy.locator('[data-replay-close]').click();
-  await academy.reload({ waitUntil: 'networkidle' });
-  assert(
-    await academy.locator('[data-home-action="continue"]').isDisabled(),
-    'A completed Academy mission must not remain as an active saved match.',
-  );
-  assert(
-    await academy
-      .locator('[data-home-action="history"]')
-      .evaluate((element) => getComputedStyle(element).cursor === 'pointer'),
-    'Completed matches must remain available through History.',
-  );
-  await academy.locator('[data-home-action="achievements"]').click();
-  await academy.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
-  const completedLesson = academy.locator('[data-achievement-id="academy-first"]');
-  assert(
-    (await completedLesson.locator('.achievement-state').textContent())?.includes('Desbloqueado') &&
-      Boolean(await completedLesson.locator('time').getAttribute('datetime')),
-    'The completed lesson achievement and its unlock date must survive reloading.',
-  );
-  const tutorialProgress = academy
-    .locator('[data-achievement-id="tutorial-complete"]')
-    .getByRole('progressbar');
-  assert(
-    (await tutorialProgress.getAttribute('value')) === '1' &&
-      Number(await tutorialProgress.getAttribute('max')) > 1,
-    'The tutorial achievement must retain partial progress after completing the first lesson.',
-  );
-  await academy.getByRole('button', { name: /^Desbloqueados/ }).click();
-  assert(
-    await completedLesson.isVisible(),
-    'The unlocked filter must include an achievement earned through real gameplay.',
-  );
-  await academy.getByRole('button', { name: /^Pendientes/ }).click();
-  assert(
-    (await completedLesson.count()) === 0 && (await tutorialProgress.count()) === 1,
-    'The pending filter must exclude earned achievements while retaining partial progress.',
-  );
-  await academy.getByRole('button', { name: 'Cerrar logros', exact: true }).click();
-  await academy.close();
+  await tutorialMenu.close();
 
   const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   watchErrors(solo, runtimeErrors);
@@ -2123,7 +1993,7 @@ try {
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    'UI smoke passed: desktop and mobile achievements and live rules layouts, earned notification and saved progress, desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
+    'UI smoke passed: desktop and mobile achievements and live rules layouts, retired Academy removal and tutorial copy, desktop flow, local undo/redo and saved history, 320px portrait utilities, 568px landscape replay, mobile keyboard navigation.',
   );
 } finally {
   await browser.close();
@@ -2469,7 +2339,7 @@ async function assertAchievementsCatalog(page, surface) {
   await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
   const cards = page.locator('[data-achievement-id]');
   const total = await cards.count();
-  assert(total === 28, `${surface} achievements must include the complete 28-item catalog.`);
+  assert(total === 23, `${surface} achievements must include the complete 23-item catalog.`);
   const ids = await cards.evaluateAll((items) => items.map((item) => item.dataset.achievementId));
   assert(new Set(ids).size === total, 'Each achievement must appear once in the full catalog.');
   assert(
@@ -2535,7 +2405,7 @@ async function assertAchievementsCatalog(page, surface) {
           source === `/achievements/${id}.webp` &&
           decorative,
       ),
-    'All 28 achievements must load their own decorative 512×512 artwork at desktop and mobile widths.',
+    'All 23 achievements must load their own decorative 512×512 artwork at desktop and mobile widths.',
   );
   await assertNoHorizontalOverflow(page, `${surface} achievements`, '#game-dialog');
 

@@ -623,7 +623,7 @@ function ScenarioBriefingDialog({ scenario }: { scenario: ScenarioDefinition }) 
         </p>
       </div>
       <footer className="scenario-briefing-actions flex shrink-0 flex-wrap items-center justify-between gap-3 border-0 border-t border-solid border-line bg-panel px-6 py-5 sm:px-8">
-        <AcademyMenuButton>Volver</AcademyMenuButton>
+        <ScenarioMenuButton>Volver al inicio</ScenarioMenuButton>
         <Button
           variant="primary"
           className="flex-1 sm:flex-none"
@@ -666,7 +666,7 @@ function ScenarioSuccessDialog({ scenario }: { scenario: ScenarioDefinition }) {
         >
           Repetir
         </Button>
-        <AcademyMenuButton primary>Seguir entrenando</AcademyMenuButton>
+        <ScenarioMenuButton primary>Volver al inicio</ScenarioMenuButton>
       </div>
     </>
   );
@@ -695,7 +695,7 @@ function ScenarioRetryDialog({
         ))}
       </ol>
       <div className="dialog-actions">
-        <AcademyMenuButton>Elegir otro</AcademyMenuButton>
+        <ScenarioMenuButton>Volver al inicio</ScenarioMenuButton>
         <Button
           type="button"
           variant="primary"
@@ -709,7 +709,7 @@ function ScenarioRetryDialog({
   );
 }
 
-function AcademyMenuButton({
+function ScenarioMenuButton({
   primary = false,
   children,
 }: {
@@ -721,8 +721,8 @@ function AcademyMenuButton({
     <Button
       type="button"
       variant={primary ? 'primary' : 'secondary'}
-      data-academy-menu
-      onClick={() => commands.openDialog({ kind: 'academy' })}
+      data-scenario-menu
+      onClick={commands.abandon}
     >
       {children}
     </Button>

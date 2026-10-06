@@ -17,7 +17,6 @@ import type {
 
 export type DialogState =
   | { kind: 'config'; mode: 'local' | 'machine' }
-  | { kind: 'academy' }
   | { kind: 'rules'; sectionId?: string }
   | { kind: 'settings' }
   | { kind: 'history' }

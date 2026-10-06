@@ -25,7 +25,7 @@ function perform(state: GameState, action: GameAction): GameState {
 
 describe('tutorial checkpoints', () => {
   it('reconstructs every exercise using legal actions, with fresh valid states', () => {
-    expect(TUTORIAL_STEPS).toHaveLength(37);
+    expect(TUTORIAL_STEPS).toHaveLength(42);
     for (const [index, step] of TUTORIAL_STEPS.entries()) {
       const checkpoint = createTutorialCheckpoint(index);
       expect(validateState(checkpoint.state), step.id).toEqual([]);
@@ -63,42 +63,53 @@ describe('tutorial checkpoints', () => {
       expect(occupancyAt(shared, target).ground?.owner).toBe(1);
       expect(occupancyAt(shared, target).air?.owner).toBe(1);
     }
-    const siege = createTutorialCheckpoint(indexOf('12.1'));
+    const siege = createTutorialCheckpoint(indexOf('12.2'));
     expect(siege.selectedId).toBe('tutorial-cian-airplane');
     expect(occupancyAt(siege.state, { q: 0, r: 4 }).ground).toMatchObject({
       type: 'fortress',
       hp: 2,
     });
     expect(createTutorialCheckpoint(indexOf('14.1')).state).toEqual(state);
+    expect(occupancyAt(shared, { q: -4, r: 0 }).air).toMatchObject({
+      id: 'tutorial-cian-airplane',
+      facing: 3,
+    });
+    expect(occupancyAt(shared, { q: -3, r: 0 }).air).toBeUndefined();
+    for (const id of ['0.1', '3.1', '5.1', '9.1', '12.1']) {
+      expect(createTutorialCheckpoint(indexOf(id)).selectedId, id).toBeNull();
+      expect(createTutorialCheckpoint(indexOf(id)).pendingAction, id).toBeNull();
+    }
   });
 
   it('prepares movement without consuming it, and leaves the tank orientation to the learner', () => {
-    const soldier = createTutorialCheckpoint(indexOf('3.2'));
+    const soldier = createTutorialCheckpoint(indexOf('3.3'));
     expect(soldier.pendingAction).toEqual({
       kind: 'move',
       pieceId: 'tutorial-cian-soldier',
       to: { q: 4, r: -3 },
     });
     expect(occupancyAt(soldier.state, { q: 4, r: -4 }).ground?.id).toBe('tutorial-cian-soldier');
-    const tank = createTutorialCheckpoint(indexOf('5.2'));
+    const tank = createTutorialCheckpoint(indexOf('5.3'));
     expect(tank.pendingAction).toMatchObject({ kind: 'move', to: { q: 0, r: -1 }, cannon: 3 });
-    expect(getTutorialActions(tank.state, indexOf('5.2'))).toEqual([
+    expect(getTutorialActions(tank.state, indexOf('5.3'))).toEqual([
       { kind: 'move', pieceId: 'tutorial-cian-medium', to: { q: 0, r: -1 }, cannon: 4 },
     ]);
   });
 
   it('skips to the first exercise of the previous or next section', () => {
-    expect(nextTutorialSection(indexOf('3.1'), 1)).toBe(indexOf('4.1'));
-    expect(nextTutorialSection(indexOf('3.4'), 1)).toBe(indexOf('4.1'));
+    expect(nextTutorialSection(indexOf('3.2'), 1)).toBe(indexOf('4.1'));
+    expect(nextTutorialSection(indexOf('3.5'), 1)).toBe(indexOf('4.1'));
     expect(nextTutorialSection(indexOf('4.2'), -1)).toBe(indexOf('3.1'));
     expect(nextTutorialSection(0, -1)).toBe(0);
+    expect(nextTutorialSection(indexOf('0.1'), 1)).toBe(indexOf('1.1'));
+    expect(nextTutorialSection(indexOf('1.1'), -1)).toBe(indexOf('0.1'));
     expect(nextTutorialSection(indexOf('14.1'), 1)).toBe(indexOf('14.1'));
     expect(() => createTutorialCheckpoint(-1)).toThrow(RangeError);
-    expect(() => createTutorialCheckpoint(37)).toThrow(RangeError);
+    expect(() => createTutorialCheckpoint(TUTORIAL_STEPS.length)).toThrow(RangeError);
   });
 
   it('moves only the scripted Amber unit in each reply', () => {
-    const expectedReplies = ['3.2', '4.1', '4.2', '5.4', '6.1', '6.2', '8.1', '9.1', '9.2'];
+    const expectedReplies = ['3.3', '4.1', '4.2', '5.5', '6.1', '6.2', '8.1', '9.2', '9.3'];
     for (const [index, step] of TUTORIAL_STEPS.entries()) {
       if (step.interaction !== 'action') continue;
       const { state } = createTutorialCheckpoint(index);
@@ -157,7 +168,7 @@ describe('tutorial exercises', () => {
         actions.filter((action) => action.pieceId === pieceId && action.kind === 'shoot'),
       ).toHaveLength(2);
     }
-    expect(actions.filter((action) => action.kind === 'move' && action.kamikaze)).toHaveLength(2);
+    expect(actions.filter((action) => action.kind === 'move' && action.kamikaze)).toHaveLength(0);
     for (const action of actions) {
       const next = perform(state, action);
       const remainingEnemies = next.pieces.filter(
@@ -188,7 +199,7 @@ describe('tutorial exercises', () => {
   });
 
   it('intercepts the drone along its path, sacrifices the rammer, and allows both final plane attacks', () => {
-    const interceptIndex = indexOf('12.2');
+    const interceptIndex = indexOf('12.3');
     const { state } = createTutorialCheckpoint(interceptIndex);
     const result = applyAction(state, getTutorialActions(state, interceptIndex)[0]);
     expect(result.events).toContainEqual(

@@ -105,7 +105,7 @@ function Header() {
             snapshot.tutorial ? commands.exitTutorial() : commands.openDialog({ kind: 'abandon' })
           }
         >
-          {snapshot.tutorial ? 'Salir del tutorial' : 'Abandonar partida'}
+          {snapshot.tutorial ? 'Abandonar tutorial' : 'Abandonar partida'}
         </button>
       </div>
     </header>

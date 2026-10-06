@@ -47,7 +47,7 @@ try {
     await page.goto(`http://127.0.0.1:${address.port}`, { waitUntil: 'networkidle' });
     await page.locator('[data-home-action="tutorial"]').click();
     await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
-    await page.locator('#app.tutorial-active #tutorial-panel[data-tutorial-step="1.1"]').waitFor();
+    await page.locator('#app.tutorial-active #tutorial-panel[data-tutorial-step="0.1"]').waitFor();
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
@@ -84,11 +84,20 @@ try {
       const canvasBeforeAction = await page.locator('#game-canvas').boundingBox();
       if (await page.locator('#command-panel').isVisible())
         await assertDisabledWindowControls(page);
-      if (plan.id === '3.1' && desktop) {
+      if (plan.id === '3.2' && desktop) {
         await assertCanvasBounds(page, canvasBeforeSelection, 'Opening the tutorial command panel');
         await assertFloatingCommandWindow(page, canvasBeforeAction);
       }
-      if (plan.id === '3.2') {
+      if (plan.id === '3.3') {
+        await page
+          .locator('.tutorial-command-arrow[data-target="confirm"]')
+          .waitFor({ state: 'visible' });
+        assert(
+          await page
+            .locator('#pending-card .confirm-button')
+            .evaluate((button) => getComputedStyle(button).outlineColor === 'rgb(255, 255, 255)'),
+          'Tutorial command targets must have a white outline.',
+        );
         await assertDisabledWindowControls(page, true);
         assert(
           await page.locator('#pending-card .confirm-button').isVisible(),
@@ -97,7 +106,32 @@ try {
         if (desktop)
           await assertCanvasBounds(page, canvasBeforeAction, 'Clicking disabled window controls');
       }
-      if (['1.1', '3.2', '5.2', '10.2', '14.1'].includes(plan.id)) {
+      if (['0.1', '3.1', '5.1', '9.1', '12.1'].includes(plan.id)) {
+        assert(
+          await page.locator('#command-panel').isHidden(),
+          `Panel must wait for selection in ${plan.id}.`,
+        );
+      }
+      if (
+        [
+          '0.1',
+          '1.1',
+          '3.1',
+          '3.2',
+          '3.3',
+          '5.1',
+          '5.2',
+          '5.3',
+          '9.1',
+          '9.2',
+          '10.2',
+          '12.1',
+          '12.2',
+          '12.3',
+          '12.4',
+          '14.1',
+        ].includes(plan.id)
+      ) {
         const result = await new AxeBuilder({ page }).analyze();
         assert.equal(
           result.violations.length,
@@ -118,6 +152,7 @@ try {
           );
           await page.screenshot({
             path: `${process.env.TUTORIAL_SCREENSHOTS}/${viewport.width}-${plan.id}.png`,
+            fullPage: true,
           });
         }
       }
@@ -146,7 +181,7 @@ try {
         continue;
       }
       if (!plan.autoSelect) {
-        if (plan.id === '3.3') await page.locator('#game-canvas').press('u');
+        if (plan.id === '3.4') await page.locator('#game-canvas').press('u');
         else await clickHex(page, plan.actor.position);
         const choice = page.locator(`[data-piece-choice="${plan.actor.id}"]`);
         if (await choice.isVisible()) await choice.click();
@@ -164,7 +199,7 @@ try {
         if (desktop)
           await assertCanvasBounds(page, canvasBeforeAction, `Changing action mode in ${plan.id}`);
       }
-      if (plan.id === '5.2') {
+      if (plan.id === '5.3') {
         assert(
           await page.locator('#pending-card .confirm-button').isDisabled(),
           'Tank move requires choosing NE.',
@@ -176,13 +211,19 @@ try {
           .click();
       } else if (plan.action.kind === 'convert' && plan.id === '11.2') {
         await page.locator('[data-command="capture-above"]').click();
-      } else if (!['rotate', 'orient'].includes(plan.action.kind) && plan.id !== '3.2') {
-        await clickHex(page, plan.id === '12.2' ? plan.target : plan.destination);
+      } else if (!['rotate', 'orient'].includes(plan.action.kind) && plan.id !== '3.3') {
+        await clickHex(page, plan.id === '12.3' ? plan.target : plan.destination);
         const choices = page.locator('[data-action-choice]:not(:disabled)');
         if (await choices.count()) await choices.first().click();
       }
       if (desktop)
         await assertCanvasBounds(page, canvasBeforeAction, `Preparing an action in ${plan.id}`);
+      if (plan.guided === false && plan.interaction === 'action') {
+        assert(
+          (await page.locator('button[data-tutorial-highlight="true"]').count()) === 0,
+          `Independent exercise ${plan.id} must not point out command buttons.`,
+        );
+      }
       if (plan.interaction !== 'prepare')
         await page.locator('#pending-card .confirm-button').click();
       console.log(`Tutorial ${viewport.width}: ${plan.id} passed.`);
@@ -199,7 +240,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'Tutorial: 37 steps, section navigation, disabled window controls, desktop dragging/keyboard movement, stable board and Axe pass at 1440, 1024 and 390 pixels.',
+    'Tutorial: 42 steps, section navigation, disabled window controls, desktop dragging/keyboard movement, stable board and Axe pass at 1440, 1024 and 390 pixels.',
   );
 } finally {
   await browser.close();

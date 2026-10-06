@@ -38,7 +38,7 @@ function rendererDouble() {
   return {
     setDepthMode: vi.fn(),
     snapToPlayer: vi.fn(),
-    setModel: vi.fn(),
+    setModel: vi.fn<GameRenderer['setModel']>(),
     resetView: vi.fn(),
     zoomBy: vi.fn(),
     playEvents: vi.fn<GameRenderer['playEvents']>().mockResolvedValue(undefined),
@@ -137,9 +137,63 @@ describe('sesión del tutorial guiado', () => {
     expect(session.getSnapshot().state).toEqual(replayRecord(record));
   });
 
+  it('abre con una bienvenida sin señales y espera la selección en los nuevos pasos', () => {
+    const session = createSession();
+    const renderer = rendererDouble();
+    session.attachRenderer(renderer);
+    expect(currentStep(session).id).toBe('0.1');
+    expect(renderer.setModel.mock.calls.at(-1)?.[0].tutorialCue).toBeNull();
+    session.commands.hoverHex({ q: 0, r: 0 });
+    expect(renderer.setModel.mock.calls.at(-1)?.[0]).toMatchObject({
+      hovered: null,
+      focused: null,
+      selectedId: null,
+      actions: [],
+    });
+    session.commands.selectPiece('tutorial-cian-soldier');
+    expect(session.getSnapshot().selectedId).toBeNull();
+    for (const [section, actor, next] of [
+      [3, 'tutorial-cian-soldier', '3.2'],
+      [5, 'tutorial-cian-medium', '5.2'],
+      [9, 'tutorial-cian-airplane', '9.2'],
+      [12, 'tutorial-cian-airplane', '12.2'],
+    ] as const) {
+      enterSection(session, section);
+      const before = session.getSnapshot().state;
+      expect(session.getSnapshot().selectedId).toBeNull();
+      session.commands.selectHex(getPiece(before, actor)!.position);
+      expect(currentStep(session).id).toBe(next);
+      expect(session.getSnapshot().selectedId).toBe(actor);
+      expect(session.getSnapshot().state).toEqual(before);
+      expect(session.getSnapshot().pendingAction).toBeNull();
+    }
+  });
+
+  it('permite inspeccionar ambas capas y reabre su selector al pulsar de nuevo la casilla', () => {
+    const session = createSession();
+    enterSection(session, 10);
+    const target = currentStep(session).target!;
+    session.commands.selectHex(target);
+    expect(currentStep(session).id).toBe('10.2');
+    const before = session.getSnapshot().state;
+    for (const id of ['tutorial-shared-ground-left', 'tutorial-shared-air-left']) {
+      session.commands.selectPiece(id);
+      expect(session.getSnapshot().selectedId).toBe(id);
+      session.commands.selectHex(target);
+      expect(session.getSnapshot().mode).toEqual({
+        kind: 'pieceChoice',
+        pieceIds: ['tutorial-shared-ground-left', 'tutorial-shared-air-left'],
+      });
+      expect(session.getSnapshot().selectedId).toBeNull();
+      expect(currentStep(session).id).toBe('10.2');
+      expect(session.getSnapshot().state).toEqual(before);
+    }
+  });
+
   it('rechaza selección ajena y órdenes directas fuera del objetivo guiado', async () => {
     const session = createSession();
     enterSection(session, 3);
+    await completeStep(session);
     const action = allowedAction(session);
     const before = session.getSnapshot().state;
     const selectedId = session.getSnapshot().selectedId;
@@ -159,20 +213,21 @@ describe('sesión del tutorial guiado', () => {
     await session.commands.commitPending();
     expect(session.getSnapshot().state).toEqual(before);
     expect(session.getSnapshot().pendingAction).toBeNull();
-    expect(currentStep(session).id).toBe('3.1');
+    expect(currentStep(session).id).toBe('3.2');
   });
 
-  it('prepara 3.1 sin mover y muestra la respuesta rival después de confirmar 3.2', async () => {
+  it('prepara 3.2 sin mover y muestra la respuesta rival después de confirmar 3.3', async () => {
     const session = createSession();
     const renderer = rendererDouble();
     session.attachRenderer(renderer);
     enterSection(session, 3);
+    await completeStep(session);
     const before = session.getSnapshot().state;
     const action = allowedAction(session);
     const target = currentStep(session).target!;
     session.commands.selectPiece(action.pieceId);
     session.commands.selectHex(target);
-    expect(currentStep(session).id).toBe('3.2');
+    expect(currentStep(session).id).toBe('3.3');
     expect(session.getSnapshot().pendingAction).toEqual(action);
     expect(session.getSnapshot().state).toEqual(before);
     const committed = session.commands.commitPending();
@@ -181,6 +236,9 @@ describe('sesión del tutorial guiado', () => {
     expect(session.getSnapshot().animating).toBe(true);
     expect(session.getSnapshot().state.activePlayer).toBe(1);
     expect(session.getSnapshot().selectedId).not.toBeNull();
+    const preview = renderer.setModel.mock.calls.at(-1)?.[0];
+    expect(preview?.selectedId).toBe('tutorial-amber-soldier-4');
+    expect(preview?.actions.some((order) => order.pieceId === preview.selectedId)).toBe(true);
     await vi.advanceTimersByTimeAsync(1_000);
     await committed;
     expect(renderer.playEvents).toHaveBeenCalledTimes(2);
@@ -190,13 +248,14 @@ describe('sesión del tutorial guiado', () => {
     ).toBe(true);
     expect(session.getSnapshot().state.activePlayer).toBe(0);
     expect(session.getSnapshot().animating).toBe(false);
-    expect(currentStep(session).id).not.toBe('3.2');
+    expect(currentStep(session).id).not.toBe('3.3');
     expect(collaborators.chooseAction).not.toHaveBeenCalled();
   });
 
-  it('impide confirmar 5.2 hasta orientar el cañón hacia el NE indicado', async () => {
+  it('impide confirmar 5.3 hasta orientar el cañón hacia el NE indicado', async () => {
     const session = createSession();
     enterSection(session, 5);
+    await completeStep(session);
     const action = allowedAction(session);
     if (action.kind !== 'move' || action.cannon === undefined)
       throw new Error('El paso debe mover un Tanque.');
@@ -204,7 +263,7 @@ describe('sesión del tutorial guiado', () => {
     const wrong = { ...action, cannon: ((action.cannon + 1) % 6) as Direction };
     session.commands.selectPiece(action.pieceId);
     session.commands.prepareAction(wrong);
-    expect(currentStep(session).id).toBe('5.2');
+    expect(currentStep(session).id).toBe('5.3');
     expect(session.getSnapshot().pendingAction).toEqual(wrong);
     await session.commands.commitPending();
     expect(session.getSnapshot().state).toEqual(before);
@@ -215,7 +274,7 @@ describe('sesión del tutorial guiado', () => {
       position: action.to,
       cannon: action.cannon,
     });
-    expect(currentStep(session).id).not.toBe('5.2');
+    expect(currentStep(session).id).not.toBe('5.3');
   });
 
   it('exige orientación y destino correctos al abandonar un vehículo', async () => {
@@ -255,12 +314,13 @@ describe('sesión del tutorial guiado', () => {
     });
   });
 
-  it('reconstruye los apartados al navegar y conserva el paso intermedio de casillas compartidas', () => {
+  it('reconstruye los apartados al navegar y conserva el paso intermedio de casillas compartidas', async () => {
     const session = createSession();
     enterSection(session, 5);
+    await completeStep(session);
     const checkpoint = structuredClone(session.getSnapshot().state);
     session.commands.prepareAction(allowedAction(session));
-    expect(currentStep(session).id).toBe('5.2');
+    expect(currentStep(session).id).toBe('5.3');
     session.commands.navigateTutorial(1);
     expect(currentStep(session).id).toBe('6.1');
     session.commands.navigateTutorial(-1);
@@ -275,6 +335,7 @@ describe('sesión del tutorial guiado', () => {
     expect(currentStep(session).id).toBe('10.3');
     session.commands.startTutorial();
     enterSection(session, 5);
+    await completeStep(session);
     expect(session.getSnapshot().state).toEqual(checkpoint);
   });
 
@@ -297,8 +358,9 @@ describe('sesión del tutorial guiado', () => {
   it('acepta el destino indicado del Dron aunque el motor lo intercepte antes de llegar', async () => {
     const session = createSession();
     enterSection(session, 12);
+    await completeStep(session);
     session.commands.selectPiece(currentStep(session).pieceId!);
-    expect(currentStep(session).id).toBe('12.2');
+    expect(currentStep(session).id).toBe('12.3');
     const intendedTarget = currentStep(session).target!;
     const action = allowedAction(session);
     if (action.kind !== 'move') throw new Error('El Dron debe desplazarse hacia el escudo.');
@@ -307,7 +369,7 @@ describe('sesión del tutorial guiado', () => {
     expect(session.getSnapshot().pendingAction).toEqual(action);
     await commit(session);
     expect(getPiece(session.getSnapshot().state, action.pieceId)).toBeUndefined();
-    expect(currentStep(session).id).toBe('12.3');
+    expect(currentStep(session).id).toBe('12.4');
   });
 
   it('mantiene inmóvil a Ámbar en práctica libre y finaliza al destruir su fortaleza', async () => {
@@ -374,7 +436,8 @@ describe('sesión del tutorial guiado', () => {
     enterSection(session, 3);
     await completeStep(session);
     await completeStep(session);
-    expect(currentStep(session).id).toBe('3.3');
+    await completeStep(session);
+    expect(currentStep(session).id).toBe('3.4');
     expect(session.getSnapshot().selectedId).toBeNull();
     session.commands.selectNextPiece(false);
     expect(session.getSnapshot().selectedId).toBe(currentStep(session).pieceId);
@@ -402,7 +465,8 @@ describe('sesión del tutorial guiado', () => {
     enterSection(session, 12);
     expect(currentStep(session).id).toBe('12.1');
     session.commands.selectNextPiece(false);
-    expect(currentStep(session).id).toBe('12.2');
+    session.commands.selectNextPiece(false);
+    expect(currentStep(session).id).toBe('12.3');
     expect(session.getSnapshot().selectedId).toBe('tutorial-cian-drone');
   });
 
@@ -417,6 +481,7 @@ describe('sesión del tutorial guiado', () => {
       renderer.playEvents.mockReturnValueOnce(animation.promise);
       session.attachRenderer(renderer);
       enterSection(session, 3);
+      await completeStep(session);
       session.commands.prepareAction(allowedAction(session));
       const checkpoint = session.getSnapshot();
       const committed = session.commands.commitPending();
@@ -435,9 +500,9 @@ describe('sesión del tutorial guiado', () => {
       animation.resolve();
       await committed;
       expect(session.getSnapshot().state).toEqual(checkpoint.state);
-      expect(currentStep(session).id).toBe('3.2');
-      await commit(session);
       expect(currentStep(session).id).toBe('3.3');
+      await commit(session);
+      expect(currentStep(session).id).toBe('3.4');
       expect(session.getSnapshot().state.activePlayer).toBe(0);
       expect(session.getSnapshot().animating).toBe(false);
     },
@@ -452,6 +517,7 @@ describe('sesión del tutorial guiado', () => {
       renderer.playEvents.mockResolvedValueOnce(undefined).mockReturnValueOnce(animation.promise);
       session.attachRenderer(renderer);
       enterSection(session, 3);
+      await completeStep(session);
       session.commands.prepareAction(allowedAction(session));
       const committed = session.commands.commitPending();
       await vi.advanceTimersByTimeAsync(1_000);

@@ -23,7 +23,7 @@ export function TutorialPanel() {
       <div className="tutorial-titlebar">
         <span>Tutorial</span>
         <span className="tutorial-progress">
-          {completed ? 'Completado' : `${step.section} de 14`}
+          {completed ? 'Completado' : step.section === 0 ? 'Inicio' : `${step.section} de 14`}
         </span>
       </div>
       <div className="tutorial-content" ref={contentRef} tabIndex={0}>
@@ -33,7 +33,7 @@ export function TutorialPanel() {
         {completed ? (
           <>
             <p>Has destruido la fortaleza enemiga y completado la práctica libre.</p>
-            <p>Ya puedes jugar una partida o seguir practicando con los desafíos de la Academia.</p>
+            <p>Ya puedes jugar una partida.</p>
           </>
         ) : (
           <>
@@ -63,7 +63,7 @@ export function TutorialPanel() {
                 id="tutorial-previous"
                 type="button"
                 className="secondary-button"
-                disabled={step.section === 1 || snapshot.animating}
+                disabled={step.section === 0 || snapshot.animating}
                 onClick={() => commands.navigateTutorial(-1)}
               >
                 Anterior
@@ -78,26 +78,8 @@ export function TutorialPanel() {
                 Siguiente
               </button>
             </nav>
-            <p className="tutorial-navigation-hint">
-              {step.section === 14
-                ? 'Destruye la fortaleza enemiga para completar el tutorial.'
-                : step.id === '10.2'
-                  ? 'Siguiente continúa con los ataques sobre casillas compartidas.'
-                  : 'También puedes usar estos botones para cambiar de apartado.'}
-            </p>
           </>
         )}
-        <button
-          type="button"
-          className="text-button tutorial-academy-link"
-          data-tutorial-academy
-          onClick={() => {
-            commands.exitTutorial();
-            commands.openDialog({ kind: 'academy' });
-          }}
-        >
-          Academia táctica
-        </button>
       </div>
     </aside>
   );

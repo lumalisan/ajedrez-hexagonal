@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadAcademyProgress, loadActiveMatch, loadMatchHistory } from '../match-storage';
-import { SCENARIOS } from '../scenarios';
-import { ACHIEVEMENTS, achievementProgressFor } from '../achievements';
+import { loadActiveMatch, loadMatchHistory } from '../match-storage';
+import { VISIBLE_ACHIEVEMENTS, achievementProgressFor } from '../achievements';
 import { useGame } from './game-context';
 import { SettingsIcon, SoundButton } from './shell-icons';
 
 function readMenuSummary() {
-  const ids = new Set(SCENARIOS.map((scenario) => scenario.id));
   return {
     saved: loadActiveMatch(),
-    completed: new Set(loadAcademyProgress().filter((id) => ids.has(id))).size,
     history: loadMatchHistory(),
   };
 }
@@ -18,7 +15,7 @@ export function HomeScreen() {
   const { snapshot, commands } = useGame();
   const menuRef = useRef<HTMLDivElement>(null);
   const previousView = useRef(snapshot.homeView);
-  const [{ saved, completed, history }, setSummary] = useState(readMenuSummary);
+  const [{ saved, history }, setSummary] = useState(readMenuSummary);
   useEffect(() => {
     if (snapshot.homeView === 'main' && !snapshot.dialog) setSummary(readMenuSummary());
   }, [snapshot.homeView, snapshot.dialog]);
@@ -87,17 +84,6 @@ export function HomeScreen() {
                   <span>Dos jugadores</span>
                   <small>Juega contra otra persona en el mismo ordenador</small>
                 </button>
-                <button
-                  type="button"
-                  className="home-nav-button"
-                  data-home-mode="academy"
-                  onClick={() => commands.openDialog({ kind: 'academy' })}
-                >
-                  <span>Academia táctica</span>
-                  <small>
-                    {completed} de {SCENARIOS.length} desafíos completados
-                  </small>
-                </button>
               </nav>
             </>
           ) : (
@@ -151,11 +137,11 @@ export function HomeScreen() {
                   <span>Logros</span>
                   <small>
                     {
-                      ACHIEVEMENTS.filter(
+                      VISIBLE_ACHIEVEMENTS.filter(
                         (entry) => achievementProgressFor(entry, snapshot.achievements).unlocked,
                       ).length
                     }{' '}
-                    de {ACHIEVEMENTS.length} hazañas desbloqueadas
+                    de {VISIBLE_ACHIEVEMENTS.length} hazañas desbloqueadas
                   </small>
                 </button>
                 <button

@@ -23,6 +23,7 @@ import { useGame } from './game-context';
 import { accessibleCellId, fortressMaximumHp } from './shell-selectors';
 import { FloatingPanelWindow } from './components/floating-panel-window';
 import { WarningIcon } from './shell-icons';
+import { TutorialCommandArrow } from './components/tutorial-command-arrow';
 
 function useTutorialControls() {
   const { snapshot } = useGame();
@@ -35,7 +36,13 @@ function useTutorialControls() {
   return {
     step,
     restricted,
-    guided: Boolean(step && step.guided !== false && step.interaction !== 'free'),
+    guided: Boolean(
+      step &&
+      step.guided !== false &&
+      step.interaction !== 'free' &&
+      !snapshot.animating &&
+      !snapshot.tutorial?.completed,
+    ),
     actionAllowed: (action: GameAction) =>
       !restricted || actions.some((candidate) => sameAction(candidate, action)),
     modeAllowed: (kind: 'rotate' | 'orient' | 'transform') => !restricted || step?.mode === kind,
@@ -380,7 +387,7 @@ function DirectionPanel({ title, ...props }: CompassProps & { title: string }) {
 }
 
 function ActionChoice({ action, index }: { action: GameAction; index: number }) {
-  const { actionAllowed } = useTutorialControls();
+  const { guided, actionAllowed } = useTutorialControls();
   const {
     snapshot: { state },
     commands,
@@ -427,6 +434,7 @@ function ActionChoice({ action, index }: { action: GameAction; index: number }) 
     <button
       type="button"
       data-action-choice={index}
+      data-tutorial-highlight={guided && actionAllowed(action) ? true : undefined}
       disabled={!actionAllowed(action)}
       onClick={() => commands.prepareAction(action)}
     >
@@ -562,6 +570,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
             type="button"
             className="stacked-response"
             data-transform-attack
+            data-tutorial-highlight={guided && actionAllowed(attackAbove) ? true : undefined}
             disabled={!actionAllowed(attackAbove)}
             onClick={() => commands.prepareAction(attackAbove)}
           >
@@ -799,14 +808,15 @@ export function CommandPanel() {
     >
       <div
         id="command-window-content"
-        className={`command-window-content${tutorialStep?.id === '3.2' ? ' tutorial-panel-emphasis' : ''}`}
-        inert={tutorialStep?.id === '3.1'}
+        className={`command-window-content${tutorialStep?.id === '3.3' ? ' tutorial-panel-emphasis' : ''}`}
+        inert={tutorialStep?.id === '3.2'}
       >
         <PieceCard piece={piece} />
         <div id="action-controls" className="action-controls">
           <ActionControls piece={piece} legalActions={legalActions} />
         </div>
         <PendingCard piece={piece} legalActions={legalActions} />
+        <TutorialCommandArrow panelRef={panelRef} />
       </div>
     </FloatingPanelWindow>
   );

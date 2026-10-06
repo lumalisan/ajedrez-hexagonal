@@ -61,8 +61,7 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 - **Disposiciones iniciales:** en Nueva partida puedes elegir Frente clásico, Columnas de asedio, Frente blindado (5 soldados y 4 tanques), Frente de infantería (7 soldados y 2 tanques) o Frente extendido (11 soldados y 2 tanques retrasados). Las cuatro primeras tienen 18 piezas por jugador; Frente extendido tiene 22. Las variantes blindada, de infantería y extendida tienen un lanzamisiles a la izquierda y un avión a la derecha de la Fortaleza, vistos desde cada bando. Disponibles en partida local y contra la IA.
 - Al elegir una disposición, la vista previa muestra el ejército de Cian con los símbolos del tablero, su composición y una breve descripción. Se actualiza también al cambiar la vida de la Fortaleza; Ámbar utiliza la formación reflejada.
 - En **Reglas → Desarrollo de la partida**, el tablero real muestra ambos ejércitos y permite comparar las cinco disposiciones, con **Frente clásico** seleccionado por defecto. El selector solo cambia la vista del manual.
-- **Academia táctica:** fundamentos, misión guiada de varios turnos, retos estratégicos y un reto diario determinista que usan `classic-v2`.
-- **Tutorial:** 14 apartados y 37 pasos sobre el tablero, con objetivos señalados, órdenes restringidas y respuestas enemigas programadas. Anterior y Siguiente cambian de apartado; los ejercicios avanzan al realizarlos. Termina con una práctica libre en la que solo juega Cian hasta destruir la Fortaleza enemiga. La Academia sigue disponible desde el panel del tutorial. Entrar o salir del tutorial conserva la partida guardada.
+- **Tutorial:** una bienvenida, 14 apartados y 42 pasos sobre el tablero, con objetivos señalados, órdenes restringidas y respuestas enemigas programadas. Anterior y Siguiente cambian de apartado; los ejercicios avanzan al realizarlos. Termina con una práctica libre en la que solo juega Cian hasta destruir la Fortaleza enemiga. Las flechas blancas indican casillas o botones del panel de mando y priorizan trayectorias diagonales libres de unidades y marcadores. Entrar o salir del tutorial conserva la partida guardada.
 - Autoguardado después de cada orden y continuación desde el inicio. Ajustes ofrece directamente Exportar partida, Importar partida, Ver repetición e Historial de resultados.
 - El visor de repetición permite recorrer la partida sin modificarla.
 - PWA instalable con caché offline del shell.
@@ -77,9 +76,9 @@ La IA valora el coste real de abandonar un vehículo para transformarlo en Solda
 
 ## Logros
 
-El menú **Logros**, disponible desde el inicio y durante la partida, reúne 28 desafíos con iconos cuadrados, descripción de sus condiciones, progreso acumulado y fecha de desbloqueo. Permite filtrar todos, pendientes o desbloqueados. Incluye victorias contra cada dificultad de IA, partidas entre humanos, relojes de 5, 10 y 20 minutos por bando, Academia, retos diarios y hazañas como remontar con la Fortaleza a un punto o dejar al rival sin piezas.
+El menú **Logros**, disponible desde el inicio y durante la partida, reúne 23 desafíos con iconos cuadrados, descripción de sus condiciones, progreso acumulado y fecha de desbloqueo. Permite filtrar todos, pendientes o desbloqueados. Incluye victorias contra cada dificultad de IA, partidas entre humanos, relojes de 5, 10 y 20 minutos por bando, hazañas como remontar con la Fortaleza a un punto o dejar al rival sin piezas.
 
-Los logros pertenecen al perfil local de este navegador: en partidas entre humanos cuentan ambos bandos; contra la IA solo cuentan las acciones y victorias del humano. Las capturas, conversiones, intercepciones y transformaciones suman y desbloquean logros en cuanto se ejecuta la acción, aunque después se abandone la partida. Los objetivos de partidas y victorias requieren terminar y haber jugado al menos una orden; los de Academia se consiguen al superar la lección. Repeticiones, partidas importadas y la demostración de portada no suman logros de partida. Deshacer no revoca un logro obtenido y rehacer no duplica el progreso. El progreso de Academia ya guardado se reconoce al iniciar, sin repetir avisos antiguos.
+Los logros pertenecen al perfil local de este navegador: en partidas entre humanos cuentan ambos bandos; contra la IA solo cuentan las acciones y victorias del humano. Las capturas, conversiones, intercepciones y transformaciones suman y desbloquean logros en cuanto se ejecuta la acción, aunque después se abandone la partida. Los objetivos de partidas y victorias requieren terminar y haber jugado al menos una orden; Repeticiones, partidas importadas y la demostración de portada no suman logros de partida. Deshacer no revoca un logro obtenido y rehacer no duplica el progreso. Los datos de la antigua Academia se conservan por compatibilidad, pero su catálogo y sus logros ya no aparecen en la interfaz.
 
 Cada desbloqueo muestra únicamente su icono y título, acompañado de una campanilla que respeta el silencio y los volúmenes maestro y de efectos. Si se consiguen varios, los avisos aparecen uno a uno; se posponen mientras la pestaña está oculta. Los logros se guardan por separado de las partidas y permanecen al iniciar otra, pero borrar los datos del navegador elimina la colección.
 
@@ -132,7 +131,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - `src/app/components/ui/` y `docs/design-system.md`: controles reutilizables, contratos de composición y guía del sistema de diseño.
 - `src/app/board-canvas.tsx`: ciclo de vida del renderer e interacción con el tablero.
 - `src/styles.css`, `src/styles/tokens.css` y `src/styles/game.css`: entrada y capas de Tailwind, tokens visuales y CSS específico del juego.
-- `src/scenarios.ts`: definiciones de Academia y evaluación de objetivos.
+- `src/scenarios.ts`: evaluación de objetivos y compatibilidad de escenarios antiguos y personalizados.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
 - `src/match-storage.ts`: preferencias, autoguardado y progreso local.
 - `src/achievements.ts`: catálogo, condiciones deterministas y persistencia versionada de logros.

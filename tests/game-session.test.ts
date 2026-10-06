@@ -1252,7 +1252,7 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().achievements.completedScenarioIds).toContain('movement');
     expect(session.getSnapshot().achievements.unlockedAt['academy-first']).toBeDefined();
     await vi.advanceTimersByTimeAsync(750);
-    expect(session.getSnapshot().achievementNotification?.achievementId).toBe('academy-first');
+    expect(session.getSnapshot().achievementNotification).toBeNull();
     expect(session.getSnapshot().toasts.some((toast) => toast.message.includes('logros'))).toBe(
       true,
     );

@@ -1,7 +1,8 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import { hexToWorld } from '../hex';
-import { COLORS, boardTilt, projectHex, type RenderModel } from './model';
+import { Container, Graphics } from 'pixi.js';
+import { equalHex, hexToWorld } from '../hex';
+import { COLORS, actionMarkers, boardTilt, projectHex, type RenderModel } from './model';
 import { hexPoints } from './shapes';
+import { placeTutorialArrow, type ArrowObstacle } from './tutorial-arrow';
 
 interface TutorialView {
   width: number;
@@ -13,42 +14,24 @@ interface TutorialView {
   depth: number;
 }
 
-/** Retained cell frame plus a screen-sized label that remains upright as the board turns. */
+/** Retained white cell frame and a short arrow, clear of units and action markers. */
 export class PixiTutorialCue {
   readonly board = new Graphics({ label: 'tutorial-cell', eventMode: 'none' });
-  readonly screen = new Container({ label: 'tutorial-callout', eventMode: 'none' });
+  readonly screen = new Container({ label: 'tutorial-arrow', eventMode: 'none' });
   private readonly connector = new Graphics();
-  private readonly background = new Graphics();
-  private readonly text = new Text({
-    text: '',
-    style: {
-      fontFamily: 'Segoe UI, sans-serif',
-      fontSize: 13,
-      fontWeight: '700',
-      fill: COLORS.text,
-      align: 'center',
-      wordWrap: true,
-      wordWrapWidth: 220,
-    },
-    resolution: 3,
-  });
   private contrast: boolean | null = null;
   private layoutKey = '';
-
   constructor() {
-    this.text.anchor.set(0.5);
-    this.screen.addChild(this.connector, this.background, this.text);
+    this.screen.addChild(this.connector);
     this.board.visible = false;
     this.screen.visible = false;
   }
-
   update(model: RenderModel | null, view: TutorialView): void {
     const cue = model?.tutorialCue;
     this.board.visible = Boolean(cue);
     this.screen.visible = Boolean(cue);
     if (!cue || !model) return;
-
-    const color = model.highContrast ? '#ffffff' : COLORS.text;
+    const color = '#ffffff';
     const dark = model.highContrast ? '#000000' : COLORS.background;
     if (this.contrast !== model.highContrast) {
       this.contrast = model.highContrast;
@@ -60,61 +43,62 @@ export class PixiTutorialCue {
         .stroke({ color, width: 3.4, join: 'round' })
         .poly(hexPoints(23.6))
         .stroke({ color, width: 1.8, join: 'round' });
-      this.text.style.fill = color;
     }
     const world = hexToWorld(cue.hex);
     this.board.position.set(world.x, world.y);
-    const projected = projectHex(cue.hex, view.orientation, view.depth);
-    const target = {
-      x: view.x + projected.x * view.scale,
-      y: view.y + projected.y * view.scale,
+    const project = (hex: typeof cue.hex) => {
+      const projected = projectHex(hex, view.orientation, view.depth);
+      return { x: view.x + projected.x * view.scale, y: view.y + projected.y * view.scale };
     };
-    // A panned-out target must not leave a label pointing to an unrelated visible cell.
+    const target = project(cue.hex);
     this.screen.visible =
       target.x >= 0 && target.x <= view.width && target.y >= 0 && target.y <= view.height;
     if (!this.screen.visible) return;
-
-    const key = `${cue.label}:${target.x}:${target.y}:${view.scale}:${view.depth}:${view.width}:${view.height}:${model.highContrast}`;
+    const obstacles: ArrowObstacle[] = [];
+    for (const piece of model.state.pieces) {
+      if (equalHex(piece.position, cue.hex)) continue;
+      const point = project(piece.position);
+      // Account for the raised aerial silhouette in the depth view.
+      obstacles.push({
+        ...point,
+        y:
+          point.y -
+          (piece.type === 'drone' || piece.type === 'airplane' ? 27 : 4) * view.depth * view.scale,
+        radius: 24 * view.scale,
+      });
+    }
+    for (const marker of actionMarkers(model).values()) {
+      if (!equalHex(marker.hex, cue.hex))
+        obstacles.push({ ...project(marker.hex), radius: 28 * view.scale });
+    }
+    const key = JSON.stringify([target, view, obstacles, model.highContrast]);
     if (key === this.layoutKey) return;
     this.layoutKey = key;
-    if (this.text.text !== cue.label) this.text.text = cue.label;
-    const wrapWidth = Math.min(220, Math.max(40, view.width - 48));
-    if (this.text.style.wordWrapWidth !== wrapWidth) this.text.style.wordWrapWidth = wrapWidth;
-    const width = this.text.width + 22;
-    const height = this.text.height + 12;
-    const cellRadius = 29 * boardTilt(view.depth) * view.scale;
-    const above = target.y - cellRadius - height - 22 >= 8;
-    const side = above ? -1 : 1;
-    const tipY = target.y + side * cellRadius;
-    const centerX = Math.max(8 + width / 2, Math.min(view.width - 8 - width / 2, target.x));
-    const centerY = tipY + side * (22 + height / 2);
-    const startY = centerY - (side * height) / 2;
-    this.background
-      .clear()
-      .roundRect(centerX - width / 2, centerY - height / 2, width, height, 6)
-      .fill(dark)
-      .stroke({ color, width: model.highContrast ? 2 : 1.5 });
-    this.text.position.set(centerX, centerY);
-    const dx = target.x - centerX;
-    const dy = tipY - startY;
-    const length = Math.hypot(dx, dy);
-    const ux = dx / length;
-    const uy = dy / length;
+    const { start, tip } = placeTutorialArrow(
+      target,
+      32 * view.scale,
+      32 * boardTilt(view.depth) * view.scale,
+      view,
+      obstacles,
+    );
+    const length = Math.hypot(tip.x - start.x, tip.y - start.y);
+    const ux = (tip.x - start.x) / length;
+    const uy = (tip.y - start.y) / length;
     this.connector
       .clear()
-      .moveTo(centerX, startY)
-      .lineTo(target.x, tipY)
-      .stroke({ color: dark, width: 6, cap: 'round' })
-      .moveTo(centerX, startY)
-      .lineTo(target.x, tipY)
-      .stroke({ color, width: 2, cap: 'round' })
+      .moveTo(start.x, start.y)
+      .lineTo(tip.x, tip.y)
+      .stroke({ color: dark, width: 7, cap: 'round' })
+      .moveTo(start.x, start.y)
+      .lineTo(tip.x, tip.y)
+      .stroke({ color, width: 3, cap: 'round' })
       .poly([
-        target.x,
-        tipY,
-        target.x - ux * 8 - uy * 4,
-        tipY - uy * 8 + ux * 4,
-        target.x - ux * 8 + uy * 4,
-        tipY - uy * 8 - ux * 4,
+        tip.x,
+        tip.y,
+        tip.x - ux * 10 - uy * 5,
+        tip.y - uy * 10 + ux * 5,
+        tip.x - ux * 10 + uy * 5,
+        tip.y - uy * 10 - ux * 5,
       ])
       .fill(color);
   }

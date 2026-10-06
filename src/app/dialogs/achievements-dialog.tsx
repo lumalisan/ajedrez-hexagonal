@@ -1,7 +1,7 @@
 import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import {
-  ACHIEVEMENTS,
+  VISIBLE_ACHIEVEMENTS,
   achievementProgressFor,
   type AchievementDefinition,
 } from '../../achievements';
@@ -17,7 +17,6 @@ const FILTERS = [
 const CATEGORIES = [
   { id: 'matches', label: 'En el campo de batalla', detail: 'Partidas y victorias' },
   { id: 'tactics', label: 'Con un poco de malicia', detail: 'Hazañas tácticas' },
-  { id: 'academy', label: 'La práctica hace al estratega', detail: 'Academia' },
 ] as const;
 
 const dateFormat = new Intl.DateTimeFormat('es-ES', {
@@ -29,7 +28,7 @@ const dateFormat = new Intl.DateTimeFormat('es-ES', {
 export function AchievementsDialog() {
   const { snapshot, commands } = useGame();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
-  const entries = ACHIEVEMENTS.map((definition) => ({
+  const entries = VISIBLE_ACHIEVEMENTS.map((definition) => ({
     definition,
     progress: achievementProgressFor(definition, snapshot.achievements),
   }));
@@ -144,7 +143,7 @@ export function AchievementsDialog() {
             <p>
               {filter === 'pending'
                 ? 'Has desbloqueado todos los logros. El tablero sigue teniendo sorpresas.'
-                : 'Completa una partida o un ejercicio de la Academia para estrenar tu palmarés.'}
+                : 'Completa una partida para estrenar tu palmarés.'}
             </p>
             <Button type="button" variant="secondary" onClick={() => setFilter('all')}>
               Ver todos los logros

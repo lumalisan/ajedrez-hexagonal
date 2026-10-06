@@ -2,6 +2,7 @@ import { chooseMachineAction, type SearchMetadata } from '../ai';
 import { WorkerAiStrategy, difficultyBudget } from '../ai-strategy';
 import { AudioDirector } from '../audio';
 import {
+  VISIBLE_ACHIEVEMENTS,
   evaluateAcademyAchievements,
   evaluateActionAchievements,
   evaluateMatchAchievements,
@@ -234,8 +235,8 @@ export function createGameSession(): GameSession {
       selectedId,
       actions: visibleActions,
       pending: pendingAction,
-      hovered: hoveredHex,
-      focused: focusedHex,
+      hovered: tutorialStep()?.section === 0 ? null : hoveredHex,
+      focused: tutorialStep()?.section === 0 ? null : focusedHex,
       firingRange: currentFiringRange(),
       lastEvents,
       threatenedCells: [],
@@ -313,7 +314,9 @@ export function createGameSession(): GameSession {
     if (result.progress === achievements) return;
     achievements = result.progress;
     persistAchievements();
-    achievementQueue.push(...result.unlocked);
+    achievementQueue.push(
+      ...result.unlocked.filter((id) => VISIBLE_ACHIEVEMENTS.some((entry) => entry.id === id)),
+    );
     if (achievementQueue.length && !achievementNotification && achievementTimer === null)
       achievementTimer = later(showNextAchievement, 750);
     render();
@@ -482,20 +485,25 @@ export function createGameSession(): GameSession {
     return tutorial ? TUTORIAL_STEPS[tutorial.stepIndex] : undefined;
   }
 
-  function tutorialCue(): { hex: Hex; label: string } | null {
+  function tutorialCue(): { hex: Hex } | null {
     const step = tutorialStep();
-    if (!step || tutorial?.completed || animating || step.interaction === 'free') return null;
-    if (step.guided === false)
-      return step.target && (step.section === 10 || step.id === '12.2')
-        ? { hex: step.target, label: 'Objetivo' }
+    if (!step || tutorial?.completed || animating || pendingAction || step.interaction === 'free')
+      return null;
+    if (step.guided === false) {
+      const actor = step.pieceId ? getPiece(state, step.pieceId) : undefined;
+      if (step.cue === 'piece' && actor && selectedId !== actor.id) return { hex: actor.position };
+      return step.target && (step.section === 10 || step.cue === 'target')
+        ? { hex: step.target }
         : null;
+    }
     const piece = step.pieceId ? getPiece(state, step.pieceId) : undefined;
-    if (piece && selectedId !== piece.id)
-      return { hex: piece.position, label: step.interaction === 'next' ? 'Observa' : 'Selecciona' };
+    if (piece && selectedId !== piece.id) return { hex: piece.position };
     if (step.mode === 'transform' && (mode.kind !== 'transform' || mode.facing === null))
       return null;
-    if (step.target) return { hex: step.target, label: 'Objetivo' };
-    return piece ? { hex: piece.position, label: 'Unidad del tutorial' } : null;
+    if (step.mode && (mode.kind !== step.mode || step.mode !== 'transform')) return null;
+    if (step.interaction === 'action' && !step.target) return null;
+    if (step.target) return { hex: step.target };
+    return piece ? { hex: piece.position } : null;
   }
 
   function tutorialAllowsAction(action: GameAction, draft = false): boolean {
@@ -508,7 +516,7 @@ export function createGameSession(): GameSession {
       (candidate) =>
         sameAction(candidate, action) ||
         (draft &&
-          (step?.id === '5.1' || step?.id === '5.2') &&
+          (step?.id === '5.2' || step?.id === '5.3') &&
           candidate.kind === 'move' &&
           action.kind === 'move' &&
           candidate.pieceId === action.pieceId &&
@@ -639,7 +647,11 @@ export function createGameSession(): GameSession {
           state = { ...state, activePlayer: 1, outcome: null };
           selectedId = reply.pieceId;
           render();
-          await delay(preferences.reducedMotion ? 0 : 1_000);
+          await delay(preferences.reducedMotion ? 0 : 650);
+          if (disposed || operationEpoch !== epoch || !tutorial) return;
+          pendingAction = reply;
+          render();
+          await delay(preferences.reducedMotion ? 0 : 350);
           if (disposed || operationEpoch !== epoch || !tutorial) return;
           if (!(await play(reply))) return;
         }
@@ -671,10 +683,25 @@ export function createGameSession(): GameSession {
   function handleCell(hex: Hex): void {
     if (animating || isMachineTurn() || replayCursor !== null) return;
     const step = tutorialStep();
-    if (tutorial?.completed || step?.interaction === 'next') return;
+    if (tutorial?.completed || (step?.interaction === 'next' && step.id !== '10.2')) return;
+    if (step?.id === '10.2') {
+      if (!step.target || !equalHex(hex, step.target)) return;
+      const occupancy = occupancyAt(state, hex);
+      selectedId = null;
+      pendingAction = null;
+      mode = {
+        kind: 'pieceChoice',
+        pieceIds: [occupancy.ground, occupancy.air]
+          .filter((piece): piece is Piece => Boolean(piece))
+          .map((piece) => piece.id),
+      };
+      focusedHex = hex;
+      render();
+      return;
+    }
     // The engine truncates a drone's path at the first interception. The lesson
     // asks for the intended destination beyond it, then demonstrates that stop.
-    if (tutorial && step?.id === '12.2' && step.target && equalHex(hex, step.target)) {
+    if (tutorial && step?.id === '12.3' && step.target && equalHex(hex, step.target)) {
       const interceptedMove = getTutorialActions(state, tutorial.stepIndex)[0];
       if (interceptedMove) {
         if (pendingAction && sameAction(pendingAction, interceptedMove)) void commitPending();

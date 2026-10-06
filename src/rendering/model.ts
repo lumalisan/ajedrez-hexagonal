@@ -60,8 +60,8 @@ export interface RenderModel {
   highContrast: boolean;
   /** Ambient motion is opt-in so instructional scenes and previews remain still. */
   idleAnimations?: boolean;
-  /** Explicit tutorial target; the screen label supplements the persistent cell outline. */
-  tutorialCue?: { hex: Hex; label: string } | null;
+  /** Explicit tutorial target; a diagonal arrow supplements the persistent cell outline. */
+  tutorialCue?: { hex: Hex } | null;
 }
 
 export type MarkerKind = 'range' | 'move' | 'capture' | 'shoot' | 'convert' | 'danger';
