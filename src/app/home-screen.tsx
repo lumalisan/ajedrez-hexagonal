@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadActiveMatch, loadMatchHistory } from '../match-storage';
-import { VISIBLE_ACHIEVEMENTS, achievementProgressFor } from '../achievements';
+import { levelProgress, PROGRESSION_ACHIEVEMENTS } from '../progression';
 import { useGame } from './game-context';
 import { SettingsIcon, SoundButton } from './shell-icons';
 import { MenuIcon } from './components/menu-icon';
@@ -138,7 +138,7 @@ export function HomeScreen() {
                   type="button"
                   className="home-shortcut"
                   data-home-action="achievements"
-                  title={`${VISIBLE_ACHIEVEMENTS.filter((entry) => achievementProgressFor(entry, snapshot.achievements).unlocked).length} de ${VISIBLE_ACHIEVEMENTS.length} hazañas desbloqueadas`}
+                  title={`${Object.keys(snapshot.progression.unlockedAt).length} de ${PROGRESSION_ACHIEVEMENTS.length} hazañas desbloqueadas`}
                   onClick={() => commands.openDialog({ kind: 'achievements' })}
                 >
                   <MenuIcon kind="achievements" />
@@ -168,10 +168,14 @@ export function HomeScreen() {
                   <SettingsIcon />
                   <span>Ajustes</span>
                 </button>
-                <button type="button" className="home-shortcut" disabled>
+                <button
+                  type="button"
+                  className="home-shortcut"
+                  data-home-action="ranking"
+                  onClick={() => commands.openDialog({ kind: 'ranking' })}
+                >
                   <MenuIcon kind="ranking" />
                   <span>Clasificación</span>
-                  <small>Próximamente</small>
                 </button>
                 <button
                   type="button"
@@ -196,7 +200,10 @@ export function HomeScreen() {
           <ProfileAvatar profile={snapshot.profile} />
           <span className="home-profile-copy">
             <strong>{snapshot.profile.name}</strong>
-            <small>Editar perfil</small>
+            <small>
+              Nivel {levelProgress(snapshot.progression.xp).level} ·{' '}
+              {levelProgress(snapshot.progression.xp).category}
+            </small>
           </span>
           <svg
             viewBox="0 0 24 24"

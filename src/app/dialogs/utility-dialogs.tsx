@@ -14,6 +14,7 @@ import { useGame } from '../game-context';
 import { AchievementsDialog } from './achievements-dialog';
 import { ProfileDialog } from './profile-dialog';
 import { StoryDialog } from './story-dialog';
+import { RankingDialog } from './ranking-dialog';
 
 const CONFIRMATION_OPTIONS: readonly {
   value: GamePreferences['confirmation'];
@@ -38,6 +39,8 @@ export function UtilityDialogs() {
       return <HistoryDialog />;
     case 'achievements':
       return <AchievementsDialog />;
+    case 'ranking':
+      return <RankingDialog />;
     case 'abandon':
       return (
         <ConfirmationDialog

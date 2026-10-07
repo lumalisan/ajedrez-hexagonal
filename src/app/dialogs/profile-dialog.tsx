@@ -4,6 +4,7 @@ import { useGame } from '../game-context';
 import { ProfileAvatar } from '../components/profile-avatar';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { ProgressionSummary } from '../components/progression-summary';
 
 const emblemLabels = { fortress: 'Fortaleza', star: 'Estrella', hex: 'Hexágono' };
 const colorLabels = { cyan: 'Cian', amber: 'Ámbar', mint: 'Menta' };
@@ -21,6 +22,7 @@ export function ProfileDialog() {
     >
       <h2>Tu perfil</h2>
       <p>Elige cómo quieres aparecer en Protocolo Hexagonal.</p>
+      <ProgressionSummary />
       <div className="profile-preview">
         <ProfileAvatar profile={draft} />
         <strong>{draft.name || 'Tu nombre'}</strong>

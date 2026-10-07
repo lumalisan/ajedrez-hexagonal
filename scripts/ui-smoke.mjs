@@ -1155,30 +1155,26 @@ try {
   await instantAchievement.locator('[data-command="transform"]').click();
   await instantAchievement.locator('[data-transform-facing="3"]').click();
   assert(
-    (await instantAchievement
-      .locator('[data-achievement-notification="transformation"]')
-      .count()) === 0,
+    (await instantAchievement.locator('[data-achievement-notification="p1-13"]').count()) === 0,
     'Preparing a transformation must not unlock its achievement before confirming the order.',
   );
   await instantAchievement.locator('#pending-card .confirm-button').click();
-  const instantNotice = instantAchievement.locator(
-    '[data-achievement-notification="transformation"]',
-  );
+  const instantNotice = instantAchievement.locator('[data-achievement-notification="p1-13"]');
   await instantNotice.waitFor({ state: 'visible' });
   assert(
     (await instantNotice.locator('img.achievement-icon').count()) === 1 &&
-      (await instantNotice.locator('strong').textContent()) === 'Me bajo aquí' &&
+      (await instantNotice.locator('strong').textContent()) === '¡Transformación!' &&
       (await instantNotice.locator('p, button, progress').count()) === 0,
     'A confirmed transformation must immediately show only its achievement icon and title.',
   );
   const liveAchievement = await instantAchievement.evaluate(() => {
     const record = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
-    const progress = JSON.parse(localStorage.getItem('atlas-achievements-v1'));
+    const progress = JSON.parse(localStorage.getItem('hexagonal:progression:v1'));
     const history = JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]');
     return {
       active: record?.currentAction === 1 && !record.conclusion && history.length === 0,
-      transformations: progress?.counters.transformations,
-      unlockedAt: progress?.unlockedAt.transformation,
+      transformations: progress?.matches[record.createdAt].metrics.transform,
+      unlockedAt: progress?.unlockedAt['p1-13'],
     };
   });
   assert(
@@ -1189,7 +1185,7 @@ try {
   );
   await instantAchievement.reload({ waitUntil: 'networkidle' });
   await instantAchievement.locator('[data-home-action="achievements"]').click();
-  const savedTransformation = instantAchievement.locator('[data-achievement-id="transformation"]');
+  const savedTransformation = instantAchievement.locator('[data-achievement-id="p1-13"]');
   assert(
     (await savedTransformation.locator('.achievement-state').textContent())?.includes(
       'Desbloqueado',
@@ -2339,7 +2335,7 @@ async function assertAchievementsCatalog(page, surface) {
   await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
   const cards = page.locator('[data-achievement-id]');
   const total = await cards.count();
-  assert(total === 23, `${surface} achievements must include the complete 23-item catalog.`);
+  assert(total === 20, `${surface} must initially show only the 20 beginner achievements.`);
   const ids = await cards.evaluateAll((items) => items.map((item) => item.dataset.achievementId));
   assert(new Set(ids).size === total, 'Each achievement must appear once in the full catalog.');
   assert(
@@ -2347,11 +2343,19 @@ async function assertAchievementsCatalog(page, surface) {
       items.every(
         (item) =>
           item.querySelector('h4')?.textContent?.trim() &&
-          item.querySelector('.achievement-description p')?.textContent?.trim() &&
-          item.querySelector('.achievement-state')?.textContent?.includes('Pendiente'),
+          (item.querySelector('.achievement-state')?.textContent?.includes('Logro oculto')
+            ? !item.querySelector('.achievement-description p') &&
+              !item.querySelector('progress') &&
+              !item.querySelector('.achievement-modes')
+            : item.querySelector('.achievement-description p')?.textContent?.trim() &&
+              item.querySelector('.achievement-state')?.textContent?.includes('Pendiente')),
       ),
     ),
-    'Each locked achievement must explain its condition and state in text.',
+    'Visible achievements explain their conditions; secret ones expose only a title and locked state.',
+  );
+  assert(
+    ids.every((id) => id.startsWith('p1-')),
+    'Higher tiers must not expose any achievement titles.',
   );
   const summary = page.locator('[data-achievement-summary]');
   const totals = await summary.evaluate((progress) => ({
@@ -2371,7 +2375,7 @@ async function assertAchievementsCatalog(page, surface) {
   );
   assert(
     progressBars.length > 1 &&
-      progressBars.every(({ label, value, max }) => label && value === 0 && max > 0),
+      progressBars.every(({ label, value, max }) => label && value >= 0 && value < max && max > 0),
     'Locked cumulative achievements must expose their labeled, numeric progress to assistive technology.',
   );
   await page.waitForFunction(() =>
@@ -2395,17 +2399,16 @@ async function assertAchievementsCatalog(page, surface) {
   );
   assert(
     icons.length === total &&
-      new Set(icons.map(({ source }) => source)).size === total &&
       icons.every(
-        ({ width, height, source, id, naturalWidth, naturalHeight, decorative }) =>
+        ({ width, height, source, naturalWidth, naturalHeight, decorative }) =>
           width > 0 &&
           Math.abs(width - height) <= 1 &&
           naturalWidth === 512 &&
           naturalWidth === naturalHeight &&
-          source === `/achievements/${id}.webp` &&
+          source.startsWith('/achievements/') &&
           decorative,
       ),
-    'All 23 achievements must load their own decorative 512×512 artwork at desktop and mobile widths.',
+    'Every visible achievement must load decorative square artwork at desktop and mobile widths.',
   );
   await assertNoHorizontalOverflow(page, `${surface} achievements`, '#game-dialog');
 

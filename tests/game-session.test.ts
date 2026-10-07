@@ -5,6 +5,7 @@ import type { SearchMetadata } from '../src/ai';
 import type { GameRenderer, GameSession, GameSnapshot } from '../src/app/contracts';
 import { createGameSession } from '../src/app/game-session';
 import { loadAchievementProgress } from '../src/achievements';
+import { createPlayerProgression, savePlayerProgression } from '../src/progression';
 import { getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
 import {
@@ -126,6 +127,24 @@ describe('sesión que conecta React con el juego', () => {
     for (const session of sessions.splice(0)) session.dispose();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('registra actividad al montar y conserva el aviso después del ciclo de Strict Mode', async () => {
+    const progress = createPlayerProgression();
+    progress.activity = { lastDay: '2026-09-20', streak: 2, best: 2 };
+    savePlayerProgression(progress);
+    createSession(); // A discarded initializer must not consume the daily achievement.
+    const session = createSession();
+    session.start();
+    session.dispose();
+    session.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().progression.activity.streak).toBe(3);
+    expect(session.getSnapshot().progression.unlockedAt['p1-15']).toBeDefined();
+    expect(session.getSnapshot().progression.xp).toBe(50);
+    await vi.advanceTimersByTimeAsync(750);
+    expect(session.getSnapshot().achievementNotification?.achievementId).toBe('p1-15');
+    expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
   });
 
   it.each(['recruit', 'tactical', 'commander', 'expert'] as const)(
@@ -1114,7 +1133,7 @@ describe('sesión que conecta React con el juego', () => {
     session.commands.resign();
 
     const earned = session.getSnapshot().achievements;
-    const unlockedCount = Object.keys(earned.unlockedAt).length;
+    const unlockedCount = Object.keys(session.getSnapshot().progression.unlockedAt).length;
     expect(earned.counters.matches).toBe(1);
     expect(earned.counters.wins).toBe(1);
     expect(unlockedCount).toBeGreaterThan(1);
@@ -1174,7 +1193,7 @@ describe('sesión que conecta React con el juego', () => {
     expect(earned.unlockedAt.transformation).toBeDefined();
     expect(loadAchievementProgress()).toEqual(earned);
     await vi.advanceTimersByTimeAsync(750);
-    expect(session.getSnapshot().achievementNotification?.achievementId).toBe('transformation');
+    expect(session.getSnapshot().achievementNotification?.achievementId).toBe('p1-13');
     expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
 
     animation.resolve();

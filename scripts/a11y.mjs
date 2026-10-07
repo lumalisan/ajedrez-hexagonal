@@ -59,6 +59,24 @@ try {
       await page.keyboard.press('Escape');
       await page.locator('#game-dialog').waitFor({ state: 'hidden' });
 
+      await page.locator('[data-home-action="ranking"]').click();
+      await page.getByRole('heading', { name: 'Clasificación', exact: true }).waitFor();
+      await audit('ranking / historical results');
+      await openSelect(page, 'Periodo');
+      await audit('ranking / period selector');
+      await chooseSelectOption(page, 'Periodo', 'Últimos 30 días');
+      await audit('ranking / monthly results');
+      await chooseSelectOption(page, 'Modalidad', 'En línea');
+      await audit('ranking / online availability');
+      await page.keyboard.press('Escape');
+      await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+
+      await page.locator('[data-home-action="profile"]').click();
+      await page.getByRole('heading', { name: 'Tu perfil', exact: true }).waitFor();
+      await audit('profile / experience and level');
+      await page.keyboard.press('Escape');
+      await page.locator('#game-dialog').waitFor({ state: 'hidden' });
+
       await page.locator('[data-home-action="rules"]').click();
       await page.locator('#rules-article').waitFor({ state: 'visible' });
       await audit('rules manual');

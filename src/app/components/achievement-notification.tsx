@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { ACHIEVEMENTS } from '../../achievements';
+import { PROGRESSION_ACHIEVEMENTS } from '../../progression';
 import { useGame } from '../game-context';
 import { AchievementIcon } from './achievement-icon';
 
@@ -7,7 +8,11 @@ export function AchievementNotification() {
   const { snapshot } = useGame();
   const notice = snapshot.achievementNotification;
   const popover = useRef<HTMLDivElement>(null);
-  const achievement = ACHIEVEMENTS.find((entry) => entry.id === notice?.achievementId);
+  const definition = PROGRESSION_ACHIEVEMENTS.find((entry) => entry.id === notice?.achievementId);
+  const achievement = definition
+    ? { ...definition, icon: 'first-win' as const }
+    : ACHIEVEMENTS.find((entry) => entry.id === notice?.achievementId);
+  const hasAchievement = Boolean(achievement);
 
   useLayoutEffect(() => {
     const element = popover.current;
@@ -16,14 +21,14 @@ export function AchievementNotification() {
     // The dialog host enters the top layer after its children's layout effects.
     queueMicrotask(() => {
       if (!active || !element.isConnected) return;
-      if (achievement) element.showPopover();
+      if (hasAchievement) element.showPopover();
       else if (element.matches(':popover-open')) element.hidePopover();
     });
     return () => {
       active = false;
       if (element.matches(':popover-open')) element.hidePopover();
     };
-  }, [achievement, notice?.id]);
+  }, [hasAchievement, notice?.id]);
 
   return (
     <div

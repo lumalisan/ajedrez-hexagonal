@@ -2,8 +2,17 @@ import { chooseMachineAction, type SearchMetadata } from '../ai';
 import { WorkerAiStrategy, difficultyBudget } from '../ai-strategy';
 import { AudioDirector } from '../audio';
 import { loadUserProfile, normalizeProfile, saveUserProfile } from '../user-profile';
+import { STORY_CHAPTERS } from '../story-content';
 import {
-  VISIBLE_ACHIEVEMENTS,
+  loadPlayerProgression,
+  savePlayerProgression,
+  recordActivity,
+  recordLearning,
+  registerProgressionMatch,
+  evaluateProgressionMatch,
+  type ProgressionUpdate,
+} from '../progression';
+import {
   evaluateAcademyAchievements,
   evaluateActionAchievements,
   evaluateMatchAchievements,
@@ -141,9 +150,11 @@ export function createGameSession(): GameSession {
   let nextToastId = 0;
   let toasts: GameSnapshot['toasts'] = [];
   let achievements = loadAchievementProgress();
+  let progression = loadPlayerProgression(achievements);
   let achievementNotification: GameSnapshot['achievementNotification'] = null;
   let nextAchievementNotificationId = 0;
-  let achievementQueue: AchievementId[] = [];
+  let achievementQueue: NonNullable<GameSnapshot['achievementNotification']>['achievementId'][] =
+    [];
   let achievementTimer: ReturnType<typeof setTimeout> | null = null;
   let achievementStorageWarningShown = false;
   let snapshot: GameSnapshot;
@@ -226,6 +237,7 @@ export function createGameSession(): GameSession {
       announcementId,
       toasts,
       achievements,
+      progression,
       achievementNotification,
     };
     syncCanvas();
@@ -294,6 +306,20 @@ export function createGameSession(): GameSession {
     }
   }
 
+  function acceptProgression(result: ProgressionUpdate): void {
+    if (result.progress === progression) return;
+    progression = result.progress;
+    if (!savePlayerProgression(progression) && !achievementStorageWarningShown) {
+      achievementStorageWarningShown = true;
+      showToast('El progreso sigue activo, pero este navegador no permite guardarlo.');
+    }
+    achievementQueue.push(...result.unlocked);
+    if (achievementQueue.length && !achievementNotification && achievementTimer === null)
+      achievementTimer = later(showNextAchievement, 750);
+    if (result.xpEarned) showToast(`+${result.xpEarned} XP`);
+    render();
+  }
+
   function showNextAchievement(): void {
     achievementTimer = null;
     if (disposed || document.visibilityState === 'hidden') return;
@@ -318,11 +344,6 @@ export function createGameSession(): GameSession {
     if (result.progress === achievements) return;
     achievements = result.progress;
     persistAchievements();
-    achievementQueue.push(
-      ...result.unlocked.filter((id) => VISIBLE_ACHIEVEMENTS.some((entry) => entry.id === id)),
-    );
-    if (achievementQueue.length && !achievementNotification && achievementTimer === null)
-      achievementTimer = later(showNextAchievement, 750);
     render();
   }
 
@@ -345,11 +366,18 @@ export function createGameSession(): GameSession {
   function registerCurrentAchievementMatch(): void {
     if (!matchRecord) return;
     achievements = registerAchievementMatch(achievements, matchRecord);
+    progression = registerProgressionMatch(progression, matchRecord);
+    savePlayerProgression(progression);
     persistAchievements();
   }
 
   // An imported record never becomes an eligible local match after a reload.
   function excludeImportedAchievements(record: MatchRecord): void {
+    progression = {
+      ...progression,
+      registeredMatchIds: progression.registeredMatchIds.filter((id) => id !== record.createdAt),
+    };
+    savePlayerProgression(progression);
     if (!achievements.registeredMatchIds.includes(record.createdAt)) return;
     achievements = {
       ...achievements,
@@ -739,6 +767,7 @@ export function createGameSession(): GameSession {
       if (disposed || operationEpoch !== epoch || !tutorial) return;
       if (free && state.outcome?.type === 'win' && state.outcome.winner === 0) {
         tutorial = { ...tutorial, completed: true };
+        acceptProgression(recordLearning(progression, 'tutorial', new Date().toISOString()));
         announce('Tutorial completado. Has destruido la fortaleza enemiga.');
       } else {
         // Scripted lessons have no opposing turns, clocks, repetitions or draws.
@@ -1004,6 +1033,12 @@ export function createGameSession(): GameSession {
     mode = { kind: 'default' };
     animating = true;
     if (matchRecord && !activeScenario && replayCursor === null) {
+      acceptProgression(
+        evaluateProgressionMatch(progression, matchRecord, {
+          source: 'live',
+          at: new Date().toISOString(),
+        }),
+      );
       acceptAchievements(
         evaluateActionAchievements(achievements, matchRecord, before, result.events, {
           source: 'live',
@@ -1233,6 +1268,9 @@ export function createGameSession(): GameSession {
     persistCurrentMatch();
     const completedAt = new Date().toISOString();
     if (!activeScenario && replayCursor === null) {
+      acceptProgression(
+        evaluateProgressionMatch(progression, matchRecord, { source: 'live', at: completedAt }),
+      );
       acceptAchievements(
         evaluateMatchAchievements(achievements, matchRecord, { source: 'live', at: completedAt }),
       );
@@ -1967,6 +2005,17 @@ export function createGameSession(): GameSession {
         saved ? 'Perfil guardado.' : 'Perfil actualizado. No se pudo guardar en este navegador.',
       );
     },
+    markStoryChapterRead(chapterId) {
+      acceptProgression(
+        recordLearning(
+          progression,
+          'story',
+          new Date().toISOString(),
+          chapterId,
+          STORY_CHAPTERS.map((chapter) => chapter.id),
+        ),
+      );
+    },
     updatePreferences(update) {
       const wasFixed = preferences.fixedBoard;
       Object.assign(preferences, update);
@@ -2178,6 +2227,8 @@ export function createGameSession(): GameSession {
       tutorialWasAnimatingBeforeDispose = false;
       lifecycle?.abort();
       lifecycle = new AbortController();
+      // Defer until the mounted lifecycle survives Strict Mode's effect cleanup.
+      later(() => acceptProgression(recordActivity(progression, new Date().toISOString())), 0);
       const activateAudio = (): void => {
         void audio.startMusic();
       };
@@ -2201,12 +2252,20 @@ export function createGameSession(): GameSession {
           } else if (achievementQueue.length && achievementTimer === null) {
             showNextAchievement();
           }
+          if (document.visibilityState !== 'hidden')
+            acceptProgression(recordActivity(progression, new Date().toISOString()));
         },
         options,
       );
       audio.setEnabled(preferences.sound);
       if (clockTimer !== null) clearInterval(clockTimer);
-      clockTimer = setInterval(tickActiveClock, 250);
+      clockTimer = setInterval(() => {
+        tickActiveClock();
+        if (document.visibilityState !== 'hidden')
+          acceptProgression(recordActivity(progression, new Date().toISOString()));
+      }, 250);
+      if (achievementQueue.length && achievementTimer === null)
+        achievementTimer = later(showNextAchievement, 750);
       if (isHomeScreenActive()) startHomeDemo();
       else {
         if (clockWasRunningBeforeDispose && matchController && !state.outcome) {

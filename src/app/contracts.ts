@@ -1,6 +1,7 @@
 import type { SearchMetadata } from '../ai';
 import type { UserProfile } from '../user-profile';
 import type { AchievementId, AchievementProgress } from '../achievements';
+import type { PlayerProgression, ProgressionAchievementId } from '../progression';
 import type { UiMode } from '../match-store';
 import type { BoardRenderer } from '../renderer';
 import type { ScenarioProgress } from '../scenarios';
@@ -24,6 +25,7 @@ export type DialogState =
   | { kind: 'story' }
   | { kind: 'history' }
   | { kind: 'achievements' }
+  | { kind: 'ranking' }
   | { kind: 'abandon' }
   | { kind: 'mode'; initial?: boolean }
   | { kind: 'resign' }
@@ -71,7 +73,11 @@ export interface GameSnapshot {
   announcementId: number;
   toasts: Array<{ id: number; message: string }>;
   achievements: AchievementProgress;
-  achievementNotification: { id: number; achievementId: AchievementId } | null;
+  progression: PlayerProgression;
+  achievementNotification: {
+    id: number;
+    achievementId: AchievementId | ProgressionAchievementId;
+  } | null;
 }
 
 export interface GameCommands {
@@ -92,6 +98,7 @@ export interface GameCommands {
   exportMatch(): void;
   updatePreferences(preferences: Partial<GamePreferences>): void;
   updateProfile(profile: UserProfile): void;
+  markStoryChapterRead(chapterId: string): void;
   toggleSound(): void;
   selectPiece(pieceId: string): void;
   selectNextPiece(backward: boolean): void;

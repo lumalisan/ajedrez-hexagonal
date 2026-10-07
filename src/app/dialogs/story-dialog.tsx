@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { STORY_CHAPTERS } from '../../story-content';
+import { useGame } from '../game-context';
 import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -7,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 const HORIZONTAL_CHAPTERS = '(max-width: 760px) and (orientation: portrait)';
 
 export function StoryDialog() {
+  const { commands } = useGame();
   const [selectedId, setSelectedId] = useState(STORY_CHAPTERS[0].id);
   const [horizontal, setHorizontal] = useState(
     () => window.matchMedia(HORIZONTAL_CHAPTERS).matches,
@@ -106,10 +108,16 @@ export function StoryDialog() {
                       ← Capítulo anterior
                     </Button>
                     <Button
-                      disabled={index === STORY_CHAPTERS.length - 1}
-                      onClick={() => activate(STORY_CHAPTERS[index + 1].id)}
+                      onClick={() => {
+                        commands.markStoryChapterRead(chapter.id);
+                        if (index < STORY_CHAPTERS.length - 1)
+                          activate(STORY_CHAPTERS[index + 1].id);
+                        else commands.closeDialog();
+                      }}
                     >
-                      Capítulo siguiente →
+                      {index < STORY_CHAPTERS.length - 1
+                        ? 'Capítulo siguiente →'
+                        : 'Terminar lectura'}
                     </Button>
                   </nav>
                 </article>

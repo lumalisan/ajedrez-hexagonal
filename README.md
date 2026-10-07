@@ -29,6 +29,7 @@ pnpm test:design-system
 pnpm test:ui
 pnpm test:a11y
 pnpm test:tutorial
+pnpm exec node scripts/progression-smoke.mjs
 ```
 
 `pnpm test:types` comprueba todos los archivos TypeScript y TSX del proyecto, incluidos el código, las pruebas y la configuración, sin generar archivos. También se ejecuta al hacer el build.
@@ -134,7 +135,8 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - `src/scenarios.ts`: evaluación de objetivos y compatibilidad de escenarios antiguos y personalizados.
 - `src/ai-strategy.ts` y `src/ai-worker.ts`: estrategias con presupuesto y cancelación.
 - `src/match-storage.ts`: preferencias, autoguardado y progreso local.
-- `src/achievements.ts`: catálogo, condiciones deterministas y persistencia versionada de logros.
+- `src/progression.ts` y `src/progression-catalog.ts`: XP, 100 niveles, 100 logros, rachas y Elo del perfil local.
+- `src/achievements.ts`: compatibilidad con los logros y guardados de la versión anterior.
 - `src/hex.ts`: coordenadas axiales y conversión a posiciones visuales.
 - `src/renderer.ts`: cámara, interacción y planificación de animaciones.
 - `src/rendering/`: escena PixiJS, piezas y marcas tácticas reutilizables, contexto gráfico y modelos visuales puros.
@@ -148,3 +150,39 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 La auditoría técnica y el siguiente orden de evolución están en `docs/auditoria-mejoras-2026.md`.
 
 No usa recursos gráficos o sonoros externos. Logotipo, fichas, efectos y audio se generan localmente.
+
+## Experiencia, logros y clasificación
+
+El perfil empieza en nivel 1 con 0 XP y 1000 puntos Elo. Cada salto de nivel cuesta
+`100 + 25 × nivel actual` XP. Las categorías Principiante, Avanzado, Experto, Maestro y
+Legendario se abren en los niveles 1, 5, 15, 30 y 50. Sus logros conceden 50, 100, 250,
+500 y 1000 XP respectivamente. Cada categoría tiene 15 logros visibles y 5 ocultos:
+los ocultos muestran solo el título hasta conseguirse. Al abrir una categoría se evalúan
+también las acciones y partidas anteriores que cumplan su modalidad y dificultad.
+
+Contra Hexfortia, una victoria concede 50/75/100/150 XP según dificultad; las derrotas
+y tablas, 25/35/50/75. Terminar cualquier partida concede hasta 50 XP por duración
+(1 XP por cada dos turnos consumidos); en local esta es la única recompensa de partida.
+La primera partida terminada del día suma 25 XP. Rendirse cuenta incluso sin órdenes;
+una partida en curso o abandonada no concede XP de partida. Las hazañas tácticas ya
+realizadas se conservan. En local el perfil pertenece a Cian; Ámbar es el invitado.
+La racha de actividad cuenta visitas en días naturales consecutivos, sin exigir partidas.
+
+La clasificación contra Hexfortia usa Elo con rivales equivalentes a 600/1000/1400/1800
+puntos. El factor K es 40/32/24/20/16 para 0–9/10–24/25–49/50–99/100 o más partidas.
+La puntuación se redondea a enteros y nunca baja de cero. La vista mensual recalcula
+desde 1000 con los últimos 30 días naturales, incluido hoy. Solo aparece el perfil de
+este navegador: las partidas en línea y las posiciones TOP mundiales necesitan una
+modalidad conectada y una clasificación compartida que este proyecto todavía no tiene.
+Sus logros permanecen pendientes; no se asignan posiciones ficticias. Las partidas
+locales no tienen Elo. Importaciones, reproducciones y deshacer/rehacer no duplican premios.
+
+Los datos se guardan en `hexagonal:progression:v1`. Los logros anteriores se conservan
+en un apartado de legado; sus contadores compartidos no se convierten en victorias
+personales ni se les atribuye una dificultad desconocida. Los guardados de partidas
+mantienen su formato existente.
+
+La fórmula de XP prevalece sobre la tabla ilustrativa del documento original, cuyos
+totales posteriores al nivel 10 no son consistentes: alcanzar el nivel 100 requiere
+133.650 XP según esa fórmula. Los siete tipos que cuentan para los logros de uso y
+combate son Soldado, Capturador, Tanque, Lanzamisiles, Embestidor, Dron y Avión.
