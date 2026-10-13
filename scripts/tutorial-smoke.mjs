@@ -200,6 +200,18 @@ try {
           await assertCanvasBounds(page, canvasBeforeAction, `Changing action mode in ${plan.id}`);
       }
       if (plan.id === '5.3') {
+        const indicatedDirection = page.locator(
+          '.compass-direction[data-tutorial-highlight="true"]',
+        );
+        assert.equal(
+          await indicatedDirection.locator('.tutorial-compass-outline polygon').count(),
+          1,
+        );
+        assert.notEqual(
+          await indicatedDirection.evaluate((button) => getComputedStyle(button).backgroundColor),
+          'rgb(255, 255, 255)',
+          'The indicated compass direction must have a white frame without a white fill.',
+        );
         assert(
           await page.locator('#pending-card .confirm-button').isDisabled(),
           'Tank move requires choosing NE.',
@@ -230,17 +242,17 @@ try {
     }
     await uncoverControl(page, '#tutorial-previous');
     await page.locator('#tutorial-previous').click();
-    await page.locator('#tutorial-panel[data-tutorial-step="13.1"]').waitFor();
+    await page.locator('#tutorial-panel[data-tutorial-step="13.2"]').waitFor();
     await uncoverControl(page, '#tutorial-previous');
     await page.locator('#tutorial-previous').click();
-    await page.locator('#tutorial-panel[data-tutorial-step="12.1"]').waitFor();
+    await page.locator('#tutorial-panel[data-tutorial-step="13.1"]').waitFor();
     await page.locator('#new-game-button').click();
     await page.locator('[data-home-action="tutorial"]').waitFor();
     await context.close();
   }
   assert.deepEqual(errors, []);
   console.log(
-    'Tutorial: 42 steps, section navigation, disabled window controls, desktop dragging/keyboard movement, stable board and Axe pass at 1440, 1024 and 390 pixels.',
+    'Tutorial: 42 steps, step navigation, disabled window controls, desktop dragging/keyboard movement, stable board and Axe pass at 1440, 1024 and 390 pixels.',
   );
 } finally {
   await browser.close();

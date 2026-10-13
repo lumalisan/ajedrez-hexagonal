@@ -1,3 +1,4 @@
+import { DialogClose } from '../components/dialog-close';
 import { useState } from 'react';
 import { PROFILE_COLORS, PROFILE_EMBLEMS } from '../../user-profile';
 import { useGame } from '../game-context';
@@ -20,6 +21,7 @@ export function ProfileDialog() {
         if (draft.name.trim()) commands.updateProfile(draft);
       }}
     >
+      <DialogClose label="Cerrar perfil sin guardar" className="dialog-corner-close" />
       <h2>Tu perfil</h2>
       <p>Elige cómo quieres aparecer en Protocolo Hexagonal.</p>
       <ProgressionSummary />
@@ -83,7 +85,7 @@ export function ProfileDialog() {
           Cancelar
         </Button>
         <Button type="submit" variant="primary" disabled={!draft.name.trim()}>
-          Guardar perfil
+          Guardar cambios
         </Button>
       </div>
     </form>

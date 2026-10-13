@@ -19,7 +19,7 @@ export class PixiTutorialCue {
   readonly board = new Graphics({ label: 'tutorial-cell', eventMode: 'none' });
   readonly screen = new Container({ label: 'tutorial-arrow', eventMode: 'none' });
   private readonly connector = new Graphics();
-  private contrast: boolean | null = null;
+  private frameKey = '';
   private layoutKey = '';
   constructor() {
     this.screen.addChild(this.connector);
@@ -33,19 +33,22 @@ export class PixiTutorialCue {
     if (!cue || !model) return;
     const color = '#ffffff';
     const dark = model.highContrast ? '#000000' : COLORS.background;
-    if (this.contrast !== model.highContrast) {
-      this.contrast = model.highContrast;
-      this.board
-        .clear()
-        .poly(hexPoints(29))
-        .stroke({ color: dark, width: 8, join: 'round' })
-        .poly(hexPoints(29))
-        .stroke({ color, width: 3.4, join: 'round' })
-        .poly(hexPoints(23.6))
-        .stroke({ color, width: 1.8, join: 'round' });
+    const frames = cue.outlineHexes ?? [cue.hex];
+    const frameKey = JSON.stringify([frames, model.highContrast]);
+    if (frameKey !== this.frameKey) {
+      this.frameKey = frameKey;
+      this.board.clear();
+      for (const hex of frames) {
+        const world = hexToWorld(hex);
+        this.board
+          .poly(hexPoints(29, world.x, world.y))
+          .stroke({ color: dark, width: 8, join: 'round' })
+          .poly(hexPoints(29, world.x, world.y))
+          .stroke({ color, width: 3.4, join: 'round' })
+          .poly(hexPoints(23.6, world.x, world.y))
+          .stroke({ color, width: 1.8, join: 'round' });
+      }
     }
-    const world = hexToWorld(cue.hex);
-    this.board.position.set(world.x, world.y);
     const project = (hex: typeof cue.hex) => {
       const projected = projectHex(hex, view.orientation, view.depth);
       return { x: view.x + projected.x * view.scale, y: view.y + projected.y * view.scale };
@@ -80,26 +83,34 @@ export class PixiTutorialCue {
       32 * boardTilt(view.depth) * view.scale,
       view,
       obstacles,
+      [],
+      view.orientation,
     );
     const length = Math.hypot(tip.x - start.x, tip.y - start.y);
     const ux = (tip.x - start.x) / length;
     const uy = (tip.y - start.y) / length;
+    // Stop the shaft at the triangle base so its round cap cannot blunt the tip.
+    const base = { x: tip.x - ux * 10, y: tip.y - uy * 10 };
+    const arrow = [
+      tip.x,
+      tip.y,
+      base.x - uy * 5,
+      base.y + ux * 5,
+      base.x + uy * 5,
+      base.y - ux * 5,
+    ];
     this.connector
       .clear()
       .moveTo(start.x, start.y)
-      .lineTo(tip.x, tip.y)
+      .lineTo(base.x, base.y)
       .stroke({ color: dark, width: 7, cap: 'round' })
+      .poly(arrow)
+      .fill(dark)
+      .stroke({ color: dark, width: 3, join: 'round' })
       .moveTo(start.x, start.y)
-      .lineTo(tip.x, tip.y)
+      .lineTo(base.x, base.y)
       .stroke({ color, width: 3, cap: 'round' })
-      .poly([
-        tip.x,
-        tip.y,
-        tip.x - ux * 10 - uy * 5,
-        tip.y - uy * 10 + ux * 5,
-        tip.x - ux * 10 + uy * 5,
-        tip.y - uy * 10 - ux * 5,
-      ])
+      .poly(arrow)
       .fill(color);
   }
 }

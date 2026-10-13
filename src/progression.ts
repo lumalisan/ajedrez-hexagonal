@@ -34,6 +34,18 @@ const COMBAT_TYPES: PieceType[] = [
   'airplane',
 ];
 type Metrics = Record<string, number>;
+export interface XpReward {
+  label: string;
+  xp: number;
+  achievementId?: ProgressionAchievementId;
+}
+export interface BattleProgression {
+  xpBefore: number;
+  xpAfter: number;
+  rewards: XpReward[];
+  ratingBefore: number;
+  ratingAfter: number;
+}
 export interface MatchEvidence {
   mode: ProgressionMode;
   difficulty: number;
@@ -41,6 +53,7 @@ export interface MatchEvidence {
   completedAt?: string;
   result?: 0 | 0.5 | 1;
   opponentRating?: number;
+  battle?: BattleProgression;
 }
 export interface PlayerProgression {
   version: 1;
@@ -284,6 +297,7 @@ export function evaluateProgressionMatch(
   const metrics = analyzeRecord(record, owner);
   const next = structuredClone(progress);
   const prior = next.matches[record.createdAt];
+  const rewards: XpReward[] = [...(prior?.battle?.rewards ?? [])];
   const evidence: MatchEvidence = { mode, difficulty, metrics: { ...prior?.metrics } };
   for (const [key, value] of Object.entries(metrics))
     evidence.metrics[key] = Math.max(evidence.metrics[key] ?? 0, value);
@@ -299,8 +313,19 @@ export function evaluateProgressionMatch(
     const duration = Math.min(50, Math.floor((final.ply - record.initialState.ply) / 2));
     const base = mode === 'local' ? 0 : (win ? [50, 75, 100, 150] : [25, 35, 50, 75])[difficulty];
     next.xp += base + Math.max(0, duration);
+    if (base)
+      rewards.push({
+        label: win
+          ? 'Victoria contra Hexfortia'
+          : result === 0.5
+            ? 'Tablas contra Hexfortia'
+            : 'Partida contra Hexfortia',
+        xp: base,
+      });
+    if (duration > 0) rewards.push({ label: 'Turnos jugados', xp: duration });
     if (progress.lastDailyMatch !== day) {
       next.xp += 25;
+      rewards.push({ label: 'Primera partida del día', xp: 25 });
       next.lastDailyMatch = day;
     }
     if (mode === 'machine') {
@@ -316,7 +341,20 @@ export function evaluateProgressionMatch(
       );
     }
   }
-  return unlock(next, options.at, progress.xp);
+  const update = unlock(next, options.at, progress.xp);
+  for (const id of update.unlocked) {
+    const achievement = PROGRESSION_ACHIEVEMENTS.find((entry) => entry.id === id)!;
+    rewards.push({ label: achievement.title, xp: TIERS[achievement.tier].xp, achievementId: id });
+  }
+  evidence.battle = {
+    xpBefore: prior?.battle?.xpBefore ?? progress.xp,
+    xpAfter: next.xp,
+    rewards,
+    ratingBefore:
+      prior?.battle?.ratingBefore ?? (mode === 'machine' ? progress.ratings.machine : 0),
+    ratingAfter: mode === 'machine' ? next.ratings.machine : 0,
+  };
+  return update;
 }
 
 function analyzeRecord(record: MatchRecord, owner: Player): Metrics {
@@ -620,6 +658,39 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
         ...(count(match.opponentRating, -1) >= 0
           ? { opponentRating: count(match.opponentRating) }
           : {}),
+      };
+    }
+  if (object(value.matches))
+    for (const [id, match] of Object.entries(value.matches)) {
+      if (!fresh.matches[id] || !object(match)) continue;
+      const battle = match.battle;
+      if (
+        !object(battle) ||
+        !Array.isArray(battle.rewards) ||
+        !['xpBefore', 'xpAfter', 'ratingBefore', 'ratingAfter'].every(
+          (key) => count(battle[key], -1) >= 0,
+        )
+      )
+        continue;
+      const rewards: XpReward[] = [];
+      for (const reward of battle.rewards) {
+        if (!object(reward) || typeof reward.label !== 'string' || count(reward.xp, -1) < 0)
+          continue;
+        const achievement = PROGRESSION_ACHIEVEMENTS.find(
+          (entry) => entry.id === reward.achievementId,
+        );
+        rewards.push({
+          label: reward.label,
+          xp: count(reward.xp),
+          ...(achievement ? { achievementId: achievement.id } : {}),
+        });
+      }
+      fresh.matches[id].battle = {
+        xpBefore: count(battle.xpBefore),
+        xpAfter: count(battle.xpAfter),
+        rewards,
+        ratingBefore: count(battle.ratingBefore),
+        ratingAfter: count(battle.ratingAfter),
       };
     }
   fresh.registeredMatchIds = strings(value.registeredMatchIds).filter(

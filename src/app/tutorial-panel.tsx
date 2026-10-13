@@ -28,12 +28,16 @@ export function TutorialPanel() {
       </div>
       <div className="tutorial-content" ref={contentRef} tabIndex={0}>
         <h1 id="tutorial-heading" aria-live="polite" aria-atomic="true">
-          {completed ? 'Tutorial completado' : step.title}
+          {completed ? '¡Tutorial completado!' : step.title}
         </h1>
         {completed ? (
           <>
-            <p>Has destruido la fortaleza enemiga y completado la práctica libre.</p>
-            <p>Ya puedes jugar una partida.</p>
+            <p>¡Enhorabuena! Has destruido la fortaleza enemiga y completado la práctica libre.</p>
+            <p>
+              Ya conoces todas las unidades y sus posibilidades en combate. Ahora estás preparado
+              para enfrentarte a tu primer rival.
+            </p>
+            <p>¡Buena suerte y que comience la batalla!</p>
           </>
         ) : (
           <>
@@ -53,7 +57,7 @@ export function TutorialPanel() {
               Repetir tutorial
             </button>
             <button type="button" className="confirm-button" onClick={commands.exitTutorial}>
-              Volver al inicio
+              Volver al menú
             </button>
           </div>
         ) : (
@@ -63,7 +67,7 @@ export function TutorialPanel() {
                 id="tutorial-previous"
                 type="button"
                 className="secondary-button"
-                disabled={step.section === 0 || snapshot.animating}
+                disabled={tutorial.stepIndex === 0 || snapshot.animating}
                 onClick={() => commands.navigateTutorial(-1)}
               >
                 Anterior
@@ -72,7 +76,7 @@ export function TutorialPanel() {
                 id="tutorial-next"
                 type="button"
                 className="confirm-button"
-                disabled={step.section === 14 || snapshot.animating}
+                disabled={tutorial.stepIndex === TUTORIAL_STEPS.length - 1 || snapshot.animating}
                 onClick={() => commands.navigateTutorial(1)}
               >
                 Siguiente

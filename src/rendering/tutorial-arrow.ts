@@ -18,24 +18,40 @@ export function placeTutorialArrow(
   bounds: { width: number; height: number },
   obstacles: readonly ArrowObstacle[],
   rectangles: readonly ArrowRectangle[] = [],
+  hexOrientation?: number,
 ): { start: ArrowPoint; tip: ArrowPoint } {
-  const directions = [
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-    [1, 1],
-    [0, -1],
-    [0, 1],
-    [-1, 0],
-    [1, 0],
-  ];
+  const directions =
+    hexOrientation === undefined
+      ? [
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, 1],
+          [0, -1],
+          [0, 1],
+          [-1, 0],
+          [1, 0],
+        ]
+      : [3, 5, 2, 0, 4, 1].map((side) => {
+          const angle = ((side + 0.5) * Math.PI) / 3 + hexOrientation;
+          return [Math.cos(angle), Math.sin(angle)];
+        });
   let best: { start: ArrowPoint; tip: ArrowPoint; score: number } | undefined;
   for (const length of [38, 26, 18])
     for (const [dx, dy] of directions) {
-      const norm = Math.hypot(dx, dy);
-      const ux = dx / norm;
-      const uy = dy / norm;
-      const tip = { x: target.x + ux * radiusX, y: target.y + uy * radiusY };
+      // Normalize after projection so camera rotation and depth keep the side midpoint aligned.
+      const offsetX =
+        hexOrientation === undefined
+          ? (dx * radiusX) / Math.hypot(dx, dy)
+          : (dx * radiusX * Math.sqrt(3)) / 2;
+      const offsetY =
+        hexOrientation === undefined
+          ? (dy * radiusY) / Math.hypot(dx, dy)
+          : (dy * radiusY * Math.sqrt(3)) / 2;
+      const norm = Math.hypot(offsetX, offsetY);
+      const ux = hexOrientation === undefined ? dx / Math.hypot(dx, dy) : offsetX / norm;
+      const uy = hexOrientation === undefined ? dy / Math.hypot(dx, dy) : offsetY / norm;
+      const tip = { x: target.x + offsetX, y: target.y + offsetY };
       const start = { x: tip.x + ux * length, y: tip.y + uy * length };
       let score = (38 - length) / 38 + (dx === 0 || dy === 0 ? 2 : 0);
       for (const point of [tip, start]) {

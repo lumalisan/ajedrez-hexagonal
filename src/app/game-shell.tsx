@@ -1,3 +1,4 @@
+import { MenuIcon } from './components/menu-icon';
 import { BoardCanvas } from './board-canvas';
 import { useGame } from './game-context';
 import { HomeScreen } from './home-screen';
@@ -58,7 +59,7 @@ function Header() {
           title="Reglas"
           onClick={() => commands.openDialog({ kind: 'rules' })}
         >
-          <span aria-hidden="true">?</span>
+          <MenuIcon kind="rules" />
         </button>
         <button
           className="icon-button"
@@ -72,19 +73,6 @@ function Header() {
         </button>
         <button
           className="icon-button"
-          id="resign-button"
-          type="button"
-          aria-label="Rendirse"
-          title="Rendirse"
-          disabled={!matchRecord || disabled}
-          onClick={() => commands.openDialog({ kind: 'resign' })}
-        >
-          <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 21V4m0 1c4-4 8 4 14 0v10c-6 4-10-4-14 0" />
-          </svg>
-        </button>
-        <button
-          className="icon-button"
           id="blockade-button"
           type="button"
           aria-label="Proponer tablas"
@@ -94,19 +82,36 @@ function Header() {
           onClick={() => commands.openDialog({ kind: 'draw-offer' })}
         >
           <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m2 10 4-5 4 2m12 3-4-5-4 1-5 5 2 2 4-3 5 5-6 5-8-6-4-4Zm4 4 4-5m10 6 2-5M9 17l2-2m1 4 2-2" />
+            <path d="m11 17 2 2a1 1 0 1 0 3-3" />
+            <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.24.27L21 4" />
+            <path d="m21 3 1 11h-2M3 3 2 14h2m-1-10 8 2m-7 8 7 7a1 1 0 1 0 3-3" />
           </svg>
         </button>
-        <button
-          className="menu-button"
-          id="new-game-button"
-          type="button"
-          onClick={() =>
-            snapshot.tutorial ? commands.exitTutorial() : commands.openDialog({ kind: 'abandon' })
-          }
-        >
-          {snapshot.tutorial ? 'Abandonar tutorial' : 'Abandonar partida'}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            className="icon-button"
+            id="resign-button"
+            type="button"
+            aria-label="Rendirse"
+            title="Rendirse"
+            disabled={!matchRecord || disabled}
+            onClick={() => commands.openDialog({ kind: 'resign' })}
+          >
+            <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 21V4m0 1c4-4 8 4 14 0v10c-6 4-10-4-14 0" />
+            </svg>
+          </button>
+          <button
+            className="menu-button"
+            id="new-game-button"
+            type="button"
+            onClick={() =>
+              snapshot.tutorial ? commands.exitTutorial() : commands.openDialog({ kind: 'abandon' })
+            }
+          >
+            {snapshot.tutorial ? 'Abandonar tutorial' : 'Abandonar partida'}
+          </button>
+        </div>
       </div>
     </header>
   );

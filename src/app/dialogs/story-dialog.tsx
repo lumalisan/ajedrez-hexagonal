@@ -101,13 +101,13 @@ export function StoryDialog() {
                     </p>
                   ))}
                   <nav className="story-pagination" aria-label="Lectura de la historia">
+                    {index > 0 && (
+                      <Button onClick={() => activate(STORY_CHAPTERS[index - 1].id)}>
+                        ← Capítulo anterior
+                      </Button>
+                    )}
                     <Button
-                      disabled={index === 0}
-                      onClick={() => activate(STORY_CHAPTERS[index - 1].id)}
-                    >
-                      ← Capítulo anterior
-                    </Button>
-                    <Button
+                      variant={index === STORY_CHAPTERS.length - 1 ? 'primary' : 'secondary'}
                       onClick={() => {
                         commands.markStoryChapterRead(chapter.id);
                         if (index < STORY_CHAPTERS.length - 1)
@@ -117,7 +117,7 @@ export function StoryDialog() {
                     >
                       {index < STORY_CHAPTERS.length - 1
                         ? 'Capítulo siguiente →'
-                        : 'Terminar lectura'}
+                        : 'Volver al menú'}
                     </Button>
                   </nav>
                 </article>

@@ -5,7 +5,7 @@ import {
   createTutorialCheckpoint,
   getTutorialActions,
   getTutorialReply,
-  nextTutorialSection,
+  nextTutorialStep,
   TUTORIAL_STEPS,
 } from '../src/tutorial';
 import type { GameAction, GameState } from '../src/types';
@@ -96,14 +96,14 @@ describe('tutorial checkpoints', () => {
     ]);
   });
 
-  it('skips to the first exercise of the previous or next section', () => {
-    expect(nextTutorialSection(indexOf('3.2'), 1)).toBe(indexOf('4.1'));
-    expect(nextTutorialSection(indexOf('3.5'), 1)).toBe(indexOf('4.1'));
-    expect(nextTutorialSection(indexOf('4.2'), -1)).toBe(indexOf('3.1'));
-    expect(nextTutorialSection(0, -1)).toBe(0);
-    expect(nextTutorialSection(indexOf('0.1'), 1)).toBe(indexOf('1.1'));
-    expect(nextTutorialSection(indexOf('1.1'), -1)).toBe(indexOf('0.1'));
-    expect(nextTutorialSection(indexOf('14.1'), 1)).toBe(indexOf('14.1'));
+  it('visits the adjacent step and clamps navigation at both ends', () => {
+    expect(nextTutorialStep(indexOf('3.2'), 1)).toBe(indexOf('3.3'));
+    expect(nextTutorialStep(indexOf('3.5'), 1)).toBe(indexOf('4.1'));
+    expect(nextTutorialStep(indexOf('4.2'), -1)).toBe(indexOf('4.1'));
+    expect(nextTutorialStep(0, -1)).toBe(0);
+    expect(nextTutorialStep(indexOf('0.1'), 1)).toBe(indexOf('1.1'));
+    expect(nextTutorialStep(indexOf('1.1'), -1)).toBe(indexOf('0.1'));
+    expect(nextTutorialStep(indexOf('14.1'), 1)).toBe(indexOf('14.1'));
     expect(() => createTutorialCheckpoint(-1)).toThrow(RangeError);
     expect(() => createTutorialCheckpoint(TUTORIAL_STEPS.length)).toThrow(RangeError);
   });

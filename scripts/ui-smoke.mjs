@@ -29,6 +29,7 @@ assert(executablePath, 'No browser found. Set PLAYWRIGHT_BROWSER_PATH to Chrome 
 
 const server = await createServer({
   logLevel: 'silent',
+  cacheDir: 'node_modules/.vite-ui-smoke',
   server: { host: '127.0.0.1', port: 4174, strictPort: true, hmr: false },
 });
 await server.listen();
@@ -592,12 +593,6 @@ try {
   assert(await fixedBoardToggle.isChecked(), 'Fixed-board option must be enabled by default.');
   await fixedBoardToggle.uncheck();
   await fixedBoardToggle.check();
-  assert(
-    await desktop.evaluate(
-      () => JSON.parse(localStorage.getItem('atlas-preferences-v2') ?? '{}').fixedBoard === true,
-    ),
-    'Fixed-board preference must be persisted.',
-  );
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-options.png` });
   await desktop.locator('[data-volume="masterVolume"]').fill('42');
@@ -605,7 +600,13 @@ try {
     (await desktop.locator('[data-volume="masterVolume"] + output').textContent()) === '42%',
     'Volume output is not synchronized.',
   );
-  await desktop.locator('[data-dialog-close]').click();
+  await desktop.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+  assert(
+    await desktop.evaluate(
+      () => JSON.parse(localStorage.getItem('atlas-preferences-v2') ?? '{}').fixedBoard === true,
+    ),
+    'Fixed-board preference must be persisted.',
+  );
 
   await desktop.locator('#help-button').click();
   await desktop.locator('#rules-article').waitFor();
@@ -785,8 +786,8 @@ try {
   );
   await desktop.locator('#settings-button').click();
   await desktop.locator('[data-pref="fixed-board"]').uncheck();
+  await desktop.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
   await desktop.locator('#game-canvas[data-viewpoint="amber"]').waitFor();
-  await desktop.locator('[data-dialog-close]').click();
   if (process.env.UI_SCREENSHOT)
     await desktop.screenshot({ path: `${process.env.UI_SCREENSHOT}-amber.png` });
   assert(
@@ -1040,6 +1041,7 @@ try {
     'Order confirmation must preserve the three existing choices.',
   );
   await chooseSelectOption(cannonPage, 'Confirmación de órdenes', 'Rápida');
+  await cannonPage.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
   assert(
     await cannonPage.evaluate(
       () =>
@@ -1047,9 +1049,9 @@ try {
     ),
     'Changing the confirmation combobox must persist the actual preference.',
   );
-  await cannonPage.locator('[data-dialog-close]').click();
   await cannonPage.reload({ waitUntil: 'networkidle' });
   await cannonPage.locator('[data-home-action="continue"]').click();
+  await cannonPage.locator('[data-continue-match]').first().click();
   await cannonPage.locator('#settings-button').click();
   assert(
     (await selectedOptionLabel(cannonPage, 'Confirmación de órdenes')) === 'Rápida',
@@ -1164,8 +1166,10 @@ try {
   assert(
     (await instantNotice.locator('img.achievement-icon').count()) === 1 &&
       (await instantNotice.locator('strong').textContent()) === '¡Transformación!' &&
-      (await instantNotice.locator('p, button, progress').count()) === 0,
-    'A confirmed transformation must immediately show only its achievement icon and title.',
+      (await instantNotice.locator('p').textContent()) ===
+        'Abandona un vehículo para convertirlo en soldado.' &&
+      (await instantNotice.locator('button, progress').count()) === 0,
+    'A confirmed transformation must immediately show its achievement icon, title and description.',
   );
   const liveAchievement = await instantAchievement.evaluate(() => {
     const record = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
@@ -1196,6 +1200,7 @@ try {
   );
   await instantAchievement.getByRole('button', { name: 'Cerrar logros', exact: true }).click();
   await instantAchievement.locator('[data-home-action="continue"]').click();
+  await instantAchievement.locator('[data-continue-match]').first().click();
   await assertActionHistory(instantAchievement, 1, 1);
   await instantAchievement.locator('#undo-action').click();
   await assertActionHistory(instantAchievement, 0, 1);
@@ -1256,6 +1261,7 @@ try {
       );
       await confirmationPage.reload({ waitUntil: 'networkidle' });
       await confirmationPage.locator('#home-continue-button').click();
+      await confirmationPage.locator('[data-continue-match]').first().click();
       await confirmationPage.locator('#home-screen').waitFor({ state: 'hidden' });
       assert(
         (await confirmationPage.locator('#sr-board').textContent()) === boardBeforeLeaving,
@@ -1350,6 +1356,7 @@ try {
   );
   await historyPage.reload({ waitUntil: 'networkidle' });
   await historyPage.locator('[data-home-action="continue"]').click();
+  await historyPage.locator('[data-continue-match]').first().click();
   await assertActionHistory(historyPage, 0, 2);
   assert(
     (await historyPage.locator('#sr-board').textContent()) === initialBoard &&
@@ -1380,9 +1387,15 @@ try {
     record.actions = [];
     record.currentAction = 0;
     localStorage.setItem(key, JSON.stringify(record));
+    const pendingKey = 'atlas-pending-matches-v1';
+    const pending = JSON.parse(localStorage.getItem(pendingKey) ?? '[]');
+    const entry = pending.find((candidate) => candidate.record.createdAt === record.createdAt);
+    if (entry) entry.record = record;
+    localStorage.setItem(pendingKey, JSON.stringify(pending));
   });
   await historyPage.reload({ waitUntil: 'networkidle' });
   await historyPage.locator('[data-home-action="continue"]').click();
+  await historyPage.locator('[data-continue-match]').first().click();
   await clickHex(historyPage, 0, -2);
   await historyPage.locator('[data-command="rotate"]').click();
   await historyPage.locator('[data-direction-order="0"]').click();
@@ -1827,7 +1840,7 @@ try {
   await clocked.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
   await clocked.locator('#home-settings-button').click();
   await clocked.locator('[data-pref="handoff"]').check();
-  await clocked.locator('[data-dialog-close]').click();
+  await clocked.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
   await clocked.locator('[data-home-action="new"]').click();
   await clocked.locator('[data-home-mode="local"]').click();
   assert(
@@ -1919,9 +1932,15 @@ try {
     record.clock.lastTickAt = Date.now() - 1_000;
     record.clock.timedOutPlayer = null;
     localStorage.setItem(key, JSON.stringify(record));
+    const pendingKey = 'atlas-pending-matches-v1';
+    const pending = JSON.parse(localStorage.getItem(pendingKey) ?? '[]');
+    const entry = pending.find((candidate) => candidate.record.createdAt === record.createdAt);
+    if (entry) entry.record = record;
+    localStorage.setItem(pendingKey, JSON.stringify(pending));
   });
   await clocked.reload({ waitUntil: 'networkidle' });
   await clocked.locator('[data-home-action="continue"]').click();
+  await clocked.locator('[data-continue-match]').first().click();
   await clocked
     .locator('#game-dialog h2')
     .filter({ hasText: /tiempo/i })
@@ -2106,9 +2125,9 @@ async function assertFloatingWindowInsideArena(page, selector, action) {
 async function assertTopActionsDoNotOverlap(page) {
   assert(
     await page
-      .locator('#achievements-button')
-      .evaluate((button) => button.nextElementSibling?.id === 'resign-button'),
-    'Achievements must appear immediately before Resign in the visual and keyboard order.',
+      .locator('#resign-button')
+      .evaluate((button) => button.nextElementSibling?.id === 'new-game-button'),
+    'Resign must appear immediately before Abandon in the visual and keyboard order.',
   );
   const boxes = await page.locator('.top-actions .icon-button').evaluateAll((buttons) =>
     buttons
@@ -2346,16 +2365,51 @@ async function assertAchievementsCatalog(page, surface) {
           (item.querySelector('.achievement-state')?.textContent?.includes('Logro oculto')
             ? !item.querySelector('.achievement-description p') &&
               !item.querySelector('progress') &&
-              !item.querySelector('.achievement-modes')
+              item.querySelector('.achievement-modes')
             : item.querySelector('.achievement-description p')?.textContent?.trim() &&
               item.querySelector('.achievement-state')?.textContent?.includes('Pendiente')),
       ),
     ),
-    'Visible achievements explain their conditions; secret ones expose only a title and locked state.',
+    'Visible achievements explain their conditions; secret ones retain mode indicators without revealing conditions.',
   );
   assert(
     ids.every((id) => id.startsWith('p1-')),
     'Higher tiers must not expose any achievement titles.',
+  );
+  const advanced = page.locator('[data-achievement-tier="1"]');
+  await advanced.hover();
+  await page
+    .getByRole('tooltip', { name: 'Llega al nivel 5 para desbloquear este nivel' })
+    .waitFor({ state: 'visible' });
+  await advanced.click({ force: true });
+  assert(
+    (await page.locator('[data-achievement-tier="0"]').getAttribute('aria-current')) === 'page' &&
+      (await cards.count()) === 20,
+    'Locked levels must explain their threshold without changing the selected catalog.',
+  );
+  if (surface === 'Desktop') {
+    const rows = await cards.evaluateAll((items) => {
+      const counts = new Map();
+      for (const item of items) {
+        const top = Math.round(item.getBoundingClientRect().top);
+        counts.set(top, (counts.get(top) ?? 0) + 1);
+      }
+      return [...counts.values()];
+    });
+    assert(
+      rows.length === 4 && rows.every((count) => count === 5),
+      'Desktop achievements must form four rows of five.',
+    );
+  }
+  const secretMode = cards
+    .filter({ hasText: 'Logro oculto' })
+    .locator('.achievement-mode button')
+    .first();
+  await secretMode.click();
+  const modeLabel = await secretMode.getAttribute('aria-label');
+  assert(
+    await page.getByRole('tooltip', { name: modeLabel, exact: true }).first().isVisible(),
+    'Secret achievements must explain their mode on click.',
   );
   const summary = page.locator('[data-achievement-summary]');
   const totals = await summary.evaluate((progress) => ({

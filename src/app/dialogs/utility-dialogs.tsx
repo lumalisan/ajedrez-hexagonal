@@ -4,9 +4,14 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Field, FieldControl, FieldLabel } from '../components/ui/field';
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { outcomeText, PLAYER_NAMES } from '../../engine';
-import { analyzeMatchMoments } from '../../match-insights';
+import { BattleProgressionPanel } from '../components/battle-progression';
 import { calculateStatistics } from '../../match-record';
-import { loadAcademyRecords, loadMatchHistory, type AcademyRecord } from '../../match-storage';
+import {
+  loadAcademyRecords,
+  loadMatchHistory,
+  loadPendingMatches,
+  type AcademyRecord,
+} from '../../match-storage';
 import { revealedScenarioHints, scenarioLessonAt } from '../../scenarios';
 import type { GamePreferences, ScenarioDefinition } from '../../types';
 import { GameSelect } from '../components/game-select';
@@ -35,6 +40,8 @@ export function UtilityDialogs() {
       return <ProfileDialog />;
     case 'settings':
       return <SettingsDialog />;
+    case 'continue':
+      return <ContinueDialog />;
     case 'history':
       return <HistoryDialog />;
     case 'achievements':
@@ -187,25 +194,35 @@ function ConfirmationDialog({
 
 function SettingsDialog() {
   const { snapshot, commands } = useGame();
-  const { preferences, matchRecord, animating } = snapshot;
+  const { matchRecord, animating } = snapshot;
+  const [preferences, setPreferences] = useState(snapshot.preferences);
+  const updateDraft = (update: Partial<GamePreferences>) =>
+    setPreferences((current) => ({ ...current, ...update }));
   const importInput = useRef<HTMLInputElement>(null);
   return (
     <>
+      <DialogClose label="Cerrar ajustes sin guardar" className="dialog-corner-close" />
       <span className="eyebrow">OPCIONES</span>
       <h2>Audio, vista y accesibilidad</h2>
-      <p>Personaliza la partida. Los cambios se guardan automáticamente.</p>
+      <p>Personaliza la partida y guarda los cambios cuando termines.</p>
       <div className="volume-settings" aria-label="Controles de volumen">
         <VolumeControl
+          preferences={preferences}
+          onChange={updateDraft}
           preference="masterVolume"
           label="Volumen maestro"
           description="Controla toda la mezcla"
         />
         <VolumeControl
+          preferences={preferences}
+          onChange={updateDraft}
           preference="musicVolume"
           label="Música"
           description="Tema ambiental en bucle"
         />
         <VolumeControl
+          preferences={preferences}
+          onChange={updateDraft}
           preference="effectsVolume"
           label="Efectos especiales"
           description="Movimientos, ataques y avisos"
@@ -221,7 +238,7 @@ function SettingsDialog() {
           description="Cian permanece abajo y Ámbar arriba durante toda la partida"
           attribute="fixed-board"
           checked={preferences.fixedBoard}
-          onChange={(fixedBoard) => commands.updatePreferences({ fixedBoard })}
+          onChange={(fixedBoard) => updateDraft({ fixedBoard })}
         />
         <div className="field-row">
           <label htmlFor="confirmation">Confirmación de órdenes</label>
@@ -229,7 +246,7 @@ function SettingsDialog() {
             inputId="confirmation"
             options={CONFIRMATION_OPTIONS}
             value={preferences.confirmation}
-            onChange={(confirmation) => commands.updatePreferences({ confirmation })}
+            onChange={(confirmation) => updateDraft({ confirmation })}
           />
         </div>
         <TogglePreference
@@ -237,7 +254,7 @@ function SettingsDialog() {
           description="Oculta la posición entre turnos locales"
           attribute="handoff"
           checked={preferences.handoffScreen}
-          onChange={(handoffScreen) => commands.updatePreferences({ handoffScreen })}
+          onChange={(handoffScreen) => updateDraft({ handoffScreen })}
         />
       </div>
       <div className="accessibility-settings">
@@ -250,21 +267,21 @@ function SettingsDialog() {
           description="Refuerza bordes y colores del tablero"
           attribute="contrast"
           checked={preferences.highContrast}
-          onChange={(highContrast) => commands.updatePreferences({ highContrast })}
+          onChange={(highContrast) => updateDraft({ highContrast })}
         />
         <TogglePreference
           label="Animar fichas en reposo"
           description="Anima las fichas mientras esperan. No afecta a movimientos ni ataques."
           attribute="idle-animations"
           checked={preferences.idleAnimations}
-          onChange={(idleAnimations) => commands.updatePreferences({ idleAnimations })}
+          onChange={(idleAnimations) => updateDraft({ idleAnimations })}
         />
         <TogglePreference
           label="Reducir movimiento"
           description="Limita animaciones y transiciones"
           attribute="motion"
           checked={preferences.reducedMotion}
-          onChange={(reducedMotion) => commands.updatePreferences({ reducedMotion })}
+          onChange={(reducedMotion) => updateDraft({ reducedMotion })}
         />
       </div>
       <div className="board-settings">
@@ -314,8 +331,16 @@ function SettingsDialog() {
         />
       </div>
       <div className="dialog-actions">
-        <Button type="button" variant="primary" data-dialog-close onClick={commands.closeDialog}>
-          Listo
+        <Button
+          type="button"
+          variant="primary"
+          data-save-preferences
+          onClick={() => {
+            commands.updatePreferences(preferences);
+            commands.closeDialog();
+          }}
+        >
+          Guardar cambios
         </Button>
       </div>
     </>
@@ -323,16 +348,19 @@ function SettingsDialog() {
 }
 
 function VolumeControl({
+  preferences,
+  onChange,
   preference,
   label,
   description,
 }: {
+  preferences: GamePreferences;
+  onChange: (update: Partial<GamePreferences>) => void;
   preference: 'masterVolume' | 'musicVolume' | 'effectsVolume';
   label: string;
   description: string;
 }) {
-  const { snapshot, commands } = useGame();
-  const percentage = Math.round(snapshot.preferences[preference] * 100);
+  const percentage = Math.round(preferences[preference] * 100);
   return (
     <label className="volume-control">
       <span>
@@ -347,9 +375,7 @@ function VolumeControl({
         value={percentage}
         data-volume={preference}
         aria-label={label}
-        onChange={(event) =>
-          commands.updatePreferences({ [preference]: Number(event.currentTarget.value) / 100 })
-        }
+        onChange={(event) => onChange({ [preference]: Number(event.currentTarget.value) / 100 })}
       />
       <output>{percentage}%</output>
     </label>
@@ -390,6 +416,48 @@ function TogglePreference({
         </FieldControl>
       </FieldLabel>
     </Field>
+  );
+}
+
+function ContinueDialog() {
+  const { commands } = useGame();
+  const [pending] = useState(loadPendingMatches);
+  return (
+    <>
+      <DialogClose label="Cerrar partidas pendientes" className="dialog-corner-close" />
+      <h2>Continuar partida</h2>
+      <p>
+        Elige la batalla que quieres retomar. Tras 30 días sin retomarla, se registra como perdida.
+      </p>
+      <div className="history-list">
+        {pending.length ? (
+          pending.map(({ record, resumedAt }) => (
+            <button
+              type="button"
+              className="history-card"
+              key={record.createdAt}
+              data-continue-match={record.createdAt}
+              onClick={() => commands.continueMatch(record.createdAt)}
+            >
+              <span>{new Date(resumedAt).toLocaleDateString('es-ES')}</span>
+              <strong>{record.config.participants.map((p) => p.name).join(' vs. ')}</strong>
+              <small>
+                {record.currentAction} órdenes ·{' '}
+                {record.config.participants.some((p) => p.kind === 'machine')
+                  ? 'Contra la IA'
+                  : 'Dos jugadores'}
+              </small>
+              <small>Retomar partida</small>
+            </button>
+          ))
+        ) : (
+          <div className="empty-state">
+            <strong>No hay partidas pendientes</strong>
+            <p>Las partidas que abandones se guardarán aquí.</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -445,15 +513,20 @@ function OutcomeDialog() {
     () => (matchRecord ? calculateStatistics(matchRecord) : null),
     [matchRecord],
   );
-  const moments = useMemo(
-    () => (matchRecord ? analyzeMatchMoments(matchRecord) : []),
-    [matchRecord],
-  );
+  const [completedAt] = useState(() => matchRecord?.updatedAt ?? new Date().toISOString());
+  const evidence = matchRecord ? snapshot.progression.matches[matchRecord.createdAt] : undefined;
+  const duration = matchRecord
+    ? Math.max(
+        0,
+        Math.round(
+          (Date.parse(evidence?.completedAt ?? completedAt) - Date.parse(matchRecord.createdAt)) /
+            1000,
+        ),
+      )
+    : 0;
   if (!state.outcome) return null;
   const winnerClass =
     state.outcome.type === 'win' ? (state.outcome.winner === 0 ? 'blue' : 'amber') : 'draw';
-  const remainingBlue = state.pieces.filter((piece) => piece.owner === 0).length;
-  const remainingAmber = state.pieces.filter((piece) => piece.owner === 1).length;
   return (
     <>
       <div className={`outcome-seal ${winnerClass}`}>
@@ -461,45 +534,35 @@ function OutcomeDialog() {
       </div>
       <span className="eyebrow">BATALLA CONCLUIDA</span>
       <h2>{outcomeText(state.outcome)}</h2>
-      <div className="result-stats">
-        <span>
-          <strong>{Math.ceil(state.ply / 2)}</strong> turnos
+      <button
+        type="button"
+        className="history-card battle-record"
+        data-analyze
+        disabled={!matchRecord}
+        onClick={() => commands.openReplay()}
+        aria-label="Ver repetición de esta partida"
+      >
+        <span className="battle-record-stats">
+          <span>
+            <strong>{Math.ceil((matchRecord?.currentAction ?? state.ply) / 2)}</strong> turnos
+          </span>
+          <span>
+            <strong>{formatDuration(duration)}</strong> duración
+          </span>
+          <span>
+            <strong>{statistics?.captures[0] ?? 0}</strong> eliminadas por Cian
+          </span>
+          <span>
+            <strong>{statistics?.captures[1] ?? 0}</strong> eliminadas por Ámbar
+          </span>
         </span>
-        <span>
-          <strong>{remainingBlue}</strong> unidades Cian
-        </span>
-        <span>
-          <strong>{remainingAmber}</strong> unidades Ámbar
-        </span>
-      </div>
-      {statistics && (
-        <p className="result-detail">
-          Capturas {statistics.captures[0]}–{statistics.captures[1]} · Daño a Fortaleza{' '}
-          {statistics.fortressDamage[0]}–{statistics.fortressDamage[1]} · Transformaciones{' '}
-          {statistics.transformations[0]}–{statistics.transformations[1]}
-        </p>
-      )}
-      {moments.length > 0 && (
-        <section className="key-moments">
-          <div>
-            <span className="eyebrow">TRES MOMENTOS CLAVE</span>
-            <p>Salta directamente a los giros que más cambiaron la batalla.</p>
-          </div>
-          {moments.map((moment) => (
-            <button
-              key={moment.actionIndex}
-              type="button"
-              className="moment-card"
-              data-moment-jump={moment.actionIndex}
-              onClick={() => commands.openReplay(moment.actionIndex)}
-            >
-              <span>Orden {moment.actionIndex}</span>
-              <strong>{moment.title}</strong>
-              <small>{moment.detail}</small>
-            </button>
-          ))}
-        </section>
-      )}
+        <small>Ver repetición →</small>
+      </button>
+      <BattleProgressionPanel
+        key={matchRecord?.createdAt}
+        battle={evidence?.battle}
+        mode={evidence?.mode ?? (snapshot.gameMode === 'machine' ? 'machine' : 'local')}
+      />
       {snapshot.isLocalMatch && snapshot.canUndo && (
         <div className="inline-actions">
           <button type="button" className="text-button" data-undo-match onClick={commands.undo}>
@@ -507,15 +570,7 @@ function OutcomeDialog() {
           </button>
         </div>
       )}
-      <div className="dialog-actions triple">
-        <button
-          type="button"
-          className="text-button"
-          data-analyze
-          onClick={() => commands.openReplay()}
-        >
-          Ver repetición
-        </button>
+      <div className="dialog-actions">
         <Button
           type="button"
           variant="secondary"

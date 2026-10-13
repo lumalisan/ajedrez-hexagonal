@@ -24,6 +24,7 @@ export type DialogState =
   | { kind: 'profile' }
   | { kind: 'story' }
   | { kind: 'history' }
+  | { kind: 'continue' }
   | { kind: 'achievements' }
   | { kind: 'ranking' }
   | { kind: 'abandon' }
@@ -91,7 +92,7 @@ export interface GameCommands {
   startTutorial(): void;
   navigateTutorial(delta: 1 | -1): void;
   exitTutorial(): void;
-  continueMatch(): void;
+  continueMatch(id?: string): void;
   resetGame(): void;
   loadRecord(record: MatchRecord): void;
   importMatch(file: File): Promise<void>;

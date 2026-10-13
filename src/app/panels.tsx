@@ -353,6 +353,16 @@ function DirectionCompass({
             aria-pressed={active || isCurrent}
             onClick={() => onDirection(direction)}
           >
+            {guided && step?.direction === direction && selected !== direction && (
+              <svg
+                className="tutorial-compass-outline"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <polygon points="50,4 89.3,27 89.3,73 50,96 10.7,73 10.7,27" />
+              </svg>
+            )}
             <i aria-hidden="true">↑</i>
             <span>{label}</span>
           </button>

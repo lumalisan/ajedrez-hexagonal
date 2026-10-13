@@ -1,6 +1,7 @@
 import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
 import { useState } from 'react';
+import { ProfileAvatar } from '../components/profile-avatar';
 import { ACHIEVEMENTS } from '../../achievements';
 import {
   PROGRESSION_ACHIEVEMENTS,
@@ -26,10 +27,13 @@ const dateFormat = new Intl.DateTimeFormat('es-ES', {
 });
 
 export function AchievementsDialog() {
-  const { snapshot, commands } = useGame();
+  const { snapshot } = useGame();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
-  const tier = levelProgress(snapshot.progression.xp).tier;
-  const entries = PROGRESSION_ACHIEVEMENTS.filter((entry) => entry.tier <= tier).map(
+  const { tier } = levelProgress(snapshot.progression.xp);
+  const [selectedTier, setSelectedTier] = useState(0);
+  const [lockedHint, setLockedHint] = useState<number | null>(null);
+  const category = TIERS[selectedTier];
+  const entries = PROGRESSION_ACHIEVEMENTS.filter((entry) => entry.tier === selectedTier).map(
     (definition) => ({
       definition,
       progress: {
@@ -54,122 +58,153 @@ export function AchievementsDialog() {
   );
 
   return (
-    <section className="achievements-shell" aria-label="Colección de logros">
-      <header className="achievements-heading">
-        <div>
-          <span className="eyebrow">TU PALMARÉS</span>
+    <section className="achievements-shell achievements-browser" aria-label="Colección de logros">
+      <aside className="achievements-sidebar">
+        <header className="achievements-heading">
           <h2>Logros</h2>
-          <p>En local juegas como Cian; las acciones del invitado no suman a tu perfil.</p>
-        </div>
-        <DialogClose label="Cerrar logros" />
-      </header>
-      <div className="achievements-collection">
-        <ProgressionSummary />
-        <div>
-          <span>
-            <strong>{unlocked}</strong> de {entries.length} logros desbloqueados
-          </span>
-          <span>{percentage}%</span>
-        </div>
-        <progress
-          value={unlocked}
-          max={entries.length}
-          aria-label="Logros desbloqueados"
-          data-achievement-summary
-        />
-        <p className="achievements-scope">
-          Las acciones suman al instante; las partidas y victorias, al terminar. Las siguientes
-          categorías se abren en los niveles 5, 15, 30 y 50.
-          {clockRunning && <strong> El reloj de la partida sigue en marcha.</strong>}
-        </p>
-      </div>
-      <div className="achievements-toolbar">
-        <div
-          className="achievement-filters flex flex-wrap gap-1"
-          role="group"
-          aria-label="Filtrar logros"
-        >
-          {FILTERS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="min-h-11 cursor-pointer rounded-control border border-transparent bg-transparent px-3 py-2 font-ui text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan aria-pressed:border-line-strong aria-pressed:bg-panel-raised aria-pressed:text-ink"
-              aria-pressed={filter === item.id}
-              data-achievement-filter={item.id}
-              onClick={() => setFilter(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <span className="achievements-result-count" role="status">
-          {visible.length} logros
-        </span>
-      </div>
-      <div className="achievements-list" tabIndex={0} aria-label="Lista de logros">
-        {visible.length ? (
-          TIERS.map((category, index) => {
-            const group = visible.filter((entry) => entry.definition.tier === index);
-            if (!group.length) return null;
+        </header>
+        <nav aria-label="Niveles de logros" className="achievement-levels">
+          {TIERS.map((entry, index) => {
+            const locked = index > tier;
+            const hint = `Llega al nivel ${entry.level} para desbloquear este nivel`;
             return (
-              <section
-                key={category.name}
-                className="achievements-category"
-                aria-labelledby={`achievement-category-${index}`}
-              >
-                <div className="achievements-category-heading">
-                  <h3 id={`achievement-category-${index}`}>{category.name}</h3>
-                  <span>+{category.xp} XP por logro</span>
-                </div>
-                <ul>
-                  {group.map(({ definition, progress }) => (
-                    <AchievementRow
-                      key={definition.id}
-                      definition={definition}
-                      progress={progress}
-                    />
-                  ))}
-                </ul>
-              </section>
+              <div key={entry.name} className="achievement-level">
+                <button
+                  type="button"
+                  aria-current={selectedTier === index ? 'page' : undefined}
+                  aria-disabled={locked}
+                  aria-describedby={locked ? `achievement-level-hint-${index}` : undefined}
+                  data-achievement-tier={index}
+                  onClick={() => {
+                    if (locked) setLockedHint(lockedHint === index ? null : index);
+                    else {
+                      setSelectedTier(index);
+                      setLockedHint(null);
+                    }
+                  }}
+                >
+                  <span>Nivel {entry.name}</span>
+                  {locked && (
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3zM8 10v1" />
+                    </svg>
+                  )}
+                </button>
+                {locked && (
+                  <span
+                    id={`achievement-level-hint-${index}`}
+                    className="achievement-level-hint"
+                    data-open={lockedHint === index}
+                    role="tooltip"
+                  >
+                    {hint}
+                  </span>
+                )}
+              </div>
             );
-          })
-        ) : (
-          <div className="achievements-empty">
-            <AchievementIcon
-              icon={filter === 'pending' ? 'wins-10' : 'first-win'}
-              unlocked={filter === 'pending'}
-            />
-            <h3>{filter === 'pending' ? '¡Vaya colección!' : 'Tu primera hazaña te espera'}</h3>
-            <p>
-              {filter === 'pending'
-                ? 'Has desbloqueado todos los logros. El tablero sigue teniendo sorpresas.'
-                : 'Completa una partida para estrenar tu palmarés.'}
-            </p>
-            <Button type="button" variant="secondary" onClick={() => setFilter('all')}>
-              Ver todos los logros
-            </Button>
+          })}
+        </nav>
+        <p className="achievements-sidebar-note">
+          En local juegas como Cian; las acciones del invitado no suman a tu perfil.
+        </p>
+      </aside>
+      <div className="achievements-main">
+        <header className="achievements-profile">
+          <div className="achievements-player">
+            <ProfileAvatar profile={snapshot.profile} />
+            <strong>{snapshot.profile.name}</strong>
           </div>
-        )}
-        {Object.keys(snapshot.progression.legacyUnlockedAt).length > 0 && (
-          <details className="legacy-achievements">
-            <summary>Logros de la versión anterior</summary>
-            <ul>
-              {Object.entries(snapshot.progression.legacyUnlockedAt).map(([id, at]) => (
-                <li key={id}>
-                  {ACHIEVEMENTS.find((entry) => entry.id === id)?.title ?? id} ·{' '}
-                  <time dateTime={at}>{dateFormat.format(new Date(at))}</time>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+          <ProgressionSummary />
+          <DialogClose label="Cerrar logros" />
+        </header>
+        <div className="achievements-collection">
+          <div>
+            <span>
+              <strong>{unlocked}</strong> de {entries.length} logros desbloqueados
+            </span>
+            <span>{percentage}%</span>
+          </div>
+          <progress
+            value={unlocked}
+            max={entries.length}
+            aria-label="Logros desbloqueados"
+            data-achievement-summary
+          />
+          <p className="achievements-scope">
+            Las acciones suman al instante; las partidas y victorias, al terminar.
+            {clockRunning && <strong> El reloj de la partida sigue en marcha.</strong>}
+          </p>
+        </div>
+        <div className="achievements-toolbar">
+          <div
+            className="achievement-filters flex flex-wrap gap-1"
+            role="group"
+            aria-label="Filtrar logros"
+          >
+            {FILTERS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="min-h-11 cursor-pointer rounded-control border border-transparent bg-transparent px-3 py-2 font-ui text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan aria-pressed:border-line-strong aria-pressed:bg-panel-raised aria-pressed:text-ink"
+                aria-pressed={filter === item.id}
+                data-achievement-filter={item.id}
+                onClick={() => setFilter(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <span className="achievements-result-count" role="status">
+            {visible.length} logros · +{category.xp} XP por logro
+          </span>
+        </div>
+        <div className="achievements-list" tabIndex={0} aria-label="Lista de logros">
+          {visible.length ? (
+            <section className="achievements-category" aria-labelledby="achievement-category-title">
+              <h3 id="achievement-category-title" className="sr-only">
+                {category.name}
+              </h3>
+              <ul>
+                {visible.map(({ definition, progress }) => (
+                  <AchievementRow key={definition.id} definition={definition} progress={progress} />
+                ))}
+              </ul>
+            </section>
+          ) : (
+            <div className="achievements-empty">
+              <AchievementIcon
+                icon={filter === 'pending' ? 'wins-10' : 'first-win'}
+                unlocked={filter === 'pending'}
+              />
+              <h3>{filter === 'pending' ? '¡Vaya colección!' : 'Tu primera hazaña te espera'}</h3>
+              <p>
+                {filter === 'pending'
+                  ? 'Has desbloqueado todos los logros. El tablero sigue teniendo sorpresas.'
+                  : 'Completa una partida para estrenar tu palmarés.'}
+              </p>
+              <Button type="button" variant="secondary" onClick={() => setFilter('all')}>
+                Ver todos los logros
+              </Button>
+            </div>
+          )}
+          {Object.keys(snapshot.progression.legacyUnlockedAt).length > 0 && (
+            <details className="legacy-achievements">
+              <summary>Logros de la versión anterior</summary>
+              <ul>
+                {Object.entries(snapshot.progression.legacyUnlockedAt).map(([id, at]) => (
+                  <li key={id}>
+                    {ACHIEVEMENTS.find((entry) => entry.id === id)?.title ?? id} ·{' '}
+                    <time dateTime={at}>{dateFormat.format(new Date(at))}</time>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+        <footer className="achievements-footer">
+          <span>Tu progreso se guarda en este navegador.</span>
+        </footer>
       </div>
-      <footer className="achievements-footer">
-        <span>Tu progreso se guarda en este navegador.</span>
-        <Button type="button" variant="secondary" data-dialog-close onClick={commands.closeDialog}>
-          {snapshot.homeView ? 'Volver al menú' : 'Volver al juego'}
-        </Button>
-      </footer>
     </section>
   );
 }
@@ -189,24 +224,22 @@ function AchievementRow({
       className={`achievement-row${progress.unlocked ? ' is-unlocked' : ''}`}
       data-achievement-id={definition.id}
     >
-      <AchievementIcon
-        icon={
-          definition.metric === 'transform'
-            ? 'transformation'
-            : definition.metric === 'tutorial'
-              ? 'tutorial-complete'
-              : definition.metric === 'wins'
-                ? 'first-win'
-                : definition.metric === 'kills'
-                  ? 'captures-100'
-                  : 'first-match'
-        }
-        unlocked={progress.unlocked}
-      />
-      <div className="achievement-description">
-        <h4>{definition.title}</h4>
-        {!secret && <p>{definition.description}</p>}
-        {!secret && modes.length > 0 && (
+      <div className="achievement-art">
+        <AchievementIcon
+          icon={
+            definition.metric === 'transform'
+              ? 'transformation'
+              : definition.metric === 'tutorial'
+                ? 'tutorial-complete'
+                : definition.metric === 'wins'
+                  ? 'first-win'
+                  : definition.metric === 'kills'
+                    ? 'captures-100'
+                    : 'first-match'
+          }
+          unlocked={progress.unlocked}
+        />
+        {modes.length > 0 && (
           <div className="achievement-modes" aria-label="Modalidades válidas">
             {modes.map((mode) => {
               const label =
@@ -216,20 +249,21 @@ function AchievementRow({
                     ? 'En línea · pendiente de esta modalidad'
                     : 'Local · solo Cian';
               return (
-                <details key={mode}>
-                  <summary title={label} aria-label={label}>
-                    {mode === 'machine'
-                      ? `⬡ ${['F', 'M', 'D', 'E'][definition.minDifficulty]}`
-                      : mode === 'online'
-                        ? '◎'
-                        : '♙'}
-                  </summary>
-                  <span>{label}</span>
-                </details>
+                <ModeIndicator key={mode} label={label} id={`${definition.id}-${mode}`}>
+                  {mode === 'machine'
+                    ? `⬡ ${['F', 'M', 'D', 'E'][definition.minDifficulty]}`
+                    : mode === 'online'
+                      ? '◎'
+                      : '♙'}
+                </ModeIndicator>
               );
             })}
           </div>
         )}
+      </div>
+      <div className="achievement-description">
+        <h4>{definition.title}</h4>
+        {!secret && <p>{definition.description}</p>}
         {cumulative && !progress.unlocked && !secret && (
           <div className="achievement-progress">
             <progress
@@ -270,5 +304,33 @@ function AchievementRow({
         </span>
       </div>
     </li>
+  );
+}
+
+function ModeIndicator({
+  label,
+  id,
+  children,
+}: {
+  label: string;
+  id: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="achievement-mode" data-open={open}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-describedby={id}
+        onClick={() => setOpen(!open)}
+        onBlur={() => setOpen(false)}
+      >
+        <span aria-hidden="true">{children}</span>
+      </button>
+      <span id={id} role="tooltip">
+        {label}
+      </span>
+    </span>
   );
 }

@@ -1,8 +1,10 @@
-import { parseRecord, serializeRecord } from './match-record';
+import { concludeMatch, parseRecord, replayRecord, serializeRecord } from './match-record';
 import type { GamePreferences, MatchRecord, Outcome } from './types';
 
 const PREFERENCES_KEY = 'atlas-preferences-v2';
 const LEGACY_PREFERENCES_KEY = 'atlas-preferences-v1';
+const PENDING_KEY = 'atlas-pending-matches-v1';
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1_000;
 const MATCH_KEY = 'atlas-match-classic-v2';
 const PROGRESS_KEY = 'atlas-academy-progress-v1';
 const ACADEMY_RECORDS_KEY = 'atlas-academy-records-v2';
@@ -78,7 +80,15 @@ export function savePreferences(preferences: GamePreferences): void {
 }
 
 export function saveActiveMatch(record: MatchRecord): boolean {
-  return safeSetItem(MATCH_KEY, serializeRecord(record));
+  const serialized = serializeRecord(record);
+  const pending = readPendingMatches();
+  const activeSaved = safeSetItem(MATCH_KEY, serialized);
+  if (record.config.definitionId.startsWith('scenario:')) return activeSaved;
+  const previous = pending.find((entry) => entry.record.createdAt === record.createdAt);
+  const remaining = pending.filter((entry) => entry.record.createdAt !== record.createdAt);
+  if (!replayRecord(record).outcome)
+    remaining.unshift({ record, resumedAt: previous?.resumedAt ?? new Date().toISOString() });
+  return safeSetItem(PENDING_KEY, JSON.stringify(remaining)) && activeSaved;
 }
 
 export function loadActiveMatch(): { record: MatchRecord | null; error?: string } {
@@ -97,6 +107,104 @@ export function loadActiveMatch(): { record: MatchRecord | null; error?: string 
 
 export function clearActiveMatch(): boolean {
   return safeRemoveItem(MATCH_KEY);
+}
+
+export interface PendingMatch {
+  record: MatchRecord;
+  resumedAt: string;
+}
+
+function readPendingMatches(): PendingMatch[] {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (raw === null) {
+      const legacy = loadActiveMatch().record;
+      if (
+        legacy &&
+        !legacy.config.definitionId.startsWith('scenario:') &&
+        !replayRecord(legacy).outcome
+      ) {
+        const migrated = [{ record: legacy, resumedAt: legacy.updatedAt }];
+        safeSetItem(PENDING_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+      return [];
+    }
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((entry: unknown) => {
+      try {
+        if (
+          !entry ||
+          typeof entry !== 'object' ||
+          !('record' in entry) ||
+          !('resumedAt' in entry) ||
+          typeof entry.resumedAt !== 'string' ||
+          !Number.isFinite(Date.parse(entry.resumedAt))
+        )
+          return [];
+        const record = parseRecord(JSON.stringify(entry.record));
+        if (record.config.definitionId.startsWith('scenario:') || replayRecord(record).outcome)
+          return [];
+        return [{ record, resumedAt: entry.resumedAt }];
+      } catch {
+        return [];
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function loadPendingMatches(now = Date.now()): PendingMatch[] {
+  const pending = readPendingMatches();
+  const remaining: PendingMatch[] = [];
+  for (const entry of pending) {
+    if (now - Date.parse(entry.resumedAt) <= THIRTY_DAYS) {
+      remaining.push(entry);
+      continue;
+    }
+    const { record } = entry;
+    const activePlayer = replayRecord(record).activePlayer;
+    const human = record.config.participants.findIndex((p) => p.kind === 'human');
+    const loser =
+      record.config.participants.some((p) => p.kind === 'machine') && human >= 0
+        ? human
+        : activePlayer;
+    const outcome: Outcome = { type: 'win', winner: loser === 0 ? 1 : 0, reason: 'resignation' };
+    const concluded = concludeMatch(record, outcome);
+    const completedAt = new Date(now).toISOString();
+    const history = loadMatchHistory().filter((candidate) => candidate.id !== record.createdAt);
+    const result: MatchHistoryEntry = {
+      id: record.createdAt,
+      definitionId: record.config.definitionId,
+      participants: [record.config.participants[0].name, record.config.participants[1].name],
+      outcome,
+      plies: record.currentAction,
+      durationSeconds: Math.max(
+        0,
+        Math.round((Date.parse(record.updatedAt) - Date.parse(record.createdAt)) / 1000),
+      ),
+      completedAt,
+      record: concluded,
+    };
+    if (!safeSetItem(HISTORY_KEY, JSON.stringify([result, ...history].slice(0, 30)))) {
+      remaining.push(entry);
+      continue;
+    }
+    if (loadActiveMatch().record?.createdAt === record.createdAt) clearActiveMatch();
+  }
+  if (remaining.length !== pending.length) safeSetItem(PENDING_KEY, JSON.stringify(remaining));
+  return remaining.sort((a, b) => Date.parse(b.resumedAt) - Date.parse(a.resumedAt));
+}
+
+export function resumePendingMatch(id: string): MatchRecord | null {
+  const pending = loadPendingMatches();
+  const entry = pending.find((candidate) => candidate.record.createdAt === id);
+  if (!entry) return null;
+  entry.resumedAt = new Date().toISOString();
+  safeSetItem(PENDING_KEY, JSON.stringify(pending));
+  return entry.record;
 }
 
 export function loadAcademyProgress(): string[] {

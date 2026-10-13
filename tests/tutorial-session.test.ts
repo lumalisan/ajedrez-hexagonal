@@ -61,8 +61,13 @@ function currentStep(session: GameSession) {
 }
 
 function enterSection(session: GameSession, section: number): void {
-  for (let guard = 0; currentStep(session).section !== section && guard < 20; guard++) {
-    session.commands.navigateTutorial(currentStep(session).section < section ? 1 : -1);
+  const index = TUTORIAL_STEPS.findIndex((step) => step.section === section);
+  for (
+    let guard = 0;
+    session.getSnapshot().tutorial!.stepIndex !== index && guard < TUTORIAL_STEPS.length;
+    guard++
+  ) {
+    session.commands.navigateTutorial(session.getSnapshot().tutorial!.stepIndex < index ? 1 : -1);
   }
   expect(currentStep(session).section).toBe(section);
 }
@@ -190,6 +195,84 @@ describe('sesión del tutorial guiado', () => {
     }
   });
 
+  it.each([
+    [
+      '10.3',
+      { q: 3, r: -1 },
+      [
+        { q: 4, r: -2 },
+        { q: 3, r: -3 },
+        { q: 2, r: -1 },
+      ],
+    ],
+    ['10.4', { q: 0, r: 0 }, [{ q: 0, r: -2 }]],
+    [
+      '10.5',
+      { q: -3, r: 2 },
+      [
+        { q: -2, r: -1 },
+        { q: -3, r: 0 },
+        { q: -4, r: 0 },
+      ],
+    ],
+  ] as const)('separa la flecha de las unidades enmarcadas en %s', (id, target, frames) => {
+    const session = createSession();
+    const renderer = rendererDouble();
+    session.attachRenderer(renderer);
+    while (currentStep(session).id !== id) session.commands.navigateTutorial(1);
+    expect(renderer.setModel.mock.calls.at(-1)?.[0].tutorialCue).toEqual({
+      hex: target,
+      outlineHexes: frames,
+    });
+    session.commands.selectPiece(allowedAction(session).pieceId);
+    expect(renderer.setModel.mock.calls.at(-1)?.[0].tutorialCue).toEqual({
+      hex: target,
+      outlineHexes: frames,
+    });
+  });
+
+  it.each([
+    ['12.4', { q: -3, r: 5 }, { q: 0, r: 5 }, '13.1'],
+    ['13.1', { q: 0, r: 5 }, { q: 0, r: 4 }, '13.2'],
+  ] as const)(
+    'indica primero el embestidor y después su único objetivo en %s',
+    async (id, origin, target, next) => {
+      const session = createSession();
+      const renderer = rendererDouble();
+      session.attachRenderer(renderer);
+      while (currentStep(session).id !== id) session.commands.navigateTutorial(1);
+      const before = session.getSnapshot().state;
+      expect(renderer.setModel.mock.calls.at(-1)?.[0].tutorialCue).toEqual({ hex: origin });
+      session.commands.selectPiece('tutorial-cian-airplane');
+      expect(session.getSnapshot().selectedId).toBeNull();
+      session.commands.selectHex(origin);
+      expect(renderer.setModel.mock.calls.at(-1)?.[0].tutorialCue).toEqual({ hex: target });
+      const action = allowedAction(session);
+      expect(getTutorialActions(before, session.getSnapshot().tutorial!.stepIndex)).toEqual([
+        action,
+      ]);
+      const forbidden = getAllLegalActions(before).find(
+        (candidate) => candidate.pieceId === action.pieceId && !sameAction(candidate, action),
+      )!;
+      expect(forbidden).toBeDefined();
+      session.commands.prepareAction(forbidden);
+      expect(session.getSnapshot().pendingAction).toBeNull();
+      expect(session.getSnapshot().state).toEqual(before);
+      session.commands.selectHex(target);
+      expect(session.getSnapshot().pendingAction).toEqual(action);
+      await commit(session);
+      expect(currentStep(session).id).toBe(next);
+      if (id === '12.4')
+        expect(getPiece(session.getSnapshot().state, 'tutorial-amber-antiAir')).toBeUndefined();
+      else {
+        expect(getPiece(session.getSnapshot().state, 'tutorial-amber-fortress')).toMatchObject({
+          hp: 1,
+        });
+        expect(getPiece(session.getSnapshot().state, 'tutorial-cian-fast')).toBeUndefined();
+      }
+    },
+  );
+
   it('rechaza selección ajena y órdenes directas fuera del objetivo guiado', async () => {
     const session = createSession();
     enterSection(session, 3);
@@ -314,7 +397,7 @@ describe('sesión del tutorial guiado', () => {
     });
   });
 
-  it('reconstruye los apartados al navegar y conserva el paso intermedio de casillas compartidas', async () => {
+  it('reconstruye cada paso al navegar y conserva el paso intermedio de casillas compartidas', async () => {
     const session = createSession();
     enterSection(session, 5);
     await completeStep(session);
@@ -322,10 +405,10 @@ describe('sesión del tutorial guiado', () => {
     session.commands.prepareAction(allowedAction(session));
     expect(currentStep(session).id).toBe('5.3');
     session.commands.navigateTutorial(1);
-    expect(currentStep(session).id).toBe('6.1');
+    expect(currentStep(session).id).toBe('5.4');
     session.commands.navigateTutorial(-1);
-    expect(currentStep(session).id).toBe('5.1');
-    expect(session.getSnapshot().pendingAction).toBeNull();
+    expect(currentStep(session).id).toBe('5.3');
+    expect(session.getSnapshot().pendingAction).toMatchObject({ kind: 'move', cannon: 3 });
     expect(session.getSnapshot().state).toEqual(checkpoint);
     enterSection(session, 10);
     session.commands.selectHex(currentStep(session).target!);

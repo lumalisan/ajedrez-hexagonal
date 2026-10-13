@@ -444,3 +444,64 @@ describe('Elo y persistencia', () => {
     expect(progressionValue(migrated, definition('p2-03'))).toBe(0);
   });
 });
+
+describe('resumen de recompensas de batalla', () => {
+  it('guarda XP, logros y Elo y no los duplica al evaluar de nuevo', () => {
+    const record = match('machine', 'commander', 4);
+    const before = createPlayerProgression();
+    before.xp = 120;
+    const update = evaluate(record, before);
+    const battle = update.progress.matches[record.createdAt].battle!;
+    expect(battle.xpBefore).toBe(120);
+    expect(battle.xpAfter).toBe(update.progress.xp);
+    expect(battle.rewards.reduce((sum, reward) => sum + reward.xp, 0)).toBe(update.xpEarned);
+    expect(battle.rewards).toEqual(
+      expect.arrayContaining([
+        { label: 'Victoria contra Hexfortia', xp: 100 },
+        { label: 'Primera partida del día', xp: 25 },
+        { label: 'Turnos jugados', xp: 2 },
+      ]),
+    );
+    expect(
+      battle.rewards.filter((reward) => reward.achievementId).map((reward) => reward.achievementId),
+    ).toEqual(update.unlocked);
+    expect(battle.ratingBefore).toBe(1000);
+    expect(battle.ratingAfter).toBe(update.progress.ratings.machine);
+    expect(levelProgress(battle.xpAfter).level).toBeGreaterThan(
+      levelProgress(battle.xpBefore).level,
+    );
+    expect(
+      parsePlayerProgression(JSON.stringify(update.progress)).matches[record.createdAt].battle,
+    ).toEqual(battle);
+    expect(
+      evaluateProgressionMatch(update.progress, record, { source: 'live', at: AT }).progress,
+    ).toBe(update.progress);
+  });
+  it('conserva logros obtenidos antes del último turno', () => {
+    let record = fixture([
+      { id: 'soldier', type: 'soldier', owner: 0, facing: 0, position: { q: 0, r: 0 } },
+    ]);
+    record = appendAction(record, { kind: 'rotate', pieceId: 'soldier', facing: 1 });
+    const during = evaluate(record);
+    expect(during.unlocked.length).toBeGreaterThan(0);
+    const finished = concludeMatch(record, { type: 'win', winner: 0, reason: 'resignation' });
+    const result = evaluateProgressionMatch(during.progress, finished, { source: 'live', at: AT });
+    const rewards = result.progress.matches[record.createdAt].battle!.rewards;
+    for (const id of during.unlocked)
+      expect(rewards.filter((reward) => reward.achievementId === id)).toHaveLength(1);
+    expect(rewards.reduce((sum, reward) => sum + reward.xp, 0)).toBe(
+      during.xpEarned + result.xpEarned,
+    );
+  });
+  it('tolera registros antiguos sin desglose y descarta recibos malformados', () => {
+    const update = evaluate(match());
+    const id = Object.keys(update.progress.matches)[0];
+    delete update.progress.matches[id].battle;
+    expect(
+      parsePlayerProgression(JSON.stringify(update.progress)).matches[id].battle,
+    ).toBeUndefined();
+    const raw = JSON.parse(JSON.stringify(update.progress));
+    raw.matches[id].battle = { xpBefore: -1, xpAfter: 'bad', rewards: [] };
+    expect(parsePlayerProgression(JSON.stringify(raw)).matches[id].battle).toBeUndefined();
+  });
+});

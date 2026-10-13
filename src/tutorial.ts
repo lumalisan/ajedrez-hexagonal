@@ -23,7 +23,9 @@ export interface TutorialStep {
   selectedId?: string;
   guided?: boolean;
   /** Limited hints in exercises that otherwise require independent play. */
-  cue?: 'piece' | 'target';
+  cue?: 'piece' | 'target' | 'piece-then-target';
+  /** Cells framed independently of the arrow destination. */
+  outlineHexes?: Hex[];
   mode?: 'rotate' | 'orient' | 'transform';
   /** World direction; the Cian camera rotates the board by half a turn. */
   direction?: Direction;
@@ -443,6 +445,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     interaction: 'action',
     target: hex(3, -1),
     guided: false,
+    outlineHexes: [hex(4, -2), hex(3, -3), hex(2, -1)],
   },
   {
     id: '10.4',
@@ -456,6 +459,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     pieceId: 'tutorial-cian-drone',
     target: hex(0, 0),
     guided: false,
+    outlineHexes: [hex(0, -2)],
   },
   {
     id: '10.5',
@@ -469,6 +473,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     interaction: 'action',
     target: hex(-3, 2),
     guided: false,
+    outlineHexes: [hex(-2, -1), hex(-3, 0), hex(-4, 0)],
   },
   {
     id: '11.1',
@@ -552,7 +557,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     interaction: 'action',
     pieceId: 'tutorial-cian-fast',
     guided: false,
-    cue: 'piece',
+    target: hex(0, 5),
+    cue: 'piece-then-target',
   },
   {
     id: '13.1',
@@ -567,6 +573,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     interaction: 'action',
     pieceId: 'tutorial-cian-fast',
     guided: false,
+    target: hex(0, 4),
+    cue: 'piece-then-target',
   },
   {
     id: '13.2',
@@ -870,10 +878,7 @@ export function createTutorialCheckpoint(index: number): TutorialCheckpoint {
   return { state, selectedId, pendingAction };
 }
 
-/** Navigation skips the remaining exercises in a section, as in the manual. */
-export function nextTutorialSection(index: number, delta: 1 | -1): number {
-  const safeIndex = Math.max(0, Math.min(TUTORIAL_STEPS.length - 1, index));
-  const section = TUTORIAL_STEPS[safeIndex].section;
-  const nextSection = Math.max(0, Math.min(14, section + delta));
-  return TUTORIAL_STEPS.findIndex((step) => step.section === nextSection);
+/** Navigation visits adjacent steps, reconstructing their canonical checkpoint. */
+export function nextTutorialStep(index: number, delta: 1 | -1): number {
+  return Math.max(0, Math.min(TUTORIAL_STEPS.length - 1, index + delta));
 }

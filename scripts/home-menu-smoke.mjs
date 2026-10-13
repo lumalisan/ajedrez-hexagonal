@@ -64,7 +64,7 @@ try {
       'Every chapter is accessible.',
     );
     assert(
-      await page.getByRole('button', { name: 'Capítulo anterior' }).isDisabled(),
+      (await page.getByRole('button', { name: 'Capítulo anterior' }).count()) === 0,
       'The first chapter has no previous chapter.',
     );
     const storyAxe = await new AxeBuilder({ page }).include('#game-dialog').analyze();
@@ -88,7 +88,7 @@ try {
       );
     }
     assert(
-      await page.getByRole('button', { name: 'Capítulo siguiente' }).isDisabled(),
+      await page.getByRole('button', { name: 'Volver al menú', exact: true }).isVisible(),
       'The final chapter has no next chapter.',
     );
     await page.getByRole('button', { name: 'Capítulo anterior' }).click();
@@ -135,7 +135,7 @@ try {
     await page.locator('#profile-name').fill('Comandante Hex');
     await page.getByRole('radio', { name: 'Estrella' }).check();
     await page.getByRole('radio', { name: 'Ámbar', exact: true }).check();
-    await page.getByRole('button', { name: 'Guardar perfil' }).click();
+    await page.getByRole('button', { name: 'Guardar cambios' }).click();
     assert(
       (await profile.textContent()).includes('Comandante Hex'),
       'Saved profile appears in the second menu.',
@@ -143,6 +143,50 @@ try {
     await page.reload({ waitUntil: 'networkidle' });
     assert((await profile.textContent()).includes('Comandante Hex'), 'Profile survives reload.');
     assert((await profile.locator('.profile-amber').count()) === 1, 'Appearance survives reload.');
+    await page.locator('#home-settings-button').click();
+    const volume = page.locator('[data-volume="masterVolume"]');
+    await volume.fill('23');
+    await page.getByRole('button', { name: 'Cerrar ajustes sin guardar' }).click();
+    await page.locator('#home-settings-button').click();
+    assert((await volume.inputValue()) === '72', 'Closing settings must discard the draft.');
+    await volume.fill('42');
+    await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('#home-settings-button').click();
+    assert((await volume.inputValue()) === '42', 'Saved settings survive reload.');
+    await page.screenshot({ path: join(tmpdir(), `hex-settings-${viewport.width}.png`) });
+    await page.keyboard.press('Escape');
+    await profile.click();
+    await page.locator('#profile-name').fill('Descartar');
+    await page.getByRole('button', { name: 'Cerrar perfil sin guardar' }).click();
+    assert((await profile.textContent()).includes('Comandante Hex'), 'Profile X discards changes.');
+    for (let index = 0; index < 2; index++) {
+      await page.locator('[data-home-action="new"]').click();
+      await page.locator('[data-home-mode="local"]').click();
+      await page.locator('[data-start-free]').click();
+      await page.locator('#home-screen').waitFor({ state: 'hidden' });
+      await page.locator('#new-game-button').click();
+      await page.locator('[data-confirm-abandon]').click();
+      await page.locator('#home-screen').waitFor({ state: 'visible' });
+    }
+    await page.locator('#home-continue-button').click();
+    const pending = page.locator('[data-continue-match]');
+    assert((await pending.count()) === 2, 'Continue offers both suspended matches.');
+    const pendingAxe = await new AxeBuilder({ page }).include('#game-dialog').analyze();
+    assert(pendingAxe.violations.length === 0, JSON.stringify(pendingAxe.violations));
+    await page.screenshot({ path: join(tmpdir(), `hex-pending-${viewport.width}.png`) });
+    const firstId = await pending.first().getAttribute('data-continue-match');
+    await pending.last().click();
+    await page.locator('#home-screen').waitFor({ state: 'hidden' });
+    assert(
+      await page.evaluate(
+        (id) => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).createdAt !== id,
+        firstId,
+      ),
+      'The chosen match is restored instead of the latest one.',
+    );
+    assert((await page.locator('#help-button svg').count()) === 1, 'Rules uses the book icon.');
+    await page.screenshot({ path: join(tmpdir(), `hex-controls-${viewport.width}.png`) });
     await context.close();
   }
   console.log(

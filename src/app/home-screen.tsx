@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadActiveMatch, loadMatchHistory } from '../match-storage';
+import { loadPendingMatches, loadMatchHistory } from '../match-storage';
 import { levelProgress, PROGRESSION_ACHIEVEMENTS } from '../progression';
 import { useGame } from './game-context';
 import { SettingsIcon, SoundButton } from './shell-icons';
@@ -8,7 +8,7 @@ import { ProfileAvatar } from './components/profile-avatar';
 
 function readMenuSummary() {
   return {
-    saved: loadActiveMatch(),
+    saved: loadPendingMatches(),
     history: loadMatchHistory(),
   };
 }
@@ -29,11 +29,9 @@ export function HomeScreen() {
     }
     previousView.current = snapshot.homeView;
   }, [snapshot.homeView]);
-  const continueDetail = saved.record
-    ? `${saved.record.currentAction} órdenes guardadas · ${saved.record.config.participants[0].name} vs. ${saved.record.config.participants[1].name}`
-    : saved.error
-      ? 'La última partida no se pudo recuperar'
-      : 'No hay una partida guardada';
+  const continueDetail = saved.length
+    ? `${saved.length} partidas pendientes · Elige cuál retomar`
+    : 'No hay partidas pendientes';
   return (
     <section
       id="home-screen"
@@ -106,8 +104,8 @@ export function HomeScreen() {
                   className="home-nav-button"
                   id="home-continue-button"
                   data-home-action="continue"
-                  disabled={!saved.record}
-                  onClick={commands.continueMatch}
+                  disabled={!saved.length}
+                  onClick={() => commands.openDialog({ kind: 'continue' })}
                 >
                   <span>Continuar partida</span>
                   <small id="home-continue-detail">{continueDetail}</small>

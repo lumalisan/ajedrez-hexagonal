@@ -46,8 +46,11 @@ export function AchievementNotification() {
           data-achievement-notification={achievement.id}
         >
           <AchievementIcon icon={achievement.icon} />
-          <span className="sr-only">Logro desbloqueado: </span>
-          <strong>{achievement.title}</strong>
+          <div className="achievement-notification-copy">
+            <span className="sr-only">Logro desbloqueado: </span>
+            <strong>{achievement.title}</strong>
+            <p>{achievement.description}</p>
+          </div>
         </div>
       )}
     </div>

@@ -40,4 +40,37 @@ describe('tutorial arrow placement', () => {
     expect(start.x).toBeGreaterThan(tip.x);
     expect(start.y).toBeLessThan(tip.y);
   });
+  it('aims through a projected side midpoint at every board rotation and depth', () => {
+    for (const rotation of [0, Math.PI, 0.37]) {
+      for (const tilt of [1, 0.72]) {
+        for (const obstacles of [[], [{ x: 160, y: 110, radius: 28 }]]) {
+          const { start, tip } = placeTutorialArrow(
+            target,
+            32,
+            32 * tilt,
+            bounds,
+            obstacles,
+            [],
+            rotation,
+          );
+          const midpoints = Array.from({ length: 6 }, (_, side) => {
+            const a = (side * Math.PI) / 3 + rotation;
+            const b = a + Math.PI / 3;
+            return {
+              x: (Math.cos(a) + Math.cos(b)) * 16,
+              y: (Math.sin(a) + Math.sin(b)) * 16 * tilt,
+            };
+          });
+          expect(
+            midpoints.some(
+              (mid) => Math.hypot(tip.x - target.x - mid.x, tip.y - target.y - mid.y) < 1e-8,
+            ),
+          ).toBe(true);
+          expect(
+            (start.x - tip.x) * (tip.y - target.y) - (start.y - tip.y) * (tip.x - target.x),
+          ).toBeCloseTo(0);
+        }
+      }
+    }
+  });
 });

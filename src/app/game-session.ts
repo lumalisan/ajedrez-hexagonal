@@ -29,7 +29,7 @@ import {
   createTutorialCheckpoint,
   getTutorialActions,
   getTutorialReply,
-  nextTutorialSection,
+  nextTutorialStep,
 } from '../tutorial';
 import { directionBetween, equalHex } from '../hex';
 import {
@@ -67,6 +67,7 @@ import {
   loadPreferences,
   recordScenarioAttempt,
   removeMatchHistory,
+  resumePendingMatch,
   saveActiveMatch,
   savePreferences as persistPreferences,
 } from '../match-storage';
@@ -408,6 +409,8 @@ export function createGameSession(): GameSession {
       matchRecord = matchController.record;
       persistCurrentMatch();
     }
+    if (matchRecord && !activeScenario && replayCursor === null && !state.outcome)
+      persistCurrentMatch();
     stopHomeDemo();
     homeView = view;
     currentDialog = null;
@@ -593,15 +596,21 @@ export function createGameSession(): GameSession {
     return tutorial ? TUTORIAL_STEPS[tutorial.stepIndex] : undefined;
   }
 
-  function tutorialCue(): { hex: Hex } | null {
+  function tutorialCue(): { hex: Hex; outlineHexes?: Hex[] } | null {
     const step = tutorialStep();
     if (!step || tutorial?.completed || animating || pendingAction || step.interaction === 'free')
       return null;
     if (step.guided === false) {
       const actor = step.pieceId ? getPiece(state, step.pieceId) : undefined;
-      if (step.cue === 'piece' && actor && selectedId !== actor.id) return { hex: actor.position };
-      return step.target && (step.section === 10 || step.cue === 'target')
-        ? { hex: step.target }
+      if (
+        (step.cue === 'piece' || step.cue === 'piece-then-target') &&
+        actor &&
+        selectedId !== actor.id
+      )
+        return { hex: actor.position };
+      return step.target &&
+        (step.section === 10 || step.cue === 'target' || step.cue === 'piece-then-target')
+        ? { hex: step.target, ...(step.outlineHexes ? { outlineHexes: step.outlineHexes } : {}) }
         : null;
     }
     const piece = step.pieceId ? getPiece(state, step.pieceId) : undefined;
@@ -720,10 +729,7 @@ export function createGameSession(): GameSession {
   function navigateTutorial(delta: 1 | -1): void {
     if (!tutorial || animating) return;
     operationEpoch++;
-    const next =
-      delta === 1 && tutorialStep()?.id === '10.2'
-        ? tutorial.stepIndex + 1
-        : nextTutorialSection(tutorial.stepIndex, delta);
+    const next = nextTutorialStep(tutorial.stepIndex, delta);
     enterTutorialStep(next, true);
   }
 
@@ -1990,10 +1996,19 @@ export function createGameSession(): GameSession {
       excludeImportedAchievements(record);
       loadRecordIntoMatch(record);
     },
-    continueMatch() {
-      const saved = loadActiveMatch();
-      if (saved.record) loadRecordIntoMatch(saved.record);
-      else showToast('No hay una partida guardada que continuar.');
+    continueMatch(id) {
+      const active = id ? null : loadActiveMatch().record;
+      const record = id
+        ? resumePendingMatch(id)
+        : active &&
+            !active.config.definitionId.startsWith('scenario:') &&
+            !replayRecord(active).outcome
+          ? resumePendingMatch(active.createdAt)
+          : active;
+      if (record) {
+        loadRecordIntoMatch(record);
+        if (!state.outcome) persistCurrentMatch();
+      } else showToast('No hay una partida guardada que continuar.');
     },
     importMatch: importMatchFile,
     exportMatch: exportCurrentMatch,
