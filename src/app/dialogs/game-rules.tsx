@@ -4,7 +4,12 @@ import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules
 import { mountRuleDemo, type RuleDemoController, type RuleDemoId } from '../../rules-demo';
 import { PIECE_NAMES } from '../../engine';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
-import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
+import {
+  INITIAL_LAYOUTS,
+  MATCH_INITIAL_LAYOUTS,
+  createInitialPieces,
+  type InitialLayout,
+} from '../../setup';
 import { useGame } from '../game-context';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
@@ -12,7 +17,7 @@ import { Input } from '../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 
 const HORIZONTAL_RULE_TABS = '(max-width: 760px) and (orientation: portrait)';
-const LAYOUT_OPTIONS = INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
+const LAYOUT_OPTIONS = MATCH_INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
 
 export function RulesDialog({ sectionId }: { sectionId?: string }) {
   const [selectedId, setSelectedId] = useState(
@@ -200,7 +205,7 @@ function RuleParagraphs({ paragraphs }: { paragraphs: RuleSection['paragraphs'] 
 function RuleLayoutPreview() {
   const { snapshot } = useGame();
   const { highContrast } = snapshot.preferences;
-  const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
+  const [initialLayout, setInitialLayout] = useState<InitialLayout>(3);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<LayoutPreview | null>(null);
   const layout = INITIAL_LAYOUTS.find(({ id }) => id === initialLayout)!;

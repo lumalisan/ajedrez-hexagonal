@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { FACTIONS, participantColor, participantLabel } from '../factions';
 import { sameAction } from '../action-identity';
 import {
   PIECE_NAMES,
@@ -117,17 +118,32 @@ function FortressStatus({ player }: { player: Player }) {
   const faction = player === 0 ? 'blue' : 'amber';
   const clock = snapshot.matchRecord?.clock;
   const turnTimeouts = clock?.turnTimeouts?.[player] ?? 0;
+  const participant = snapshot.matchConfig?.participants[player];
+  const name = participantLabel(participant, PLAYER_NAMES[player]);
   return (
-    <div className={`fortress-status player-${faction}`} id={`${faction}-fortress`}>
+    <div
+      className={`fortress-status player-${faction}`}
+      id={`${faction}-fortress`}
+      style={
+        {
+          color: participantColor(participant, player),
+          '--blue': participantColor(participant, player),
+          '--amber': participantColor(participant, player),
+        } as CSSProperties
+      }
+    >
       <div className="faction-identity">
         <FactionMark player={player} />
-        <strong>{PLAYER_NAMES[player]}</strong>
+        <strong title={name}>
+          <span>{participant?.name ?? PLAYER_NAMES[player]}</span>
+          {participant?.faction && <small>{FACTIONS[participant.faction].name}</small>}
+        </strong>
       </div>
       <div className="faction-vitals">
         <span
           className="hp"
           role="img"
-          aria-label={`Fortaleza de ${PLAYER_NAMES[player]}: ${hp} de ${maximum} puntos de vida`}
+          aria-label={`Fortaleza de ${name}: ${hp} de ${maximum} puntos de vida`}
         >
           {Array.from({ length: maximum }, (_, index) => (
             <i key={index} className={hp > index ? 'active' : ''} aria-hidden="true">
@@ -141,14 +157,14 @@ function FortressStatus({ player }: { player: Player }) {
           <ClockTime
             id={`${faction}-clock`}
             remainingMs={clock.remainingMs[player]}
-            label={`Tiempo total de ${PLAYER_NAMES[player]}`}
+            label={`Tiempo total de ${name}`}
             active={clock.activePlayer === player && clock.status === 'running'}
           />
         )}
         {turnTimeouts > 0 && (
           <small
             className="turn-timeouts"
-            title={`Turnos agotados de ${PLAYER_NAMES[player]}. Al llegar a ${TURN_TIMEOUT_LIMIT}, pierdes la partida.`}
+            title={`Turnos agotados de ${name}. Al llegar a ${TURN_TIMEOUT_LIMIT}, pierdes la partida.`}
           >
             Agotados {turnTimeouts}/{TURN_TIMEOUT_LIMIT}
           </small>
@@ -162,18 +178,31 @@ export function MatchStatus() {
   const { snapshot } = useGame();
   const { state, activeScenario, scenarioProgress } = snapshot;
   const clock = snapshot.matchRecord?.clock;
-  const commander = `${PLAYER_NAMES[state.activePlayer]} en mando`;
+  const commander = `${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])} en mando`;
   return (
     <div className="match-status" aria-live="polite">
       <FortressStatus player={0} />
       <div
         className={`turn-chip ${state.outcome ? 'finished' : state.activePlayer === 0 ? 'blue' : 'amber'}`}
         id="turn-chip"
+        style={
+          {
+            '--blue': participantColor(snapshot.matchConfig?.participants[0], 0),
+            '--amber': participantColor(snapshot.matchConfig?.participants[1], 1),
+          } as CSSProperties
+        }
       >
         {state.outcome ? (
           <>
             <span>PARTIDA FINALIZADA</span>
-            <strong>{outcomeText(state.outcome)}</strong>
+            <strong>
+              {state.outcome.type === 'win'
+                ? participantLabel(
+                    snapshot.matchConfig?.participants[state.outcome.winner],
+                    PLAYER_NAMES[state.outcome.winner],
+                  ) + ' gana'
+                : outcomeText(state.outcome)}
+            </strong>
           </>
         ) : (
           <>
@@ -192,7 +221,7 @@ export function MatchStatus() {
           <ClockTime
             id="turn-clock"
             remainingMs={clock.turnRemainingMs}
-            label={`Turno de ${PLAYER_NAMES[clock.activePlayer]}`}
+            label={`Turno de ${participantLabel(snapshot.matchConfig?.participants[clock.activePlayer], PLAYER_NAMES[clock.activePlayer])}`}
             active={clock.status === 'running'}
           />
         )}
@@ -222,7 +251,7 @@ export function SelectionSummary() {
                 : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
               : isMachineTurn
                 ? 'La máquina está calculando su siguiente orden.'
-                : `Turno de ${PLAYER_NAMES[state.activePlayer]}. Selecciona una unidad propia.`;
+                : `Turno de ${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])}. Selecciona una unidad propia.`;
   return (
     <div id="selection-summary" className="selection-summary">
       {snapshot.tutorial ? TUTORIAL_STEPS[snapshot.tutorial.stepIndex]?.instruction : text}

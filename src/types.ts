@@ -153,6 +153,7 @@ export type AiPersonality = 'balanced' | 'aggressive' | 'guardian' | 'ambush';
 export interface Participant {
   kind: 'human' | 'machine';
   name: string;
+  faction?: 'expansionist' | 'conservationist';
   difficulty?: AiDifficulty;
   personality?: AiPersonality;
   seed?: number;
@@ -175,6 +176,8 @@ export interface VictoryDefinition {
 }
 
 export interface MatchOptions {
+  /** Draw the opening turn before clocks and AI start. Absent in legacy saves. */
+  openingDraw?: boolean;
   confirmation: ConfirmationMode;
   contextualHints: boolean;
   fixedBoard: boolean;
@@ -240,6 +243,8 @@ export interface MatchRecord {
   clock?: MatchClockSnapshot | null;
   /** Optional for compatibility with existing version 2 saves and non-Academy matches. */
   academySession?: AcademySessionMetadata | null;
+  /** Accumulated active play time; absent in legacy saves. */
+  activeDurationMs?: number;
   createdAt: string;
   updatedAt: string;
 }

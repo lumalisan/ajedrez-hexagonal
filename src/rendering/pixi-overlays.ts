@@ -120,7 +120,7 @@ export class PixiOverlays {
       const { x, y } = hexToWorld(cell);
       for (const [index, owner] of owners.entries()) {
         const relevant = tactical && selected?.owner !== owner;
-        const color = owner === 0 ? COLORS.blue : COLORS.amber;
+        const color = model.playerColors?.[owner] ?? (owner === 0 ? COLORS.blue : COLORS.amber);
         const alpha = relevant ? 0.18 : 0.055;
         this.protection
           .beginPath()
@@ -217,7 +217,14 @@ export class PixiOverlays {
       }
       const position = hexToWorld(marker.hex);
       view.board.position.set(position.x, position.y);
-      view.configure(marker, model.highContrast, targetKind(model, marker, selected));
+      view.configure(
+        marker,
+        model.highContrast,
+        targetKind(model, marker, selected),
+        marker.kind === 'convert' && marker.owner !== undefined
+          ? model.playerColors?.[marker.owner]
+          : undefined,
+      );
       view.board.visible = true;
       view.board.alpha = inspectionAlpha;
       view.target.alpha = inspectionAlpha;
@@ -249,8 +256,13 @@ class MarkerView {
     this.target.addChild(this.targetHalo, this.targetDotHalo, this.targetShape, this.targetDot);
   }
 
-  configure(marker: ActionMarker, highContrast: boolean, target: TargetKind | null): void {
-    const color = markerColor(marker);
+  configure(
+    marker: ActionMarker,
+    highContrast: boolean,
+    target: TargetKind | null,
+    factionColor?: string,
+  ): void {
+    const color = factionColor ?? markerColor(marker);
     const key = `${marker.kind}:${color}:${marker.hasRange}:${marker.canMove}:${highContrast}`;
     this.targetKind = target;
     this.target.visible = target !== null;

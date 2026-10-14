@@ -105,7 +105,8 @@ export function AchievementsDialog() {
           })}
         </nav>
         <p className="achievements-sidebar-note">
-          En local juegas como Cian; las acciones del invitado no suman a tu perfil.
+          En local las acciones de tu lado suman al perfil; las acciones del invitado no suman a tu
+          perfil.
         </p>
       </aside>
       <div className="achievements-main">

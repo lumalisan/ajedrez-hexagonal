@@ -10,9 +10,9 @@ export type ProgressionAchievement = (typeof PROGRESSION_ACHIEVEMENTS)[number];
 export type ProgressionAchievementId = ProgressionAchievement['id'];
 export type ProgressionMode = 'local' | 'machine' | 'online';
 export const TIERS = [
-  { name: 'Principiante', level: 1, xp: 50 },
-  { name: 'Avanzado', level: 5, xp: 100 },
-  { name: 'Experto', level: 15, xp: 250 },
+  { name: 'Principiante', level: 0, xp: 25 },
+  { name: 'Avanzado', level: 5, xp: 75 },
+  { name: 'Experto', level: 15, xp: 200 },
   { name: 'Maestro', level: 30, xp: 500 },
   { name: 'Legendario', level: 50, xp: 1000 },
 ] as const;
@@ -94,11 +94,11 @@ export function createPlayerProgression(): PlayerProgression {
 }
 
 export function xpForLevel(level: number): number {
-  const steps = Math.max(0, Math.min(100, Math.floor(level)) - 1);
+  const steps = Math.max(0, Math.min(100, Math.floor(level)));
   return 100 * steps + (25 * steps * (steps + 1)) / 2;
 }
 export function levelProgress(xp: number) {
-  let level = 1;
+  let level = 0;
   while (level < 100 && xp >= xpForLevel(level + 1)) level++;
   let tier = 0;
   TIERS.forEach((entry, index) => {
@@ -110,7 +110,7 @@ export function levelProgress(xp: number) {
     tier,
     category: TIERS[tier].name,
     current,
-    required: level === 100 ? 0 : 100 + 25 * level,
+    required: level === 100 ? 0 : 100 + 25 * (level + 1),
   };
 }
 export function eloK(matches: number): number {
@@ -310,8 +310,8 @@ export function evaluateProgressionMatch(
     evidence.result = result;
     next.registeredMatchIds = next.registeredMatchIds.filter((id) => id !== record.createdAt);
     addCompletionMetrics(evidence.metrics, record, final, owner, win, day);
-    const duration = Math.min(50, Math.floor((final.ply - record.initialState.ply) / 2));
-    const base = mode === 'local' ? 0 : (win ? [50, 75, 100, 150] : [25, 35, 50, 75])[difficulty];
+    const duration = Math.min(50, Math.floor((final.ply - record.initialState.ply) / 4));
+    const base = mode === 'local' ? 0 : (win ? [25, 50, 75, 100] : [15, 25, 35, 50])[difficulty];
     next.xp += base + Math.max(0, duration);
     if (base)
       rewards.push({
@@ -522,7 +522,7 @@ function addCompletionMetrics(
   win: boolean,
   day: string,
 ) {
-  const turns = final.ply - record.initialState.ply;
+  const turns = (final.ply - record.initialState.ply) / 2;
   const initialOwn = record.initialState.pieces.filter((p) => p.owner === owner);
   const survivingIds = new Set(final.pieces.filter((p) => p.owner === owner).map((p) => p.id));
   const survivors = initialOwn.filter((p) => survivingIds.has(p.id)).length;

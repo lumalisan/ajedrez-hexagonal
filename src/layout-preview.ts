@@ -8,6 +8,7 @@ export interface LayoutPreviewOptions {
   initialLayout: InitialLayout;
   fortressHp: FortressHp;
   highContrast: boolean;
+  playerColors?: [string, string];
   /** Show both armies and all 91 cells instead of Cian's close-up. */
   fullBoard?: boolean;
 }
@@ -44,6 +45,7 @@ export function mountLayoutPreview(
     renderer.setModel({
       state: { ...state, pieces },
       fortressMaxHp: [next.fortressHp, next.fortressHp],
+      playerColors: next.playerColors,
       selectedId: null,
       actions: [],
       pending: null,

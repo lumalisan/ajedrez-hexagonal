@@ -22,6 +22,7 @@ import {
   type AchievementId,
   type AchievementProgress,
 } from '../achievements';
+import { participantLabel, participantColor } from '../factions';
 import { createClassicConfig } from '../game-config';
 import { sameAction } from '../action-identity';
 import {
@@ -37,6 +38,7 @@ import {
   actionDestination,
   applyAction,
   createInitialState,
+  createGameState,
   declareBlockade,
   describeAction,
   getAllLegalActions,
@@ -50,6 +52,7 @@ import {
 import {
   appendAction,
   createMatchRecord,
+  matchDurationSeconds,
   parseRecord,
   replayRecord,
   serializeRecord,
@@ -165,6 +168,33 @@ export function createGameSession(): GameSession {
   let operationEpoch = 0;
   let clockWasRunningBeforeDispose = false;
   let tutorialWasAnimatingBeforeDispose = false;
+  let durationRecordId: string | null = null;
+  let durationTickAt = Date.now();
+  let durationRunning = false;
+  let durationPersistAt = Date.now();
+
+  function syncPlayDuration(): void {
+    const now = Date.now();
+    if (matchRecord && durationRecordId === matchRecord.createdAt && durationRunning) {
+      matchRecord = {
+        ...matchRecord,
+        activeDurationMs: (matchRecord.activeDurationMs ?? 0) + Math.max(0, now - durationTickAt),
+      };
+      if (matchController?.record.createdAt === matchRecord.createdAt)
+        matchController.record = matchRecord;
+    }
+    durationRecordId = matchRecord?.createdAt ?? null;
+    durationTickAt = now;
+    durationRunning = Boolean(
+      matchRecord &&
+      !state.outcome &&
+      !disposed &&
+      currentDialog?.kind !== 'first-turn' &&
+      !isHomeScreenActive() &&
+      replayCursor === null &&
+      document.visibilityState !== 'hidden',
+    );
+  }
 
   function later(callback: () => void, delay: number): ReturnType<typeof setTimeout> {
     const timer = setTimeout(() => {
@@ -190,6 +220,7 @@ export function createGameSession(): GameSession {
 
   function render(): void {
     if (disposed) return;
+    syncPlayDuration();
     const selected = selectedId ? getPiece(state, selectedId) : undefined;
     if (selectedId && !selected) {
       selectedId = null;
@@ -249,6 +280,10 @@ export function createGameSession(): GameSession {
     renderer?.setModel({
       state,
       fortressMaxHp: [fortressMaximumHp(0), fortressMaximumHp(1)],
+      playerColors: [
+        participantColor(matchConfig?.participants[0], 0),
+        participantColor(matchConfig?.participants[1], 1),
+      ],
       selectedId,
       actions: visibleActions,
       pending: pendingAction,
@@ -265,6 +300,7 @@ export function createGameSession(): GameSession {
   }
 
   function openDialog(dialog: DialogState): void {
+    if (currentDialog?.kind === 'first-turn') return;
     closeReplay();
     currentDialog = dialog;
     dialogError = null;
@@ -272,6 +308,7 @@ export function createGameSession(): GameSession {
   }
 
   function closeDialog(): void {
+    if (currentDialog?.kind === 'first-turn') return;
     currentDialog = null;
     dialogError = null;
     render();
@@ -481,6 +518,7 @@ export function createGameSession(): GameSession {
       showToast(error instanceof Error ? error.message : 'No se pudo abrir la repetición.');
       return;
     }
+    syncPlayDuration();
     const previous = {
       state,
       matchRecord,
@@ -796,6 +834,7 @@ export function createGameSession(): GameSession {
   }
 
   function handleCell(hex: Hex): void {
+    if (currentDialog?.kind === 'first-turn') return;
     if (animating || isMachineTurn() || replayCursor !== null) return;
     const step = tutorialStep();
     if (tutorial?.completed || (step?.interaction === 'next' && step.id !== '10.2')) return;
@@ -887,6 +926,7 @@ export function createGameSession(): GameSession {
   }
 
   function selectPiece(pieceId: string): void {
+    if (currentDialog?.kind === 'first-turn') return;
     if (replayCursor !== null || animating || isMachineTurn()) return;
     if (!tutorialAllowsPiece(pieceId)) return;
     const piece = getPiece(state, pieceId);
@@ -980,6 +1020,7 @@ export function createGameSession(): GameSession {
   }
 
   async function executeTurn(action: GameAction, automatic = false): Promise<void> {
+    if (currentDialog?.kind === 'first-turn') return;
     if (disposed || animating || state.outcome || isHomeScreenActive()) return;
     if (tutorial) {
       await executeTutorialAction(action);
@@ -1106,6 +1147,7 @@ export function createGameSession(): GameSession {
   async function runMachineTurn(): Promise<void> {
     if (
       disposed ||
+      currentDialog?.kind === 'first-turn' ||
       !isMachineTurn() ||
       state.outcome ||
       animating ||
@@ -1211,6 +1253,7 @@ export function createGameSession(): GameSession {
   }
 
   function persistCurrentMatch(): void {
+    syncPlayDuration();
     if (!matchRecord) return;
     try {
       if (!saveActiveMatch(matchRecord))
@@ -1221,6 +1264,7 @@ export function createGameSession(): GameSession {
   }
 
   function startActiveTurnClock(): void {
+    if (currentDialog?.kind === 'first-turn') return;
     if (
       !matchController?.record.clock ||
       state.outcome ||
@@ -1290,10 +1334,7 @@ export function createGameSession(): GameSession {
       ],
       outcome: state.outcome,
       plies: matchRecord.currentAction,
-      durationSeconds: Math.max(
-        0,
-        Math.round((Date.parse(completedAt) - Date.parse(matchRecord.createdAt)) / 1_000),
-      ),
+      durationSeconds: matchDurationSeconds(matchRecord),
       completedAt,
       record: matchRecord,
     });
@@ -1571,10 +1612,20 @@ export function createGameSession(): GameSession {
     // preserves its seed. Matching state, seed and completed search depth reproduce
     // the choice; a time limit can change the depth completed on different devices.
     matchConfig = { ...matchConfig, participants };
-    matchRecord = createMatchRecord(matchConfig);
+    const openingPlayer = matchConfig.options.openingDraw ? ((createMatchSeed() % 2) as 0 | 1) : 0;
+    matchRecord = createMatchRecord(
+      matchConfig,
+      createGameState(
+        matchConfig.setup.map(({ piece }) => structuredClone(piece)),
+        openingPlayer,
+      ),
+    );
+    if (matchConfig.options.openingDraw)
+      currentDialog = { kind: 'first-turn', player: openingPlayer };
     registerCurrentAchievementMatch();
     matchController = new MatchController(matchRecord);
-    if (matchRecord.clock) matchController.resumeClock(Date.now());
+    if (matchRecord.clock && !matchConfig.options.openingDraw)
+      matchController.resumeClock(Date.now());
     matchRecord = matchController.record;
     state = matchController.store.getState().game;
     clearActiveMatch();
@@ -1595,14 +1646,14 @@ export function createGameSession(): GameSession {
     lastClockPersistSecond = -1;
     render();
     announce(
-      gameMode === 'machine'
-        ? 'Nueva partida contra la máquina. Juegas como Cian.'
-        : 'Nueva partida para dos personas. Turno de Cian.',
-    );
-    showToast(
-      gameMode === 'machine'
-        ? 'Modo contra la máquina. Tú controlas a Cian.'
-        : 'Modo para dos personas. Cian inicia.',
+      matchConfig.options.openingDraw
+        ? 'Sorteando el primer turno.'
+        : 'Nueva partida. Turno de ' +
+            participantLabel(
+              matchConfig.participants[state.activePlayer],
+              PLAYER_NAMES[state.activePlayer],
+            ) +
+            '.',
     );
   }
 
@@ -1985,6 +2036,24 @@ export function createGameSession(): GameSession {
       resetGame(true);
       if (isMachineTurn()) void runMachineTurn();
     },
+    finishOpeningDraw() {
+      if (disposed || currentDialog?.kind !== 'first-turn') return;
+      currentDialog = null;
+      if (matchController?.record.clock) {
+        matchController.resumeClock(Date.now());
+        matchRecord = matchController.record;
+      }
+      persistCurrentMatch();
+      announce(
+        'Primer turno: ' +
+          participantLabel(
+            matchConfig?.participants[state.activePlayer],
+            PLAYER_NAMES[state.activePlayer],
+          ) +
+          '.',
+      );
+      if (isMachineTurn()) void runMachineTurn();
+    },
     startScenario,
     startTutorial,
     navigateTutorial,
@@ -2134,6 +2203,7 @@ export function createGameSession(): GameSession {
     setReplayCursor,
     closeReplay,
     resign() {
+      if (currentDialog?.kind === 'first-turn') return;
       if (
         !matchController ||
         state.outcome ||
@@ -2157,6 +2227,7 @@ export function createGameSession(): GameSession {
     acceptBlockade,
     revealHint,
     readyForTurn() {
+      if (currentDialog?.kind === 'first-turn') return;
       closeDialog();
       startActiveTurnClock();
       if (isMachineTurn()) void runMachineTurn();
@@ -2171,6 +2242,8 @@ export function createGameSession(): GameSession {
 
   function dispose(): void {
     if (disposed) return;
+    if (matchRecord && replayCursor === null && !state.outcome) persistCurrentMatch();
+    durationRunning = false;
     tutorialWasAnimatingBeforeDispose = Boolean(tutorial && animating);
     clockWasRunningBeforeDispose = matchController?.record.clock?.status === 'running';
     if (clockWasRunningBeforeDispose && matchController) {
@@ -2179,6 +2252,7 @@ export function createGameSession(): GameSession {
       persistCurrentMatch();
     }
     disposed = true;
+    durationRunning = false;
     operationEpoch++;
     lifecycle?.abort();
     lifecycle = null;
@@ -2253,6 +2327,8 @@ export function createGameSession(): GameSession {
       window.addEventListener(
         'visibilitychange',
         () => {
+          if (matchRecord && replayCursor === null && !state.outcome) persistCurrentMatch();
+          render();
           if (document.visibilityState === 'hidden') {
             if (achievementTimer !== null) {
               clearTimeout(achievementTimer);
@@ -2272,9 +2348,23 @@ export function createGameSession(): GameSession {
         },
         options,
       );
+      window.addEventListener(
+        'pagehide',
+        () => {
+          if (matchRecord && replayCursor === null && !state.outcome) persistCurrentMatch();
+          durationRunning = false;
+        },
+        options,
+      );
+      window.addEventListener('pageshow', () => render(), options);
       audio.setEnabled(preferences.sound);
       if (clockTimer !== null) clearInterval(clockTimer);
       clockTimer = setInterval(() => {
+        if (Date.now() - durationPersistAt >= 15_000) {
+          durationPersistAt = Date.now();
+          if (matchRecord && !state.outcome && replayCursor === null && !isHomeScreenActive())
+            persistCurrentMatch();
+        }
         tickActiveClock();
         if (document.visibilityState !== 'hidden')
           acceptProgression(recordActivity(progression, new Date().toISOString()));

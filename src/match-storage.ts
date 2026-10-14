@@ -1,4 +1,10 @@
-import { concludeMatch, parseRecord, replayRecord, serializeRecord } from './match-record';
+import {
+  concludeMatch,
+  matchDurationSeconds,
+  parseRecord,
+  replayRecord,
+  serializeRecord,
+} from './match-record';
 import type { GamePreferences, MatchRecord, Outcome } from './types';
 
 const PREFERENCES_KEY = 'atlas-preferences-v2';
@@ -181,10 +187,7 @@ export function loadPendingMatches(now = Date.now()): PendingMatch[] {
       participants: [record.config.participants[0].name, record.config.participants[1].name],
       outcome,
       plies: record.currentAction,
-      durationSeconds: Math.max(
-        0,
-        Math.round((Date.parse(record.updatedAt) - Date.parse(record.createdAt)) / 1000),
-      ),
+      durationSeconds: matchDurationSeconds(record),
       completedAt,
       record: concluded,
     };

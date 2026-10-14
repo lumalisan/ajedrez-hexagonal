@@ -4,6 +4,7 @@ import { createPieceGlyph, type PieceGlyph } from './pixi-piece-glyph';
 
 export interface PixiPieceOptions {
   selected: boolean;
+  color?: string;
   highContrast: boolean;
   alpha: number;
   isStacked?: boolean;
@@ -50,7 +51,11 @@ export class PixiPiece extends Container {
 
   update(piece: Piece, options: PixiPieceOptions): void {
     if (this.destroyed) return;
-    const color = piece.owner === 0 ? CYAN : AMBER;
+    const color = options.color
+      ? Number.parseInt(options.color.slice(1), 16)
+      : piece.owner === 0
+        ? CYAN
+        : AMBER;
     const airborne = piece.type === 'airplane' || piece.type === 'drone';
     const radius = piece.type === 'fortress' ? 19 : 16.6;
     const lift = (airborne ? 27 : 4) * options.depth;
@@ -92,20 +97,20 @@ export class PixiPiece extends Container {
       this.drawBase(piece, options, radius, color);
     }
 
-    const markKey = `${piece.type}:${piece.owner}:${piece.type === 'fortress' ? piece.hp : ''}:${options.fortressMaxHp ?? 2}`;
+    const markKey = `${color}:${piece.type}:${piece.owner}:${piece.type === 'fortress' ? piece.hp : ''}:${options.fortressMaxHp ?? 2}`;
     if (markKey !== this.markKey) {
       this.markKey = markKey;
       this.drawMarks(piece, options.fortressMaxHp ?? 2, color);
     }
 
-    const glyphKey = `${piece.type}:${piece.owner}:${options.highContrast}`;
+    const glyphKey = `${color}:${piece.type}:${piece.owner}:${options.highContrast}`;
     if (glyphKey !== this.glyphKey) {
       this.glyphKey = glyphKey;
       if (this.glyph) {
         this.glyph.container.removeFromParent();
         this.glyph.container.destroy({ children: true, context: true });
       }
-      this.glyph = createPieceGlyph(piece, options.highContrast);
+      this.glyph = createPieceGlyph(piece, options.highContrast, color);
       this.glyphMotion.addChild(this.glyph.container);
     }
     const phase =

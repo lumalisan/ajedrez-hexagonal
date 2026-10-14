@@ -50,6 +50,7 @@ export function createMatchRecord(
             state.activePlayer,
             config.options.turnClockSeconds ?? null,
           ),
+    activeDurationMs: 0,
     createdAt: now,
     updatedAt: now,
   };
@@ -219,7 +220,17 @@ function collectEvents(stats: MatchStatistics, before: GameState, events: GameEv
   }
 }
 
+/** Legacy records have no reliable active-time measurement. */
+export function matchDurationSeconds(record: MatchRecord): number {
+  return Math.max(0, Math.round((record.activeDurationMs ?? 0) / 1000));
+}
+
 function validateRecordMetadata(record: MatchRecord): void {
+  if (
+    record.activeDurationMs !== undefined &&
+    (!Number.isSafeInteger(record.activeDurationMs) || record.activeDurationMs < 0)
+  )
+    throw new ReplayError('La duración activa de la partida no es válida.');
   if (record.academySession !== undefined && record.academySession !== null)
     validateAcademySession(record.academySession);
   if (record.conclusion) {

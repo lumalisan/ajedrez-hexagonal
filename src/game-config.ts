@@ -31,23 +31,37 @@ export interface MatchConfigInput {
   playerNames?: [string, string];
   fortressHp?: FortressHp;
   initialLayout?: InitialLayout;
+  faction?: Participant['faction'];
+  openingDraw?: boolean;
 }
 
 export function createClassicConfig(input: MatchConfigInput): MatchConfig {
   const names = input.playerNames ?? ['Comando Cian', 'Comando Ámbar'];
   const participants: [Participant, Participant] = [
-    { kind: 'human', name: names[0] },
+    { kind: 'human', name: names[0], ...(input.faction ? { faction: input.faction } : {}) },
     input.mode === 'machine'
       ? {
           kind: 'machine',
-          name: 'Mando automático',
+          name: 'Hexfortia',
           difficulty: input.difficulty ?? 'recruit',
           personality: input.personality ?? 'balanced',
           ...(input.seed === undefined ? {} : { seed: input.seed }),
         }
-      : { kind: 'human', name: names[1] },
+      : {
+          kind: 'human',
+          name: names[1],
+          ...(input.faction
+            ? {
+                faction:
+                  input.faction === 'expansionist'
+                    ? ('conservationist' as const)
+                    : ('expansionist' as const),
+              }
+            : {}),
+        },
   ];
   const options: MatchOptions = {
+    ...(input.openingDraw ? { openingDraw: true } : {}),
     confirmation: input.confirmation ?? 'always',
     contextualHints: input.contextualHints ?? true,
     fixedBoard: input.fixedBoard ?? true,
@@ -128,7 +142,14 @@ export function validateMatchConfig(config: MatchConfig): string[] {
     config.victory.repetition === 1
   )
     errors.push('El umbral de repetición debe ser 0 (desactivado) o al menos 2.');
+  if (config.options.openingDraw !== undefined && typeof config.options.openingDraw !== 'boolean')
+    errors.push('El sorteo del primer turno debe ser booleano.');
   for (const participant of config.participants) {
+    if (
+      participant.faction !== undefined &&
+      !['expansionist', 'conservationist'].includes(participant.faction)
+    )
+      errors.push('Bando no compatible.');
     if (
       participant.seed !== undefined &&
       (!Number.isSafeInteger(participant.seed) || participant.seed < 0)

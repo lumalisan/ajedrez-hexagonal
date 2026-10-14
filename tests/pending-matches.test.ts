@@ -60,12 +60,14 @@ describe('partidas pendientes', () => {
   });
   it('vence después de 30 días y conserva una derrota reproducible para el humano', () => {
     const record = match('machine');
+    record.activeDurationMs = 90_000;
     saveActiveMatch(record);
     vi.advanceTimersByTime(30 * day);
     expect(loadPendingMatches()).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(loadPendingMatches()).toHaveLength(0);
     const result = loadMatchHistory()[0];
+    expect(result.durationSeconds).toBe(90);
     expect(result.outcome).toEqual({ type: 'win', winner: 1, reason: 'resignation' });
     expect(replayRecord(result.record!).outcome).toEqual(result.outcome);
     expect(resumePendingMatch(record.createdAt)).toBeNull();

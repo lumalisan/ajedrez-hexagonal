@@ -60,9 +60,25 @@ export function HomeScreen() {
                 className="home-back-button"
                 data-home-action="back"
                 aria-label="Volver al menú principal"
+                title="Volver al menú principal"
                 onClick={() => commands.setHomeView('main')}
               >
-                ← <span>Nueva partida</span>
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M20 12H4m7-7-7 7 7 7"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </button>
               <p className="home-intro">Elige cómo quieres disputar la batalla.</p>
               <nav className="home-navigation mode-navigation" aria-label="Tipo de partida">
@@ -88,7 +104,6 @@ export function HomeScreen() {
             </>
           ) : (
             <>
-              <p className="home-intro">Domina el frente. Protege tu fortaleza.</p>
               <nav className="home-navigation" aria-label="Menú principal">
                 <button
                   type="button"

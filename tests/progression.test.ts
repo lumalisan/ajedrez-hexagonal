@@ -62,14 +62,35 @@ function fixture(pieces: Piece[], owner: Player = 0, mode: 'machine' | 'local' =
 }
 
 describe('experiencia, niveles y categorías', () => {
-  it('empieza con nivel 1 y aplica la fórmula, incluidos los límites de categoría', () => {
+  it.each([0, 1, 2, 3, 4, 59, 60, 61, 79, 80, 99, 100])(
+    'cuenta turnos de dos órdenes para XP y logros con %i órdenes',
+    (plies) => {
+      const config = createClassicConfig({ mode: 'local', noProgressPlyLimit: null });
+      config.victory.repetition = 0;
+      let record = createMatchRecord(config);
+      for (let i = 0; i < plies; i++) {
+        const action = getAllLegalActions(replayRecord(record)).find((a) => a.kind === 'rotate')!;
+        record = appendAction(record, action);
+      }
+      record = concludeMatch(record, { type: 'win', winner: 0, reason: 'resignation' });
+      const result = evaluate(record, noAwards());
+      const evidence = result.progress.matches[record.createdAt];
+      expect(evidence.battle?.rewards.find((r) => r.label === 'Turnos jugados')?.xp ?? 0).toBe(
+        Math.floor(plies / 4),
+      );
+      expect(evidence.metrics.longMatches).toBe(Number(plies >= 100));
+      expect(evidence.metrics.longWins).toBe(Number(plies >= 100));
+      expect(evidence.metrics.quickWins).toBe(Number(plies < 80));
+    },
+  );
+  it('empieza con nivel 0 y aplica la fórmula, incluidos los límites de categoría', () => {
     expect(levelProgress(0)).toMatchObject({
-      level: 1,
+      level: 0,
       current: 0,
       required: 125,
       category: 'Principiante',
     });
-    expect([1, 2, 3, 4, 5, 10, 100].map(xpForLevel)).toEqual([0, 125, 275, 450, 650, 2025, 133650]);
+    expect([0, 1, 2, 3, 4, 9, 99].map(xpForLevel)).toEqual([0, 125, 275, 450, 650, 2025, 133650]);
     for (const [level, category] of [
       [5, 'Avanzado'],
       [15, 'Experto'],
@@ -82,14 +103,14 @@ describe('experiencia, niveles y categorías', () => {
     expect(levelProgress(999999).level).toBe(100);
   });
   it.each([
-    ['recruit', 0, 25],
-    ['recruit', 1, 50],
-    ['tactical', 0, 35],
-    ['tactical', 1, 75],
-    ['commander', 0, 50],
-    ['commander', 1, 100],
-    ['expert', 0, 75],
-    ['expert', 1, 150],
+    ['recruit', 0, 15],
+    ['recruit', 1, 25],
+    ['tactical', 0, 25],
+    ['tactical', 1, 50],
+    ['commander', 0, 35],
+    ['commander', 1, 75],
+    ['expert', 0, 50],
+    ['expert', 1, 100],
   ] as const)(
     'otorga XP contra %s con resultado %i incluso al rendirse sin órdenes',
     (difficulty, win, xp) => {
@@ -102,17 +123,17 @@ describe('experiencia, niveles y categorías', () => {
   );
   it('da la bonificación diaria una sola vez y en local solo la duración', () => {
     const first = evaluate(match('local', 'recruit', 2), noAwards());
-    expect(first.xpEarned).toBe(26);
+    expect(first.xpEarned).toBe(25);
     const another = { ...match('local', 'recruit', 4), createdAt: '2026-10-07T12:01:00.000Z' };
     const second = evaluate(another, first.progress);
-    expect(second.xpEarned).toBe(2);
+    expect(second.xpEarned).toBe(1);
     const third = evaluate(
       { ...another, createdAt: '2026-10-08T12:00:00.000Z' },
       second.progress,
       'live',
       '2026-10-08T12:00:00.000Z',
     );
-    expect(third.xpEarned).toBe(27);
+    expect(third.xpEarned).toBe(26);
   });
   it('limita la duración a 50 XP y concede la recompensa de tablas', () => {
     const config = createClassicConfig({
@@ -122,7 +143,7 @@ describe('experiencia, niveles y categorías', () => {
     });
     config.victory.repetition = 0;
     let record = createMatchRecord(config);
-    for (let index = 0; index < 104; index++) {
+    for (let index = 0; index < 204; index++) {
       const rotation = getAllLegalActions(replayRecord(record)).find(
         (action) => action.kind === 'rotate',
       );
@@ -130,7 +151,7 @@ describe('experiencia, niveles y categorías', () => {
     }
     record = concludeMatch(record, { type: 'draw', reason: 'blockade' });
     const result = evaluate(record, noAwards());
-    expect(result.xpEarned).toBe(35 + 50 + 25);
+    expect(result.xpEarned).toBe(25 + 50 + 25);
     expect(result.progress.ratings.machine).toBe(1000);
   });
   it('no concede XP de partida ni Elo antes de un resultado terminal', () => {
@@ -200,11 +221,11 @@ describe('catálogo y evidencia retrospectiva', () => {
     expect(progressionValue(progress, definition('p2-03'))).toBe(3);
     const before = recordActivity(progress, AT);
     expect(before.progress.unlockedAt['p2-03']).toBeUndefined();
-    before.progress.xp = 600;
+    before.progress.xp = xpForLevel(5) - 25;
     const opened = recordLearning(before.progress, 'tutorial', AT);
     expect(opened.progress.unlockedAt['p2-03']).toBe(AT);
     expect(opened.unlocked).toContain('p2-03');
-    expect(opened.progress.xp).toBeGreaterThanOrEqual(750);
+    expect(opened.progress.xp).toBeGreaterThanOrEqual(xpForLevel(5) + 75);
   });
   it('filtra dificultad mínima y modalidad sin atribuir partidas locales a logros de IA', () => {
     const progress = createPlayerProgression();
@@ -237,7 +258,7 @@ describe('catálogo y evidencia retrospectiva', () => {
     const untouched = structuredClone(initial);
     const first = evaluate(record, initial);
     expect(first.unlocked).toContain('p1-07');
-    expect(first.xpEarned).toBe(50);
+    expect(first.xpEarned).toBe(25);
     expect(initial).toEqual(untouched);
     const second = evaluate(record, parsePlayerProgression(JSON.stringify(first.progress)));
     expect(second.xpEarned).toBe(0);
@@ -253,7 +274,7 @@ describe('catálogo y evidencia retrospectiva', () => {
     const result = evaluate(record);
     expect(result.progress.matches[record.createdAt]?.metrics.kills).toBe(1);
     expect(result.unlocked).toContain('p1-19');
-    expect(result.unlocked).toContain('p1-17');
+    expect(result.unlocked).not.toContain('p1-17');
     expect(replayRecord(record).pieces.some((p) => p.id === 'air')).toBe(true);
   });
   it('no considera una baja rival el sacrificio del rival contra la fortaleza', () => {
@@ -457,9 +478,9 @@ describe('resumen de recompensas de batalla', () => {
     expect(battle.rewards.reduce((sum, reward) => sum + reward.xp, 0)).toBe(update.xpEarned);
     expect(battle.rewards).toEqual(
       expect.arrayContaining([
-        { label: 'Victoria contra Hexfortia', xp: 100 },
+        { label: 'Victoria contra Hexfortia', xp: 75 },
         { label: 'Primera partida del día', xp: 25 },
-        { label: 'Turnos jugados', xp: 2 },
+        { label: 'Turnos jugados', xp: 1 },
       ]),
     );
     expect(

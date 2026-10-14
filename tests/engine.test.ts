@@ -1180,20 +1180,41 @@ describe('Fortaleza, transformación y finales', () => {
     expect(getPiece(state, 'medium')?.type).toBe('medium');
   });
 
-  it('tanque transformado puede contraatacar al Dron superior', () => {
-    const state = base([
-      { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
-      { id: 'air', type: 'drone', owner: 1, position: hex(0, 0) },
-    ]);
-    const action = findAction(
-      state,
-      'fast',
-      'transform',
-      (candidate) => candidate.facing === 0 && candidate.attackAboveId === 'air',
-    );
-    const next = perform(state, action);
-    expect(getPiece(next, 'air')).toBeUndefined();
-    expect(getPiece(next, 'fast')?.type).toBe('soldier');
+  describe.each([
+    { type: 'medium', name: 'Tanque' },
+    { type: 'fast', name: 'Embestidor' },
+    { type: 'long', name: 'Lanzamisiles' },
+  ] as const)('abandono de $name para contraatacar', ({ type, name }) => {
+    it.each([
+      { type: 'drone', name: 'Dron' },
+      { type: 'airplane', name: 'Avión' },
+    ] as const)('identifica al $name superior en la orden y el historial', (target) => {
+      const vehicle: Piece =
+        type === 'medium'
+          ? { id: 'vehicle', type, owner: 0, position: hex(0, 0), cannon: 0 }
+          : { id: 'vehicle', type, owner: 0, position: hex(0, 0) };
+      const state = base([
+        vehicle,
+        target.type === 'airplane'
+          ? { id: 'air', type: target.type, owner: 1, position: hex(0, 0), facing: 3 }
+          : { id: 'air', type: target.type, owner: 1, position: hex(0, 0) },
+      ]);
+      const action = findAction(
+        state,
+        'vehicle',
+        'transform',
+        (candidate) => candidate.facing === 0 && candidate.attackAboveId === 'air',
+      );
+      expect(describeAction(state, action)).toBe(
+        `${name} será abandonado; el Soldado atacará al ${target.name} superior`,
+      );
+      const next = perform(state, action);
+      expect(getPiece(next, 'air')).toBeUndefined();
+      expect(getPiece(next, 'vehicle')?.type).toBe('soldier');
+      expect(next.history[0].text).toContain(
+        `${name} fue abandonado; el Soldado neutralizó al ${target.name} superior`,
+      );
+    });
   });
 
   it('la tercera repetición declara tablas automáticamente', () => {

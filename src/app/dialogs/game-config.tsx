@@ -1,11 +1,17 @@
 import { DialogClose } from '../components/dialog-close';
 import { useEffect, useRef, useState } from 'react';
+import { FACTIONS } from '../../factions';
 import { PIECE_NAMES } from '../../engine';
 import { createClassicConfig } from '../../game-config';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
 import { TURN_TIMEOUT_LIMIT } from '../../match-clock';
 import { recordTelemetry } from '../../playtest-telemetry';
-import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
+import {
+  INITIAL_LAYOUTS,
+  MATCH_INITIAL_LAYOUTS,
+  createInitialPieces,
+  type InitialLayout,
+} from '../../setup';
 import type { AiDifficulty, FortressHp } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
@@ -21,7 +27,7 @@ const FORTRESS_HP_OPTIONS: readonly { value: FortressHp; label: string }[] = [
   { value: 3, label: '3' },
 ];
 const INITIAL_LAYOUT_OPTIONS: readonly { value: InitialLayout; label: string }[] =
-  INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
+  MATCH_INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
 const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'recruit', label: 'Fácil' },
   { value: 'tactical', label: 'Medio' },
@@ -45,8 +51,9 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   const { snapshot, commands } = useGame();
   const { preferences } = snapshot;
   const [fortressHp, setFortressHp] = useState<FortressHp>(1);
-  const [initialLayout, setInitialLayout] = useState<InitialLayout>(1);
+  const [initialLayout, setInitialLayout] = useState<InitialLayout>(3);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('tactical');
+  const [faction, setFaction] = useState<'expansionist' | 'conservationist'>('expansionist');
   const [clock, setClock] = useState<MatchClockValue>('');
   const [turnClock, setTurnClock] = useState<TurnClockValue>('');
   const layout = INITIAL_LAYOUTS.find((candidate) => candidate.id === initialLayout)!;
@@ -71,10 +78,13 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
       contextualHints: preferences.contextualHints,
       fixedBoard: preferences.fixedBoard,
       handoffScreen: preferences.handoffScreen,
-      clockSeconds: clock || null,
-      turnClockSeconds: turnClock || null,
+      clockSeconds: mode === 'machine' ? null : clock || null,
+      turnClockSeconds: mode === 'machine' ? null : turnClock || null,
       fortressHp,
       initialLayout,
+      faction,
+      openingDraw: true,
+      playerNames: [snapshot.profile.name, 'Invitado'],
     });
     recordTelemetry('match-start', {
       mode,
@@ -92,12 +102,24 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
     <>
       <DialogClose label="Cerrar configuración" className="dialog-corner-close config-close" />
       <span className="eyebrow">NUEVA PARTIDA</span>
-      <h2>{mode === 'machine' ? 'Individual vs. IA' : 'Dos jugadores'}</h2>
+      <h2>{mode === 'machine' ? 'Vs. Hexfortia' : 'Dos jugadores'}</h2>
       <div className="match-configuration mt-6 grid gap-6 text-sm">
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 content-start gap-2">
+            <label htmlFor="player-faction">Bando</label>
+            <GameSelect
+              inputId="player-faction"
+              value={faction}
+              onChange={setFaction}
+              options={[
+                { value: 'expansionist', label: 'Expansionista · Cian' },
+                { value: 'conservationist', label: 'Conservacionista · Violeta' },
+              ]}
+            />
+          </div>
           {mode === 'machine' && (
             <div className="grid min-w-0 content-start gap-2">
-              <label htmlFor="ai-difficulty">Dificultad</label>
+              <label htmlFor="ai-difficulty">Nivel</label>
               <GameSelect
                 inputId="ai-difficulty"
                 options={DIFFICULTY_OPTIONS}
@@ -116,36 +138,42 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
             />
           </div>
         </div>
-        <fieldset className="m-0 min-w-0 border-0 border-t border-solid border-line p-0 pt-5">
-          <legend className="sr-only">Límites de tiempo</legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid min-w-0 gap-2">
-              <label htmlFor="turn-clock-setting">Tiempo por turno</label>
-              <GameSelect
-                inputId="turn-clock-setting"
-                options={TURN_CLOCK_OPTIONS}
-                value={turnClock}
-                onChange={setTurnClock}
-                describedBy="clock-description"
-              />
+        {mode === 'local' ? (
+          <fieldset className="m-0 min-w-0 border-0 border-t border-solid border-line p-0 pt-5">
+            <legend className="sr-only">Límites de tiempo</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 gap-2">
+                <label htmlFor="turn-clock-setting">Tiempo por turno</label>
+                <GameSelect
+                  inputId="turn-clock-setting"
+                  options={TURN_CLOCK_OPTIONS}
+                  value={turnClock}
+                  onChange={setTurnClock}
+                  describedBy="clock-description"
+                />
+              </div>
+              <div className="grid min-w-0 gap-2">
+                <label htmlFor="match-clock-setting">Tiempo total</label>
+                <GameSelect
+                  inputId="match-clock-setting"
+                  options={MATCH_CLOCK_OPTIONS}
+                  value={clock}
+                  onChange={setClock}
+                  describedBy="clock-description"
+                />
+              </div>
             </div>
-            <div className="grid min-w-0 gap-2">
-              <label htmlFor="match-clock-setting">Tiempo total</label>
-              <GameSelect
-                inputId="match-clock-setting"
-                options={MATCH_CLOCK_OPTIONS}
-                value={clock}
-                onChange={setClock}
-                describedBy="clock-description"
-              />
-            </div>
-          </div>
-          <p id="clock-description" className="mb-0 mt-3 text-xs leading-relaxed text-muted">
-            Si agotas el tiempo de turno, la IA juega por ti. Si te ocurre {TURN_TIMEOUT_LIMIT}{' '}
-            veces durante la partida, pierdes. El tiempo total es por jugador; agotarlo supone
-            perder la partida. Puedes combinar ambos límites.
+            <p id="clock-description" className="mb-0 mt-3 text-xs leading-relaxed text-muted">
+              Si agotas el tiempo de turno, la IA juega por ti. Si te ocurre {TURN_TIMEOUT_LIMIT}{' '}
+              veces durante la partida, pierdes. El tiempo total es por jugador; agotarlo supone
+              perder la partida. Puedes combinar ambos límites.
+            </p>
+          </fieldset>
+        ) : (
+          <p className="m-0 border-0 border-t border-solid border-line pt-5 text-muted">
+            Las partidas contra Hexfortia se juegan con tiempo ilimitado.
           </p>
-        </fieldset>
+        )}
         <div className="border-0 border-t border-solid border-line pt-5">
           <div className="layout-picker">
             <div className="layout-picker-choice">
@@ -176,9 +204,10 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
                 initialLayout={initialLayout}
                 fortressHp={fortressHp}
                 highContrast={preferences.highContrast}
+                faction={faction}
               />
               <p id="layout-preview-orientation">
-                Vista de Cian. Ámbar tiene la formación reflejada.
+                Vista de tu lado del tablero. El rival tiene la formación reflejada.
               </p>
             </figure>
             <div className="layout-composition">
@@ -211,19 +240,26 @@ function LayoutPreviewCanvas({
   initialLayout,
   fortressHp,
   highContrast,
+  faction,
 }: {
   initialLayout: InitialLayout;
   fortressHp: FortressHp;
   highContrast: boolean;
+  faction: keyof typeof FACTIONS;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<LayoutPreview | null>(null);
   useEffect(() => {
     if (!canvasRef.current) return;
-    const options = { initialLayout, fortressHp, highContrast };
+    const options = {
+      initialLayout,
+      fortressHp,
+      highContrast,
+      playerColors: [FACTIONS[faction].color, '#ffb547'] as [string, string],
+    };
     if (previewRef.current) previewRef.current.update(options);
     else previewRef.current = mountLayoutPreview(canvasRef.current, options);
-  }, [initialLayout, fortressHp, highContrast]);
+  }, [initialLayout, fortressHp, highContrast, faction]);
   useEffect(
     () => () => {
       previewRef.current?.destroy();

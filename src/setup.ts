@@ -12,7 +12,7 @@ export type InitialLayout = 1 | 2 | 3 | 4 | 5;
 export const INITIAL_LAYOUTS = [
   {
     id: 1,
-    name: 'Frente clásico',
+    name: 'Frente original',
     description:
       'Cinco soldados al frente, dos lanzamisiles en los flancos y dos aviones en retaguardia.',
   },
@@ -24,7 +24,7 @@ export const INITIAL_LAYOUTS = [
   },
   {
     id: 3,
-    name: 'Frente blindado',
+    name: 'Frente clásico',
     description:
       'Cuatro tanques detrás de los cinco soldados. Un lanzamisiles y un avión en retaguardia.',
   },
@@ -41,6 +41,9 @@ export const INITIAL_LAYOUTS = [
       'Once soldados al frente y dos tanques retrasados. Un lanzamisiles y un avión en retaguardia.',
   },
 ] as const satisfies ReadonlyArray<{ id: InitialLayout; name: string; description: string }>;
+
+/** Available for new matches. Older layouts remain supported for saved records. */
+export const MATCH_INITIAL_LAYOUTS = INITIAL_LAYOUTS.filter(({ id }) => id === 3 || id === 5);
 
 const CLASSIC_BLUE_SETUP: SetupPiece[] = [
   { type: 'soldier', position: { q: 4, r: -4 }, facing: 3 },

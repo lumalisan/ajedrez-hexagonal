@@ -43,7 +43,7 @@ describe('contenido del reglamento', () => {
     const sharedText = shared?.paragraphs.map(paragraphText).join('\n') ?? '';
 
     expect(developmentText).toContain(
-      'Explora la disposición inicial en el tablero y utiliza el selector para comparar las cinco formaciones.',
+      'Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
     );
     expect(sharedText).toContain(
       'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado o un embestidor, estos podrán atacarlo.',

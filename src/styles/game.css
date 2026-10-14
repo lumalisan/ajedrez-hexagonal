@@ -2697,24 +2697,26 @@ button:disabled {
 }
 
 .home-back-button {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  align-items: center;
   align-self: flex-start;
-  min-height: 44px;
+  justify-content: center;
   margin: -8px 0 18px;
-  padding: 8px 10px;
-  border: 0;
-  background: transparent;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--control-radius);
+  background: var(--surface-2);
   color: var(--text);
   cursor: pointer;
-  font-weight: 700;
-}
-
-.home-back-button span {
-  margin-left: 8px;
-  text-transform: uppercase;
 }
 
 .home-back-button:hover,
 .home-back-button:focus-visible {
+  border-color: var(--move);
+  background: var(--surface-3);
   color: var(--move);
 }
 

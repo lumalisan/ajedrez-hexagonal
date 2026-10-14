@@ -135,14 +135,20 @@ function DialogHost() {
         id="game-dialog"
         className="game-dialog"
         aria-labelledby={isOpen ? 'active-dialog-title' : undefined}
-        data-mandatory={dialog?.kind === 'handoff' ? 'true' : undefined}
+        data-mandatory={
+          dialog?.kind === 'handoff' || dialog?.kind === 'first-turn' ? 'true' : undefined
+        }
         onClick={(event) => {
-          if (event.target === event.currentTarget && dialog?.kind !== 'handoff')
+          if (
+            event.target === event.currentTarget &&
+            dialog?.kind !== 'handoff' &&
+            dialog?.kind !== 'first-turn'
+          )
             commands.closeDialog();
         }}
         onCancel={(event) => {
           event.preventDefault();
-          if (dialog?.kind !== 'handoff') commands.closeDialog();
+          if (dialog?.kind !== 'handoff' && dialog?.kind !== 'first-turn') commands.closeDialog();
         }}
         onClose={() => {
           if (!dialogRef.current?.open && session.getSnapshot().dialog) commands.closeDialog();

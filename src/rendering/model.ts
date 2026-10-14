@@ -45,6 +45,7 @@ export const DEPTH_TRANSITION_DURATION = 420;
 
 export interface RenderModel {
   state: GameState;
+  playerColors?: [string, string];
   fortressMaxHp: [1 | 2 | 3, 1 | 2 | 3];
   selectedId: string | null;
   actions: GameAction[];

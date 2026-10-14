@@ -1298,12 +1298,15 @@ export function describeAction(state: GameState, action: GameAction): string {
       return `${name} neutralizará la aeronave situada encima`;
     case 'attackBelow':
       return `${name} atacará la unidad terrestre situada debajo`;
-    case 'transform':
-      if (action.attackAboveId)
-        return `${name} será abandonado; el Soldado atacará el Dron superior`;
+    case 'transform': {
+      if (action.attackAboveId) {
+        const target = getPiece(state, action.attackAboveId);
+        return `${name} será abandonado; el Soldado atacará al ${target ? PIECE_NAMES[target.type] : 'objetivo aéreo'} superior`;
+      }
       if (action.to)
         return `${name} será abandonado; el Soldado avanzará a ${formatHex(action.to)}`;
       return `${name} será abandonado y se convertirá en Soldado`;
+    }
   }
 }
 
@@ -1354,13 +1357,15 @@ function describeResolvedAction(
     case 'attackBelow':
       base = `${name} neutralizó la unidad inferior`;
       break;
-    case 'transform':
+    case 'transform': {
+      const target = action.attackAboveId ? getPiece(before, action.attackAboveId) : undefined;
       base = action.to
         ? `${name} fue abandonado; el Soldado avanzó a ${formatHex(action.to)}`
         : action.attackAboveId
-          ? `${name} fue abandonado; el Soldado neutralizó el Dron superior`
+          ? `${name} fue abandonado; el Soldado neutralizó al ${target ? PIECE_NAMES[target.type] : 'objetivo aéreo'} superior`
           : `${name} fue abandonado y convertido en Soldado`;
       break;
+    }
   }
   const destroyed = events.filter(
     (event) => event.type === 'destroy' || event.type === 'intercept',

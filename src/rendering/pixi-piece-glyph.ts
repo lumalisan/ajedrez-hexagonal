@@ -10,9 +10,13 @@ const TAU = Math.PI * 2;
 type Animate = (phase: number | null) => void;
 
 /** Retained mechanical parts: idle motion changes transforms, never the game piece. */
-export function createPieceGlyph(piece: Piece, highContrast: boolean): PieceGlyph {
+export function createPieceGlyph(
+  piece: Piece,
+  highContrast: boolean,
+  factionColor?: number,
+): PieceGlyph {
   const container = new Container({ label: `glyph-${piece.type}` });
-  const color = piece.owner === 0 ? 0x36b9ff : 0xffb547;
+  const color = factionColor ?? (piece.owner === 0 ? 0x36b9ff : 0xffb547);
   const width = highContrast ? 2.25 : 1.9;
   // Soft joins keep the small silhouettes legible without sharp miter spikes.
   const stroke = { color, width, cap: 'round', join: 'round' } as const;

@@ -316,6 +316,7 @@ export class PixiBoard {
       // A stack's ground offset must not paint it above the aircraft sharing its cell.
       node.zIndex = row + (isAirPiece(piece) ? 0.001 : 0);
       node.update(piece, {
+        color: model.playerColors?.[piece.owner],
         selected: !moving && piece.id === model.selectedId,
         highContrast: model.highContrast,
         alpha: survives ? 1 : 1 - Math.max(0, (raw - 0.75) / 0.25),

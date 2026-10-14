@@ -38,6 +38,14 @@ try {
       reducedMotion: 'reduce',
     });
     try {
+      await context.addInitScript(() => {
+        const original = crypto.getRandomValues.bind(crypto);
+        crypto.getRandomValues = (buffer) => {
+          original(buffer);
+          if (buffer instanceof Uint32Array && buffer.length === 1) buffer[0] &= ~1;
+          return buffer;
+        };
+      });
       const page = await context.newPage();
       const audit = async (surface) => {
         const label = `${profile.name} / ${surface}`;
@@ -48,6 +56,13 @@ try {
 
       await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
       await audit('home');
+      await page.locator('.home-profile').click();
+      await audit('profile / overview');
+      await page.getByRole('button', { name: 'Estadísticas y récords', exact: true }).click();
+      await audit('profile / statistics and records');
+      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await audit('profile / settings');
+      await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
 
       await page.locator('[data-home-action="achievements"]').click();
       await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
@@ -93,12 +108,12 @@ try {
       await page.locator('[data-home-action="new"]').click();
       await page.locator('[data-home-mode="machine"]').click();
       await page
-        .getByRole('combobox', { name: 'Dificultad', exact: true })
+        .getByRole('combobox', { name: 'Nivel', exact: true })
         .waitFor({ state: 'visible' });
       await audit('AI configuration / difficulty');
-      await openSelect(page, 'Dificultad');
+      await openSelect(page, 'Nivel');
       await audit('AI configuration / open difficulty menu');
-      await chooseSelectOption(page, 'Dificultad', 'Experto');
+      await chooseSelectOption(page, 'Nivel', 'Experto');
       await audit('AI configuration / expert');
       await page.locator('[data-back-menu]').click();
       await page.locator('[data-home-mode="local"]').click();
@@ -112,7 +127,7 @@ try {
       await chooseSelectOption(
         page,
         'Disposición inicial',
-        profile.isMobile ? 'Frente de infantería' : 'Frente blindado',
+        profile.isMobile ? 'Frente extendido' : 'Frente clásico',
       );
       await page.locator('[data-layout-preview]').waitFor({ state: 'visible' });
       await audit('match configuration / initial layout preview');
@@ -126,6 +141,8 @@ try {
       await clockControl.press('Escape');
       await chooseSelectOption(page, 'Disposición inicial', 'Frente clásico');
       await page.locator('[data-start-free]').click();
+      await audit('opening turn draw');
+      await page.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
       await page.locator('#game-canvas').waitFor({ state: 'visible' });
 
       await page.locator('#command-panel').waitFor({ state: 'hidden' });

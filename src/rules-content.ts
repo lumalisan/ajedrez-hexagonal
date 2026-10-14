@@ -220,14 +220,13 @@ export const RULE_SECTIONS: RuleSection[] = [
     title: 'Desarrollo de la partida',
     paragraphs: [
       emphasize(
-        'En el despliegue clásico completo, cada jugador comienza con 5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones, además de una fortaleza y un escudo antiaéreo. Explora la disposición inicial en el tablero y utiliza el selector para comparar las cinco formaciones.',
-        '5 soldados, 1 capturador, 2 tanques, 2 lanzamisiles, 2 embestidores, 2 drones y 2 aviones',
+        'En Frente clásico, cada jugador comienza con 5 soldados, 1 capturador, 4 tanques, 1 lanzamisiles, 2 embestidores, 2 drones y 1 avión, además de una fortaleza y un escudo antiaéreo. Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
+        '5 soldados, 1 capturador, 4 tanques, 1 lanzamisiles, 2 embestidores, 2 drones y 1 avión',
       ),
       'Al crear una partida puedes elegir la disposición inicial y los puntos de vida de las fortalezas. Cada disposición determina la composición y la posición de los ejércitos; el movimiento, el combate, las capas y el daño de cada impacto siguen las mismas reglas.',
       emphasize(
-        'El jugador de color cian realiza el primer turno. Durante su turno, debe seleccionar una de sus unidades y realizar una acción, como desplazarse, atacar, disparar o cambiar su orientación, según las características de la unidad. A continuación, comienza el turno del jugador de color ámbar.',
-        'cian',
-        'ámbar',
+        'El primer turno se sortea antes de empezar la partida. Durante su turno, cada jugador debe seleccionar una de sus unidades y realizar una acción, como desplazarse, atacar, disparar o cambiar su orientación, según las características de la unidad. A continuación, comienza el turno del rival.',
+        'primer turno se sortea',
       ),
       peerHeading('Final de la partida'),
       emphasize(
@@ -244,7 +243,7 @@ export const RULE_SECTIONS: RuleSection[] = [
         `La configuración estándar declara tablas tras ${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies) consecutivas sin una baja, una intercepción ni daño a una fortaleza. Una conversión del Capturador cambia de bando a la unidad, pero no reinicia este contador.`,
         `${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies)`,
       ),
-      `Puedes configurar dos límites de tiempo independientes: por turno (sin límite, 30 segundos, 1 minuto o 2 minutos) y total por jugador (sin límite, 5 minutos, 10 minutos o 20 minutos). El tiempo por turno se reinicia al comenzar cada turno; el total solo se consume mientras juega ese bando. Al agotar el tiempo de turno, la IA realiza una jugada por ese jugador. Si un mismo jugador lo agota ${TURN_TIMEOUT_LIMIT} veces durante la partida, pierde. Agotar el tiempo total o rendirse también concede la victoria al rival.`,
+      `En partidas locales puedes configurar dos límites de tiempo independientes: por turno (sin límite, 30 segundos, 1 minuto o 2 minutos) y total por jugador (sin límite, 5 minutos, 10 minutos o 20 minutos). El tiempo por turno se reinicia al comenzar cada turno; el total solo se consume mientras juega ese bando. Al agotar el tiempo de turno, la IA realiza una jugada por ese jugador. Si un mismo jugador lo agota ${TURN_TIMEOUT_LIMIT} veces durante la partida, pierde. Agotar el tiempo total o rendirse también concede la victoria al rival. Las partidas contra Hexfortia siempre se juegan con tiempo ilimitado.`,
       peerHeading('Registro y continuidad'),
       'Cada orden confirmada y el desenlace quedan guardados en el registro de partida. Al guardar y continuar se conservan el tiempo restante de ambos relojes y las veces que cada jugador ha agotado el tiempo de turno. La destrucción de una fortaleza, las tablas, el tiempo agotado y la rendición se conservan al continuar, exportar, importar o reproducir la partida; una partida concluida no vuelve a abrirse como si siguiera activa.',
     ],

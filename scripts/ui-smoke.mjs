@@ -36,36 +36,107 @@ await server.listen();
 
 const browser = await chromium.launch({ executablePath, headless: true });
 const runtimeErrors = [];
+// Make opening draws reproducible; both winners are covered by session regressions.
+const createSmokePage = browser.newPage.bind(browser);
+browser.newPage = async (options) => {
+  const page = await createSmokePage(options);
+  await page.addInitScript(() => {
+    const original = crypto.getRandomValues.bind(crypto);
+    crypto.getRandomValues = (buffer) => {
+      original(buffer);
+      if (buffer instanceof Uint32Array && buffer.length === 1) buffer[0] &= ~1;
+      return buffer;
+    };
+  });
+  return page;
+};
 
 try {
   for (const { layout, mode, viewport } of [
     { layout: '3', mode: 'local', viewport: { width: 1440, height: 900 } },
-    { layout: '4', mode: 'machine', viewport: { width: 390, height: 844 } },
+    { layout: '3', mode: 'machine', viewport: { width: 390, height: 844 } },
     { layout: '5', mode: 'local', viewport: { width: 1440, height: 900 } },
     { layout: '5', mode: 'machine', viewport: { width: 390, height: 844 } },
   ]) {
     const page = await browser.newPage({ viewport });
     watchErrors(page, runtimeErrors);
     await page.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+    if (layout === '3') {
+      await page.locator('.home-profile').click();
+      await page
+        .getByRole('heading', { name: 'Tu perfil', exact: true })
+        .waitFor({ state: 'visible' });
+      assert(
+        await page.getByRole('heading', { name: 'Tu perfil', exact: true }).isVisible(),
+        'Profile must open its overview by default.',
+      );
+      assert(
+        (await page.locator('.profile-content').textContent()).includes('Nivel 0'),
+        'A new player must begin at level 0.',
+      );
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({ path: process.env.UI_SCREENSHOT + '-profile-' + mode + '.png' });
+      await page.getByRole('button', { name: 'Estadísticas y récords', exact: true }).click();
+      assert(
+        (await page.locator('.profile-content table').count()) === 2,
+        'Profile must contain statistics and records tables.',
+      );
+      assert(
+        (await page.locator('.profile-content table').nth(0).locator('tbody tr').count()) === 4,
+        'Statistics must contain three modes and total.',
+      );
+      assert(
+        (await page.locator('.profile-content table').nth(1).locator('tbody tr').count()) === 2,
+        'Records must contain online and Hexfortia.',
+      );
+      await assertNoHorizontalOverflow(page, 'Profile tables', '#game-dialog');
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({
+          path: process.env.UI_SCREENSHOT + '-profile-tables-' + mode + '.png',
+        });
+      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await page.locator('#profile-name').fill('Alex');
+      await page.getByRole('radio', { name: 'Estrella', exact: true }).check();
+      await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+      assert(
+        (await page.locator('.home-profile').textContent()).includes('Alex'),
+        'Saving must update the profile name.',
+      );
+      await page.locator('.home-profile').click();
+      await page
+        .getByRole('heading', { name: 'Tu perfil', exact: true })
+        .waitFor({ state: 'visible' });
+      assert(
+        await page.getByRole('heading', { name: 'Tu perfil', exact: true }).isVisible(),
+        'Reopening the profile must reset its section.',
+      );
+      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await page.locator('#profile-name').fill('Sin guardar');
+      await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
+      assert(
+        (await page.locator('.home-profile').textContent()).includes('Alex'),
+        'Closing profile must discard unsaved edits.',
+      );
+    }
     await page.locator('[data-home-action="new"]').click();
     await page.locator(`[data-home-mode="${mode}"]`).click();
     await page
       .getByRole('combobox', { name: 'Puntos de vida de la Fortaleza', exact: true })
       .waitFor({ state: 'visible' });
     if (mode === 'machine') {
-      const difficulty = page.getByRole('combobox', { name: 'Dificultad', exact: true });
+      const difficulty = page.getByRole('combobox', { name: 'Nivel', exact: true });
       await difficulty.waitFor({ state: 'visible' });
       assert((await difficulty.count()) === 1, 'AI must have a single difficulty selector.');
       assert(
-        (await selectOptionLabels(page, 'Dificultad')).join('|') === 'Fácil|Medio|Difícil|Experto',
+        (await selectOptionLabels(page, 'Nivel')).join('|') === 'Fácil|Medio|Difícil|Experto',
         'AI must offer four clearly ordered difficulty levels.',
       );
       assert(
         (await page.locator('[data-ai-doctrine], .doctrine-grid').count()) === 0,
         'AI configuration must not expose a second doctrine selector.',
       );
-      await chooseSelectOption(page, 'Dificultad', 'Experto');
-      await openSelect(page, 'Dificultad');
+      await chooseSelectOption(page, 'Nivel', 'Experto');
+      await openSelect(page, 'Nivel');
       await difficulty.press('ArrowUp');
       assert(
         (await page
@@ -80,17 +151,17 @@ try {
         'Escape must close the select menu while keeping its parent dialog open.',
       );
       assert(
-        (await selectedOptionLabel(page, 'Dificultad')) === 'Experto',
+        (await selectedOptionLabel(page, 'Nivel')) === 'Experto',
         'Escape must preserve the previously selected difficulty.',
       );
-      await openSelect(page, 'Dificultad');
+      await openSelect(page, 'Nivel');
       await difficulty.press('ArrowUp');
       await difficulty.press('Enter');
       assert(
-        (await selectedOptionLabel(page, 'Dificultad')) === 'Difícil',
+        (await selectedOptionLabel(page, 'Nivel')) === 'Difícil',
         'Difficulty must remain selectable with the keyboard.',
       );
-      await openSelect(page, 'Dificultad');
+      await openSelect(page, 'Nivel');
       await assertSelectMenuWithinViewport(page, 'Difficulty menu');
       if (process.env.UI_SCREENSHOT)
         await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-mobile-select.png` });
@@ -106,7 +177,7 @@ try {
         'Escape with the menu closed must close the dialog and return focus to its opener.',
       );
       await page.locator('[data-home-mode="machine"]').click();
-      await chooseSelectOption(page, 'Dificultad', 'Difícil');
+      await chooseSelectOption(page, 'Nivel', 'Difícil');
     }
     assert(
       (await page.locator('[data-preset]').count()) === 0,
@@ -114,14 +185,18 @@ try {
     );
     if (mode === 'local') {
       assert(
-        (await page.getByRole('combobox', { name: 'Dificultad', exact: true }).count()) === 0,
+        (await page.getByRole('combobox', { name: 'Nivel', exact: true }).count()) === 0,
         'Local matches must not expose an AI difficulty setting.',
       );
     }
     for (const [label, expectedOptions] of [
       ['Puntos de vida de la Fortaleza', '1|2|3'],
-      ['Tiempo por turno', 'Sin límite|30 segundos|1 minuto|2 minutos'],
-      ['Tiempo total', 'Sin límite|5 minutos|10 minutos|20 minutos'],
+      ...(mode === 'local'
+        ? [
+            ['Tiempo por turno', 'Sin límite|30 segundos|1 minuto|2 minutos'],
+            ['Tiempo total', 'Sin límite|5 minutos|10 minutos|20 minutos'],
+          ]
+        : []),
     ]) {
       assert(
         await page.getByRole('combobox', { name: label, exact: true }).isVisible(),
@@ -137,25 +212,28 @@ try {
       'New local and AI matches must default to 1 fortress HP.',
     );
     assert(
-      (await selectedOptionLabel(page, 'Tiempo por turno')) === 'Sin límite' &&
-        (await selectedOptionLabel(page, 'Tiempo total')) === 'Sin límite',
+      mode === 'machine' ||
+        ((await selectedOptionLabel(page, 'Tiempo por turno')) === 'Sin límite' &&
+          (await selectedOptionLabel(page, 'Tiempo total')) === 'Sin límite'),
       'Both clocks must default to unlimited independently.',
     );
+    assert(
+      (await selectedOptionLabel(page, 'Bando')) === 'Expansionista · Cian',
+      'Expansionista must be the default faction.',
+    );
+    if (mode === 'local') await chooseSelectOption(page, 'Bando', 'Conservacionista · Violeta');
     const layoutSelect = page.getByRole('combobox', { name: 'Disposición inicial', exact: true });
     assert(
       (await selectOptionLabels(page, 'Disposición inicial')).join('|') ===
-        'Frente clásico|Columnas de asedio|Frente blindado|Frente de infantería|Frente extendido',
-      'All five initial layouts must be available, preserving the existing options.',
+        'Frente clásico|Frente extendido',
+      'Only the two supported new-match formations must be available.',
     );
     const preview = page.locator('[data-layout-preview]');
     await page.locator('[data-layout-preview][data-renderer-status="ready"]').waitFor();
     const previewImages = new Set();
     let previewSize;
     for (const [value, soldiers, tanks, capturers, launchers, airplanes] of [
-      ['1', 5, 2, 1, 2, 2],
-      ['2', 5, 2, 2, 1, 2],
       ['3', 5, 4, 1, 1, 1],
-      ['4', 7, 2, 1, 1, 1],
       ['5', 11, 2, 1, 1, 1],
     ]) {
       await chooseSelectOption(page, 'Disposición inicial', INITIAL_LAYOUT_LABELS[value]);
@@ -202,17 +280,16 @@ try {
         'Updating the preview must preserve keyboard focus.',
       );
     }
-    assert(previewImages.size === 5, 'Each layout must produce a different board preview.');
+    assert(previewImages.size === 2, 'Each layout must produce a different board preview.');
     await openSelect(page, 'Disposición inicial');
     await layoutSelect.press('Home');
-    await layoutSelect.press('ArrowDown');
     assert(
       (await preview.getAttribute('data-layout')) === '5',
       'Navigating layout options must leave the preview unchanged until selection is confirmed.',
     );
     await layoutSelect.press('Enter');
     assert(
-      (await preview.getAttribute('data-layout')) === '2',
+      (await preview.getAttribute('data-layout')) === '3',
       'Keyboard selection must update the preview.',
     );
     await openSelect(page, 'Disposición inicial');
@@ -220,7 +297,7 @@ try {
     await layoutSelect.press('Tab');
     assert(
       (await layoutSelect.getAttribute('aria-expanded')) === 'false' &&
-        (await preview.getAttribute('data-layout')) === '2',
+        (await preview.getAttribute('data-layout')) === '3',
       'Tab must close the layout menu without committing the highlighted option.',
     );
     const beforeHealth = await preview.evaluate((canvas) => canvas.toDataURL());
@@ -231,18 +308,26 @@ try {
       'Fortress health changes must be reflected in the preview.',
     );
     await chooseSelectOption(page, 'Puntos de vida de la Fortaleza', '2');
-    await chooseSelectOption(page, 'Tiempo por turno', '2 minutos');
-    await chooseSelectOption(page, 'Tiempo total', '20 minutos');
+    if (mode === 'local') {
+      await chooseSelectOption(page, 'Tiempo por turno', '2 minutos');
+      await chooseSelectOption(page, 'Tiempo total', '20 minutos');
+    } else {
+      assert(
+        (await page.getByRole('combobox', { name: 'Tiempo total', exact: true }).count()) === 0,
+        'Hexfortia must always use unlimited time.',
+      );
+    }
     if (mode === 'machine') {
-      await chooseSelectOption(page, 'Dificultad', 'Experto');
-      await chooseSelectOption(page, 'Dificultad', 'Difícil');
+      await chooseSelectOption(page, 'Nivel', 'Experto');
+      await chooseSelectOption(page, 'Nivel', 'Difícil');
     }
     assert(
       (await preview.isVisible()) &&
-        (await preview.getAttribute('data-layout')) === '2' &&
+        (await preview.getAttribute('data-layout')) === '3' &&
         (await selectedOptionLabel(page, 'Puntos de vida de la Fortaleza')) === '2' &&
-        (await selectedOptionLabel(page, 'Tiempo por turno')) === '2 minutos' &&
-        (await selectedOptionLabel(page, 'Tiempo total')) === '20 minutos',
+        (mode === 'machine' ||
+          ((await selectedOptionLabel(page, 'Tiempo por turno')) === '2 minutos' &&
+            (await selectedOptionLabel(page, 'Tiempo total')) === '20 minutos')),
       'Changing difficulty and clock choices must preserve the layout, preview and other settings.',
     );
     await chooseSelectOption(page, 'Disposición inicial', INITIAL_LAYOUT_LABELS[layout]);
@@ -255,13 +340,14 @@ try {
         path: `${process.env.UI_SCREENSHOT}-layout-${layout}-${mode}-config.png`,
       });
     await page.locator('[data-start-free]').click();
+    await page.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
     await page.locator('#game-dialog').waitFor({ state: 'hidden' });
     const savedConfig = await page.evaluate(
       () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config,
     );
     assert(
-      savedConfig.options.turnClockSeconds === 120 &&
-        savedConfig.options.clockSeconds === 1200 &&
+      savedConfig.options.turnClockSeconds === (mode === 'machine' ? null : 120) &&
+        savedConfig.options.clockSeconds === (mode === 'machine' ? null : 1200) &&
         savedConfig.definitionId === 'classic' &&
         savedConfig.setup.filter(({ piece }) => piece.type === 'fortress').length === 2 &&
         savedConfig.setup
@@ -269,6 +355,17 @@ try {
           .every(({ piece }) => piece.hp === 2),
       'Starting a match must save both independent clocks and the selected fortress health.',
     );
+    assert(
+      (await page.locator('#blue-fortress').textContent()).includes(
+        savedConfig.participants[0].name,
+      ),
+      'Scoreboard must use the profile name.',
+    );
+    if (mode === 'local')
+      assert(
+        (await page.locator('#amber-fortress').textContent()).includes('Invitado'),
+        'Local rival must be the guest.',
+      );
     if (mode === 'machine') {
       const rival = await page.evaluate(
         () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config.participants[1],
@@ -335,6 +432,7 @@ try {
     'Setting a turn clock must leave total time unlimited.',
   );
   await turnOnly.locator('[data-start-free]').click();
+  await turnOnly.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
   await turnOnly.locator('#turn-clock').waitFor({ state: 'visible' });
   assert(
     await turnOnly.evaluate(() => {
@@ -351,7 +449,7 @@ try {
   assert(
     (await turnOnly.locator('.match-status .match-clock').count()) === 1 &&
       (await turnOnly.locator('#turn-chip #turn-clock').textContent()) === '0:30' &&
-      (await turnOnly.locator('#turn-clock').getAttribute('aria-label')) === 'Turno de Cian: 0:30',
+      /^Turno de .+: 0:30$/.test(await turnOnly.locator('#turn-clock').getAttribute('aria-label')),
     'A turn-only match must display and announce only the current turn countdown, without zero total clocks.',
   );
   await assertNoHorizontalOverflow(turnOnly, 'Mobile turn-only match');
@@ -512,8 +610,9 @@ try {
     (await selectedOptionLabel(desktop, 'Disposición inicial')) === 'Frente clásico',
     'Initial layout must default to option 1.',
   );
-  await chooseSelectOption(desktop, 'Disposición inicial', 'Columnas de asedio');
+  await chooseSelectOption(desktop, 'Disposición inicial', 'Frente clásico');
   await desktop.locator('[data-start-free]').click();
+  await desktop.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
   await desktop.locator('#game-dialog').waitFor({ state: 'hidden' });
   assert(
     await desktop.evaluate(() => !document.documentElement.classList.contains('modal-open')),
@@ -532,10 +631,10 @@ try {
     'Accessible board must expose 91 cells.',
   );
   assert(
-    (await desktop.locator('#sr-board [data-hex="3,-4"]').textContent())?.startsWith('CAP,') &&
-      (await desktop.locator('#sr-board [data-hex="-3,-1"]').textContent())?.startsWith('CAP,') &&
-      (await desktop.locator('#sr-board [data-hex="0,-3"]').textContent())?.startsWith('LMS,'),
-    'Initial layout option 2 did not swap Capturadores and Lanzamisiles.',
+    (await desktop.locator('#sr-board [data-hex="3,-4"]').textContent())?.startsWith('TNQ,') &&
+      (await desktop.locator('#sr-board [data-hex="-3,-1"]').textContent())?.startsWith('TNQ,') &&
+      (await desktop.locator('#sr-board [data-hex="0,-3"]').textContent())?.startsWith('CAP,'),
+    'Frente clásico must include the four tanks and central Capturador.',
   );
   assert(
     !(await desktop.locator('#sr-board [role="gridcell"]').allTextContents()).some((label) =>
@@ -769,7 +868,10 @@ try {
   await desktop.locator('.cancel-mode').click();
 
   await doubleClickHex(desktop, 0, -1);
-  await desktop.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  await desktop
+    .locator('#turn-chip')
+    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .waitFor();
   assert(
     (await desktop.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
     'Fixed board must keep Cian below during the Ámbar turn.',
@@ -860,8 +962,9 @@ try {
   assert(
     (await windowPage.locator('#command-panel').isHidden()) &&
       (await windowPage.locator('#command-panel-restore').isHidden()) &&
-      (await windowPage.locator('#selection-summary').textContent()) ===
-        'Turno de Cian. Selecciona una unidad propia.',
+      /^Turno de .+\. Selecciona una unidad propia\.$/.test(
+        await windowPage.locator('#selection-summary').textContent(),
+      ),
     'Closing the window must deselect the unit and discard its prepared order.',
   );
   await assertCanvasBounds(windowPage, unobstructedCanvas, 'Closing the command window');
@@ -1001,17 +1104,20 @@ try {
       Math.abs(reopenedLogWindow.y - defaultLogWindow.y) <= 1,
     'Reopening a closed battle log must reset it to its default position.',
   );
-  await clickHex(logPage, 1, -5);
-  await clickHex(logPage, 1, -3);
+  await clickHex(logPage, -1, -4);
+  await clickHex(logPage, -1, -2);
   await logPage.locator('#pending-card .confirm-button').click();
-  await logPage.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  await logPage
+    .locator('#turn-chip')
+    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .waitFor();
   assert(
     (await logPage.locator('#battle-log-panel').isVisible()) &&
       (await logPage.locator('#battle-log li:not(.empty-log)').count()) === 1,
     'Confirming an order must keep the battle log visible and update its history.',
   );
   await logPage.locator('#undo-action:not([disabled])').waitFor();
-  await clickHex(logPage, 1, -3);
+  await clickHex(logPage, -1, -2);
   assert(
     (await logPage.locator('#selection-summary').textContent()) ===
       'Casilla apilada. Elige una unidad en el panel de mando.' &&
@@ -1309,11 +1415,13 @@ try {
     'History arrow buttons must have accessible names.',
   );
   const initialBoard = await historyPage.locator('#sr-board').textContent();
+  const initialCommander = await historyPage.locator('#turn-chip').textContent();
   await clickHex(historyPage, 0, -2);
   await doubleClickHex(historyPage, 0, -1);
   await historyPage.locator('#undo-action:not([disabled])').waitFor();
   await assertActionHistory(historyPage, 1, 1);
   const firstMoveBoard = await historyPage.locator('#sr-board').textContent();
+  const firstMoveCommander = await historyPage.locator('#turn-chip').textContent();
   const firstMoveLog = await historyPage.locator('#battle-log').textContent();
   assert(firstMoveBoard !== initialBoard, 'A committed move must change the board.');
   await undoAction.focus();
@@ -1322,7 +1430,7 @@ try {
   assert(
     (await historyPage.locator('#sr-board').textContent()) === initialBoard &&
       (await historyPage.locator('#battle-log li:not(.empty-log)').count()) === 0 &&
-      (await historyPage.locator('#turn-chip').textContent())?.includes('Cian en mando'),
+      (await historyPage.locator('#turn-chip').textContent()) === initialCommander,
     'Undo must restore the board, turn and battle log before the move.',
   );
   assert(
@@ -1334,7 +1442,7 @@ try {
   assert(
     (await historyPage.locator('#sr-board').textContent()) === firstMoveBoard &&
       (await historyPage.locator('#battle-log').textContent()) === firstMoveLog &&
-      (await historyPage.locator('#turn-chip').textContent())?.includes('Ámbar en mando') &&
+      (await historyPage.locator('#turn-chip').textContent()) === firstMoveCommander &&
       (await redoAction.isDisabled()),
     'Redo must restore the exact board, turn and battle log without duplicating the move.',
   );
@@ -1380,7 +1488,10 @@ try {
       (await historyPage.locator('#sr-board').textContent()) !== firstMoveBoard,
     'A different move after undo must replace the discarded future and disable redo.',
   );
-  await historyPage.evaluate(() => {
+  // Prepare after the old document has flushed its final active-time save.
+  await historyPage.addInitScript(() => {
+    if (!sessionStorage.getItem('terminal-order-fixture')) return;
+    sessionStorage.removeItem('terminal-order-fixture');
     const key = 'atlas-match-classic-v2';
     const record = JSON.parse(localStorage.getItem(key));
     record.config.options.noProgressPlyLimit = 1;
@@ -1393,6 +1504,7 @@ try {
     if (entry) entry.record = record;
     localStorage.setItem(pendingKey, JSON.stringify(pending));
   });
+  await historyPage.evaluate(() => sessionStorage.setItem('terminal-order-fixture', '1'));
   await historyPage.reload({ waitUntil: 'networkidle' });
   await historyPage.locator('[data-home-action="continue"]').click();
   await historyPage.locator('[data-continue-match]').first().click();
@@ -1569,7 +1681,10 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile.locator('#pending-card:not([hidden])').waitFor();
   await mobile.keyboard.press('Enter');
-  await mobile.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  await mobile
+    .locator('#turn-chip')
+    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .waitFor();
   assert(
     (await mobile.locator('#battle-log li').count()) >= 1 &&
       (await mobile.locator('#battle-log-panel').isVisible()),
@@ -1776,7 +1891,10 @@ try {
   await assertPendingActionsReachable(compactLandscape);
   await compactLandscape.setViewportSize({ width: 568, height: 320 });
   await compactLandscape.locator('#pending-card .confirm-button').click();
-  await compactLandscape.locator('#turn-chip').getByText('Ámbar en mando').waitFor();
+  await compactLandscape
+    .locator('#turn-chip')
+    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .waitFor();
   await compactLandscape.locator('[data-open-replay]').click();
   await compactLandscape.locator('.replay-dock').waitFor();
   assert(
@@ -1854,6 +1972,7 @@ try {
     'Setting a total clock must leave the turn clock unlimited.',
   );
   await clocked.locator('[data-start-free]').click();
+  await clocked.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
   assert(
     await clocked.evaluate(() => {
       const { options } = JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config;
@@ -1924,7 +2043,9 @@ try {
       ),
     'Redo must run the next player clock without refunding elapsed time.',
   );
-  await clocked.evaluate(() => {
+  await clocked.addInitScript(() => {
+    if (!sessionStorage.getItem('timeout-fixture')) return;
+    sessionStorage.removeItem('timeout-fixture');
     const key = 'atlas-match-classic-v2';
     const record = JSON.parse(localStorage.getItem(key));
     record.clock.remainingMs[record.clock.activePlayer] = 1;
@@ -1938,6 +2059,7 @@ try {
     if (entry) entry.record = record;
     localStorage.setItem(pendingKey, JSON.stringify(pending));
   });
+  await clocked.evaluate(() => sessionStorage.setItem('timeout-fixture', '1'));
   await clocked.reload({ waitUntil: 'networkidle' });
   await clocked.locator('[data-home-action="continue"]').click();
   await clocked.locator('[data-continue-match]').first().click();
@@ -1995,7 +2117,7 @@ try {
   await clickHex(solo, 0, -2);
   await doubleClickHex(solo, 0, -1);
   await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 25_000 });
-  await solo.locator('#turn-chip').getByText('Cian en mando').waitFor();
+  await solo.locator('#turn-chip strong').filter({ hasText: 'en mando' }).waitFor();
   assert(
     (await solo.locator('#battle-log li').count()) >= 2,
     'The machine must answer the human move with a legal move.',
@@ -2034,11 +2156,12 @@ async function selectMode(page, mode) {
     await page.locator(`[data-game-mode="${mode}"]`).click();
   }
   if (mode === 'machine') {
-    await chooseSelectOption(page, 'Dificultad', 'Experto');
+    await chooseSelectOption(page, 'Nivel', 'Experto');
     if (process.env.UI_SCREENSHOT)
       await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-desktop.png` });
   }
   await page.locator('[data-start-free]').click();
+  await page.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
   await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
 }
@@ -2287,7 +2410,7 @@ async function assertRulesLayouts(page, surface) {
   const preview = page.locator('[data-rules-layout-preview]');
   await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();
   assert(
-    (await preview.getAttribute('data-layout')) === '1' &&
+    (await preview.getAttribute('data-layout')) === '3' &&
       (await selectedOptionLabel(page, 'Disposición inicial')) === 'Frente clásico',
     'The rules deployment preview must begin with the default classic layout.',
   );
@@ -2323,7 +2446,7 @@ async function assertRulesLayouts(page, surface) {
     );
     images.add(rendered.image);
   }
-  assert(images.size === 5, 'Changing rule layouts must redraw five different board positions.');
+  assert(images.size === 2, 'Changing rule layouts must redraw five different board positions.');
   await assertNoHorizontalOverflow(page, `${surface} rules deployment`, '#game-dialog');
   await preview.scrollIntoViewIfNeeded();
   if (process.env.UI_SCREENSHOT)
@@ -2335,14 +2458,13 @@ async function assertRulesLayouts(page, surface) {
     'The rules layout menu must remain inside its modal dialog.',
   );
   await selector.press('Home');
-  await selector.press('ArrowDown');
   assert(
     (await preview.getAttribute('data-layout')) === '5',
     'Highlighting another rule layout must leave the preview unchanged before confirmation.',
   );
   await selector.press('Enter');
   assert(
-    (await preview.getAttribute('data-layout')) === '2' &&
+    (await preview.getAttribute('data-layout')) === '3' &&
       (await selector.evaluate((control) => control === document.activeElement)),
     'Keyboard confirmation must update the live rules board and preserve selector focus.',
   );

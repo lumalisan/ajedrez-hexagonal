@@ -18,6 +18,7 @@ import {
   ReplayError,
   appendAction,
   calculateStatistics,
+  matchDurationSeconds,
   concludeMatch,
   createMatchRecord,
   parseRecord,
@@ -26,6 +27,25 @@ import {
   setMatchClock,
 } from '../src/match-record';
 import { SCENARIOS, evaluateScenario } from '../src/scenarios';
+
+describe('duración activa portable', () => {
+  it('conserva tiempo acumulado al exportar y acepta guardados anteriores sin duración', () => {
+    const record = createMatchRecord(createClassicConfig({ mode: 'local' }));
+    record.activeDurationMs = 90_000;
+    const restored = parseRecord(serializeRecord(record));
+    expect(matchDurationSeconds(restored)).toBe(90);
+    delete restored.activeDurationMs;
+    expect(matchDurationSeconds(parseRecord(serializeRecord(restored)))).toBe(0);
+  });
+  it.each([-1, NaN, Infinity, 0.5])('rechaza duración inválida %s', (activeDurationMs) => {
+    const record = {
+      ...createMatchRecord(createClassicConfig({ mode: 'local' })),
+      activeDurationMs,
+    };
+    expect(() => serializeRecord(record)).toThrow(ReplayError);
+    expect(() => parseRecord(JSON.stringify(record))).toThrow(ReplayError);
+  });
+});
 
 describe('configuración, invariantes y diario', () => {
   it.each([null, 300])(

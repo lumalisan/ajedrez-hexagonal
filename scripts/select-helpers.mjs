@@ -40,10 +40,4 @@ export async function selectedOptionLabel(page, label) {
   return text?.trim();
 }
 
-export const INITIAL_LAYOUT_LABELS = {
-  1: 'Frente clásico',
-  2: 'Columnas de asedio',
-  3: 'Frente blindado',
-  4: 'Frente de infantería',
-  5: 'Frente extendido',
-};
+export const INITIAL_LAYOUT_LABELS = { 3: 'Frente clásico', 5: 'Frente extendido' };

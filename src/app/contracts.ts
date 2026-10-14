@@ -36,7 +36,8 @@ export type DialogState =
   | { kind: 'scenario-briefing'; scenario: ScenarioDefinition }
   | { kind: 'scenario-success'; scenario: ScenarioDefinition }
   | { kind: 'scenario-retry'; scenario: ScenarioDefinition; feedback: string }
-  | { kind: 'handoff' };
+  | { kind: 'handoff' }
+  | { kind: 'first-turn'; player: 0 | 1 };
 
 export interface GameSnapshot {
   state: GameState;
@@ -88,6 +89,7 @@ export interface GameCommands {
   setHomeView(view: 'main' | 'new'): void;
   abandon(): void;
   startMatch(config: MatchConfig): void;
+  finishOpeningDraw(): void;
   startScenario(scenario: ScenarioDefinition): void;
   startTutorial(): void;
   navigateTutorial(delta: 1 | -1): void;

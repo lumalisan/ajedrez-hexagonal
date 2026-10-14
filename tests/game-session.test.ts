@@ -129,6 +129,92 @@ describe('sesión que conecta React con el juego', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([0, 1] as const)(
+    'sortea el turno %i antes de activar reloj o IA y conserva el resultado',
+    async (winner) => {
+      vi.stubGlobal('crypto', {
+        getRandomValues: (values: Uint32Array) => {
+          values[0] = winner;
+          return values;
+        },
+      });
+      const session = createSession();
+      session.start();
+      session.commands.startMatch(
+        createClassicConfig({ mode: 'machine', openingDraw: true, clockSeconds: 300 }),
+      );
+      const initial = session.getSnapshot();
+      expect(initial.dialog).toEqual({ kind: 'first-turn', player: winner });
+      expect(initial.state.activePlayer).toBe(winner);
+      session.commands.closeDialog();
+      session.commands.openDialog({ kind: 'settings' });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(session.getSnapshot().dialog?.kind).toBe('first-turn');
+      expect(collaborators.chooseAction).not.toHaveBeenCalled();
+      expect(session.getSnapshot().matchRecord?.clock?.remainingMs).toEqual([300000, 300000]);
+      expect(session.getSnapshot().matchRecord?.activeDurationMs).toBe(0);
+      expect(
+        replayRecord(parseRecord(serializeRecord(session.getSnapshot().matchRecord!))).activePlayer,
+      ).toBe(winner);
+      session.commands.finishOpeningDraw();
+      expect(session.getSnapshot().dialog).toBeNull();
+      expect(session.getSnapshot().matchRecord?.clock?.status).toBe('running');
+      await vi.advanceTimersByTimeAsync(300);
+      expect(collaborators.chooseAction).toHaveBeenCalledTimes(winner);
+    },
+  );
+
+  it.each(['local', 'machine'] as const)(
+    'suma solo tiempo jugado al guardar y retomar en %s',
+    (mode) => {
+      const session = createSession();
+      session.commands.startMatch(createClassicConfig({ mode }));
+      const id = session.getSnapshot().matchRecord!.createdAt;
+      vi.setSystemTime(Date.now() + 60_000);
+      session.commands.abandon();
+      expect(loadActiveMatch().record?.activeDurationMs).toBe(60_000);
+      vi.setSystemTime(Date.now() + 8 * 3_600_000);
+      session.commands.continueMatch(id);
+      vi.setSystemTime(Date.now() + 30_000);
+      session.commands.resign();
+      expect(loadMatchHistory()[0].durationSeconds).toBe(90);
+      expect(session.getSnapshot().matchRecord?.activeDurationMs).toBe(90_000);
+    },
+  );
+
+  it('guarda duración sin reloj al cerrar y no cuenta el tiempo con la sesión desmontada', () => {
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    vi.setSystemTime(Date.now() + 20_000);
+    session.dispose();
+    expect(loadActiveMatch().record?.activeDurationMs).toBe(20_000);
+    vi.setSystemTime(Date.now() + 8 * 3_600_000);
+    session.start();
+    vi.setSystemTime(Date.now() + 10_000);
+    session.commands.resign();
+    expect(loadMatchHistory()[0].durationSeconds).toBe(30);
+  });
+
+  it('excluye el tiempo con la pestaña oculta y en repetición', () => {
+    const session = createSession();
+    session.start();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    vi.setSystemTime(Date.now() + 10_000);
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    browserWindow.dispatchEvent(new Event('visibilitychange'));
+    vi.setSystemTime(Date.now() + 3_600_000);
+    vi.stubGlobal('document', { visibilityState: 'visible' });
+    browserWindow.dispatchEvent(new Event('visibilitychange'));
+    vi.setSystemTime(Date.now() + 10_000);
+    session.commands.openReplay();
+    vi.setSystemTime(Date.now() + 3_600_000);
+    session.commands.closeReplay();
+    vi.setSystemTime(Date.now() + 10_000);
+    session.commands.resign();
+    expect(loadMatchHistory()[0].durationSeconds).toBe(30);
+  });
+
   it('registra actividad al montar y conserva el aviso después del ciclo de Strict Mode', async () => {
     const progress = createPlayerProgression();
     progress.activity = { lastDay: '2026-09-20', streak: 2, best: 2 };
@@ -141,7 +227,7 @@ describe('sesión que conecta React con el juego', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(session.getSnapshot().progression.activity.streak).toBe(3);
     expect(session.getSnapshot().progression.unlockedAt['p1-15']).toBeDefined();
-    expect(session.getSnapshot().progression.xp).toBe(50);
+    expect(session.getSnapshot().progression.xp).toBe(25);
     await vi.advanceTimersByTimeAsync(750);
     expect(session.getSnapshot().achievementNotification?.achievementId).toBe('p1-15');
     expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);

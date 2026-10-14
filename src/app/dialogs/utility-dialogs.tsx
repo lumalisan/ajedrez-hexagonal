@@ -5,7 +5,7 @@ import { Field, FieldControl, FieldLabel } from '../components/ui/field';
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { outcomeText, PLAYER_NAMES } from '../../engine';
 import { BattleProgressionPanel } from '../components/battle-progression';
-import { calculateStatistics } from '../../match-record';
+import { calculateStatistics, matchDurationSeconds } from '../../match-record';
 import {
   loadAcademyRecords,
   loadMatchHistory,
@@ -17,6 +17,7 @@ import type { GamePreferences, ScenarioDefinition } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { useGame } from '../game-context';
 import { AchievementsDialog } from './achievements-dialog';
+import { OpeningDrawDialog } from './opening-draw-dialog';
 import { ProfileDialog } from './profile-dialog';
 import { StoryDialog } from './story-dialog';
 import { RankingDialog } from './ranking-dialog';
@@ -36,6 +37,8 @@ export function UtilityDialogs() {
   switch (dialog?.kind) {
     case 'story':
       return <StoryDialog />;
+    case 'first-turn':
+      return <OpeningDrawDialog player={dialog.player} />;
     case 'profile':
       return <ProfileDialog />;
     case 'settings':
@@ -53,11 +56,14 @@ export function UtilityDialogs() {
         <ConfirmationDialog
           eyebrow="ABANDONAR PARTIDA"
           title="¿Volver al inicio?"
-          confirmLabel="Abandonar partida"
+          confirmLabel="Guardar y salir"
           confirmAttribute="data-confirm-abandon"
           onConfirm={commands.abandon}
         >
-          <p>Volverás al inicio. La partida quedará guardada para que puedas continuarla.</p>
+          <p>
+            Volverás al menú de inicio. La partida se guardará durante 30 días para que puedas
+            retomarla más adelante. Transcurrido ese plazo, se registrará como perdida.
+          </p>
         </ConfirmationDialog>
       );
     case 'resign':
@@ -513,17 +519,8 @@ function OutcomeDialog() {
     () => (matchRecord ? calculateStatistics(matchRecord) : null),
     [matchRecord],
   );
-  const [completedAt] = useState(() => matchRecord?.updatedAt ?? new Date().toISOString());
   const evidence = matchRecord ? snapshot.progression.matches[matchRecord.createdAt] : undefined;
-  const duration = matchRecord
-    ? Math.max(
-        0,
-        Math.round(
-          (Date.parse(evidence?.completedAt ?? completedAt) - Date.parse(matchRecord.createdAt)) /
-            1000,
-        ),
-      )
-    : 0;
+  const duration = matchRecord ? matchDurationSeconds(matchRecord) : 0;
   if (!state.outcome) return null;
   const winnerClass =
     state.outcome.type === 'win' ? (state.outcome.winner === 0 ? 'blue' : 'amber') : 'draw';
@@ -588,10 +585,10 @@ function OutcomeDialog() {
           data-new-game
           onClick={() => {
             commands.closeDialog();
-            commands.showHome('new');
+            commands.showHome();
           }}
         >
-          Nueva partida
+          Volver al menú
         </Button>
       </div>
     </>

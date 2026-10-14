@@ -1026,3 +1026,156 @@
     right: 64px;
   }
 }
+
+/* Profile inherits the collection browser navigation and modal proportions. */
+.profile-header {
+  justify-content: space-between;
+}
+.profile-header .achievements-player {
+  max-width: 85%;
+}
+.profile-content {
+  padding: 0 24px 32px;
+}
+.profile-content h3 {
+  margin: 24px 0 16px;
+  font: 600 22px / 1.3 var(--font-display);
+}
+.profile-content .progression-summary {
+  padding-inline: 0;
+}
+.profile-achievements {
+  display: grid;
+  gap: 12px;
+  margin-block: 24px;
+}
+.profile-achievements > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.profile-achievements progress {
+  width: 100%;
+  accent-color: var(--blue);
+}
+.profile-achievements button {
+  justify-self: start;
+}
+.profile-ratings {
+  margin: 0;
+}
+.profile-ratings > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 2fr;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.profile-ratings dd {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.profile-ratings dd span,
+.profile-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.profile-records {
+  margin-top: 32px;
+}
+.profile-content .ranking-table th {
+  white-space: normal;
+  min-width: 90px;
+}
+.profile-content .ranking-table tbody th {
+  white-space: nowrap;
+}
+.profile-content .ranking-table tbody tr:last-child {
+  font-weight: 600;
+}
+.opening-draw {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.opening-draw p {
+  margin: 0;
+}
+.opening-draw strong {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.opening-coin {
+  font-size: 110px;
+  line-height: 1;
+  animation: opening-flip 400ms ease-in-out 4;
+}
+.opening-coin[data-revealed='true'] {
+  animation: none;
+}
+@keyframes opening-flip {
+  50% {
+    transform: rotateY(180deg) scale(0.85);
+  }
+}
+.reduced-motion .opening-coin {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .opening-coin {
+    animation: none;
+  }
+}
+@media (max-width: 700px) {
+  .profile-content {
+    padding-inline: 16px;
+  }
+  .profile-browser .achievement-levels {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .profile-browser .achievement-level button {
+    min-height: 44px;
+  }
+  .profile-ratings > div {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.faction-identity {
+  min-width: 0;
+}
+.faction-identity strong {
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.faction-identity strong {
+  display: grid;
+  gap: 3px;
+}
+.faction-identity small {
+  font-size: 10px;
+  text-transform: none;
+  font-weight: 400;
+}
+.turn-chip {
+  min-width: 0;
+}
+.turn-chip strong {
+  overflow-wrap: anywhere;
+}
+@media (min-width: 1201px) {
+  .topbar {
+    grid-template-columns: minmax(180px, 0.65fr) minmax(480px, 1.4fr) auto;
+  }
+  .match-status {
+    min-width: 0;
+  }
+}
