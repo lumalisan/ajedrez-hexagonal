@@ -8,6 +8,15 @@ import {
 import { FloatingPanel } from '../../floating-panel';
 
 const WINDOWS = {
+  replay: {
+    label: 'Repetición',
+    panel: 'replay-dock',
+    titlebar: 'replay-window-titlebar',
+    minimize: 'minimize-replay',
+    close: 'close-replay',
+    restore: 'replay-restore',
+    side: 'left',
+  },
   command: {
     label: 'Panel de mando',
     panel: 'command-panel',
@@ -56,6 +65,7 @@ export function FloatingPanelWindow({
   const closeRef = useRef<HTMLButtonElement>(null);
   const restoreRef = useRef<HTMLButtonElement>(null);
   const config = WINDOWS[kind];
+  const Panel = kind === 'replay' ? 'section' : 'aside';
   useLayoutEffect(() => {
     const arena = panelRef.current?.parentElement;
     if (
@@ -78,20 +88,21 @@ export function FloatingPanelWindow({
       },
       onClose,
       config.side,
+      kind === 'replay',
     );
     controllerRef.current = floating;
     return () => {
       floating.destroy();
       controllerRef.current = null;
     };
-  }, [config.side, controllerRef, onClose, panelRef]);
+  }, [config.side, controllerRef, kind, onClose, panelRef]);
   useLayoutEffect(() => {
     controllerRef.current?.setVisible(visible);
   }, [controllerRef, visible]);
 
   return (
     <>
-      <aside
+      <Panel
         ref={panelRef}
         className={`${config.panel} floating-panel`}
         id={config.panel}
@@ -133,6 +144,7 @@ export function FloatingPanelWindow({
               type="button"
               id={config.close}
               data-window-close
+              data-replay-close={kind === 'replay' ? '' : undefined}
               disabled={controlsDisabled}
               aria-label={`Cerrar ${config.label.toLowerCase()}`}
               title={`Cerrar ${config.label.toLowerCase()}`}
@@ -145,7 +157,7 @@ export function FloatingPanelWindow({
           </div>
         </div>
         {children}
-      </aside>
+      </Panel>
       <button
         ref={restoreRef}
         type="button"

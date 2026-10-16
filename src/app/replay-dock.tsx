@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { analyzeMatchMoments } from '../match-insights';
+import { useEffect, useRef } from 'react';
+import type { FloatingPanel } from '../floating-panel';
+import { FloatingPanelWindow } from './components/floating-panel-window';
 import { useGame } from './game-context';
 
 export function ReplayDock() {
   const { snapshot, commands } = useGame();
   const { matchRecord: record, replayCursor: cursor, state } = snapshot;
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const moments = useMemo(() => (record ? analyzeMatchMoments(record) : []), [record]);
+  const panelRef = useRef<HTMLElement>(null);
+  const floatingRef = useRef<FloatingPanel | null>(null);
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeRef.current?.focus();
+    panelRef.current?.querySelector<HTMLButtonElement>('[data-replay-close]')?.focus();
     return () => {
       if (previous?.isConnected) previous.focus();
     };
@@ -20,89 +21,62 @@ export function ReplayDock() {
       ? 'Posición inicial'
       : (state.history.find((entry) => entry.id === state.ply)?.text ?? 'Orden completada.');
   return (
-    <section className="replay-dock" aria-label="Controles de repetición de partida">
-      <div className="replay-heading">
-        <div>
-          <span className="eyebrow">REPETICIÓN</span>
+    <FloatingPanelWindow
+      kind="replay"
+      visible
+      panelRef={panelRef}
+      controllerRef={floatingRef}
+      onClose={commands.closeReplay}
+    >
+      <div className="replay-content">
+        <div className="replay-heading">
           <strong>
             Posición <output data-replay-output>{cursor}</output> de {record.actions.length}
           </strong>
+          <button
+            type="button"
+            className="text-button replay-export"
+            data-export-match
+            onClick={commands.exportMatch}
+          >
+            Exportar partida
+          </button>
         </div>
-        <button
-          ref={closeRef}
-          type="button"
-          className="icon-button replay-close"
-          data-replay-close
-          aria-label="Cerrar repetición"
-          onClick={commands.closeReplay}
-        >
-          ×
-        </button>
+        <p className="replay-description" data-replay-description>
+          {description}
+        </p>
+        <div className="replay-controls">
+          <button
+            type="button"
+            className="secondary-button"
+            data-replay-step="-1"
+            aria-label="Posición anterior"
+            disabled={cursor === 0}
+            onClick={() => commands.setReplayCursor(cursor - 1)}
+          >
+            ←
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={record.actions.length}
+            value={cursor}
+            data-replay-slider
+            aria-label="Posición de la repetición"
+            onChange={(event) => commands.setReplayCursor(Number(event.currentTarget.value))}
+          />
+          <button
+            type="button"
+            className="secondary-button"
+            data-replay-step="1"
+            aria-label="Posición siguiente"
+            disabled={cursor === record.actions.length}
+            onClick={() => commands.setReplayCursor(cursor + 1)}
+          >
+            →
+          </button>
+        </div>
       </div>
-      <p className="replay-description" data-replay-description>
-        {description}
-      </p>
-      <div className="replay-controls">
-        <button
-          type="button"
-          className="secondary-button"
-          data-replay-step="-1"
-          aria-label="Posición anterior"
-          onClick={() => commands.setReplayCursor(cursor - 1)}
-        >
-          ←
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={record.actions.length}
-          value={cursor}
-          data-replay-slider
-          aria-label="Posición de la repetición"
-          onChange={(event) => commands.setReplayCursor(Number(event.currentTarget.value))}
-        />
-        <button
-          type="button"
-          className="secondary-button"
-          data-replay-step="1"
-          aria-label="Posición siguiente"
-          onClick={() => commands.setReplayCursor(cursor + 1)}
-        >
-          →
-        </button>
-      </div>
-      {moments.length > 0 && (
-        <section className="key-moments replay-moments" aria-label="Momentos destacados">
-          <h3>Momentos destacados</h3>
-          {moments.map((moment) => (
-            <button
-              key={moment.actionIndex}
-              type="button"
-              className="moment-jump"
-              data-replay-moment={moment.actionIndex}
-              onClick={() => commands.setReplayCursor(moment.actionIndex)}
-            >
-              <span>Orden {moment.actionIndex}</span>
-              <strong>{moment.title}</strong>
-              <small>
-                {moment.suggestedAlternativeLabel
-                  ? `Alternativa: ${moment.suggestedAlternativeLabel}`
-                  : moment.detail}
-              </small>
-            </button>
-          ))}
-        </section>
-      )}
-      <div className="inline-actions">
-        <button
-          type="button"
-          className="text-button replay-export"
-          data-export-match
-          onClick={commands.exportMatch}
-        >
-          Exportar partida
-        </button>
-      </div>
-    </section>
+    </FloatingPanelWindow>
   );
 }

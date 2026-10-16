@@ -1,9 +1,16 @@
 import { chooseMachineAction, type SearchMetadata } from '../ai';
 import { WorkerAiStrategy, difficultyBudget } from '../ai-strategy';
 import { AudioDirector } from '../audio';
-import { loadUserProfile, normalizeProfile, saveUserProfile } from '../user-profile';
+import {
+  loadUserProfile,
+  normalizeProfile,
+  saveUserProfile,
+  PROFILE_COLORS,
+  PROFILE_EMBLEMS,
+} from '../user-profile';
 import { STORY_CHAPTERS } from '../story-content';
 import {
+  levelProgress,
   loadPlayerProgression,
   savePlayerProgression,
   recordActivity,
@@ -64,6 +71,8 @@ import type { UiMode } from '../match-store';
 import {
   appendMatchHistory,
   clearActiveMatch,
+  loadPendingMatches,
+  loadMatchHistory,
   loadActiveMatch,
   loadAcademyProgress,
   loadAcademyRecords,
@@ -135,6 +144,7 @@ export function createGameSession(): GameSession {
   let aiAbortController: AbortController | null = null;
   let replayCursor: number | null = null;
   let replayClockWasRunning = false;
+  let returnToOutcome = false;
   let restoreHistoryReplay: (() => void) | null = null;
   let machineThinking = false;
   let machineSearch: SearchMetadata | null = null;
@@ -299,9 +309,27 @@ export function createGameSession(): GameSession {
     });
   }
 
+  function reconcileExpiredMatches(): void {
+    loadPendingMatches();
+    for (const entry of loadMatchHistory()) {
+      if (!entry.record) continue;
+      const update = evaluateProgressionMatch(progression, entry.record, {
+        source: 'live',
+        at: entry.completedAt,
+      });
+      if (update.progress !== progression) {
+        progression = update.progress;
+        savePlayerProgression(progression);
+      }
+    }
+  }
+
   function openDialog(dialog: DialogState): void {
+    reconcileExpiredMatches();
     if (currentDialog?.kind === 'first-turn') return;
+    const fromOutcome = currentDialog?.kind === 'outcome' || returnToOutcome;
     closeReplay();
+    returnToOutcome = fromOutcome;
     currentDialog = dialog;
     dialogError = null;
     render();
@@ -309,7 +337,8 @@ export function createGameSession(): GameSession {
 
   function closeDialog(): void {
     if (currentDialog?.kind === 'first-turn') return;
-    currentDialog = null;
+    currentDialog = returnToOutcome && state.outcome ? { kind: 'outcome' } : null;
+    returnToOutcome = false;
     dialogError = null;
     render();
   }
@@ -449,6 +478,7 @@ export function createGameSession(): GameSession {
     if (matchRecord && !activeScenario && replayCursor === null && !state.outcome)
       persistCurrentMatch();
     stopHomeDemo();
+    returnToOutcome = false;
     homeView = view;
     currentDialog = null;
     dialogError = null;
@@ -495,6 +525,7 @@ export function createGameSession(): GameSession {
 
   function openReplay(initialAction?: number): void {
     if (!matchRecord || animating || machineThinking) return;
+    returnToOutcome = currentDialog?.kind === 'outcome';
     currentDialog = null;
     dialogError = null;
     replayClockWasRunning = matchController?.record.clock?.status === 'running';
@@ -585,7 +616,11 @@ export function createGameSession(): GameSession {
       restoreHistoryReplay = null;
       currentDialog = { kind: 'history' };
       renderer?.resetView();
-    } else if (matchRecord) state = replayForDisplay(matchRecord);
+    } else if (matchRecord) {
+      state = replayForDisplay(matchRecord);
+      if (returnToOutcome && state.outcome) currentDialog = { kind: 'outcome' };
+      returnToOutcome = false;
+    }
     if (replayClockWasRunning && matchController && !state.outcome) {
       matchController.resumeClock(Date.now());
       matchRecord = matchController.record;
@@ -1578,6 +1613,7 @@ export function createGameSession(): GameSession {
   }
 
   function resetGame(preserveConfiguredSeed = false): void {
+    returnToOutcome = false;
     tutorial = null;
     operationEpoch++;
     currentDialog = null;
@@ -1737,6 +1773,7 @@ export function createGameSession(): GameSession {
   }
 
   function loadRecordIntoMatch(record: MatchRecord): void {
+    returnToOutcome = false;
     tutorial = null;
     operationEpoch++;
     currentDialog = null;
@@ -2019,10 +2056,15 @@ export function createGameSession(): GameSession {
     closeDialog,
     showHome: showHomeScreen,
     setHomeView(view) {
+      returnToOutcome = false;
       homeView = view;
       render();
     },
     abandon() {
+      if (replayCursor !== null && returnToOutcome) {
+        closeReplay();
+        return;
+      }
       showHomeScreen();
     },
     startMatch(config) {
@@ -2082,7 +2124,19 @@ export function createGameSession(): GameSession {
     importMatch: importMatchFile,
     exportMatch: exportCurrentMatch,
     updateProfile(update) {
-      profile = normalizeProfile(update, profile);
+      const available = (levelProgress(progression.xp).tier + 1) * 2;
+      const normalized = normalizeProfile(update, profile);
+      if (
+        normalized.emblem !== profile.emblem &&
+        PROFILE_EMBLEMS.indexOf(normalized.emblem) >= available
+      )
+        return;
+      if (
+        normalized.color !== profile.color &&
+        PROFILE_COLORS.indexOf(normalized.color) >= available
+      )
+        return;
+      profile = normalized;
       const saved = saveUserProfile(profile);
       closeDialog();
       showToast(
@@ -2155,6 +2209,7 @@ export function createGameSession(): GameSession {
         if (animating || tutorial.completed || !step || !selectedId) return;
         if (
           step.interaction !== 'free' &&
+          !(step.id === '11.2' && nextMode.kind === 'transform') &&
           (nextMode.kind !== step.mode ||
             (nextMode.kind === 'transform' &&
               nextMode.facing !== null &&
@@ -2269,6 +2324,8 @@ export function createGameSession(): GameSession {
     aiStrategy.dispose();
     audio.setEnabled(false);
   }
+
+  reconcileExpiredMatches();
 
   // Existing tutorial completion is recognized silently, without replaying old notifications.
   const academySync = evaluateAcademyAchievements(

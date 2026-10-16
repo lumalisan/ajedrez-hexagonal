@@ -2,7 +2,6 @@ import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import { ProfileAvatar } from '../components/profile-avatar';
-import { ACHIEVEMENTS } from '../../achievements';
 import {
   PROGRESSION_ACHIEVEMENTS,
   TIERS,
@@ -27,7 +26,7 @@ const dateFormat = new Intl.DateTimeFormat('es-ES', {
 });
 
 export function AchievementsDialog() {
-  const { snapshot } = useGame();
+  const { snapshot, commands } = useGame();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
   const { tier } = levelProgress(snapshot.progression.xp);
   const [selectedTier, setSelectedTier] = useState(0);
@@ -105,17 +104,21 @@ export function AchievementsDialog() {
           })}
         </nav>
         <p className="achievements-sidebar-note">
-          En local las acciones de tu lado suman al perfil; las acciones del invitado no suman a tu
+          En local las acciones de tu bando suman al perfil; las acciones del invitado no suman a tu
           perfil.
         </p>
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
-          <div className="achievements-player">
+          <button
+            type="button"
+            className="achievements-player profile-link"
+            onClick={() => commands.openDialog({ kind: 'profile' })}
+          >
             <ProfileAvatar profile={snapshot.profile} />
             <strong>{snapshot.profile.name}</strong>
-          </div>
-          <ProgressionSummary />
+          </button>
+          <ProgressionSummary showActivity={false} />
           <DialogClose label="Cerrar logros" />
         </header>
         <div className="achievements-collection">
@@ -156,7 +159,7 @@ export function AchievementsDialog() {
             ))}
           </div>
           <span className="achievements-result-count" role="status">
-            {visible.length} logros · +{category.xp} XP por logro
+            +{category.xp} XP por logro
           </span>
         </div>
         <div className="achievements-list" tabIndex={0} aria-label="Lista de logros">
@@ -188,23 +191,7 @@ export function AchievementsDialog() {
               </Button>
             </div>
           )}
-          {Object.keys(snapshot.progression.legacyUnlockedAt).length > 0 && (
-            <details className="legacy-achievements">
-              <summary>Logros de la versión anterior</summary>
-              <ul>
-                {Object.entries(snapshot.progression.legacyUnlockedAt).map(([id, at]) => (
-                  <li key={id}>
-                    {ACHIEVEMENTS.find((entry) => entry.id === id)?.title ?? id} ·{' '}
-                    <time dateTime={at}>{dateFormat.format(new Date(at))}</time>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
         </div>
-        <footer className="achievements-footer">
-          <span>Tu progreso se guarda en este navegador.</span>
-        </footer>
       </div>
     </section>
   );
@@ -226,20 +213,7 @@ function AchievementRow({
       data-achievement-id={definition.id}
     >
       <div className="achievement-art">
-        <AchievementIcon
-          icon={
-            definition.metric === 'transform'
-              ? 'transformation'
-              : definition.metric === 'tutorial'
-                ? 'tutorial-complete'
-                : definition.metric === 'wins'
-                  ? 'first-win'
-                  : definition.metric === 'kills'
-                    ? 'captures-100'
-                    : 'first-match'
-          }
-          unlocked={progress.unlocked}
-        />
+        <AchievementIcon icon={definition.id} unlocked={progress.unlocked} />
         {modes.length > 0 && (
           <div className="achievement-modes" aria-label="Modalidades válidas">
             {modes.map((mode) => {

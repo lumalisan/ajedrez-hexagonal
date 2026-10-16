@@ -276,12 +276,12 @@ export const RULE_SECTIONS: RuleSection[] = [
         'tanque, lanzamisiles y avión',
       ),
       emphasize(
-        'Por último, cuando el ataque lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre. Tras el ataque, el dron queda situado sobre la unidad terrestre enemiga. Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado o un embestidor, estos podrán atacarlo. Del mismo modo, si se trata de un capturador, podrá capturarlo.',
+        'Por último, cuando el ataque lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre. Tras el ataque, el dron queda situado sobre la unidad terrestre enemiga. Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado, este podrá atacarlo. Del mismo modo, si se trata de un capturador, podrá capturarlo.',
         'dron',
       ),
       emphasize(
-        'En cambio, el tanque y el lanzamisiles no pueden atacar directamente a un dron situado sobre ellos. Sin embargo, tanto el tanque como el lanzamisiles pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
-        'tanque y el lanzamisiles',
+        'En cambio, el tanque, el lanzamisiles y el embestidor no pueden atacar directamente a un dron situado sobre ellos. Sin embargo, el tanque, el lanzamisiles y el embestidor pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
+        'tanque, el lanzamisiles y el embestidor',
       ),
       peerHeading('Abandono y transformación'),
       'Tanque, Lanzamisiles y Embestidor pueden ser abandonados. La transformación parte de la misma casilla y conserva el propietario de la unidad, pero el vehículo desaparece y queda un Soldado con la orientación elegida. Esa misma orden puede incluir el avance o ataque legal del nuevo Soldado, incluso contra una aeronave enemiga situada encima; no concede un segundo turno independiente.',

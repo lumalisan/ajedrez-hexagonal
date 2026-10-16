@@ -39,143 +39,165 @@ try {
   const { createMatchRecord, parseRecord, replayRecord, serializeRecord } =
     await server.ssrLoadModule('/src/match-record.ts');
   const { applyAction } = await server.ssrLoadModule('/src/engine.ts');
-  const config = createClassicConfig({ mode: 'local', fixedBoard: true });
-  const pieces = [
-    { id: 'blue-fortress', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
-    { id: 'blue-soldier', type: 'soldier', owner: 0, position: { q: -4, r: 0 }, facing: 3 },
-    { id: 'blue-drone', type: 'drone', owner: 0, position: { q: 0, r: 0 } },
-    { id: 'amber-ground', type: 'soldier', owner: 1, position: { q: 1, r: 0 }, facing: 0 },
-    { id: 'amber-shield', type: 'antiAir', owner: 1, position: { q: 2, r: 0 } },
-    { id: 'amber-fortress', type: 'fortress', owner: 1, position: { q: 5, r: 0 }, hp: 2 },
-  ];
-  config.setup = pieces.map((piece) => ({ id: piece.id, piece }));
-  const initialRecord = serializeRecord(createMatchRecord(config));
-
-  for (const viewport of [
-    { width: 1440, height: 900 },
-    { width: 390, height: 844 },
+  for (const aircraft of [
+    { type: 'airplane', name: 'Avión', glyph: 'AVI', range: [1, 2] },
+    { type: 'drone', name: 'Dron', glyph: 'DRN', range: [1, 2, 3] },
   ]) {
-    const mobile = viewport.width < 900;
-    const context = await browser.newContext({
-      viewport,
-      isMobile: mobile,
-      hasTouch: mobile,
-      reducedMotion: 'reduce',
-    });
-    try {
-      const page = await context.newPage();
-      page.setDefaultTimeout(10_000);
-      page.setDefaultNavigationTimeout(30_000);
-      page.on('pageerror', (error) => errors.push(error.message));
-      page.on('console', (message) => {
-        if (message.type() === 'error') errors.push(message.text());
+    const config = createClassicConfig({ mode: 'local', fixedBoard: true });
+    const pieces = [
+      { id: 'blue-fortress', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+      { id: 'blue-soldier', type: 'soldier', owner: 0, position: { q: -4, r: 0 }, facing: 3 },
+      {
+        id: 'blue-drone',
+        type: aircraft.type,
+        owner: 0,
+        position: { q: 0, r: 0 },
+        ...(aircraft.type === 'airplane' ? { facing: 2 } : {}),
+      },
+      { id: 'amber-ground', type: 'soldier', owner: 1, position: { q: 1, r: 0 }, facing: 0 },
+      { id: 'amber-shield', type: 'antiAir', owner: 1, position: { q: 2, r: 0 } },
+      { id: 'amber-fortress', type: 'fortress', owner: 1, position: { q: 5, r: 0 }, hp: 2 },
+    ];
+    config.setup = pieces.map((piece) => ({ id: piece.id, piece }));
+    const initialRecord = serializeRecord(createMatchRecord(config));
+
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 },
+    ]) {
+      const mobile = viewport.width < 900;
+      const context = await browser.newContext({
+        viewport,
+        isMobile: mobile,
+        hasTouch: mobile,
+        reducedMotion: 'reduce',
       });
-      await page.addInitScript((record) => {
-        if (!localStorage.getItem('atlas-match-classic-v2'))
-          localStorage.setItem('atlas-match-classic-v2', record);
-        localStorage.setItem(
-          'atlas-preferences-v2',
-          JSON.stringify({
-            reducedMotion: true,
-            sound: false,
-            fixedBoard: true,
-            boardDepth: false,
-            confirmation: 'always',
-            idleAnimations: false,
-          }),
+      try {
+        const page = await context.newPage();
+        page.setDefaultTimeout(10_000);
+        page.setDefaultNavigationTimeout(30_000);
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => {
+          if (message.type() === 'error') errors.push(message.text());
+        });
+        await page.addInitScript((record) => {
+          if (!localStorage.getItem('atlas-match-classic-v2'))
+            localStorage.setItem('atlas-match-classic-v2', record);
+          localStorage.setItem(
+            'atlas-preferences-v2',
+            JSON.stringify({
+              reducedMotion: true,
+              sound: false,
+              fixedBoard: true,
+              boardDepth: false,
+              confirmation: 'always',
+              idleAnimations: false,
+            }),
+          );
+        }, initialRecord);
+        await page.goto(`http://127.0.0.1:${address.port}`, { waitUntil: 'networkidle' });
+        await page.locator('[data-home-action="continue"]').click();
+        await page.locator('[data-continue-match]').first().click();
+        await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
+        await clickHex(page, { q: 0, r: 0 });
+        assert.match(await page.locator('#piece-card h2').textContent(), new RegExp(aircraft.name));
+        for (const q of aircraft.range) {
+          assert.match(
+            await page.locator(`#sr-board [data-hex="${q},0"]`).textContent(),
+            /Acciones legales:/,
+            `The protected destination ${q},0 must remain selectable.`,
+          );
+        }
+        await assertWarningPixels(
+          page,
+          aircraft.range.map((q) => ({ q, r: 0 })),
         );
-      }, initialRecord);
-      await page.goto(`http://127.0.0.1:${address.port}`, { waitUntil: 'networkidle' });
-      await page.locator('[data-home-action="continue"]').click();
-      await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
-      await clickHex(page, { q: 0, r: 0 });
-      assert.match(await page.locator('#piece-card h2').textContent(), /Dron/);
-      for (const q of [1, 2, 3]) {
-        assert.match(
-          await page.locator(`#sr-board [data-hex="${q},0"]`).textContent(),
-          /Acciones legales:/,
-          `The protected destination ${q},0 must remain selectable.`,
+        await captureBoard(
+          page,
+          join(screenshotDirectory, `${aircraft.type}-${viewport.width}-warnings.png`),
         );
-      }
-      await assertWarningPixels(
-        page,
-        [1, 2, 3].map((q) => ({ q, r: 0 })),
-      );
-      await captureBoard(page, join(screenshotDirectory, `${viewport.width}-warnings.png`));
-      if (mobile) {
-        await page.locator('#game-canvas').focus();
-        await page.keyboard.press('e');
-        await page.keyboard.press('e');
-        assert.equal(
-          await page.locator('#sr-board [aria-selected="true"]').getAttribute('data-hex'),
-          '2,0',
+        if (mobile) {
+          await page.locator('#game-canvas').focus();
+          await page.keyboard.press('e');
+          await page.keyboard.press('e');
+          assert.equal(
+            await page.locator('#sr-board [aria-selected="true"]').getAttribute('data-hex'),
+            '2,0',
+          );
+          await page.keyboard.press('Enter');
+        } else {
+          await clickHex(page, { q: 2, r: 0 });
+        }
+        await page.locator('#pending-card .confirm-button').waitFor();
+        assert.match(await page.locator('#piece-card h2').textContent(), new RegExp(aircraft.name));
+        const preview = await page.locator('#pending-card').textContent();
+        assert.match(preview, /hacia \[\+2, \+0\]/);
+        assert.match(preview, /será interceptado en \[\+1, \+0\]/);
+        assert.equal(await page.locator('#battle-log li:not(.empty-log)').count(), 0);
+        await captureBoard(
+          page,
+          join(screenshotDirectory, `${aircraft.type}-${viewport.width}-pending.png`),
         );
-        await page.keyboard.press('Enter');
-      } else {
-        await clickHex(page, { q: 2, r: 0 });
-      }
-      await page.locator('#pending-card .confirm-button').waitFor();
-      assert.match(await page.locator('#piece-card h2').textContent(), /Dron/);
-      const preview = await page.locator('#pending-card').textContent();
-      assert.match(preview, /hacia \[\+2, \+0\]/);
-      assert.match(preview, /será interceptado en \[\+1, \+0\]/);
-      assert.equal(await page.locator('#battle-log li:not(.empty-log)').count(), 0);
-      await captureBoard(page, join(screenshotDirectory, `${viewport.width}-pending.png`));
-      await page.locator('#pending-card .confirm-button').click();
-      await page.locator('#undo-action:not([disabled])').waitFor();
-      const saved = parseRecord(
-        await page.evaluate(() => localStorage.getItem('atlas-match-classic-v2')),
-      );
-      assert.equal(saved.currentAction, 1);
-      assert.equal(saved.actions.length, 1);
-      assert.equal(saved.actions[0].kind, 'move');
-      assert.equal(saved.actions[0].pieceId, 'blue-drone');
-      assert.deepEqual(saved.actions[0].to, { q: 2, r: 0 });
-      const resolution = applyAction(saved.initialState, saved.actions[0]);
-      assert(resolution.ok);
-      assert.deepEqual(
-        resolution.events.find((event) => event.type === 'intercept')?.at,
-        { q: 1, r: 0 },
-        'The requested destination must remain 2,0 while interception happens at 1,0.',
-      );
-      const restored = replayRecord(saved);
-      assert.equal(
-        restored.pieces.some(({ id }) => id === 'blue-drone'),
-        false,
-      );
-      for (const id of ['amber-ground', 'amber-shield'])
+        await page.locator('#pending-card .confirm-button').click();
+        await page.locator('#undo-action:not([disabled])').waitFor();
+        const saved = parseRecord(
+          await page.evaluate(() => localStorage.getItem('atlas-match-classic-v2')),
+        );
+        assert.equal(saved.currentAction, 1);
+        assert.equal(saved.actions.length, 1);
+        assert.equal(saved.actions[0].kind, 'move');
+        assert.equal(saved.actions[0].pieceId, 'blue-drone');
+        assert.deepEqual(saved.actions[0].to, { q: 2, r: 0 });
+        const resolution = applyAction(saved.initialState, saved.actions[0]);
+        assert(resolution.ok);
         assert.deepEqual(
-          restored.pieces.find((piece) => piece.id === id),
-          pieces.find((piece) => piece.id === id),
-          'Interception must preserve the ground unit and the shield.',
+          resolution.events.find((event) => event.type === 'intercept')?.at,
+          { q: 1, r: 0 },
+          'The requested destination must remain 2,0 while interception happens at 1,0.',
         );
-      assert.match(await page.locator('#sr-board [data-hex="0,0"]').textContent(), /vacía/);
-      assert.match(await page.locator('#sr-board [data-hex="1,0"]').textContent(), /SOL/);
-      assert.match(await page.locator('#sr-board [data-hex="2,0"]').textContent(), /EAA/);
-      const completedBoard = await page.locator('#sr-board').textContent();
-      const completedLog = await page.locator('#battle-log li p').first().textContent();
-      assert.equal(completedLog, 'Dron fue interceptado en [+1, +0].');
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.locator('[data-home-action="continue"]').click();
-      await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
-      assert.equal(await page.locator('#sr-board').textContent(), completedBoard);
-      await page.locator('[data-open-replay]').click();
-      assert.equal(await page.locator('[data-replay-description]').textContent(), completedLog);
-      assert.equal(await page.locator('#sr-board').textContent(), completedBoard);
-      await page.locator('[data-replay-step="-1"]').click();
-      assert.match(await page.locator('#sr-board [data-hex="0,0"]').textContent(), /DRN/);
-      await page.locator('[data-replay-step="1"]').click();
-      assert.equal(await page.locator('#sr-board').textContent(), completedBoard);
-      assert.equal(await page.locator('[data-replay-description]').textContent(), completedLog);
-      assert(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
-        'Interception and replay must not introduce horizontal overflow.',
-      );
-      console.log(
-        `Interception ${viewport.width}: warnings, order, save/resume and replay passed.`,
-      );
-    } finally {
-      await context.close();
+        const restored = replayRecord(saved);
+        assert.equal(
+          restored.pieces.some(({ id }) => id === 'blue-drone'),
+          false,
+        );
+        for (const id of ['amber-ground', 'amber-shield'])
+          assert.deepEqual(
+            restored.pieces.find((piece) => piece.id === id),
+            pieces.find((piece) => piece.id === id),
+            'Interception must preserve the ground unit and the shield.',
+          );
+        assert.match(await page.locator('#sr-board [data-hex="0,0"]').textContent(), /vacía/);
+        assert.match(await page.locator('#sr-board [data-hex="1,0"]').textContent(), /SOL/);
+        assert.match(await page.locator('#sr-board [data-hex="2,0"]').textContent(), /EAA/);
+        const completedBoard = await page.locator('#sr-board').textContent();
+        const completedLog = await page.locator('#battle-log li p').first().textContent();
+        assert.equal(completedLog, `${aircraft.name} fue interceptado en [+1, +0].`);
+        await page.reload({ waitUntil: 'networkidle' });
+        await page.locator('[data-home-action="continue"]').click();
+        await page.locator('[data-continue-match]').first().click();
+        await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
+        assert.equal(await page.locator('#sr-board').textContent(), completedBoard);
+        await page.locator('[data-open-replay]').click();
+        assert.equal(await page.locator('[data-replay-description]').textContent(), completedLog);
+        assert.equal(await page.locator('#sr-board').textContent(), completedBoard);
+        await page.locator('[data-replay-step="-1"]').click();
+        assert.match(
+          await page.locator('#sr-board [data-hex="0,0"]').textContent(),
+          new RegExp(aircraft.glyph),
+        );
+        await page.locator('[data-replay-step="1"]').click();
+        assert.equal(await page.locator('#sr-board').textContent(), completedBoard);
+        assert.equal(await page.locator('[data-replay-description]').textContent(), completedLog);
+        assert(
+          await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+          'Interception and replay must not introduce horizontal overflow.',
+        );
+        console.log(
+          `Interception ${aircraft.type} ${viewport.width}: warnings, order, save/resume and replay passed.`,
+        );
+      } finally {
+        await context.close();
+      }
     }
   }
   assert.deepEqual(errors, []);

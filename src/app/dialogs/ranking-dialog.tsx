@@ -83,7 +83,15 @@ export function RankingDialog() {
                 </thead>
                 <tbody>
                   <tr>
-                    <th scope="row">{snapshot.profile.name}</th>
+                    <th scope="row">
+                      <button
+                        type="button"
+                        className="profile-link"
+                        onClick={() => commands.openDialog({ kind: 'profile' })}
+                      >
+                        {snapshot.profile.name}
+                      </button>
+                    </th>
                     <td>{summary.played}</td>
                     <td>{summary.wins}</td>
                     <td>{summary.draws}</td>

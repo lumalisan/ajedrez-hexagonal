@@ -46,7 +46,8 @@ function useTutorialControls() {
     ),
     actionAllowed: (action: GameAction) =>
       !restricted || actions.some((candidate) => sameAction(candidate, action)),
-    modeAllowed: (kind: 'rotate' | 'orient' | 'transform') => !restricted || step?.mode === kind,
+    modeAllowed: (kind: 'rotate' | 'orient' | 'transform') =>
+      !restricted || step?.mode === kind || (step?.id === '11.2' && kind === 'transform'),
   };
 }
 
@@ -703,7 +704,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
           className="danger-command"
           data-command="transform"
           disabled={!modeAllowed('transform')}
-          data-tutorial-highlight={guided && step?.mode === 'transform' ? true : undefined}
+          data-tutorial-highlight={guided && modeAllowed('transform') ? true : undefined}
           onClick={() => commands.setMode({ kind: 'transform', facing: null })}
         >
           Abandonar vehículo
@@ -714,7 +715,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
 }
 
 function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: GameAction[] }) {
-  const { guided, actionAllowed } = useTutorialControls();
+  const { guided, actionAllowed, step } = useTutorialControls();
   const {
     snapshot: { state, pendingAction: action, animating },
     commands,
@@ -773,7 +774,12 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
               type="button"
               className="confirm-button"
               disabled={animating || !actionAllowed(action)}
-              data-tutorial-highlight={guided && actionAllowed(action) ? true : undefined}
+              data-tutorial-highlight={
+                (guided || ['10.3', '10.4', '10.5'].includes(step?.id ?? '')) &&
+                actionAllowed(action)
+                  ? true
+                  : undefined
+              }
               onClick={() => void commands.commitPending()}
             >
               Confirmar acción

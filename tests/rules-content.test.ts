@@ -46,10 +46,10 @@ describe('contenido del reglamento', () => {
       'Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
     );
     expect(sharedText).toContain(
-      'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado o un embestidor, estos podrán atacarlo.',
+      'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado, este podrá atacarlo.',
     );
     expect(sharedText).toContain(
-      'tanto el tanque como el lanzamisiles pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
+      'el tanque, el lanzamisiles y el embestidor pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
     );
     expect(sharedText).not.toContain('El vehículo puede abandonarse');
   });

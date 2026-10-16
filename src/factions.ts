@@ -1,7 +1,7 @@
 import type { Participant, Player } from './types';
 export const FACTIONS = {
   expansionist: { name: 'Expansionista', color: '#36b9ff' },
-  conservationist: { name: 'Conservacionista', color: '#b8a1ff' },
+  conservationist: { name: 'Conservacionista', color: '#00A86B' },
 } as const;
 export function participantLabel(participant: Participant | undefined, fallback: string): string {
   if (!participant) return fallback;

@@ -1,5 +1,27 @@
-export const PROFILE_EMBLEMS = ['fortress', 'star', 'hex'] as const;
-export const PROFILE_COLORS = ['cyan', 'amber', 'mint'] as const;
+export const PROFILE_EMBLEMS = [
+  'fortress',
+  'star',
+  'hex',
+  'shield',
+  'swords',
+  'crown',
+  'wing',
+  'flame',
+  'compass',
+  'laurel',
+] as const;
+export const PROFILE_COLORS = [
+  'cyan',
+  'amber',
+  'mint',
+  'coral',
+  'sky',
+  'rose',
+  'gold',
+  'silver',
+  'emerald',
+  'ivory',
+] as const;
 export interface UserProfile {
   name: string;
   emblem: (typeof PROFILE_EMBLEMS)[number];

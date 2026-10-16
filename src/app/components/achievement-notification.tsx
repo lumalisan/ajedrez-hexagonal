@@ -10,7 +10,7 @@ export function AchievementNotification() {
   const popover = useRef<HTMLDivElement>(null);
   const definition = PROGRESSION_ACHIEVEMENTS.find((entry) => entry.id === notice?.achievementId);
   const achievement = definition
-    ? { ...definition, icon: 'first-win' as const }
+    ? { ...definition, icon: definition.id }
     : ACHIEVEMENTS.find((entry) => entry.id === notice?.achievementId);
   const hasAchievement = Boolean(achievement);
 

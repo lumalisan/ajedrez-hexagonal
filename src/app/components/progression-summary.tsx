@@ -1,14 +1,15 @@
 import { levelProgress } from '../../progression';
 import { useGame } from '../game-context';
 
-export function ProgressionSummary() {
+export function ProgressionSummary({ showActivity = true }: { showActivity?: boolean }) {
   const { snapshot } = useGame();
   const progress = levelProgress(snapshot.progression.xp);
   return (
     <div className="progression-summary">
       <div>
-        <strong>Nivel {progress.level}</strong>
-        <span>{progress.category}</span>
+        <strong>
+          Nivel {progress.level} – {progress.category}
+        </strong>
       </div>
       <span>{snapshot.progression.xp.toLocaleString('es-ES')} XP acumulados</span>
       {progress.required ? (
@@ -25,10 +26,12 @@ export function ProgressionSummary() {
       ) : (
         <small>Nivel máximo alcanzado</small>
       )}
-      <small>
-        Racha de actividad: {snapshot.progression.activity.streak} días · Mejor:{' '}
-        {snapshot.progression.activity.best}
-      </small>
+      {showActivity && (
+        <small>
+          Racha de actividad: {snapshot.progression.activity.streak} días · Mejor:{' '}
+          {snapshot.progression.activity.best}
+        </small>
+      )}
     </div>
   );
 }

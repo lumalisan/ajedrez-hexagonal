@@ -21,7 +21,7 @@ interface FloatingPanelElements {
 
 /** Keeps desktop window placement separate from each panel's content and visibility. */
 export class FloatingPanel {
-  private readonly desktop = window.matchMedia('(min-width: 901px)');
+  private readonly desktop: MediaQueryList;
   private readonly events = new AbortController();
   private readonly observer: ResizeObserver;
   private visible = false;
@@ -33,7 +33,9 @@ export class FloatingPanel {
     private readonly elements: FloatingPanelElements,
     private readonly onClose: () => void,
     private readonly defaultSide: 'left' | 'right' = 'right',
+    movableOnMobile = false,
   ) {
+    this.desktop = window.matchMedia(movableOnMobile ? '(min-width: 0px)' : '(min-width: 901px)');
     const { titlebar, arena, panel } = elements;
     const options = { signal: this.events.signal };
     panel.dataset.floatingPanel = '';

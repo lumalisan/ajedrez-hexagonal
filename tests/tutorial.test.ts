@@ -144,10 +144,16 @@ describe('tutorial exercises', () => {
         let branch = perform(next, rangedChoice);
         branch = perform(branch, getTutorialActions(branch, indexOf('11.1'))[0]);
         const upperAttacks = getTutorialActions(branch, indexOf('11.2'));
-        expect(upperAttacks).toHaveLength(1);
-        expect(upperAttacks[0].pieceId).toBe(occupancyAt(branch, { q: 3, r: -1 }).ground?.id);
-        const final = perform(branch, upperAttacks[0]);
-        expect(occupancyAt(final, { q: 3, r: -1 }).air?.owner).not.toBe(1);
+        const ground = occupancyAt(branch, { q: 3, r: -1 }).ground!;
+        expect(upperAttacks).toHaveLength(ground.type === 'fast' ? 6 : 1);
+        for (const attack of upperAttacks) {
+          expect(attack.pieceId).toBe(ground.id);
+          if (ground.type === 'fast') expect(attack.kind).toBe('transform');
+          const final = perform(branch, attack);
+          expect(occupancyAt(final, { q: 3, r: -1 }).air?.owner).not.toBe(1);
+          if (ground.type === 'fast')
+            expect(occupancyAt(final, ground.position).ground?.type).toBe('soldier');
+        }
       }
     }
   });

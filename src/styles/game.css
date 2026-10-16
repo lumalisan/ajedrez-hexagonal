@@ -2269,136 +2269,6 @@ button:disabled {
   margin: 18px 0;
 }
 
-.replay-dock {
-  position: absolute;
-  z-index: 8;
-  bottom: 42px;
-  left: 50%;
-  display: grid;
-  width: min(620px, calc(100% - 28px));
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
-  gap: 6px;
-  transform: translateX(-50%);
-}
-
-.replay-heading,
-.replay-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.replay-heading {
-  justify-content: space-between;
-}
-
-.replay-heading > div {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.replay-heading strong {
-  font-size: 12px;
-}
-
-.replay-close {
-  min-width: 34px;
-  min-height: 34px;
-  font-size: 20px;
-}
-
-.replay-description {
-  overflow: hidden;
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.replay-controls [data-replay-slider] {
-  min-width: 0;
-  margin: 0;
-  flex: 1;
-}
-
-.replay-controls button {
-  min-width: 42px;
-  min-height: 38px;
-}
-
-.replay-export {
-  position: absolute;
-  top: 16px;
-  right: 58px;
-  min-height: 30px;
-  padding: 4px 8px;
-  font-size: 9px;
-}
-
-.replay-dock .replay-moments {
-  gap: 8px;
-  margin: 8px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.replay-moments h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.replay-moments .moment-jump {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: start;
-  justify-self: stretch;
-  min-width: 0;
-  min-height: 44px;
-  gap: 4px 12px;
-  margin: 0;
-  padding: 6px 0;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-  text-align: left;
-  white-space: normal;
-  text-decoration: none;
-}
-
-.replay-moments .moment-jump > span {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.75;
-}
-
-.replay-moments .moment-jump > strong {
-  min-width: 0;
-  font-size: inherit;
-}
-
-.replay-moments .moment-jump > small {
-  grid-column: 2;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-.replay-moments .moment-jump:hover > strong,
-.replay-moments .moment-jump:focus-visible > strong {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .scenario-objective {
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--move) 32%, transparent);
@@ -2451,16 +2321,6 @@ button:disabled {
     z-index: 4;
     bottom: max(8px, env(safe-area-inset-bottom));
     box-shadow: 0 -10px 32px rgb(0 0 0 / 30%);
-  }
-
-  .replay-dock {
-    bottom: 34px;
-    width: calc(100% - 18px);
-    padding: 10px;
-  }
-
-  .replay-export {
-    display: none;
   }
 }
 
@@ -4491,20 +4351,6 @@ html {
     padding-bottom: 0;
   }
 
-  .replay-dock {
-    position: fixed;
-    z-index: 30;
-    right: max(9px, env(safe-area-inset-right));
-    bottom: max(9px, env(safe-area-inset-bottom));
-    left: max(9px, env(safe-area-inset-left));
-    width: auto;
-    max-height: min(52svh, 380px);
-    padding: 12px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    transform: none;
-  }
-
   .replay-description {
     display: -webkit-box;
     overflow: hidden;
@@ -4512,12 +4358,6 @@ html {
     white-space: normal;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-  }
-
-  .replay-controls button,
-  .replay-close {
-    min-width: 44px;
-    min-height: 44px;
   }
 
   .game-dialog:not(:has(.rules-shell)):not(:has(.academy-shell)) {
@@ -4792,18 +4632,6 @@ html {
 
   body.replay-active .game-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .replay-dock {
-    right: max(8px, env(safe-area-inset-right));
-    bottom: max(8px, env(safe-area-inset-bottom));
-    left: max(8px, env(safe-area-inset-left));
-    max-height: min(68svh, 218px);
-    padding: 9px 11px;
-  }
-
-  .replay-dock .key-moments {
-    display: none;
   }
 
   .piece-card.empty-state {
@@ -5985,9 +5813,11 @@ button.history-card:disabled {
 }
 .home-shortcut-story {
   grid-column: 1 / -1;
-  min-height: 68px;
-  padding: 8px 22px;
-  background: var(--surface-2);
+  min-height: 52px;
+  padding: 6px 16px;
+  background:
+    url('/story-texture.svg') repeat,
+    var(--surface-2);
   color: var(--amber);
   clip-path: polygon(
     12px 0,
@@ -6138,7 +5968,7 @@ button.history-card:disabled {
 }
 .profile-options .profile-avatar {
   width: 44px;
-  height: 48px;
+  height: auto;
 }
 .profile-swatch {
   width: 24px;
@@ -6207,6 +6037,9 @@ button.history-card:disabled {
   font-size: 16px;
 }
 .home-shortcut-story > svg {
+  width: 28px;
+  height: 28px;
+  padding: 4px;
   color: var(--move);
   background: transparent;
 }
@@ -6314,5 +6147,200 @@ button.history-card:disabled {
   }
   .battle-achievements li + li {
     margin-top: 0;
+  }
+}
+
+/* Replay uses the shared window controls on touch screens as well as desktop. */
+.board-arena > .replay-dock {
+  position: absolute;
+  z-index: 5;
+  top: var(--floating-window-y, 24px);
+  left: var(--floating-window-x, 24px);
+  right: auto;
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgb(0 0 0 / 38%);
+  overflow: hidden;
+}
+
+.board-arena > .replay-dock.is-front {
+  z-index: 6;
+}
+
+.replay-dock .command-window-titlebar {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding-left: 14px;
+  background: var(--surface-2);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.replay-dock.is-dragging .command-window-titlebar {
+  cursor: grabbing;
+}
+
+.replay-dock [data-window-minimize] {
+  display: grid;
+}
+
+.replay-content {
+  display: grid;
+  min-height: 0;
+  padding: 12px 14px;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.replay-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.replay-heading strong {
+  font-size: 12px;
+}
+
+.replay-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.replay-controls [data-replay-slider] {
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  flex: 1;
+}
+
+.replay-controls button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.replay-export {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 4px 0;
+  align-items: center;
+  font-size: 12px;
+}
+
+.replay-restore {
+  display: inline-flex;
+  right: auto;
+  left: 12px;
+  bottom: 12px;
+}
+
+.profile-avatar {
+  flex-direction: column;
+  height: auto;
+  gap: 3px;
+}
+.profile-avatar > svg {
+  height: auto;
+  aspect-ratio: 1;
+}
+.profile-stars {
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.profile-coral {
+  color: #ff927c;
+}
+.profile-sky {
+  color: #83cfff;
+}
+.profile-rose {
+  color: #f59ec4;
+}
+.profile-gold {
+  color: #e6c65c;
+}
+.profile-silver {
+  color: #c4ced8;
+}
+.profile-emerald {
+  color: #00a86b;
+}
+.profile-ivory {
+  color: #f0e8d0;
+}
+.profile-options label:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+.profile-options small {
+  font-size: 10px;
+}
+.profile-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.profile-link:hover {
+  color: var(--move);
+}
+.profile-link:focus-visible {
+  outline: 2px solid var(--move);
+  outline-offset: 4px;
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 650px) {
+  body.replay-active .app-shell:not(.home-active) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.replay-active .board-stage {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  body.replay-active .board-toolbar {
+    flex-direction: row;
+    min-height: 44px;
+    padding-block: 0;
+  }
+
+  body.replay-active .selection-summary,
+  body.replay-active .legend {
+    display: none;
+  }
+
+  body.replay-active .board-arena {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  body.replay-active .board-arena .canvas-wrap {
+    height: 100%;
+    min-height: 0;
   }
 }

@@ -1,13 +1,25 @@
 import type { AchievementId } from '../../achievements';
+import type { ProgressionAchievementId } from '../../progression';
+import { ACHIEVEMENT_SYMBOLS } from '../../achievement-symbols';
 
-/** AI-created square artwork shared by the collection and unlock notices. */
+/** Artwork shared by the collection and unlock notices. */
 export function AchievementIcon({
   icon,
   unlocked = true,
 }: {
-  icon: AchievementId;
+  icon: AchievementId | ProgressionAchievementId;
   unlocked?: boolean;
 }) {
+  if (icon in ACHIEVEMENT_SYMBOLS) {
+    return (
+      <span
+        className={`achievement-icon achievement-symbol${unlocked ? '' : ' is-locked'}`}
+        aria-hidden="true"
+      >
+        {ACHIEVEMENT_SYMBOLS[icon as ProgressionAchievementId]}
+      </span>
+    );
+  }
   return (
     <img
       className={`achievement-icon${unlocked ? '' : ' is-locked'}`}

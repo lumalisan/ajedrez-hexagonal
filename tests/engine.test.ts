@@ -601,27 +601,32 @@ describe('Embestidor y Dron', () => {
     expect(getPiece(next, 'friendly-air')).toBeDefined();
   });
 
-  it('puede atacar un Dron o un Avión enemigo situado encima', () => {
-    const droneState = base([
-      { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
-      { id: 'air', type: 'drone', owner: 1, position: hex(0, 0) },
-    ]);
-    expect(
-      getLegalActionsForPiece(droneState, 'fast').some(
-        (action) => action.kind === 'attackAbove' && action.targetId === 'air',
-      ),
-    ).toBe(true);
-
-    const airplaneState = base([
-      { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
-      { id: 'air', type: 'airplane', owner: 1, position: hex(0, 0), facing: 3 },
-    ]);
-    expect(
-      getLegalActionsForPiece(airplaneState, 'fast').some(
-        (action) => action.kind === 'attackAbove' && action.targetId === 'air',
-      ),
-    ).toBe(true);
-  });
+  it.each(['drone', 'airplane'] as const)(
+    'necesita transformarse para atacar al %s situado encima',
+    (type) => {
+      const state = base([
+        { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
+        type === 'drone'
+          ? { id: 'air', type, owner: 1, position: hex(0, 0) }
+          : { id: 'air', type, owner: 1, position: hex(0, 0), facing: 3 },
+      ]);
+      const actions = getLegalActionsForPiece(state, 'fast');
+      expect(actions.some((action) => action.kind === 'attackAbove')).toBe(false);
+      expect(applyAction(state, { kind: 'attackAbove', pieceId: 'fast', targetId: 'air' }).ok).toBe(
+        false,
+      );
+      const transform = actions.find(
+        (action) => action.kind === 'transform' && action.attackAboveId === 'air',
+      )!;
+      const result = applyAction(state, transform);
+      expect(result.ok).toBe(true);
+      expect(getPiece(result.state, 'air')).toBeUndefined();
+      expect(getPiece(result.state, 'fast')).toMatchObject({
+        type: 'soldier',
+        position: hex(0, 0),
+      });
+    },
+  );
 
   it('Dron sobrevuela suelo, pero otro Dron corta la trayectoria', () => {
     const state = base([
@@ -892,6 +897,54 @@ describe('Avión', () => {
 });
 
 describe('Escudo antiaéreo', () => {
+  it.each([hex(2, 0), hex(1, 1)])(
+    'permite ordenar el vuelo del Avión más allá de la primera intercepción (%j)',
+    (shield) => {
+      const state = base([
+        { id: 'plane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 2 },
+        { id: 'aa', type: 'antiAir', owner: 1, position: shield },
+        soldier('ground', 1, hex(1, 0), 3),
+      ]);
+      const before = structuredClone(state);
+      freezeRecursively(state);
+      for (const to of [hex(1, 0), hex(2, 0)]) {
+        const action = findAction(state, 'plane', 'move', (candidate) => equal(candidate.to, to));
+        expect(markerKind(state, action)).toBe('danger');
+        const result = applyAction(state, action);
+        expect(result.ok).toBe(true);
+        expect(result.state.pieces).toEqual(before.pieces.filter((piece) => piece.id !== 'plane'));
+        expect(result.events).toContainEqual({
+          type: 'move',
+          pieceId: 'plane',
+          owner: 0,
+          from: hex(0, 0),
+          to: hex(1, 0),
+        });
+        expect(result.events).toContainEqual({
+          type: 'intercept',
+          pieceId: 'plane',
+          targetId: 'plane',
+          owner: 1,
+          at: hex(1, 0),
+        });
+        expect(action.to).toEqual(to);
+      }
+      expect(state).toEqual(before);
+    },
+  );
+
+  it.each([0, 1] as const)('mantiene el bloqueo aéreo del Avión con propietario %s', (owner) => {
+    const state = base([
+      { id: 'plane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 2 },
+      { id: 'aa', type: 'antiAir', owner: 1, position: hex(2, 0) },
+      { id: 'blocker', type: 'drone', owner, position: hex(1, 0) },
+    ]);
+    const moves = getLegalActionsForPiece(state, 'plane').filter(
+      (action) => action.kind === 'move' && action.to.r === 0 && action.to.q > 0,
+    );
+    expect(moves).toEqual([{ kind: 'move', pieceId: 'plane', to: hex(1, 0) }]);
+  });
+
   it.each([false, true])(
     'admite una orden de Dron al escudo y lo intercepta antes (casilla intermedia ocupada: %s)',
     (occupied) => {

@@ -59,11 +59,15 @@ try {
       const { actionDestination, getPiece } = await import('/src/engine.ts');
       return TUTORIAL_STEPS.map((step, index) => {
         const entry = createTutorialCheckpoint(index);
-        const action = getTutorialActions(entry.state, index)[0];
+        const available = getTutorialActions(entry.state, index);
+        const action =
+          step.id === '10.3'
+            ? available.find((action) => action.pieceId === 'tutorial-cian-fast')
+            : available[0];
         const actor = getPiece(entry.state, action?.pieceId ?? step.pieceId ?? '');
         return {
           ...step,
-          actor,
+          actor: step.id === '11.2' ? { ...actor, id: 'tutorial-cian-fast' } : actor,
           action,
           destination: action && actionDestination(entry.state, action),
         };
@@ -217,12 +221,17 @@ try {
           'Tank move requires choosing NE.',
         );
         await page.locator(`[data-pending-cannon="${plan.direction}"]`).click();
+      } else if (plan.id === '11.2') {
+        const abandon = page.locator('[data-command="transform"]');
+        assert.equal(await abandon.getAttribute('data-tutorial-highlight'), 'true');
+        await abandon.click();
+        const attack = page.locator('[data-transform-attack]');
+        assert.equal(await attack.getAttribute('data-tutorial-highlight'), 'true');
+        await attack.click();
       } else if (plan.action.kind === 'attackAbove' || plan.action.kind === 'attackBelow') {
         await page
           .locator(`[data-command="${plan.action.kind === 'attackAbove' ? 'above' : 'below'}"]`)
           .click();
-      } else if (plan.action.kind === 'convert' && plan.id === '11.2') {
-        await page.locator('[data-command="capture-above"]').click();
       } else if (!['rotate', 'orient'].includes(plan.action.kind) && plan.id !== '3.3') {
         await clickHex(page, plan.id === '12.3' ? plan.target : plan.destination);
         const choices = page.locator('[data-action-choice]:not(:disabled)');
@@ -230,7 +239,14 @@ try {
       }
       if (desktop)
         await assertCanvasBounds(page, canvasBeforeAction, `Preparing an action in ${plan.id}`);
-      if (plan.guided === false && plan.interaction === 'action') {
+      if (['10.3', '10.4', '10.5'].includes(plan.id)) {
+        assert.equal(
+          await page
+            .locator('#pending-card .confirm-button')
+            .getAttribute('data-tutorial-highlight'),
+          'true',
+        );
+      } else if (plan.guided === false && plan.interaction === 'action') {
         assert(
           (await page.locator('button[data-tutorial-highlight="true"]').count()) === 0,
           `Independent exercise ${plan.id} must not point out command buttons.`,

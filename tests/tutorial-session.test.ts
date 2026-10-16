@@ -422,6 +422,31 @@ describe('sesión del tutorial guiado', () => {
     expect(session.getSnapshot().state).toEqual(checkpoint);
   });
 
+  it('permite abandonar el embestidor antes de atacar la aeronave superior', async () => {
+    const session = createSession();
+    enterSection(session, 10);
+    while (currentStep(session).id !== '10.3') session.commands.navigateTutorial(1);
+    const snapshot = session.getSnapshot();
+    const action = getTutorialActions(snapshot.state, snapshot.tutorial!.stepIndex).find(
+      (a) => a.pieceId === 'tutorial-cian-fast',
+    )!;
+    session.commands.selectPiece(action.pieceId);
+    session.commands.prepareAction(action);
+    await commit(session);
+    while (currentStep(session).id !== '11.2') await completeStep(session);
+    const attack = allowedAction(session);
+    expect(attack.kind).toBe('transform');
+    session.commands.selectPiece(attack.pieceId);
+    session.commands.setMode({ kind: 'transform', facing: null });
+    expect(session.getSnapshot().mode.kind).toBe('transform');
+    session.commands.prepareAction(attack);
+    expect(session.getSnapshot().pendingAction).toEqual(attack);
+    const completion = session.commands.commitPending();
+    expect(getPiece(session.getSnapshot().state, attack.pieceId)?.type).toBe('soldier');
+    await completion;
+    expect(currentStep(session).id).toBe('12.1');
+  });
+
   it('recorre todos los ejercicios y llega a la práctica libre sin búsquedas de IA', async () => {
     const session = createSession();
     const visited: string[] = [];

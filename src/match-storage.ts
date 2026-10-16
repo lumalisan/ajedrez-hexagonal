@@ -171,12 +171,9 @@ export function loadPendingMatches(now = Date.now()): PendingMatch[] {
       continue;
     }
     const { record } = entry;
-    const activePlayer = replayRecord(record).activePlayer;
     const human = record.config.participants.findIndex((p) => p.kind === 'human');
     const loser =
-      record.config.participants.some((p) => p.kind === 'machine') && human >= 0
-        ? human
-        : activePlayer;
+      record.config.participants.some((p) => p.kind === 'machine') && human >= 0 ? human : 0;
     const outcome: Outcome = { type: 'win', winner: loser === 0 ? 1 : 0, reason: 'resignation' };
     const concluded = concludeMatch(record, outcome);
     const completedAt = new Date(now).toISOString();

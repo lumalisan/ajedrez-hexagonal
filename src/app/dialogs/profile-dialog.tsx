@@ -5,15 +5,38 @@ import { useGame } from '../game-context';
 import { ProfileAvatar } from '../components/profile-avatar';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { PROGRESSION_ACHIEVEMENTS } from '../../progression';
+import { PROGRESSION_ACHIEVEMENTS, levelProgress, TIERS } from '../../progression';
 import { playerRecords, playerStatistics } from '../../profile-statistics';
 import { ProgressionSummary } from '../components/progression-summary';
 
-const emblemLabels = { fortress: 'Fortaleza', star: 'Estrella', hex: 'Hexágono' };
-const colorLabels = { cyan: 'Cian', amber: 'Ámbar', mint: 'Menta' };
+const emblemLabels = {
+  fortress: 'Fortaleza',
+  star: 'Estrella',
+  hex: 'Hexágono',
+  shield: 'Escudo',
+  swords: 'Espadas',
+  crown: 'Corona',
+  wing: 'Ala',
+  flame: 'Llama',
+  compass: 'Brújula',
+  laurel: 'Laurel',
+};
+const colorLabels = {
+  cyan: 'Cian',
+  amber: 'Ámbar',
+  mint: 'Menta',
+  coral: 'Coral',
+  sky: 'Celeste',
+  rose: 'Rosa',
+  gold: 'Oro',
+  silver: 'Plata',
+  emerald: 'Esmeralda',
+  ivory: 'Marfil',
+};
 
 function ProfileSettings() {
   const { snapshot, commands } = useGame();
+  const unlockedOptions = (levelProgress(snapshot.progression.xp).tier + 1) * 2;
   const [draft, setDraft] = useState(snapshot.profile);
   return (
     <form
@@ -47,17 +70,27 @@ function ProfileSettings() {
       <fieldset>
         <legend>Emblema</legend>
         <div className="profile-options">
-          {PROFILE_EMBLEMS.map((emblem) => (
-            <label key={emblem}>
+          {PROFILE_EMBLEMS.map((emblem, index) => (
+            <label
+              key={emblem}
+              title={
+                index >= unlockedOptions
+                  ? `Se desbloquea en ${TIERS[Math.floor(index / 2)].name}`
+                  : undefined
+              }
+            >
               <input
+                disabled={index >= unlockedOptions}
                 type="radio"
                 name="profile-emblem"
+                aria-label={emblemLabels[emblem]}
                 value={emblem}
                 checked={draft.emblem === emblem}
                 onChange={() => setDraft({ ...draft, emblem })}
               />
               <ProfileAvatar profile={{ ...draft, emblem }} />
               <span>{emblemLabels[emblem]}</span>
+              {index >= unlockedOptions && <small>{TIERS[Math.floor(index / 2)].name}</small>}
             </label>
           ))}
         </div>
@@ -65,17 +98,27 @@ function ProfileSettings() {
       <fieldset>
         <legend>Color</legend>
         <div className="profile-options">
-          {PROFILE_COLORS.map((color) => (
-            <label key={color}>
+          {PROFILE_COLORS.map((color, index) => (
+            <label
+              key={color}
+              title={
+                index >= unlockedOptions
+                  ? `Se desbloquea en ${TIERS[Math.floor(index / 2)].name}`
+                  : undefined
+              }
+            >
               <input
+                disabled={index >= unlockedOptions}
                 type="radio"
                 name="profile-color"
+                aria-label={colorLabels[color]}
                 value={color}
                 checked={draft.color === color}
                 onChange={() => setDraft({ ...draft, color })}
               />
               <span className={`profile-swatch profile-${color}`} aria-hidden="true" />
               <span>{colorLabels[color]}</span>
+              {index >= unlockedOptions && <small>{TIERS[Math.floor(index / 2)].name}</small>}
             </label>
           ))}
         </div>
@@ -139,10 +182,14 @@ export function ProfileDialog() {
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile profile-header">
-          <div className="achievements-player">
+          <button
+            type="button"
+            className="achievements-player profile-link"
+            onClick={() => setSection('profile')}
+          >
             <ProfileAvatar profile={profile} />
             <strong>{profile.name}</strong>
-          </div>
+          </button>
           <DialogClose label="Cerrar perfil" />
         </header>
         <div id="profile-content" className="profile-content">
@@ -273,11 +320,6 @@ export function ProfileDialog() {
                 </table>
               </div>
               <p className="ranking-scroll-hint">Desliza las tablas para ver todas las columnas.</p>
-              <p className="profile-note">
-                Solo cuentan las partidas terminadas. Los guardados antiguos sin resultado conservan
-                el número de partidas, sin asignarles victorias, tablas o derrotas. Las posiciones
-                requieren una clasificación compartida.
-              </p>
             </>
           )}
           {section === 'settings' && <ProfileSettings />}

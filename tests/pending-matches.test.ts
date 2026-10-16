@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
 import {
+  appendAction,
   concludeMatch,
   createMatchRecord,
   replayRecord,
@@ -73,6 +75,17 @@ describe('partidas pendientes', () => {
     expect(resumePendingMatch(record.createdAt)).toBeNull();
     expect(loadMatchHistory()).toHaveLength(1);
   });
+  it('la caducidad local cuenta como derrota de Cian aunque sea el turno de Ámbar', () => {
+    let record = match();
+    const action = getAllLegalActions(replayRecord(record)).find((a) => a.kind === 'rotate')!;
+    record = appendAction(record, action);
+    expect(replayRecord(record).activePlayer).toBe(1);
+    saveActiveMatch(record);
+    vi.advanceTimersByTime(30 * day + 1);
+    loadPendingMatches();
+    expect(loadMatchHistory()[0].outcome).toMatchObject({ winner: 1 });
+  });
+
   it('renueva el plazo al retomar y no al guardar', () => {
     const record = match();
     saveActiveMatch(record);

@@ -113,7 +113,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
               onChange={setFaction}
               options={[
                 { value: 'expansionist', label: 'Expansionista · Cian' },
-                { value: 'conservationist', label: 'Conservacionista · Violeta' },
+                { value: 'conservationist', label: 'Conservacionista · Verde esmeralda' },
               ]}
             />
           </div>

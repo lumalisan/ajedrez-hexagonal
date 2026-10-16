@@ -106,10 +106,18 @@ function Header() {
             id="new-game-button"
             type="button"
             onClick={() =>
-              snapshot.tutorial ? commands.exitTutorial() : commands.openDialog({ kind: 'abandon' })
+              snapshot.tutorial
+                ? commands.exitTutorial()
+                : replayCursor !== null
+                  ? commands.abandon()
+                  : commands.openDialog({ kind: 'abandon' })
             }
           >
-            {snapshot.tutorial ? 'Abandonar tutorial' : 'Abandonar partida'}
+            {snapshot.tutorial
+              ? 'Abandonar tutorial'
+              : replayCursor !== null
+                ? 'Abandonar repetición'
+                : 'Abandonar partida'}
           </button>
         </div>
       </div>
@@ -284,9 +292,9 @@ export function GameShell() {
             <BoardCanvas />
             <CommandPanel />
             <BattleLog />
+            {replayCursor !== null && <ReplayDock />}
           </div>
           <BoardLegend />
-          {replayCursor !== null && <ReplayDock />}
         </section>
         <ScreenReaderBoard />
       </main>

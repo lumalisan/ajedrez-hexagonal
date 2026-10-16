@@ -496,7 +496,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     paragraphs: [
       'En la casilla señalada, una unidad terrestre aliada ha quedado situada bajo un dron enemigo tras atacar o capturar al soldado enemigo que estaba bajo el dron.',
       'En esta situación, en el siguiente turno la unidad terrestre aliada puede atacar o capturar a la aeronave superior, tanto si es un dron como si es un avión.',
-      'El soldado, el embestidor y el capturador pueden realizar el ataque o la captura directamente. En cambio, el tanque y el lanzamisiles no pueden atacar directamente a la aeronave superior, pero pueden ser abandonados para convertirse en soldados y realizar el ataque como tales en el mismo turno.',
+      'El soldado y el capturador pueden realizar el ataque o la captura directamente. En cambio, el tanque, el lanzamisiles y el embestidor no pueden atacar directamente a la aeronave superior, pero pueden ser abandonados para convertirse en soldados y realizar el ataque como tales en el mismo turno.',
     ],
     instruction:
       'Elige a la unidad terrestre situada en la casilla señalada y ataca a la aeronave superior.',
@@ -746,7 +746,7 @@ const ACTION_KINDS: Record<string, GameAction['kind'][]> = {
   '10.4': ['move'],
   '10.5': ['shoot'],
   '11.1': ['attackBelow'],
-  '11.2': ['attackAbove', 'convert'],
+  '11.2': ['attackAbove', 'convert', 'transform'],
   '12.3': ['move'],
   '12.4': ['move'],
   '13.1': ['move'],
@@ -797,7 +797,11 @@ export function getTutorialActions(state: GameState, stepIndex: number): GameAct
         !!actor && ['medium', 'long', 'airplane'].includes(actor.type) && action.kind === 'shoot'
       );
     }
-    if (step.id === '11.2') return occupancyAt(state, hex(3, -1)).ground?.id === action.pieceId;
+    if (step.id === '11.2')
+      return (
+        occupancyAt(state, hex(3, -1)).ground?.id === action.pieceId &&
+        (action.kind !== 'transform' || Boolean(action.attackAboveId))
+      );
     return true;
   });
 }

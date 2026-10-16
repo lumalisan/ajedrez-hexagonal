@@ -1191,6 +1191,51 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().matchRecord).toEqual(record);
   });
 
+  it('vuelve al resultado al cerrar clasificación o repetición y al abandonarla', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    session.commands.resign();
+    const outcome = session.getSnapshot().state.outcome;
+    session.commands.openDialog({ kind: 'ranking' });
+    session.commands.closeDialog();
+    expect(session.getSnapshot().dialog?.kind).toBe('outcome');
+    session.commands.openReplay(0);
+    expect(session.getSnapshot().dialog).toBeNull();
+    session.commands.closeReplay();
+    expect(session.getSnapshot().dialog?.kind).toBe('outcome');
+    expect(session.getSnapshot().state.outcome).toEqual(outcome);
+    session.commands.openReplay(0);
+    session.commands.abandon();
+    expect(session.getSnapshot().dialog?.kind).toBe('outcome');
+    expect(session.getSnapshot().replayCursor).toBeNull();
+    expect(session.getSnapshot().homeView).toBeNull();
+    session.commands.closeDialog();
+    session.commands.openReplay(0);
+    session.commands.abandon();
+    expect(session.getSnapshot().homeView).toBe('main');
+  });
+
+  it('incorpora las pendientes caducadas una sola vez como partidas perdidas', () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'machine' }));
+    session.commands.abandon();
+    expect(
+      Object.values(session.getSnapshot().progression.matches).filter((m) => m.completedAt),
+    ).toHaveLength(0);
+    vi.setSystemTime(Date.now() + 30 * 24 * 60 * 60 * 1000 + 1);
+    session.commands.openDialog({ kind: 'profile' });
+    const completed = Object.values(session.getSnapshot().progression.matches).filter(
+      (m) => m.completedAt,
+    );
+    expect(completed).toHaveLength(1);
+    expect(completed[0].result).toBe(0);
+    session.commands.closeDialog();
+    session.commands.openDialog({ kind: 'profile' });
+    expect(
+      Object.values(session.getSnapshot().progression.matches).filter((m) => m.completedAt),
+    ).toEqual(completed);
+  });
+
   it('la revancha cierra el resultado anterior y empieza una partida sin desenlace', () => {
     const session = createSession();
     session.commands.startMatch(createClassicConfig({ mode: 'local' }));

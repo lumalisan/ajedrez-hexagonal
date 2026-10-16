@@ -95,6 +95,22 @@ try {
           path: process.env.UI_SCREENSHOT + '-profile-tables-' + mode + '.png',
         });
       await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      assert(
+        (await page.locator('input[name="profile-emblem"]').count()) === 10,
+        'Ten emblems must be offered.',
+      );
+      assert(
+        (await page.locator('input[name="profile-color"]').count()) === 10,
+        'Ten colors must be offered.',
+      );
+      assert(
+        (await page.locator('input[name="profile-emblem"]:enabled').count()) === 2,
+        'Beginners unlock two emblems.',
+      );
+      assert(
+        (await page.locator('input[name="profile-color"]:enabled').count()) === 2,
+        'Beginners unlock two colors.',
+      );
       await page.locator('#profile-name').fill('Alex');
       await page.getByRole('radio', { name: 'Estrella', exact: true }).check();
       await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
@@ -221,7 +237,8 @@ try {
       (await selectedOptionLabel(page, 'Bando')) === 'Expansionista · Cian',
       'Expansionista must be the default faction.',
     );
-    if (mode === 'local') await chooseSelectOption(page, 'Bando', 'Conservacionista · Violeta');
+    if (mode === 'local')
+      await chooseSelectOption(page, 'Bando', 'Conservacionista · Verde esmeralda');
     const layoutSelect = page.getByRole('combobox', { name: 'Disposición inicial', exact: true });
     assert(
       (await selectOptionLabels(page, 'Disposición inicial')).join('|') ===
@@ -579,7 +596,7 @@ try {
   await desktop.locator('[data-rule-section="casillas-compartidas"]').click();
   assert(
     (await desktop.locator('#rules-article').textContent())?.includes(
-      'tanto el tanque como el lanzamisiles pueden ser abandonados para convertirse en soldados',
+      'el tanque, el lanzamisiles y el embestidor pueden ser abandonados para convertirse en soldados',
     ),
     'Updated shared-cell attack wording is missing.',
   );
@@ -1240,6 +1257,34 @@ try {
   assert(tankMoveLog.startsWith('Tanque avanzó a '), 'Executed tank movement must use past tense.');
   await cannonPage.locator('[data-open-replay]').click();
   assert(
+    (await cannonPage.locator('[data-replay-moment], .replay-moments').count()) === 0,
+    'Replay must omit highlights to leave more of the board visible.',
+  );
+  const replayBeforeDrag = await cannonPage.locator('.replay-dock').boundingBox();
+  await dragFloatingWindow(cannonPage, '#replay-window-titlebar', 160, 90);
+  const replayAfterDrag = await cannonPage.locator('.replay-dock').boundingBox();
+  assert(
+    replayAfterDrag.x > replayBeforeDrag.x + 100 && replayAfterDrag.y > replayBeforeDrag.y + 50,
+    'Replay must move when its titlebar is dragged.',
+  );
+  await cannonPage.locator('#replay-window-titlebar').focus();
+  await cannonPage.keyboard.press('ArrowRight');
+  const replayAfterArrow = await cannonPage.locator('.replay-dock').boundingBox();
+  assert(replayAfterArrow.x > replayAfterDrag.x, 'Replay must support keyboard movement.');
+  await cannonPage.locator('#minimize-replay').click();
+  await cannonPage.locator('#replay-restore').waitFor({ state: 'visible' });
+  assert(await cannonPage.locator('.replay-dock').isHidden(), 'Replay must minimize.');
+  await cannonPage.locator('#replay-restore').click();
+  const replayRestored = await cannonPage.locator('.replay-dock').boundingBox();
+  assert(
+    Math.abs(replayRestored.x - replayAfterArrow.x) <= 1 &&
+      Math.abs(replayRestored.y - replayAfterArrow.y) <= 1,
+    'Restoring replay must preserve its position.',
+  );
+  await assertFloatingWindowInsideArena(cannonPage, '.replay-dock', 'Replay moved');
+  if (process.env.UI_SCREENSHOT)
+    await cannonPage.screenshot({ path: process.env.UI_SCREENSHOT + '-replay-desktop.png' });
+  assert(
     (await cannonPage.locator('[data-replay-description]').textContent()) === tankMoveLog,
     'Replay must describe the completed tank move with the same past-tense text as the battle log.',
   );
@@ -1270,7 +1315,7 @@ try {
   const instantNotice = instantAchievement.locator('[data-achievement-notification="p1-13"]');
   await instantNotice.waitFor({ state: 'visible' });
   assert(
-    (await instantNotice.locator('img.achievement-icon').count()) === 1 &&
+    (await instantNotice.locator('.achievement-icon').count()) === 1 &&
       (await instantNotice.locator('strong').textContent()) === '¡Transformación!' &&
       (await instantNotice.locator('p').textContent()) ===
         'Abandona un vehículo para convertirlo en soldado.' &&
@@ -1897,6 +1942,15 @@ try {
     .waitFor();
   await compactLandscape.locator('[data-open-replay]').click();
   await compactLandscape.locator('.replay-dock').waitFor();
+  await compactLandscape.setViewportSize({ width: 390, height: 844 });
+  await dragFloatingWindow(compactLandscape, '#replay-window-titlebar', 0, 70);
+  await assertFloatingWindowInsideArena(compactLandscape, '.replay-dock', 'Mobile replay moved');
+  await compactLandscape.locator('#minimize-replay').click();
+  await compactLandscape.locator('#replay-restore').waitFor({ state: 'visible' });
+  await compactLandscape.locator('#replay-restore').click();
+  if (process.env.UI_SCREENSHOT)
+    await compactLandscape.screenshot({ path: process.env.UI_SCREENSHOT + '-replay-mobile.png' });
+  await compactLandscape.setViewportSize({ width: 568, height: 320 });
   assert(
     (await compactLandscape.getByRole('button', { name: 'Explorar desde aquí' }).count()) === 0 &&
       (await compactLandscape.locator('.replay-dock [data-export-match]').textContent()) ===
@@ -2554,37 +2608,18 @@ async function assertAchievementsCatalog(page, surface) {
       progressBars.every(({ label, value, max }) => label && value >= 0 && value < max && max > 0),
     'Locked cumulative achievements must expose their labeled, numeric progress to assistive technology.',
   );
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('[data-achievement-id] .achievement-icon')].every(
-      (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
-    ),
-  );
-  const icons = await cards.locator('img.achievement-icon').evaluateAll((items) =>
-    items.map((item) => {
-      const { width, height } = item.getBoundingClientRect();
-      return {
-        width,
-        height,
-        source: new URL(item.currentSrc).pathname,
-        id: item.closest('[data-achievement-id]').dataset.achievementId,
-        naturalWidth: item.naturalWidth,
-        naturalHeight: item.naturalHeight,
-        decorative: item.alt === '',
-      };
-    }),
+  const icons = await cards.locator('.achievement-symbol').evaluateAll((items) =>
+    items.map((item) => ({
+      symbol: item.textContent,
+      width: item.getBoundingClientRect().width,
+      decorative: item.getAttribute('aria-hidden') === 'true',
+    })),
   );
   assert(
     icons.length === total &&
-      icons.every(
-        ({ width, height, source, naturalWidth, naturalHeight, decorative }) =>
-          width > 0 &&
-          Math.abs(width - height) <= 1 &&
-          naturalWidth === 512 &&
-          naturalWidth === naturalHeight &&
-          source.startsWith('/achievements/') &&
-          decorative,
-      ),
-    'Every visible achievement must load decorative square artwork at desktop and mobile widths.',
+      new Set(icons.map((icon) => icon.symbol)).size === total &&
+      icons.every((icon) => icon.width > 0 && icon.decorative),
+    'Each achievement must have a distinct decorative icon.',
   );
   await assertNoHorizontalOverflow(page, `${surface} achievements`, '#game-dialog');
 

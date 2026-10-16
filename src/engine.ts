@@ -518,10 +518,6 @@ function fastActions(state: GameState, piece: Extract<Piece, { type: 'fast' }>):
       }
     }
   }
-  const air = occupancyAt(state, piece.position).air;
-  if (air && air.owner !== piece.owner) {
-    actions.push({ kind: 'attackAbove', pieceId: piece.id, targetId: air.id });
-  }
   actions.push(...transformActions(state, piece));
   return actions;
 }
@@ -571,7 +567,9 @@ function airplaneActions(
       if (!isOnBoard(to)) break;
       if (isProtectedByPlayer(state, to, enemy)) {
         actions.push({ kind: 'move', pieceId: piece.id, to });
-        break;
+        // Keep the requested destination, just as for drones; interception resolves en route.
+        if (occupancyAt(state, to).air) break;
+        continue;
       }
       const air = occupancyAt(state, to).air;
       if (air) {
