@@ -117,11 +117,14 @@ export function BattleProgressionPanel({
           }}
         />
       </div>
-      <p className="my-2 text-sm text-muted" aria-live="polite">
-        {frame.xp === after && frame.fullLevel === null && gainedLevels > 0
-          ? `¡Has subido ${gainedLevels === 1 ? 'un nivel' : `${gainedLevels} niveles`}! Nivel ${levelProgress(before).level} → ${levelProgress(after).level}.`
-          : `${after.toLocaleString('es-ES')} XP acumulados`}
-      </p>
+      <p className="my-2 text-sm text-muted">{after.toLocaleString('es-ES')} XP acumulados</p>
+      <div aria-live="polite">
+        {frame.xp === after && frame.fullLevel === null && gainedLevels > 0 && (
+          <p className="my-2 text-sm text-accent">
+            {`¡Has subido ${gainedLevels === 1 ? 'un nivel' : `${gainedLevels} niveles`}! Nivel ${levelProgress(before).level} → ${levelProgress(after).level}.`}
+          </p>
+        )}
+      </div>
       {rewards.length > 0 ? (
         <ul className="battle-rewards" aria-label="XP obtenida">
           {rewards.map((reward, index) => (

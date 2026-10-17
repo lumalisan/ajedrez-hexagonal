@@ -1180,14 +1180,50 @@
   }
 }
 
-.achievement-symbol {
-  display: grid;
-  place-items: center;
-  font-size: 38px;
-  line-height: 1;
-  background: var(--surface-2);
+.achievement-insignia {
+  --insignia-accent: var(--move);
+  color: var(--text);
+  background: none;
+  border-radius: 0;
 }
-.achievement-symbol.is-locked {
-  filter: grayscale(0.7);
-  opacity: 0.7;
+.achievement-insignia[data-tier='2'] {
+  --insignia-accent: var(--blue);
+}
+.achievement-insignia[data-tier='3'] {
+  --insignia-accent: var(--convert);
+}
+.achievement-insignia[data-tier='4'],
+.achievement-insignia[data-tier='5'] {
+  --insignia-accent: var(--amber);
+}
+.insignia-plate {
+  fill: var(--surface-2);
+  stroke: var(--line-strong);
+}
+.insignia-rim,
+.insignia-divider {
+  fill: none;
+  stroke: var(--insignia-accent);
+  stroke-opacity: 0.45;
+}
+.insignia-motif {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+.insignia-legend {
+  fill: currentColor;
+  font: 600 4.5px var(--font-display);
+  letter-spacing: 0.15px;
+}
+.insignia-rank {
+  stroke: var(--insignia-accent);
+  stroke-width: 2;
+}
+.achievement-insignia.is-locked {
+  color: var(--muted);
+  filter: none;
+  --insignia-accent: var(--muted);
 }

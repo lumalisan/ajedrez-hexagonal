@@ -59,7 +59,7 @@ function ModeDialog({ initial }: { initial: boolean }) {
           <span className="mode-icon" aria-hidden="true">
             ♙ ♟
           </span>
-          <strong>Partida libre local</strong>
+          <strong>Batalla local</strong>
           <small>Dos jugadores comparten este dispositivo y alternan turnos.</small>
         </button>
         <button
@@ -71,7 +71,7 @@ function ModeDialog({ initial }: { initial: boolean }) {
           <span className="mode-icon" aria-hidden="true">
             ♙ ⬡
           </span>
-          <strong>Partida libre vs IA</strong>
+          <strong>Individual Vs. Hexfortia</strong>
           <small>Elige entre Fácil, Medio, Difícil y Experto.</small>
         </button>
       </div>

@@ -314,14 +314,6 @@ function SettingsDialog() {
           >
             Importar partida
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            data-history
-            onClick={() => commands.openDialog({ kind: 'history' })}
-          >
-            Historial de resultados
-          </Button>
         </div>
         <input
           ref={importInput}
@@ -547,10 +539,13 @@ function OutcomeDialog() {
             <strong>{formatDuration(duration)}</strong> duración
           </span>
           <span>
-            <strong>{statistics?.captures[0] ?? 0}</strong> eliminadas por Cian
+            <strong>{statistics?.captures[0] ?? 0}</strong> unidades eliminadas por{' '}
+            {matchRecord?.config.participants[0].name ?? snapshot.profile.name}
           </span>
           <span>
-            <strong>{statistics?.captures[1] ?? 0}</strong> eliminadas por Ámbar
+            <strong>{statistics?.captures[1] ?? 0}</strong> unidades eliminadas por{' '}
+            {matchRecord?.config.participants[1].name ??
+              (snapshot.gameMode === 'machine' ? 'Hexfortia' : 'Invitado')}
           </span>
         </span>
         <small>Ver repetición →</small>

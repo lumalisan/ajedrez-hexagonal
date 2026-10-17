@@ -112,7 +112,7 @@ try {
         'Beginners unlock two colors.',
       );
       await page.locator('#profile-name').fill('Alex');
-      await page.getByRole('radio', { name: 'Estrella', exact: true }).check();
+      await page.getByRole('radio', { name: 'Hexágono', exact: true }).check();
       await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
       assert(
         (await page.locator('.home-profile').textContent()).includes('Alex'),
@@ -234,7 +234,7 @@ try {
       'Both clocks must default to unlimited independently.',
     );
     assert(
-      (await selectedOptionLabel(page, 'Bando')) === 'Expansionista · Cian',
+      (await selectedOptionLabel(page, 'Bando')) === 'Expansionista · Azul cian',
       'Expansionista must be the default faction.',
     );
     if (mode === 'local')
@@ -691,12 +691,18 @@ try {
       .count()) === 0,
     'Settings must remove perspective, contextual hints, threats and the nested data menu.',
   );
-  for (const label of ['Exportar partida', 'Importar partida', 'Historial de resultados']) {
+  for (const label of ['Exportar partida', 'Importar partida']) {
     assert(
       await desktop.getByRole('button', { name: label, exact: true }).isVisible(),
       `${label} must be directly available in settings.`,
     );
   }
+  assert(
+    (await desktop
+      .getByRole('button', { name: 'Historial de resultados', exact: true })
+      .count()) === 0,
+    'Results history belongs in the home menu.',
+  );
   assert(
     (await desktop.locator('#game-dialog [data-open-replay]').count()) === 0,
     'Replay must be available from the board toolbar instead of settings.',
@@ -2608,9 +2614,9 @@ async function assertAchievementsCatalog(page, surface) {
       progressBars.every(({ label, value, max }) => label && value >= 0 && value < max && max > 0),
     'Locked cumulative achievements must expose their labeled, numeric progress to assistive technology.',
   );
-  const icons = await cards.locator('.achievement-symbol').evaluateAll((items) =>
+  const icons = await cards.locator('.achievement-insignia').evaluateAll((items) =>
     items.map((item) => ({
-      symbol: item.textContent,
+      symbol: item.innerHTML,
       width: item.getBoundingClientRect().width,
       decorative: item.getAttribute('aria-hidden') === 'true',
     })),

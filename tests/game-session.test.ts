@@ -8,6 +8,7 @@ import { loadAchievementProgress } from '../src/achievements';
 import { createPlayerProgression, savePlayerProgression } from '../src/progression';
 import { getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
+import { createInitialPieces } from '../src/setup';
 import {
   appendAction,
   createMatchRecord,
@@ -1612,6 +1613,20 @@ describe('sesión que conecta React con el juego', () => {
     expect(collaborators.chooseAction).toHaveBeenCalledOnce();
     expect(collaborators.chooseAction.mock.calls[0][0]).toEqual(position);
     expect(session.getSnapshot().state).toEqual(position);
+  });
+
+  it('usa Frente clásico en la portada y al reiniciar la demostración', async () => {
+    const session = createSession();
+    const classic = createInitialPieces(2, 3);
+    expect(session.getSnapshot().state.pieces).toEqual(classic);
+    session.start();
+    // No action available forces the demonstration to restart its initial formation.
+    collaborators.chooseDemoAction.mockReturnValueOnce(null);
+    await vi.advanceTimersByTimeAsync(850);
+    expect(session.getSnapshot().state.pieces).toEqual(classic);
+    session.commands.startMatch(createClassicConfig({ mode: 'local', initialLayout: 5 }));
+    session.commands.showHome();
+    expect(session.getSnapshot().state.pieces).toEqual(classic);
   });
 
   it('desmontar cancela demo, reloj, avisos y activación de audio', async () => {

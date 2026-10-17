@@ -31,6 +31,7 @@ import {
 } from '../achievements';
 import { participantLabel, participantColor } from '../factions';
 import { createClassicConfig } from '../game-config';
+import { createInitialPieces } from '../setup';
 import { sameAction } from '../action-identity';
 import {
   TUTORIAL_STEPS,
@@ -44,7 +45,6 @@ import {
   PLAYER_NAMES,
   actionDestination,
   applyAction,
-  createInitialState,
   createGameState,
   declareBlockade,
   describeAction,
@@ -113,6 +113,10 @@ import type {
   GameSnapshot,
 } from './contracts';
 
+function createHomeDemoState() {
+  return createGameState(createInitialPieces(2, 3));
+}
+
 /** Owns one local game session. React subscribes; rules and rendering stay independent. */
 export function createGameSession(): GameSession {
   const preferences = loadPreferences();
@@ -126,7 +130,7 @@ export function createGameSession(): GameSession {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const pendingDelays = new Set<() => void>();
   let renderer: GameRenderer | null = null;
-  let state = createInitialState();
+  let state = createHomeDemoState();
   let selectedId: string | null = null;
   let pendingAction: GameAction | null = null;
   let mode: UiMode = { kind: 'default' };
@@ -495,7 +499,7 @@ export function createGameSession(): GameSession {
     pendingAction = null;
     mode = { kind: 'default' };
     lastEvents = [];
-    state = createInitialState();
+    state = createHomeDemoState();
     focusedHex = { q: 0, r: 0 };
     hoveredHex = null;
     animating = false;
@@ -1528,14 +1532,14 @@ export function createGameSession(): GameSession {
       return;
     }
     if (state.outcome || state.ply >= 46) {
-      state = createInitialState();
+      state = createHomeDemoState();
       lastEvents = [];
       renderer?.snapToPlayer(0);
       render();
     }
     const action = chooseMachineAction(state);
     if (!action) {
-      state = createInitialState();
+      state = createHomeDemoState();
       render();
       homeDemoTimer = later(() => void runHomeDemoTurn(), 900);
       return;

@@ -88,7 +88,7 @@ export function HomeScreen() {
                   data-home-mode="machine"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
                 >
-                  <span>Individual vs. IA</span>
+                  <span>Individual Vs. Hexfortia</span>
                   <small>Juega contra la inteligencia artificial</small>
                 </button>
                 <button
@@ -97,7 +97,7 @@ export function HomeScreen() {
                   data-home-mode="local"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'local' })}
                 >
-                  <span>Dos jugadores</span>
+                  <span>Batalla local</span>
                   <small>Juega contra otra persona en el mismo ordenador</small>
                 </button>
               </nav>

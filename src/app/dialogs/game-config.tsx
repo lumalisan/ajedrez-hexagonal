@@ -102,7 +102,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
     <>
       <DialogClose label="Cerrar configuración" className="dialog-corner-close config-close" />
       <span className="eyebrow">NUEVA PARTIDA</span>
-      <h2>{mode === 'machine' ? 'Vs. Hexfortia' : 'Dos jugadores'}</h2>
+      <h2>{mode === 'machine' ? 'Individual Vs. Hexfortia' : 'Batalla local'}</h2>
       <div className="match-configuration mt-6 grid gap-6 text-sm">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid min-w-0 content-start gap-2">
@@ -112,7 +112,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
               value={faction}
               onChange={setFaction}
               options={[
-                { value: 'expansionist', label: 'Expansionista · Cian' },
+                { value: 'expansionist', label: 'Expansionista · Azul cian' },
                 { value: 'conservationist', label: 'Conservacionista · Verde esmeralda' },
               ]}
             />
@@ -138,7 +138,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
             />
           </div>
         </div>
-        {mode === 'local' ? (
+        {mode === 'local' && (
           <fieldset className="m-0 min-w-0 border-0 border-t border-solid border-line p-0 pt-5">
             <legend className="sr-only">Límites de tiempo</legend>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -169,10 +169,6 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
               perder la partida. Puedes combinar ambos límites.
             </p>
           </fieldset>
-        ) : (
-          <p className="m-0 border-0 border-t border-solid border-line pt-5 text-muted">
-            Las partidas contra Hexfortia se juegan con tiempo ilimitado.
-          </p>
         )}
         <div className="border-0 border-t border-solid border-line pt-5">
           <div className="layout-picker">
@@ -184,19 +180,8 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
                   options={INITIAL_LAYOUT_OPTIONS}
                   value={initialLayout}
                   onChange={setInitialLayout}
-                  describedBy="layout-description"
                 />
               </div>
-              <p
-                id="layout-description"
-                className="layout-description"
-                data-layout-description
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {layout.description}
-              </p>
             </div>
             <figure className="layout-preview">
               <figcaption id="layout-preview-title">Vista previa · {layout.name}</figcaption>
@@ -275,7 +260,7 @@ function LayoutPreviewCanvas({
         data-layout={initialLayout}
         role="img"
         aria-labelledby="layout-preview-title"
-        aria-describedby="layout-preview-orientation layout-description layout-preview-roster"
+        aria-describedby="layout-preview-orientation layout-preview-roster"
       />
       <RendererStatus canvasRef={canvasRef} />
     </>

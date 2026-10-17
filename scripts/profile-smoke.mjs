@@ -43,6 +43,26 @@ try {
     });
     if (screenshotDir)
       await page.screenshot({ path: `${screenshotDir}/home-${viewport.width}.png` });
+    await page.locator('#home-settings-button').click();
+    assert.equal(await page.getByRole('button', { name: 'Historial de resultados' }).count(), 0);
+    await page.getByRole('button', { name: 'Cerrar ajustes sin guardar' }).click();
+    await page.locator('[data-home-action="new"]').click();
+    assert.match(
+      await page.locator('[data-home-mode="machine"]').textContent(),
+      /Individual Vs\. Hexfortia/,
+    );
+    assert.match(await page.locator('[data-home-mode="local"]').textContent(), /Batalla local/);
+    await page.locator('[data-home-mode="machine"]').click();
+    await page.locator('[data-layout-preview][data-renderer-status="ready"]').waitFor();
+    assert.equal(
+      await page.getByText('Las partidas contra Hexfortia se juegan con tiempo ilimitado.').count(),
+      0,
+    );
+    assert.equal(await page.locator('[data-layout-description]').count(), 0);
+    if (screenshotDir)
+      await page.screenshot({ path: `${screenshotDir}/config-${viewport.width}.png` });
+    await page.getByRole('button', { name: 'Cerrar configuración', exact: true }).click();
+    await page.locator('[data-home-action="back"]').click();
     for (const [index, tier] of tiers.entries()) {
       await page.evaluate(
         (progress) => localStorage.setItem('hexagonal:progression:v1', JSON.stringify(progress)),
@@ -67,6 +87,28 @@ try {
           (index + 1) * 2,
         );
       }
+      assert.deepEqual(
+        await page
+          .locator('input[name="profile-emblem"]')
+          .evaluateAll((inputs) => inputs.map((input) => input.value)),
+        [
+          'fortress',
+          'hex',
+          'shield',
+          'swords',
+          'wing',
+          'flame',
+          'compass',
+          'laurel',
+          'crown',
+          'star',
+        ],
+      );
+      const colors = await page
+        .locator('input[name="profile-color"]')
+        .evaluateAll((inputs) => inputs.map((input) => input.value));
+      assert.deepEqual(colors.slice(0, 3), ['cyan', 'emerald', 'amber']);
+      assert.deepEqual(colors.slice(-2), ['silver', 'gold']);
       if (index === 0 && screenshotDir)
         await page.screenshot({ path: `${screenshotDir}/settings-${viewport.width}.png` });
       await page.locator('.profile-header .profile-link').click();
@@ -80,8 +122,8 @@ try {
       );
       await page.locator(`[data-achievement-tier="${index}"]`).click();
       const symbols = await page
-        .locator('[data-achievement-id] .achievement-symbol')
-        .allTextContents();
+        .locator('[data-achievement-id] .achievement-insignia')
+        .evaluateAll((icons) => icons.map((icon) => icon.innerHTML));
       assert.equal(symbols.length, 20);
       assert.equal(new Set(symbols).size, 20);
       if (index === 0 && screenshotDir) {
@@ -143,6 +185,59 @@ try {
     await page.locator('#new-game-button').click();
     await page.locator('[data-home-action="new"]').waitFor();
     assert.equal(await page.locator('#game-dialog[open]').count(), 0);
+    await page.setViewportSize(viewport);
+    for (const [mode, xp] of [
+      ['local', 300],
+      ['local', 120],
+      ['machine', 120],
+    ]) {
+      const matchId = await page.evaluate(
+        async ({ mode, xp }) => {
+          const { createClassicConfig } = await import('/src/game-config.ts');
+          const { createMatchRecord, appendAction } = await import('/src/match-record.ts');
+          const { getAllLegalActions } = await import('/src/engine.ts');
+          const { saveActiveMatch } = await import('/src/match-storage.ts');
+          const { createPlayerProgression } = await import('/src/progression.ts');
+          const progress = { ...createPlayerProgression(), xp };
+          const record = createMatchRecord(
+            createClassicConfig({
+              mode,
+              initialLayout: 3,
+              playerNames: ['Comandante de prueba', 'Invitado'],
+            }),
+          );
+          progress.registeredMatchIds.push(record.createdAt);
+          localStorage.setItem('hexagonal:progression:v1', JSON.stringify(progress));
+          saveActiveMatch(
+            appendAction(
+              record,
+              getAllLegalActions(record.initialState).find((action) => action.kind === 'rotate'),
+            ),
+          );
+          return record.createdAt;
+        },
+        { mode, xp },
+      );
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.locator('[data-home-action="continue"]').click();
+      await page.locator(`[data-continue-match="${matchId}"]`).click();
+      await page.locator('#resign-button').click();
+      await page.locator('[data-confirm-resign]').click();
+      await page.locator('.battle-progression[data-xp-animation="complete"]').waitFor();
+      const panel = await page.locator('.battle-progression').textContent();
+      assert.match(panel, /\d[\d.]* XP acumulados/);
+      assert.equal(panel.includes('¡Has subido'), xp === 120, JSON.stringify({ mode, xp, panel }));
+      const summary = await page.locator('.battle-record-stats').textContent();
+      assert(summary.includes('unidades eliminadas por Comandante de prueba'));
+      assert(
+        summary.includes(
+          `unidades eliminadas por ${mode === 'machine' ? 'Hexfortia' : 'Invitado'}`,
+        ),
+      );
+      if (mode === 'machine' && screenshotDir)
+        await page.screenshot({ path: `${screenshotDir}/outcome-${viewport.width}.png` });
+      await page.locator('[data-new-game]').click();
+    }
     await page.close();
   }
   assert.deepEqual(errors, []);
