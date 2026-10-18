@@ -58,8 +58,8 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 
 - **Partida libre:** local o contra IA. Contra la IA puedes elegir la dificultad: Fácil, Medio, Difícil o Experto. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil.
 - **Puntos de vida de la Fortaleza:** elige 1, 2 o 3 al crear cualquier partida libre; la opción predeterminada es 1.
-- **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 1 minuto o 2 minutos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites. Al agotar el tiempo de turno, la IA realiza una jugada por ti; la tercera vez que un mismo jugador lo agota durante la partida, pierde. Agotar el tiempo total concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes y las veces que cada jugador ha agotado el tiempo de turno se conservan al guardar y continuar.
-- **Disposiciones iniciales:** Frente clásico (antes Frente blindado: 5 soldados, 4 tanques y 18 piezas por jugador) y Frente extendido (11 soldados, 2 tanques retrasados y 22 piezas por jugador). Ambas incluyen un lanzamisiles y un avión. Los guardados con formaciones anteriores siguen siendo compatibles.
+- **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 60 segundos o 90 segundos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites. Al agotar el tiempo de turno, la IA realiza una jugada por ti; la tercera vez que un mismo jugador lo agota durante la partida, pierde. Agotar el tiempo total concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes y las veces que cada jugador ha agotado el tiempo de turno se conservan al guardar y continuar.
+- **Disposiciones iniciales:** Frente clásico (antes Frente blindado: 5 asaltadores, 4 tanques y 18 piezas por jugador) y Frente extendido (11 asaltadores, 2 tanques retrasados y 22 piezas por jugador). Ambas incluyen un lanzamisiles y un caza. Los guardados con formaciones anteriores siguen siendo compatibles.
 - Al elegir una disposición, la vista previa muestra el ejército de Cian con los símbolos del tablero, su composición y una breve descripción. Se actualiza también al cambiar la vida de la Fortaleza; Ámbar utiliza la formación reflejada.
 - En **Reglas → Desarrollo de la partida**, el tablero real muestra ambos ejércitos y permite comparar las dos disposiciones, con **Frente clásico** seleccionado por defecto. El selector solo cambia la vista del manual.
 - **Tutorial:** una bienvenida, 14 apartados y 42 pasos sobre el tablero, con objetivos señalados, órdenes restringidas y respuestas enemigas programadas. Anterior y Siguiente cambian de apartado; los ejercicios avanzan al realizarlos. Termina con una práctica libre en la que solo juega Cian hasta destruir la Fortaleza enemiga. Las flechas blancas indican casillas o botones del panel de mando y priorizan trayectorias diagonales libres de unidades y marcadores. Entrar o salir del tutorial conserva la partida guardada.
@@ -77,7 +77,7 @@ Cada partida contra la IA y cada revancha generan una semilla nueva. Todos los n
 
 Los presupuestos máximos de cálculo por turno son: Fácil, 0,25 segundos; Medio, 2 segundos; Difícil, 5 segundos; y Experto, 15 segundos. Buscan hasta 1, 3, 5 y 9 medias jugadas respectivamente, con extensiones para resolver intercambios y amenazas a la Fortaleza. Todos los niveles, incluido Fácil, utilizan búsqueda en un Worker y pueden responder antes si terminan el análisis. Solo se utilizan iteraciones terminadas: la profundidad efectiva depende de la posición y del dispositivo. Si el Worker no está disponible, el respaldo limita su tiempo para mantener la respuesta de la interfaz. Una semilla explícita permite repetir las decisiones con el mismo estado y profundidad completada; no garantiza que equipos distintos alcancen la misma profundidad dentro del límite de tiempo.
 
-La IA valora el coste real de abandonar un vehículo para transformarlo en Soldado y comprueba esas capturas inmediatas también al elegir una jugada de respaldo por falta de tiempo. Para el Avión, considera las salidas legales sin intercepción, el espacio de maniobra y el rumbo hacia objetivos, evitando avances sin utilidad que lo encierren contra un borde.
+La IA valora el coste real de convertir un vehículo en Asaltador y comprueba esas capturas inmediatas también al elegir una jugada de respaldo por falta de tiempo. Para el Caza, considera las salidas legales sin intercepción, el espacio de maniobra y el rumbo hacia objetivos, evitando avances sin utilidad que lo encierren contra un borde.
 
 ## Logros
 
@@ -89,12 +89,12 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 
 ## Reglas canónicas (`classic-v2`)
 
-- El Lanzamisiles dispone de dos misiles por partida. Cada disparo consume uno; cambiar de bando no repone la munición. Agotados los misiles, conserva el movimiento y la transformación en Soldado.
+- El Lanzamisiles dispone de dos misiles por partida. Cada disparo consume uno; cambiar de bando no repone la munición. Agotados los misiles, conserva el movimiento y la transformación en Asaltador.
 - La Fortaleza puede comenzar con 1, 2 o 3 puntos de vida, según la configuración. Cada impacto siempre causa exactamente 1 punto de daño.
-- Soldado, Capturador y Embestidor se sacrifican después de impactar contra la Fortaleza. Tanque, Lanzamisiles, Dron y Avión sobreviven si no usan un ataque kamikaze; el Avión kamikaze se destruye por su propia regla.
+- Asaltador, Capturador y Embestidor se sacrifican después de impactar contra la Fortaleza. Tanque, Lanzamisiles, Dron y Caza sobreviven si no usan un ataque kamikaze; el Caza kamikaze se destruye por su propia regla.
 - Cada casilla admite una capa terrestre y una aérea, con una unidad como máximo en cada capa. Al atacar una casilla compartida se elige un único objetivo.
-- El Escudo antiaéreo protege su propia casilla y las seis adyacentes. Las aeronaves enemigas que entran o cruzan esa zona son interceptadas en la primera casilla protegida. Tanque y Lanzamisiles no pueden disparar por una trayectoria protegida; el Avión no puede disparar contra una casilla protegida.
-- Tanque, Lanzamisiles y Embestidor pueden transformarse en Soldado. La orientación elegida y el posible avance o ataque inmediato del Soldado forman una sola orden.
+- El Escudo antiaéreo protege su propia casilla y las seis adyacentes. Las aeronaves enemigas que entran o cruzan esa zona son interceptadas en la primera casilla protegida. Tanque y Lanzamisiles no pueden disparar por una trayectoria protegida; el Caza no puede disparar contra una casilla protegida.
+- Tanque, Lanzamisiles y Embestidor pueden transformarse en Asaltador. La orientación elegida y el posible avance o ataque inmediato del Asaltador forman una sola orden.
 - La tercera aparición de la misma posición, con el mismo jugador al turno, produce tablas. La configuración estándar también declara tablas tras 120 medias jugadas (`plies`) sin bajas, intercepciones ni daño a Fortaleza; el límite efectivo queda guardado en cada partida.
 - Si un jugador no tiene acciones legales, el turno pasa. Si ninguno de los dos bandos puede destruir la Fortaleza rival, hay tablas por bloqueo; los jugadores también pueden acordar ese resultado.
 
@@ -106,7 +106,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - Cancelar aparece junto a Confirmar acción y descarta la orden preparada manteniendo la unidad seleccionada y el panel abierto. Pulsar la unidad seleccionada o una casilla vacía sin orden legal tampoco cierra el panel; usa «×» para cerrarlo.
 - El botón de registro de batalla abre o cierra su ventana sin cambiar la selección ni la orden preparada. Puede verse junto al panel de mando; en escritorio, ambas ventanas se pueden mover, minimizar y restaurar de forma independiente.
 - Cambiar orientación y Orientar cañón abren la brújula. El movimiento del tanque permite elegir la orientación final del cañón antes de confirmar, también en modo Rápida.
-- Al abandonar un vehículo, elige la orientación y, si quieres avanzar o atacar como Soldado ese mismo turno, selecciona el destino antes de confirmar.
+- Al convertir un vehículo en Asaltador, elige la orientación y, si quieres avanzar o atacar como Asaltador ese mismo turno, selecciona el destino antes de confirmar.
 - La cabecera permite rendirse, proponer tablas en partidas locales y abandonar la partida, siempre con confirmación. Abandonar descarta la partida en curso y vuelve al inicio.
 - Pantalla completa está disponible en todas las pantallas y diálogos.
 - Arrastrar: desplazar cámara.
@@ -189,4 +189,4 @@ mantienen su formato existente.
 La fórmula de XP prevalece sobre la tabla ilustrativa del documento original, cuyos
 totales posteriores al nivel 10 no son consistentes: alcanzar el nivel 100 requiere
 133.650 XP según esa fórmula. Los siete tipos que cuentan para los logros de uso y
-combate son Soldado, Capturador, Tanque, Lanzamisiles, Embestidor, Dron y Avión.
+combate son Asaltador, Capturador, Tanque, Lanzamisiles, Embestidor, Dron y Caza.

@@ -23,7 +23,7 @@ describe('action consequence lens', () => {
     const consequence = analyzeActionConsequences(state, action!);
     expect(consequence.ok).toBe(true);
     expect(consequence.captured.map((piece) => piece.id)).toEqual(['amber']);
-    expect(consequence.summaries.join(' ')).toContain('Neutralizas Soldado');
+    expect(consequence.summaries.join(' ')).toContain('Neutralizas Asaltador');
   });
 
   it('reports newly exposed pieces without predicting intent', () => {

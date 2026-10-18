@@ -14,31 +14,31 @@ export const INITIAL_LAYOUTS = [
     id: 1,
     name: 'Frente original',
     description:
-      'Cinco soldados al frente, dos lanzamisiles en los flancos y dos aviones en retaguardia.',
+      'Cinco asaltadores al frente, dos lanzamisiles en los flancos y dos cazas en retaguardia.',
   },
   {
     id: 2,
     name: 'Columnas de asedio',
     description:
-      'Dos capturadores en los flancos y un lanzamisiles en el centro. Conserva los dos aviones.',
+      'Dos capturadores en los flancos y un lanzamisiles en el centro. Conserva los dos cazas.',
   },
   {
     id: 3,
     name: 'Frente clásico',
     description:
-      'Cuatro tanques detrás de los cinco soldados. Un lanzamisiles y un avión en retaguardia.',
+      'Cuatro tanques detrás de los cinco asaltadores. Un lanzamisiles y un caza en retaguardia.',
   },
   {
     id: 4,
     name: 'Frente de infantería',
     description:
-      'Siete soldados y dos tanques centrales. Un lanzamisiles y un avión en retaguardia.',
+      'Siete asaltadores y dos tanques centrales. Un lanzamisiles y un caza en retaguardia.',
   },
   {
     id: 5,
     name: 'Frente extendido',
     description:
-      'Once soldados al frente y dos tanques retrasados. Un lanzamisiles y un avión en retaguardia.',
+      'Once asaltadores al frente y dos tanques retrasados. Un lanzamisiles y un caza en retaguardia.',
   },
 ] as const satisfies ReadonlyArray<{ id: InitialLayout; name: string; description: string }>;
 

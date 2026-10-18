@@ -61,6 +61,10 @@ try {
     const page = await browser.newPage({ viewport });
     watchErrors(page, runtimeErrors);
     await page.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+    assert(
+      (await page.locator('.demo-status').count()) === 0,
+      'The home screen must not display a demo status label.',
+    );
     if (layout === '3') {
       await page.locator('.home-profile').click();
       await page
@@ -135,6 +139,10 @@ try {
       );
     }
     await page.locator('[data-home-action="new"]').click();
+    assert(
+      (await page.locator('.home-intro').textContent()) === 'Elige el modo de juego',
+      'The new match menu must use the requested introduction.',
+    );
     await page.locator(`[data-home-mode="${mode}"]`).click();
     await page
       .getByRole('combobox', { name: 'Puntos de vida de la Fortaleza', exact: true })
@@ -209,7 +217,7 @@ try {
       ['Puntos de vida de la Fortaleza', '1|2|3'],
       ...(mode === 'local'
         ? [
-            ['Tiempo por turno', 'Sin límite|30 segundos|1 minuto|2 minutos'],
+            ['Tiempo por turno', 'Sin límite|30 segundos|60 segundos|90 segundos'],
             ['Tiempo total', 'Sin límite|5 minutos|10 minutos|20 minutos'],
           ]
         : []),
@@ -278,11 +286,11 @@ try {
           ),
         );
       assert(
-        roster.Soldado === soldiers &&
+        roster.Asaltador === soldiers &&
           roster.Tanque === tanks &&
           roster.Capturador === capturers &&
           roster.Lanzamisiles === launchers &&
-          roster.Avión === airplanes &&
+          roster.Caza === airplanes &&
           Object.values(roster).reduce((total, count) => total + count, 0) ===
             (value === '5' ? 22 : 18),
         `Layout ${value} must describe the actual army in text.`,
@@ -326,7 +334,7 @@ try {
     );
     await chooseSelectOption(page, 'Puntos de vida de la Fortaleza', '2');
     if (mode === 'local') {
-      await chooseSelectOption(page, 'Tiempo por turno', '2 minutos');
+      await chooseSelectOption(page, 'Tiempo por turno', '90 segundos');
       await chooseSelectOption(page, 'Tiempo total', '20 minutos');
     } else {
       assert(
@@ -343,7 +351,7 @@ try {
         (await preview.getAttribute('data-layout')) === '3' &&
         (await selectedOptionLabel(page, 'Puntos de vida de la Fortaleza')) === '2' &&
         (mode === 'machine' ||
-          ((await selectedOptionLabel(page, 'Tiempo por turno')) === '2 minutos' &&
+          ((await selectedOptionLabel(page, 'Tiempo por turno')) === '90 segundos' &&
             (await selectedOptionLabel(page, 'Tiempo total')) === '20 minutos')),
       'Changing difficulty and clock choices must preserve the layout, preview and other settings.',
     );
@@ -363,7 +371,7 @@ try {
       () => JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config,
     );
     assert(
-      savedConfig.options.turnClockSeconds === (mode === 'machine' ? null : 120) &&
+      savedConfig.options.turnClockSeconds === (mode === 'machine' ? null : 90) &&
         savedConfig.options.clockSeconds === (mode === 'machine' ? null : 1200) &&
         savedConfig.definitionId === 'classic' &&
         savedConfig.setup.filter(({ piece }) => piece.type === 'fortress').length === 2 &&
@@ -393,12 +401,12 @@ try {
       );
     }
     await page.locator('#game-canvas[data-viewpoint="blue"]:not([data-rotating])').waitFor();
-    const frontLabel = layout === '3' ? 'TNQ,' : 'SOL,';
+    const frontLabel = layout === '3' ? 'TNQ,' : 'ASA,';
     for (const [q, r, label] of [
       [3, -4, frontLabel],
       [-3, -1, frontLabel],
       [1, -5, 'LMS,'],
-      [-1, -4, 'AVI,'],
+      [-1, -4, 'CAZ,'],
       [0, -3, 'CAP,'],
     ]) {
       for (const sign of [1, -1]) {
@@ -412,11 +420,11 @@ try {
     }
     if (layout === '5') {
       for (const [q, r, label] of [
-        [5, -5, 'SOL,'],
-        [1, -3, 'SOL,'],
+        [5, -5, 'ASA,'],
+        [1, -3, 'ASA,'],
         [2, -4, 'TNQ,'],
-        [-5, 0, 'SOL,'],
-        [-1, -2, 'SOL,'],
+        [-5, 0, 'ASA,'],
+        [-1, -2, 'ASA,'],
         [-2, -2, 'TNQ,'],
       ]) {
         for (const sign of [1, -1]) {
@@ -596,7 +604,7 @@ try {
   await desktop.locator('[data-rule-section="casillas-compartidas"]').click();
   assert(
     (await desktop.locator('#rules-article').textContent())?.includes(
-      'el tanque, el lanzamisiles y el embestidor pueden ser abandonados para convertirse en soldados',
+      'el tanque, el lanzamisiles y el embestidor pueden convertirse en asaltadores',
     ),
     'Updated shared-cell attack wording is missing.',
   );
@@ -751,20 +759,20 @@ try {
   await clickHex(desktop, 0, -2);
   await desktop.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert(
-    (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
+    (await desktop.locator('#piece-card h2').textContent())?.includes('Asaltador'),
     'Canvas selection failed.',
   );
   assert(
     (await desktop.locator('#command-panel').isVisible()) &&
       (await desktop.locator('#selection-summary').textContent()) ===
-        'Soldado seleccionado. Elige una casilla para desplazarte o atacar, o cambia su orientación.',
+        'Asaltador seleccionado. Elige una casilla para desplazarte o atacar, o cambia su orientación.',
     'Selecting a soldier must reveal the command panel and its next-step instruction.',
   );
   await desktop.locator('#log-toggle').click();
   assert(
     (await desktop.locator('#command-panel').isVisible()) &&
       (await desktop.locator('#battle-log-panel').isVisible()) &&
-      (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
+      (await desktop.locator('#piece-card h2').textContent())?.includes('Asaltador'),
     'Opening the battle log must preserve the selected unit and its command panel.',
   );
   await clickHex(desktop, 2, -3);
@@ -789,7 +797,7 @@ try {
       (await desktop.locator('#pending-card').isHidden()) &&
       (await desktop.locator('#battle-log li:not(.empty-log)').count()) === 0 &&
       (await desktop.locator('#selection-summary').textContent()) ===
-        'Soldado seleccionado. Elige una casilla para desplazarte o atacar, o cambia su orientación.',
+        'Asaltador seleccionado. Elige una casilla para desplazarte o atacar, o cambia su orientación.',
     'Cancel must discard the prepared order while keeping its unit and panel selected.',
   );
   assert(
@@ -833,7 +841,7 @@ try {
   );
   await clickHex(desktop, 0, 2);
   assert(
-    (await desktop.locator('#piece-card h2').textContent())?.includes('Soldado'),
+    (await desktop.locator('#piece-card h2').textContent())?.includes('Asaltador'),
     'Enemy unit inspection failed.',
   );
   assert(
@@ -1201,13 +1209,13 @@ try {
   await cannonPage.locator('[data-transform-facing="3"]').click();
   assert(
     (await cannonPage.locator('.transform-warning').textContent()) ===
-      'Para realizar un desplazamiento o ataque como soldado en este mismo turno, selecciona la casilla de destino antes de confirmar' &&
+      'Para realizar un desplazamiento o ataque como asaltador en este mismo turno, selecciona la casilla de destino antes de confirmar' &&
       (await cannonPage.locator('.consequence-lens').count()) === 0,
     'A stationary transformation must show the destination reminder without the consequence card.',
   );
   const transformedMove = cannonPage
     .locator('#sr-board [role="gridcell"]')
-    .filter({ hasText: 'el Soldado avanzará' })
+    .filter({ hasText: 'el Asaltador avanzará' })
     .first();
   const transformedKey = await transformedMove.getAttribute('data-hex');
   assert(transformedKey, 'The selected tank must offer a soldier destination.');
@@ -1323,8 +1331,7 @@ try {
   assert(
     (await instantNotice.locator('.achievement-icon').count()) === 1 &&
       (await instantNotice.locator('strong').textContent()) === '¡Transformación!' &&
-      (await instantNotice.locator('p').textContent()) ===
-        'Abandona un vehículo para convertirlo en soldado.' &&
+      (await instantNotice.locator('p').textContent()) === 'Convierte un vehículo en asaltador.' &&
       (await instantNotice.locator('button, progress').count()) === 0,
     'A confirmed transformation must immediately show its achievement icon, title and description.',
   );
@@ -1672,7 +1679,7 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile.locator('#piece-card h2').waitFor({ state: 'visible' });
   assert(
-    (await mobile.locator('#piece-card h2').textContent())?.includes('Soldado'),
+    (await mobile.locator('#piece-card h2').textContent())?.includes('Asaltador'),
     'Keyboard hex navigation failed.',
   );
   assert(
@@ -2616,15 +2623,16 @@ async function assertAchievementsCatalog(page, surface) {
   );
   const icons = await cards.locator('.achievement-insignia').evaluateAll((items) =>
     items.map((item) => ({
-      symbol: item.innerHTML,
+      symbol: item.getAttribute('src'),
       width: item.getBoundingClientRect().width,
       decorative: item.getAttribute('aria-hidden') === 'true',
+      loaded: item instanceof HTMLImageElement && item.complete && item.naturalWidth > 0,
     })),
   );
   assert(
     icons.length === total &&
       new Set(icons.map((icon) => icon.symbol)).size === total &&
-      icons.every((icon) => icon.width > 0 && icon.decorative),
+      icons.every((icon) => icon.width > 0 && icon.decorative && icon.loaded),
     'Each achievement must have a distinct decorative icon.',
   );
   await assertNoHorizontalOverflow(page, `${surface} achievements`, '#game-dialog');

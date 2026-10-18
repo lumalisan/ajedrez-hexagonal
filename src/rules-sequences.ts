@@ -73,9 +73,9 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
         { id: 'fort-amber', type: 'fortress', owner: 1, position: at(0, 4), hp: 1 },
       ],
       steps: [
-        move('Animación 1 · El Soldado avanza de [+0, +2] a [+0, +3].', 'actor', 0, 3),
+        move('Animación 1 · El Asaltador avanza de [+0, +2] a [+0, +3].', 'actor', 0, 3),
         move(
-          'Animación 1 · El Soldado destruye la Fortaleza de 1 PV en [+0, +4] y se sacrifica.',
+          'Animación 1 · El Asaltador destruye la Fortaleza de 1 PV en [+0, +4] y se sacrifica.',
           'actor',
           0,
           4,
@@ -104,9 +104,9 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
     {
       pieces: [soldier('actor', 0, 2, -3), tank('target', 1, 0, 0)],
       steps: [
-        move('El Soldado avanza de [+2, −3] a [+1, −2] y se orienta al moverse.', 'actor', 1, -2),
-        move('El Soldado continúa hasta [+1, −1].', 'actor', 1, -1),
-        move('El Soldado ataca al Tanque y ocupa su casilla [+0, +0].', 'actor', 0, 0),
+        move('El Asaltador avanza de [+2, −3] a [+1, −2] y se orienta al moverse.', 'actor', 1, -2),
+        move('El Asaltador continúa hasta [+1, −1].', 'actor', 1, -1),
+        move('El Asaltador ataca al Tanque y ocupa su casilla [+0, +0].', 'actor', 0, 0),
       ],
     },
   ],
@@ -175,7 +175,7 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
         tank('target', 1, -3, 2),
       ],
       steps: [
-        move('El Dron vuela hasta [+0, −1] y se sitúa sobre el Soldado cian.', 'actor', 0, -1),
+        move('El Dron vuela hasta [+0, −1] y se sitúa sobre el Asaltador cian.', 'actor', 0, -1),
         move('El Dron ataca al Tanque y ocupa su casilla [−3, +2].', 'actor', -3, 2),
       ],
     },
@@ -191,17 +191,12 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
         tank('target-two', 1, -3, 1),
       ],
       steps: [
-        move(
-          'El Avión avanza en diagonal hasta [−1, −2] y cambia de orientación.',
-          'actor',
-          -1,
-          -2,
-        ),
-        move('El Avión avanza hasta [−1, −1] y se sitúa sobre el Soldado.', 'actor', -1, -1),
-        shoot('El Avión dispara al Tanque ámbar situado en [−1, +2].', 'actor', 'target-one'),
+        move('El Caza avanza en diagonal hasta [−1, −2] y cambia de orientación.', 'actor', -1, -2),
+        move('El Caza avanza hasta [−1, −1] y se sitúa sobre el Asaltador.', 'actor', -1, -1),
+        shoot('El Caza dispara al Tanque ámbar situado en [−1, +2].', 'actor', 'target-one'),
         {
           ...move(
-            'El Avión realiza un ataque kamikaze contra el Tanque de [−3, +1]; ambos quedan destruidos.',
+            'El Caza realiza un ataque kamikaze contra el Tanque de [−3, +1]; ambos quedan destruidos.',
             'actor',
             -3,
             1,
@@ -223,20 +218,20 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
       ],
       steps: [
         move(
-          'Animación 1 · El Soldado ataca al Soldado de [+3, −1]; el Dron ámbar permanece encima.',
+          'Animación 1 · El Asaltador ataca al Asaltador de [+3, −1]; el Dron ámbar permanece encima.',
           'soldier',
           3,
           -1,
         ),
         move(
-          'Animación 1 · El Embestidor ataca al Soldado de [+0, +0]; el Avión ámbar permanece encima.',
+          'Animación 1 · El Embestidor ataca al Asaltador de [+0, +0]; el Caza ámbar permanece encima.',
           'fast',
           0,
           0,
         ),
         {
           label:
-            'Animación 1 · El Capturador convierte al Soldado de [−3, +2]; el Dron continúa siendo ámbar.',
+            'Animación 1 · El Capturador convierte al Asaltador de [−3, +2]; el Dron continúa siendo ámbar.',
           actorId: 'capturer',
           kind: 'convert',
           targetId: 'left-ground',
@@ -256,22 +251,22 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
       ],
       steps: [
         shoot(
-          'Animación 2 · El Tanque dispara al Dron de [+3, −1]; el Soldado permanece.',
+          'Animación 2 · El Tanque dispara al Dron de [+3, −1]; el Asaltador permanece.',
           'tank',
           'right-air',
         ),
         shoot(
-          'Animación 2 · El Lanzamisiles dispara al Avión de [+1, +0]; el Soldado permanece.',
+          'Animación 2 · El Lanzamisiles dispara al Caza de [+1, +0]; el Asaltador permanece.',
           'long',
           'center-right-air',
         ),
         shoot(
-          'Animación 2 · El Avión dispara al Avión de [−1, +1]; el Soldado permanece.',
+          'Animación 2 · El Caza dispara al Caza de [−1, +1]; el Asaltador permanece.',
           'plane',
           'center-left-air',
         ),
         move(
-          'Animación 2 · El Dron ataca al Dron de [−3, +2] y queda sobre el Soldado ámbar.',
+          'Animación 2 · El Dron ataca al Dron de [−3, +2] y queda sobre el Asaltador ámbar.',
           'drone',
           -3,
           2,

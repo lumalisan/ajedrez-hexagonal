@@ -16,8 +16,9 @@ function offlinePrecache(): Plugin {
       );
       // Public artwork is copied outside the bundle, so include it explicitly in the offline cache.
       const achievementDirectory = new URL('./public/achievements/', import.meta.url);
-      const achievementImages = (await readdir(achievementDirectory))
+      const achievementImages = (await readdir(achievementDirectory, { recursive: true }))
         .filter((fileName) => fileName.endsWith('.webp'))
+        .map((fileName) => fileName.replaceAll('\\', '/'))
         .sort();
       const hash = createHash('sha256').update(template);
       for (const asset of assets) {

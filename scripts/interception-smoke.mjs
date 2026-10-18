@@ -40,7 +40,7 @@ try {
     await server.ssrLoadModule('/src/match-record.ts');
   const { applyAction } = await server.ssrLoadModule('/src/engine.ts');
   for (const aircraft of [
-    { type: 'airplane', name: 'Avión', glyph: 'AVI', range: [1, 2] },
+    { type: 'airplane', name: 'Caza', glyph: 'CAZ', range: [1, 2] },
     { type: 'drone', name: 'Dron', glyph: 'DRN', range: [1, 2, 3] },
   ]) {
     const config = createClassicConfig({ mode: 'local', fixedBoard: true });

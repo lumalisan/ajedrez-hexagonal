@@ -36,25 +36,25 @@ import type {
 } from './types';
 
 export const PIECE_NAMES: Record<PieceType, string> = {
-  soldier: 'Soldado',
+  soldier: 'Asaltador',
   capturer: 'Capturador',
   medium: 'Tanque',
   long: 'Lanzamisiles',
   fast: 'Embestidor',
   drone: 'Dron',
-  airplane: 'Avión',
+  airplane: 'Caza',
   antiAir: 'Escudo antiaéreo',
   fortress: 'Fortaleza',
 };
 
 export const PIECE_SHORT_NAMES: Record<PieceType, string> = {
-  soldier: 'SOL',
+  soldier: 'ASA',
   capturer: 'CAP',
   medium: 'TNQ',
   long: 'LMS',
   fast: 'EMB',
   drone: 'DRN',
-  airplane: 'AVI',
+  airplane: 'CAZ',
   antiAir: 'EAA',
   fortress: 'FOR',
 };
@@ -1299,11 +1299,11 @@ export function describeAction(state: GameState, action: GameAction): string {
     case 'transform': {
       if (action.attackAboveId) {
         const target = getPiece(state, action.attackAboveId);
-        return `${name} será abandonado; el Soldado atacará al ${target ? PIECE_NAMES[target.type] : 'objetivo aéreo'} superior`;
+        return `${name} se convertirá en Asaltador; el Asaltador atacará al ${target ? PIECE_NAMES[target.type] : 'objetivo aéreo'} superior`;
       }
       if (action.to)
-        return `${name} será abandonado; el Soldado avanzará a ${formatHex(action.to)}`;
-      return `${name} será abandonado y se convertirá en Soldado`;
+        return `${name} se convertirá en Asaltador; el Asaltador avanzará a ${formatHex(action.to)}`;
+      return `${name} se convertirá en Asaltador`;
     }
   }
 }
@@ -1358,10 +1358,10 @@ function describeResolvedAction(
     case 'transform': {
       const target = action.attackAboveId ? getPiece(before, action.attackAboveId) : undefined;
       base = action.to
-        ? `${name} fue abandonado; el Soldado avanzó a ${formatHex(action.to)}`
+        ? `${name} se convirtió en Asaltador; el Asaltador avanzó a ${formatHex(action.to)}`
         : action.attackAboveId
-          ? `${name} fue abandonado; el Soldado neutralizó al ${target ? PIECE_NAMES[target.type] : 'objetivo aéreo'} superior`
-          : `${name} fue abandonado y convertido en Soldado`;
+          ? `${name} se convirtió en Asaltador; el Asaltador neutralizó al ${target ? PIECE_NAMES[target.type] : 'objetivo aéreo'} superior`
+          : `${name} se convirtió en Asaltador`;
       break;
     }
   }

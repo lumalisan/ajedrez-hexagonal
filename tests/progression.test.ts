@@ -301,7 +301,7 @@ describe('catálogo y evidencia retrospectiva', () => {
     expect(evidence.metrics.airKillsMatch).toBe(1);
     expect(evidence.metrics.soldierKills ?? 0).toBe(0);
   });
-  it('atribuye al soldado los ataques realizados al transformar un vehículo', () => {
+  it('atribuye al asaltador los ataques realizados al transformar un vehículo', () => {
     let record = fixture([
       { id: 'vehicle', type: 'long', owner: 0, position: { q: 0, r: 0 } },
       { id: 'enemy', type: 'soldier', owner: 1, facing: 0, position: { q: 1, r: 0 } },

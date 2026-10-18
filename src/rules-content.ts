@@ -55,8 +55,8 @@ export const RULE_SECTIONS: RuleSection[] = [
         `Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto de daño`,
       ),
       emphasize(
-        'Soldado, Capturador y Embestidor se sacrifican después de impactar contra la fortaleza. Tanque, Lanzamisiles, Dron y Avión sobreviven cuando usan un ataque que no sea kamikaze; el Avión que elige un kamikaze se destruye como de costumbre.',
-        'Soldado, Capturador y Embestidor se sacrifican',
+        'Asaltador, Capturador y Embestidor se sacrifican después de impactar contra la fortaleza. Tanque, Lanzamisiles, Dron y Caza sobreviven cuando usan un ataque que no sea kamikaze; el Caza que elige un kamikaze se destruye como de costumbre.',
+        'Asaltador, Capturador y Embestidor se sacrifican',
       ),
       peerHeading('Escudo antiaéreo'),
       emphasize(
@@ -64,29 +64,29 @@ export const RULE_SECTIONS: RuleSection[] = [
         'protege su propia casilla y las seis casillas adyacentes',
       ),
       emphasize(
-        'Cuando un dron o un avión entra o intenta cruzar una zona protegida enemiga, es interceptado y destruido en la primera casilla protegida de su recorrido.',
+        'Cuando un dron o un caza entra o intenta cruzar una zona protegida enemiga, es interceptado y destruido en la primera casilla protegida de su recorrido.',
         'interceptado y destruido en la primera casilla protegida',
       ),
-      'El tanque y el lanzamisiles no pueden disparar si la trayectoria entra en una casilla protegida; el avión no puede disparar contra una casilla protegida. El propio escudo solo puede ser destruido mediante un ataque terrestre de Soldado o Embestidor, o convertido por un Capturador.',
+      'El tanque y el lanzamisiles no pueden disparar si la trayectoria entra en una casilla protegida; el caza no puede disparar contra una casilla protegida. El propio escudo solo puede ser destruido mediante un ataque terrestre de Asaltador o Embestidor, o convertido por un Capturador.',
       'El escudo antiaéreo no se desplaza ni realiza acciones.',
     ],
     demo: 'fortaleza',
   },
   {
     id: 'soldado',
-    label: 'SOLDADO',
-    title: 'Soldado',
+    label: 'ASALTADOR',
+    title: 'Asaltador',
     paragraphs: [
       emphasize(
-        'El soldado puede desplazarse a cualquiera de las tres casillas situadas delante de él. Si se desplaza en diagonal, su orientación cambia automáticamente.',
+        'El asaltador puede desplazarse a cualquiera de las tres casillas situadas delante de él. Si se desplaza en diagonal, su orientación cambia automáticamente.',
         'desplazarse',
       ),
       emphasize(
-        'El soldado puede atacar a cualquier unidad enemiga situada dentro de su área de desplazamiento. Al hacerlo, la unidad enemiga es eliminada y el soldado pasa a ocupar su casilla.',
+        'El asaltador puede atacar a cualquier unidad enemiga situada dentro de su área de desplazamiento. Al hacerlo, la unidad enemiga es eliminada y el asaltador pasa a ocupar su casilla.',
         'atacar',
       ),
       emphasize(
-        'El soldado también puede cambiar su orientación sin desplazarse. No obstante, si lo hace, no podrá desplazarse ni atacar durante ese turno.',
+        'El asaltador también puede cambiar su orientación sin desplazarse. No obstante, si lo hace, no podrá desplazarse ni atacar durante ese turno.',
         'cambiar su orientación sin desplazarse',
       ),
     ],
@@ -126,8 +126,8 @@ export const RULE_SECTIONS: RuleSection[] = [
         'disparar',
       ),
       emphasize(
-        'El tanque puede ser abandonado para convertirse en un soldado. El soldado que lo sustituya puede elegir libremente su orientación y realizar su acción en ese mismo turno.',
-        'abandonado',
+        'El tanque puede convertirse en un asaltador. El asaltador que lo sustituya puede elegir libremente su orientación y realizar su acción en ese mismo turno.',
+        'convertirse en un asaltador',
         'realizar su acción en ese mismo turno',
       ),
     ],
@@ -143,12 +143,12 @@ export const RULE_SECTIONS: RuleSection[] = [
         'desplazarse',
       ),
       emphasize(
-        'El lanzamisiles dispone de dos misiles para toda la partida y puede disparar a cualquier casilla situada exactamente a tres casillas de su posición, en cualquier dirección. Cada disparo consume un misil y no se recargan, tampoco al cambiar de bando. Debe elegir entre desplazarse o disparar, por lo que no puede realizar ambas acciones en el mismo turno. Sin misiles, puede seguir desplazándose o convertirse en soldado.',
+        'El lanzamisiles dispone de dos misiles para toda la partida y puede disparar a cualquier casilla situada exactamente a tres casillas de su posición, en cualquier dirección. Cada disparo consume un misil y no se recargan, tampoco al cambiar de bando. Debe elegir entre desplazarse o disparar, por lo que no puede realizar ambas acciones en el mismo turno. Sin misiles, puede seguir desplazándose o convertirse en asaltador.',
         'disparar',
       ),
       emphasize(
-        'El lanzamisiles puede ser abandonado para convertirse en un soldado. El soldado que lo sustituya puede elegir libremente su orientación y realizar su acción en ese mismo turno.',
-        'abandonado',
+        'El lanzamisiles puede convertirse en un asaltador. El asaltador que lo sustituya puede elegir libremente su orientación y realizar su acción en ese mismo turno.',
+        'convertirse en un asaltador',
         'realizar su acción en ese mismo turno',
       ),
     ],
@@ -168,8 +168,8 @@ export const RULE_SECTIONS: RuleSection[] = [
         'atacar',
       ),
       emphasize(
-        'El embestidor puede ser abandonado para convertirse en un soldado. El soldado que lo sustituya puede elegir libremente su orientación y realizar su acción en ese mismo turno.',
-        'abandonado',
+        'El embestidor puede convertirse en un asaltador. El asaltador que lo sustituya puede elegir libremente su orientación y realizar su acción en ese mismo turno.',
+        'convertirse en un asaltador',
         'realizar su acción en ese mismo turno',
       ),
     ],
@@ -181,7 +181,7 @@ export const RULE_SECTIONS: RuleSection[] = [
     title: 'Dron',
     paragraphs: [
       emphasize(
-        'El dron puede desplazarse en cualquiera de las seis direcciones del tablero, hasta un máximo de tres casillas. Al desplazarse por el aire, puede pasar por encima de unidades aliadas y enemigas, excepto de otros drones y aviones. También puede finalizar su desplazamiento en una casilla ocupada por una unidad aliada, excepto por un dron o un avión.',
+        'El dron puede desplazarse en cualquiera de las seis direcciones del tablero, hasta un máximo de tres casillas. Al desplazarse por el aire, puede pasar por encima de unidades aliadas y enemigas, excepto de otros drones y cazas. También puede finalizar su desplazamiento en una casilla ocupada por una unidad aliada, excepto por un dron o un caza.',
         'desplazarse',
       ),
       emphasize(
@@ -194,22 +194,22 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'avion',
-    label: 'AVIÓN',
-    title: 'Avión',
+    label: 'CAZA',
+    title: 'Caza',
     paragraphs: [
       emphasize(
-        'El avión puede desplazarse hasta dos casillas hacia adelante. Si se desplaza en diagonal, su orientación cambia automáticamente.',
+        'El caza puede desplazarse hasta dos casillas hacia adelante. Si se desplaza en diagonal, su orientación cambia automáticamente.',
         'desplazarse',
       ),
-      'Al desplazarse por el aire, puede pasar por encima de unidades aliadas y enemigas, excepto de otros drones y aviones. También puede finalizar su desplazamiento en una casilla ocupada por una unidad aliada o enemiga, excepto por un dron o un avión.',
+      'Al desplazarse por el aire, puede pasar por encima de unidades aliadas y enemigas, excepto de otros drones y cazas. También puede finalizar su desplazamiento en una casilla ocupada por una unidad aliada o enemiga, excepto por un dron o un caza.',
       emphasize(
-        'El avión puede disparar a un total de ocho casillas: las tres casillas situadas dos casillas por delante de él y las cinco casillas situadas tres casillas por delante. La casilla central de las tres situadas a dos casillas de distancia (indicada con un punto verde con el contorno rojo) también puede ser alcanzada mediante un desplazamiento. En cualquier caso, el avión debe elegir entre desplazarse o disparar, por lo que no puede realizar ambas acciones en el mismo turno, tampoco en dicha casilla.',
+        'El caza puede disparar a un total de ocho casillas: las tres casillas situadas dos casillas por delante de él y las cinco casillas situadas tres casillas por delante. La casilla central de las tres situadas a dos casillas de distancia (indicada con un punto verde con el contorno rojo) también puede ser alcanzada mediante un desplazamiento. En cualquier caso, el caza debe elegir entre desplazarse o disparar, por lo que no puede realizar ambas acciones en el mismo turno, tampoco en dicha casilla.',
         'disparar',
       ),
       emphasize(
-        'El avión también puede realizar un ataque kamikaze, desplazándose a una casilla ocupada por una unidad enemiga e impactando contra ella. En ese caso, tanto la unidad enemiga como el avión son destruidos.',
+        'El caza también puede realizar un ataque kamikaze, desplazándose a una casilla ocupada por una unidad enemiga e impactando contra ella. En ese caso, tanto la unidad enemiga como el caza son destruidos.',
         'ataque kamikaze',
-        'tanto la unidad enemiga como el avión son destruidos',
+        'tanto la unidad enemiga como el caza son destruidos',
       ),
     ],
     demo: 'avion',
@@ -220,8 +220,8 @@ export const RULE_SECTIONS: RuleSection[] = [
     title: 'Desarrollo de la partida',
     paragraphs: [
       emphasize(
-        'En Frente clásico, cada jugador comienza con 5 soldados, 1 capturador, 4 tanques, 1 lanzamisiles, 2 embestidores, 2 drones y 1 avión, además de una fortaleza y un escudo antiaéreo. Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
-        '5 soldados, 1 capturador, 4 tanques, 1 lanzamisiles, 2 embestidores, 2 drones y 1 avión',
+        'En Frente clásico, cada jugador comienza con 5 asaltadores, 1 capturador, 4 tanques, 1 lanzamisiles, 2 embestidores, 2 drones y 1 caza, además de una fortaleza y un escudo antiaéreo. Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
+        '5 asaltadores, 1 capturador, 4 tanques, 1 lanzamisiles, 2 embestidores, 2 drones y 1 caza',
       ),
       'Al crear una partida puedes elegir la disposición inicial y los puntos de vida de las fortalezas. Cada disposición determina la composición y la posición de los ejércitos; el movimiento, el combate, las capas y el daño de cada impacto siguen las mismas reglas.',
       emphasize(
@@ -264,27 +264,27 @@ export const RULE_SECTIONS: RuleSection[] = [
         'solo puede ser atacada una de las dos unidades en cada acción',
       ),
       emphasize(
-        'Las unidades terrestres cuyo ataque implica ocupar la casilla enemiga —soldado y embestidor— solo pueden atacar a la unidad terrestre situada debajo de un dron o avión enemigo. Tras el ataque, la unidad atacante queda situada debajo del dron o avión. Si queda debajo de un dron, este podrá atacarla en el siguiente turno.',
-        'soldado y embestidor',
+        'Las unidades terrestres cuyo ataque implica ocupar la casilla enemiga —asaltador y embestidor— solo pueden atacar a la unidad terrestre situada debajo de un dron o caza enemigo. Tras el ataque, la unidad atacante queda situada debajo del dron o caza. Si queda debajo de un dron, este podrá atacarla en el siguiente turno.',
+        'asaltador y embestidor',
       ),
       emphasize(
-        'Del mismo modo, el capturador solo puede capturar a la unidad terrestre situada debajo de un dron o avión enemigo. El capturador permanece en su casilla y la unidad capturada, que pasa a ser aliada, permanece debajo del dron o avión enemigo.',
+        'Del mismo modo, el capturador solo puede capturar a la unidad terrestre situada debajo de un dron o caza enemigo. El capturador permanece en su casilla y la unidad capturada, que pasa a ser aliada, permanece debajo del dron o caza enemigo.',
         'capturador',
       ),
       emphasize(
-        'En cambio, las unidades que realizan sus ataques a distancia —tanque, lanzamisiles y avión— pueden elegir cuál de las dos unidades enemigas atacar, pero no pueden atacar a ambas en el mismo turno. El avión también puede realizar un ataque kamikaze contra cualquiera de las dos unidades.',
-        'tanque, lanzamisiles y avión',
+        'En cambio, las unidades que realizan sus ataques a distancia —tanque, lanzamisiles y caza— pueden elegir cuál de las dos unidades enemigas atacar, pero no pueden atacar a ambas en el mismo turno. El caza también puede realizar un ataque kamikaze contra cualquiera de las dos unidades.',
+        'tanque, lanzamisiles y caza',
       ),
       emphasize(
-        'Por último, cuando el ataque lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre. Tras el ataque, el dron queda situado sobre la unidad terrestre enemiga. Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado, este podrá atacarlo. Del mismo modo, si se trata de un capturador, podrá capturarlo.',
+        'Por último, cuando el ataque lo realiza un dron, este solo puede atacar a la unidad aérea enemiga situada sobre la unidad terrestre. Tras el ataque, el dron queda situado sobre la unidad terrestre enemiga. Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un asaltador, este podrá atacarlo. Del mismo modo, si se trata de un capturador, podrá capturarlo.',
         'dron',
       ),
       emphasize(
-        'En cambio, el tanque, el lanzamisiles y el embestidor no pueden atacar directamente a un dron situado sobre ellos. Sin embargo, el tanque, el lanzamisiles y el embestidor pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
+        'En cambio, el tanque, el lanzamisiles y el embestidor no pueden atacar directamente a un dron situado sobre ellos. Sin embargo, el tanque, el lanzamisiles y el embestidor pueden convertirse en asaltadores, lo que les permite igualmente atacar al dron en ese mismo turno.',
         'tanque, el lanzamisiles y el embestidor',
       ),
-      peerHeading('Abandono y transformación'),
-      'Tanque, Lanzamisiles y Embestidor pueden ser abandonados. La transformación parte de la misma casilla y conserva el propietario de la unidad, pero el vehículo desaparece y queda un Soldado con la orientación elegida. Esa misma orden puede incluir el avance o ataque legal del nuevo Soldado, incluso contra una aeronave enemiga situada encima; no concede un segundo turno independiente.',
+      peerHeading('Conversión en asaltador'),
+      'Tanque, Lanzamisiles y Embestidor pueden convertirse en Asaltadores. La transformación parte de la misma casilla y conserva el propietario de la unidad, pero el vehículo desaparece y queda un Asaltador con la orientación elegida. Esa misma orden puede incluir el avance o ataque legal del nuevo Asaltador, incluso contra una aeronave enemiga situada encima; no concede un segundo turno independiente.',
     ],
     demo: 'casillas-compartidas',
   },

@@ -183,8 +183,8 @@ export const ACHIEVEMENTS = [
   ),
   achievement(
     'transformation',
-    'Me bajo aquí',
-    'Transforma uno de tus vehículos en Soldado.',
+    'Cambio de forma',
+    'Transforma uno de tus vehículos en Asaltador.',
     'tactics',
     1,
     'transformaciones',

@@ -1,0 +1,607 @@
+{
+  "version": 1,
+  "tool": "image_gen.imagegen (built-in)",
+  "reference": "originals/p1-01.png",
+  "images": [
+    {
+      "id": "p1-01",
+      "subject": "open golden book with ivory pages and one cyan hexagonal seal",
+      "prompt": "Use case: stylized-concept. Asset type: achievement badge icon for Spanish tactical game Protocolo Hexagonal.\nCreate ONE finished premium game achievement badge, horizontal six-sided hexagon silhouette, wide 1.3:1, with long flat top and bottom edges and points at left and right, straight-on view. Rich chunky polished GOLD beveled metal frame, dark deep burgundy enamel recessed interior. Inside: a beautiful OPEN GOLDEN BOOK with thick ivory pages and a small cyan hexagonal seal on one page, a single curling golden bookmark, symbolizing completing the tutorial. Bright dimensional sculpted collectible, painterly 3D game icon, strong readable silhouette, generous object size, warm golden highlights, tiny restrained cyan gemstone accents. Inspired by the attached achievement reference sheets' gold trophies and jewelry, not their square frames. The frame and object must be fully visible and centered, filling 94% of a landscape canvas, no large margins. Transparent outside the hexagonal badge only; interior is opaque burgundy. No text, letters, numbers, watermark, ribbon banner, extra badges, square backing, holographic effects. One badge only.",
+      "original": "originals/p1-01.png"
+    },
+    {
+      "id": "p1-02",
+      "subject": "a rolled scholarly parchment diploma tied with a burgundy cord beside a golden quill",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a rolled scholarly parchment diploma tied with a burgundy cord beside a golden quill. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-02.png"
+    },
+    {
+      "id": "p1-03",
+      "subject": "a golden checkered starting flag on a small hexagonal board",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden checkered starting flag on a small hexagonal board. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-03.png"
+    },
+    {
+      "id": "p1-04",
+      "subject": "a single tall handled victory cup with an angular stem and cyan gem",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a single tall handled victory cup with an angular stem and cyan gem. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-04.png"
+    },
+    {
+      "id": "p1-05",
+      "subject": "a golden clenched gauntlet fist with a cyan signal spark",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden clenched gauntlet fist with a cyan signal spark. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-05.png"
+    },
+    {
+      "id": "p1-06",
+      "subject": "a golden royal scepter laid across a defeated small robot head",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden royal scepter laid across a defeated small robot head. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-06.png"
+    },
+    {
+      "id": "p1-07",
+      "subject": "a golden infantry helmet encircled by a curved turning arrow",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden infantry helmet encircled by a curved turning arrow. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-07.png"
+    },
+    {
+      "id": "p1-08",
+      "subject": "a miniature golden tank turret with a rotating circular bearing",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a miniature golden tank turret with a rotating circular bearing. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-08.png"
+    },
+    {
+      "id": "p1-09",
+      "subject": "a golden armored battering ram ploughing through five broken stone blocks",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden armored battering ram ploughing through five broken stone blocks. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-09.png"
+    },
+    {
+      "id": "p1-10",
+      "subject": "an empty golden twin missile rack with two clearly hollow launch tubes",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: an empty golden twin missile rack with two clearly hollow launch tubes. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-10.png"
+    },
+    {
+      "id": "p1-11",
+      "subject": "a golden quadcopter hovering over a friendly cyan pawn",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden quadcopter hovering over a friendly cyan pawn. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-11.png"
+    },
+    {
+      "id": "p1-12",
+      "subject": "a swept-wing golden fighter jet above a small amber enemy token",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a swept-wing golden fighter jet above a small amber enemy token. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-12.png"
+    },
+    {
+      "id": "p1-13",
+      "subject": "a golden caterpillar track opening into an upright infantry figurine",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden caterpillar track opening into an upright infantry figurine. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-13.png"
+    },
+    {
+      "id": "p1-14",
+      "subject": "a golden engine piston with orange flame",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden engine piston with orange flame. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-14.png"
+    },
+    {
+      "id": "p1-15",
+      "subject": "three golden candle flames on a single curved candelabrum",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: three golden candle flames on a single curved candelabrum. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-15.png"
+    },
+    {
+      "id": "p1-16",
+      "subject": "two crossed short golden combat daggers",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: two crossed short golden combat daggers. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-16.png"
+    },
+    {
+      "id": "p1-17",
+      "subject": "a golden long sniper telescope with a cyan glass lens",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden long sniper telescope with a cyan glass lens. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-17.png"
+    },
+    {
+      "id": "p1-18",
+      "subject": "a golden trident whose three tips each bear a small ruby",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden trident whose three tips each bear a small ruby. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-18.png"
+    },
+    {
+      "id": "p1-19",
+      "subject": "two stacked amber enemy tiles pierced by a downward golden spear",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: two stacked amber enemy tiles pierced by a downward golden spear. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-19.png"
+    },
+    {
+      "id": "p1-20",
+      "subject": "a domed golden anti-aircraft shield sheltering a tiny aircraft",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a domed golden anti-aircraft shield sheltering a tiny aircraft. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p1-20.png"
+    },
+    {
+      "id": "p2-01",
+      "subject": "a golden climbing piton with a taut rope and a cyan jewel",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden climbing piton with a taut rope and a cyan jewel. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-01.png"
+    },
+    {
+      "id": "p2-02",
+      "subject": "a golden racing chariot wheel with five flame spokes",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden racing chariot wheel with five flame spokes. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-02.png"
+    },
+    {
+      "id": "p2-03",
+      "subject": "a golden robot face split open to reveal three loose gears",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden robot face split open to reveal three loose gears. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-03.png"
+    },
+    {
+      "id": "p2-04",
+      "subject": "two falling golden aircraft silhouettes caught in an anti-aircraft net",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: two falling golden aircraft silhouettes caught in an anti-aircraft net. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-04.png"
+    },
+    {
+      "id": "p2-05",
+      "subject": "three golden infantry spearheads arranged as an assault wedge",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: three golden infantry spearheads arranged as an assault wedge. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-05.png"
+    },
+    {
+      "id": "p2-06",
+      "subject": "a golden command baton resting over a fan of seven differently shaped unit tokens",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden command baton resting over a fan of seven differently shaped unit tokens. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-06.png"
+    },
+    {
+      "id": "p2-07",
+      "subject": "a half-shattered golden hexagonal mosaic, one half intact and one half scattered",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a half-shattered golden hexagonal mosaic, one half intact and one half scattered. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-07.png"
+    },
+    {
+      "id": "p2-08",
+      "subject": "a golden horseshoe magnet pulling an amber pawn into cyan light",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden horseshoe magnet pulling an amber pawn into cyan light. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-08.png"
+    },
+    {
+      "id": "p2-09",
+      "subject": "a golden fortress tower broken into three large sections",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden fortress tower broken into three large sections. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-09.png"
+    },
+    {
+      "id": "p2-10",
+      "subject": "a golden sweeping broom gathering small amber shards",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden sweeping broom gathering small amber shards. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-10.png"
+    },
+    {
+      "id": "p2-11",
+      "subject": "a golden sling shooting a ruby toward a large fallen stone helmet",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden sling shooting a ruby toward a large fallen stone helmet. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-11.png"
+    },
+    {
+      "id": "p2-12",
+      "subject": "an ornate golden hourglass with pale sand and a wide base",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: an ornate golden hourglass with pale sand and a wide base. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-12.png"
+    },
+    {
+      "id": "p2-13",
+      "subject": "a golden pair of linked gaming controllers",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden pair of linked gaming controllers. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-13.png"
+    },
+    {
+      "id": "p2-14",
+      "subject": "a golden handshake between a human gauntlet and a mechanical hand",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden handshake between a human gauntlet and a mechanical hand. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-14.png"
+    },
+    {
+      "id": "p2-15",
+      "subject": "a golden daily planner with a curled page and a cyan wax seal",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden daily planner with a curled page and a cyan wax seal. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-15.png"
+    },
+    {
+      "id": "p2-16",
+      "subject": "a golden pocket watch with a wing on its right side",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden pocket watch with a wing on its right side. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-16.png"
+    },
+    {
+      "id": "p2-17",
+      "subject": "a golden tank hull split by a heavy axe",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden tank hull split by a heavy axe. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-17.png"
+    },
+    {
+      "id": "p2-18",
+      "subject": "two golden ram heads clashing horn to horn",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: two golden ram heads clashing horn to horn. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-18.png"
+    },
+    {
+      "id": "p2-19",
+      "subject": "a golden eagle with wide spread wings and an amber gemstone chest",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden eagle with wide spread wings and an amber gemstone chest. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-19.png"
+    },
+    {
+      "id": "p2-20",
+      "subject": "a golden diving jet nose surrounded by orange flame",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden diving jet nose surrounded by orange flame. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p2-20.png"
+    },
+    {
+      "id": "p3-01",
+      "subject": "a golden mountain peak capped with a cyan pennant",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden mountain peak capped with a cyan pennant. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-01.png"
+    },
+    {
+      "id": "p3-02",
+      "subject": "a golden abacus with ivory beads and an amber end jewel",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden abacus with ivory beads and an amber end jewel. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-02.png"
+    },
+    {
+      "id": "p3-03",
+      "subject": "a golden puzzle piece lifting out of a robotic lock",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden puzzle piece lifting out of a robotic lock. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-03.png"
+    },
+    {
+      "id": "p3-04",
+      "subject": "a braided golden victory knot with five distinct loops",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a braided golden victory knot with five distinct loops. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-04.png"
+    },
+    {
+      "id": "p3-05",
+      "subject": "a golden coffee cup with steam shaped like a fast forward arrow",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden coffee cup with steam shaped like a fast forward arrow. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-05.png"
+    },
+    {
+      "id": "p3-06",
+      "subject": "a golden empty battlefield plinth with a lowered broken enemy flag",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden empty battlefield plinth with a lowered broken enemy flag. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-06.png"
+    },
+    {
+      "id": "p3-07",
+      "subject": "a golden collector display claw holding two different amber pieces",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden collector display claw holding two different amber pieces. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-07.png"
+    },
+    {
+      "id": "p3-08",
+      "subject": "a golden cracked tower with one ruby heart still glowing",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden cracked tower with one ruby heart still glowing. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-08.png"
+    },
+    {
+      "id": "p3-09",
+      "subject": "a golden stationary missile launcher on an anchored pedestal",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden stationary missile launcher on an anchored pedestal. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-09.png"
+    },
+    {
+      "id": "p3-10",
+      "subject": "a golden flaming comet striking a crumbling fortress",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden flaming comet striking a crumbling fortress. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-10.png"
+    },
+    {
+      "id": "p3-11",
+      "subject": "a golden wheelbarrow full of amber armor debris",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden wheelbarrow full of amber armor debris. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-11.png"
+    },
+    {
+      "id": "p3-12",
+      "subject": "a golden little mouse standing proudly on an overturned lion helmet",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden little mouse standing proudly on an overturned lion helmet. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-12.png"
+    },
+    {
+      "id": "p3-13",
+      "subject": "a golden veteran shoulder epaulette with a burgundy tassel",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden veteran shoulder epaulette with a burgundy tassel. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-13.png"
+    },
+    {
+      "id": "p3-14",
+      "subject": "a golden mechanical eye with three concentric iris rings",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden mechanical eye with three concentric iris rings. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-14.png"
+    },
+    {
+      "id": "p3-15",
+      "subject": "a golden sunrise rising behind a page torn from a calendar",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden sunrise rising behind a page torn from a calendar. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-15.png"
+    },
+    {
+      "id": "p3-16",
+      "subject": "a golden duel gauntlet thrown down with a cyan gem on its knuckle",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden duel gauntlet thrown down with a cyan gem on its knuckle. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-16.png"
+    },
+    {
+      "id": "p3-17",
+      "subject": "a golden puppet control cross pulling an amber soldier on strings",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden puppet control cross pulling an amber soldier on strings. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-17.png"
+    },
+    {
+      "id": "p3-18",
+      "subject": "a golden fighter cockpit canopy with five ruby tally stones",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden fighter cockpit canopy with five ruby tally stones. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-18.png"
+    },
+    {
+      "id": "p3-19",
+      "subject": "a golden protective breastplate with a polished cyan heart",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden protective breastplate with a polished cyan heart. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-19.png"
+    },
+    {
+      "id": "p3-20",
+      "subject": "a jagged golden lightning bolt splitting a dark stone",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a jagged golden lightning bolt splitting a dark stone. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p3-20.png"
+    },
+    {
+      "id": "p4-01",
+      "subject": "a golden lion bust with a thick sculpted mane",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden lion bust with a thick sculpted mane. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-01.png"
+    },
+    {
+      "id": "p4-02",
+      "subject": "a golden laurel arch around a rising stairway",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden laurel arch around a rising stairway. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-02.png"
+    },
+    {
+      "id": "p4-03",
+      "subject": "a golden ceremonial chalice with two dragon-shaped handles",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden ceremonial chalice with two dragon-shaped handles. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-03.png"
+    },
+    {
+      "id": "p4-04",
+      "subject": "a golden unbroken ten-link chain in a circular loop",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden unbroken ten-link chain in a circular loop. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-04.png"
+    },
+    {
+      "id": "p4-05",
+      "subject": "a golden winged hourglass tipped diagonally",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden winged hourglass tipped diagonally. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-05.png"
+    },
+    {
+      "id": "p4-06",
+      "subject": "a golden whirlwind carrying away broken amber tiles",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden whirlwind carrying away broken amber tiles. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-06.png"
+    },
+    {
+      "id": "p4-07",
+      "subject": "a lone golden foot soldier standing on a last intact hex tile",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a lone golden foot soldier standing on a last intact hex tile. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-07.png"
+    },
+    {
+      "id": "p4-08",
+      "subject": "a golden phoenix feather rising from a cracked tower brick",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden phoenix feather rising from a cracked tower brick. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-08.png"
+    },
+    {
+      "id": "p4-09",
+      "subject": "a golden chess rook pulled by a hook toward a broken enemy gate",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden chess rook pulled by a hook toward a broken enemy gate. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-09.png"
+    },
+    {
+      "id": "p4-10",
+      "subject": "a golden infantry figure stepping out of an empty rocket casing",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden infantry figure stepping out of an empty rocket casing. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-10.png"
+    },
+    {
+      "id": "p4-11",
+      "subject": "seven golden blades fanned around a central cyan jewel",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: seven golden blades fanned around a central cyan jewel. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-11.png"
+    },
+    {
+      "id": "p4-12",
+      "subject": "a golden shield wall of three overlapping broad shields",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden shield wall of three overlapping broad shields. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-12.png"
+    },
+    {
+      "id": "p4-13",
+      "subject": "a golden armored gauntlet lifting a bucket of broken amber tokens",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden armored gauntlet lifting a bucket of broken amber tokens. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-13.png"
+    },
+    {
+      "id": "p4-14",
+      "subject": "a golden sword piercing a massive overturned crown",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden sword piercing a massive overturned crown. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-14.png"
+    },
+    {
+      "id": "p4-15",
+      "subject": "a golden sun with a circular chain of fifty rays",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden sun with a circular chain of fifty rays. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-15.png"
+    },
+    {
+      "id": "p4-16",
+      "subject": "a golden globe wrapped in cyan network meridians",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden globe wrapped in cyan network meridians. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-16.png"
+    },
+    {
+      "id": "p4-17",
+      "subject": "a golden robot bust facing a human silhouette across a handshake coin",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden robot bust facing a human silhouette across a handshake coin. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-17.png"
+    },
+    {
+      "id": "p4-18",
+      "subject": "a golden javelin with a long winding trail over a distant hex tile",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden javelin with a long winding trail over a distant hex tile. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-18.png"
+    },
+    {
+      "id": "p4-19",
+      "subject": "a golden heart emerging from a deeply cracked fortress foundation",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden heart emerging from a deeply cracked fortress foundation. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-19.png"
+    },
+    {
+      "id": "p4-20",
+      "subject": "a golden crescent moon cradling a rising bright star",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden crescent moon cradling a rising bright star. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p4-20.png"
+    },
+    {
+      "id": "p5-01",
+      "subject": "a golden charging bull head with large sweeping horns",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden charging bull head with large sweeping horns. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-01.png"
+    },
+    {
+      "id": "p5-02",
+      "subject": "a golden robotic skull with shattered gear teeth",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden robotic skull with shattered gear teeth. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-02.png"
+    },
+    {
+      "id": "p5-03",
+      "subject": "a golden gladiator mask with a crimson crest",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden gladiator mask with a crimson crest. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-03.png"
+    },
+    {
+      "id": "p5-04",
+      "subject": "a golden historian scroll unfurling around a magnificent faceted gem",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden historian scroll unfurling around a magnificent faceted gem. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-04.png"
+    },
+    {
+      "id": "p5-05",
+      "subject": "a golden power switch lever crushing a loose robot circuit board",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden power switch lever crushing a loose robot circuit board. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-05.png"
+    },
+    {
+      "id": "p5-06",
+      "subject": "a golden professional signet ring with cyan hexagonal stone",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden professional signet ring with cyan hexagonal stone. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-06.png"
+    },
+    {
+      "id": "p5-07",
+      "subject": "a golden serpent biting its own tail with a row of ruby scales",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden serpent biting its own tail with a row of ruby scales. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-07.png"
+    },
+    {
+      "id": "p5-08",
+      "subject": "a golden stopwatch with a flame-shaped sweep hand",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden stopwatch with a flame-shaped sweep hand. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-08.png"
+    },
+    {
+      "id": "p5-09",
+      "subject": "a golden flawless diamond enclosed in a transparent crystal shield",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden flawless diamond enclosed in a transparent crystal shield. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-09.png"
+    },
+    {
+      "id": "p5-10",
+      "subject": "a golden lone hero helmet crowned by tiny laurel sprigs",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden lone hero helmet crowned by tiny laurel sprigs. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-10.png"
+    },
+    {
+      "id": "p5-11",
+      "subject": "a golden rising phoenix with two amber embers below",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden rising phoenix with two amber embers below. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-11.png"
+    },
+    {
+      "id": "p5-12",
+      "subject": "a golden unstoppable locomotive front breaking a stone barrier",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden unstoppable locomotive front breaking a stone barrier. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-12.png"
+    },
+    {
+      "id": "p5-13",
+      "subject": "a golden family tree whose branches end in small robot faces",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden family tree whose branches end in small robot faces. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-13.png"
+    },
+    {
+      "id": "p5-14",
+      "subject": "a golden military dog tag on a heavy coiled chain",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden military dog tag on a heavy coiled chain. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-14.png"
+    },
+    {
+      "id": "p5-15",
+      "subject": "a golden four-season tree with snow crystal, leaf, blossom and sun branches",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden four-season tree with snow crystal, leaf, blossom and sun branches. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-15.png"
+    },
+    {
+      "id": "p5-16",
+      "subject": "a golden ornate invitation envelope opening to reveal crossed battle standards",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden ornate invitation envelope opening to reveal crossed battle standards. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-16.png"
+    },
+    {
+      "id": "p5-17",
+      "subject": "a golden volcanic crater erupting tiny amber fragments",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden volcanic crater erupting tiny amber fragments. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-17.png"
+    },
+    {
+      "id": "p5-18",
+      "subject": "a golden overflowing cornucopia filled with stars and hex gems",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden overflowing cornucopia filled with stars and hex gems. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-18.png"
+    },
+    {
+      "id": "p5-19",
+      "subject": "a golden legendary winged crown floating over a faceted amber jewel",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden legendary winged crown floating over a faceted amber jewel. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-19.png"
+    },
+    {
+      "id": "p5-20",
+      "subject": "a golden ringed planet with an orbiting miniature hexagonal satellite",
+      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden ringed planet with an orbiting miniature hexagonal satellite. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+      "original": "originals/p5-20.png"
+    }
+  ]
+}

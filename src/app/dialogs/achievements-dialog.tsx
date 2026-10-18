@@ -177,7 +177,7 @@ export function AchievementsDialog() {
           ) : (
             <div className="achievements-empty">
               <AchievementIcon
-                icon={filter === 'pending' ? 'wins-10' : 'first-win'}
+                icon={filter === 'pending' ? 'p2-02' : 'p1-04'}
                 unlocked={filter === 'pending'}
               />
               <h3>{filter === 'pending' ? '¡Vaya colección!' : 'Tu primera hazaña te espera'}</h3>

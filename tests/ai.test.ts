@@ -186,7 +186,7 @@ describe('machine player', () => {
     });
   });
 
-  it('sacrifices the Avión para causar 1 HP a la Fortaleza', () => {
+  it('sacrifices the Caza para causar 1 HP a la Fortaleza', () => {
     const state = createGameState(
       [
         { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: 1 }, hp: 2 },

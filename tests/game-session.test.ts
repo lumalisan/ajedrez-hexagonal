@@ -510,11 +510,11 @@ describe('sesión que conecta React con el juego', () => {
       const piece = before.pieces.find(
         (candidate) => candidate.position.q === 0 && candidate.position.r === -2,
       );
-      if (!piece) throw new Error('La posición de prueba debe contener el soldado central.');
+      if (!piece) throw new Error('La posición de prueba debe contener el asaltador central.');
       const move = getAllLegalActions(before).find(
         (action) => action.pieceId === piece.id && action.kind === 'move',
       );
-      if (!move) throw new Error('El soldado central debe poder moverse.');
+      if (!move) throw new Error('El asaltador central debe poder moverse.');
       session.commands.selectPiece(piece.id);
       if (prepared) session.commands.prepareAction(move);
 

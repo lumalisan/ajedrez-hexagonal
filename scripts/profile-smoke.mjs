@@ -63,6 +63,7 @@ try {
       await page.screenshot({ path: `${screenshotDir}/config-${viewport.width}.png` });
     await page.getByRole('button', { name: 'Cerrar configuración', exact: true }).click();
     await page.locator('[data-home-action="back"]').click();
+    const allArtworkSources = new Set();
     for (const [index, tier] of tiers.entries()) {
       await page.evaluate(
         (progress) => localStorage.setItem('hexagonal:progression:v1', JSON.stringify(progress)),
@@ -123,9 +124,19 @@ try {
       await page.locator(`[data-achievement-tier="${index}"]`).click();
       const symbols = await page
         .locator('[data-achievement-id] .achievement-insignia')
-        .evaluateAll((icons) => icons.map((icon) => icon.innerHTML));
+        .evaluateAll(async (icons) =>
+          Promise.all(
+            icons.map(async (icon) => {
+              await icon.decode();
+              if (icon.naturalWidth !== 512 || icon.naturalHeight !== 400)
+                throw new Error('Achievement art must load at 512×400.');
+              return icon.getAttribute('src');
+            }),
+          ),
+        );
       assert.equal(symbols.length, 20);
       assert.equal(new Set(symbols).size, 20);
+      symbols.forEach((source) => allArtworkSources.add(source));
       if (index === 0 && screenshotDir) {
         await page.screenshot({ path: `${screenshotDir}/achievements-${viewport.width}.png` });
       }
@@ -134,6 +145,7 @@ try {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
     }
+    assert.equal(allArtworkSources.size, 100);
     await page.evaluate(async () => {
       const { createClassicConfig } = await import('/src/game-config.ts');
       const { createMatchRecord, appendAction } = await import('/src/match-record.ts');

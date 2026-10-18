@@ -69,7 +69,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p1-07',
     title: 'Cambio de rumbo',
-    description: 'Cambia la orientación de un soldado sin desplazarte.',
+    description: 'Cambia la orientación de un asaltador sin desplazarte.',
     tier: 0,
     hidden: false,
     modes: ['machine', 'online', 'local'],
@@ -124,7 +124,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p1-12',
     title: 'Con vistas al enemigo',
-    description: 'Quédate sobre una unidad enemiga con un avión.',
+    description: 'Quédate sobre una unidad enemiga con un caza.',
     tier: 0,
     hidden: false,
     modes: ['machine', 'online', 'local'],
@@ -135,7 +135,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p1-13',
     title: '¡Transformación!',
-    description: 'Abandona un vehículo para convertirlo en soldado.',
+    description: 'Convierte un vehículo en asaltador.',
     tier: 0,
     hidden: false,
     modes: ['machine', 'online', 'local'],
@@ -267,7 +267,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p2-05',
     title: 'Triple asalto',
-    description: 'Destruye tres unidades enemigas con soldados en una misma partida.',
+    description: 'Destruye tres unidades enemigas con asaltadores en una misma partida.',
     tier: 1,
     hidden: false,
     modes: ['machine', 'online'],
@@ -633,7 +633,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p3-18',
     title: 'Póker de bajas',
-    description: 'Destruye cinco unidades con un avión en una misma partida.',
+    description: 'Destruye cinco unidades con un caza en una misma partida.',
     tier: 2,
     hidden: true,
     modes: ['machine', 'online'],
@@ -767,7 +767,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
     id: 'p4-10',
     title: 'De la chatarra a la gloria',
     description:
-      'Después de utilizar los dos misiles del lanzamisiles, abandónalo para convertirlo en soldado y destruye la fortaleza enemiga con ese soldado.',
+      'Después de utilizar los dos misiles del lanzamisiles, conviértelo en asaltador y destruye la fortaleza enemiga con ese asaltador.',
     tier: 3,
     hidden: false,
     modes: ['machine', 'online'],

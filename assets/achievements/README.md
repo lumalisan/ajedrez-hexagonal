@@ -1,5 +1,9 @@
 # Ilustraciones de logros
 
+El catálogo de progresión actual utiliza los [100 emblemas hexagonales](hexagonal/README.md).
+Los archivos descritos a continuación pertenecen al catálogo anterior y se conservan para sus
+referencias compatibles.
+
 Colección de 28 ilustraciones cuadradas creadas con la herramienta integrada ImageGen, una generación por logro. El primer emblema (`first-win`) sirve como referencia visual para los otros 27: miniaturas tácticas de latón y esmalte cian, iluminación cálida, base hexagonal y fondo azul oscuro. Cada imagen representa la condición del logro sin texto incrustado.
 
 - `originals/`: PNG originales de la generación, conservados sin modificaciones.

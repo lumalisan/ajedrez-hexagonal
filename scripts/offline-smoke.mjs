@@ -3,7 +3,11 @@ import { resolve } from 'node:path';
 
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
-import { chooseSelectOption, selectedOptionLabel } from './select-helpers.mjs';
+import {
+  INITIAL_LAYOUT_LABELS,
+  chooseSelectOption,
+  selectedOptionLabel,
+} from './select-helpers.mjs';
 
 const candidates =
   process.platform === 'win32'
@@ -39,6 +43,7 @@ try {
     server.config.root,
     server.config.build.outDir,
     'achievements',
+    'hexagonal',
   );
   assert(
     existsSync(achievementDirectory),
@@ -46,8 +51,8 @@ try {
   );
   const achievementImages = readdirSync(achievementDirectory)
     .filter((file) => file.endsWith('.webp'))
-    .map((file) => `/achievements/${file}`);
-  assert(achievementImages.length === 28, 'The build must contain all 28 achievement images.');
+    .map((file) => `/achievements/hexagonal/${file}`);
+  assert(achievementImages.length === 100, 'The build must contain all 100 achievement images.');
   assert(
     builtAssets.some((asset) => asset.endsWith('.js')),
     'The build must contain JavaScript.',
@@ -182,13 +187,13 @@ try {
       })),
     );
   assert(
-    offlineArtwork.length === 28 &&
-      new Set(offlineArtwork.map(({ source }) => source)).size === 28 &&
+    offlineArtwork.length === 20 &&
+      new Set(offlineArtwork.map(({ source }) => source)).size === 20 &&
       offlineArtwork.every(
         ({ source, width, height }) =>
-          achievementImages.includes(source) && width === 512 && width === height,
+          achievementImages.includes(source) && width === 512 && height === 400,
       ),
-    'All 28 achievement images must load at 512×512 on the first collection visit while offline.',
+    'All 20 visible achievement images must load at 512×400 on the first collection visit while offline.',
   );
   await page.keyboard.press('Escape');
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
@@ -198,11 +203,11 @@ try {
   const rulesPreview = page.locator('[data-rules-layout-preview]');
   await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();
   assert(
-    (await rulesPreview.getAttribute('data-layout')) === '1' &&
+    (await rulesPreview.getAttribute('data-layout')) === '3' &&
       (await rulesPreview.getAttribute('data-piece-count')) === '36',
     'The real default deployment must render on the first rules visit while offline.',
   );
-  await chooseSelectOption(page, 'Disposición inicial', 'Frente extendido');
+  await chooseSelectOption(page, 'Disposición inicial', INITIAL_LAYOUT_LABELS[5]);
   assert(
     (await rulesPreview.getAttribute('data-layout')) === '5' &&
       (await rulesPreview.getAttribute('data-piece-count')) === '44',
@@ -213,24 +218,25 @@ try {
   await page.locator('[data-home-action="new"]').click();
   await page.locator('[data-home-mode="local"]').click();
   await chooseSelectOption(page, 'Puntos de vida de la Fortaleza', '3');
-  await chooseSelectOption(page, 'Tiempo por turno', '1 minuto');
+  await chooseSelectOption(page, 'Tiempo por turno', '60 segundos');
   await chooseSelectOption(page, 'Tiempo total', '10 minutos');
   assert(
     (await selectedOptionLabel(page, 'Puntos de vida de la Fortaleza')) === '3' &&
-      (await selectedOptionLabel(page, 'Tiempo por turno')) === '1 minuto' &&
+      (await selectedOptionLabel(page, 'Tiempo por turno')) === '60 segundos' &&
       (await selectedOptionLabel(page, 'Tiempo total')) === '10 minutos',
     'Fortress health and both independent time limits must be selectable offline.',
   );
-  await chooseSelectOption(page, 'Disposición inicial', 'Frente blindado');
+  await chooseSelectOption(page, 'Disposición inicial', INITIAL_LAYOUT_LABELS[5]);
   assert(
-    (await selectedOptionLabel(page, 'Disposición inicial')) === 'Frente blindado',
+    (await selectedOptionLabel(page, 'Disposición inicial')) === INITIAL_LAYOUT_LABELS[5],
     'The layout selector must accept a new value on its first offline visit.',
   );
   assert(
-    (await page.locator('[data-layout-preview]').getAttribute('data-layout')) === '3',
+    (await page.locator('[data-layout-preview]').getAttribute('data-layout')) === '5',
     'The layout preview must update offline.',
   );
   await page.locator('[data-start-free]').click();
+  await page.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
   await page.locator('#game-canvas').waitFor({ state: 'visible' });
   await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
@@ -249,6 +255,7 @@ try {
     (await selectedOptionLabel(page, 'Confirmación de órdenes')) === 'Solo críticas',
     'The confirmation selector must work on the first offline settings visit.',
   );
+  await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
   const savedConfirmation = await page.evaluate(
     () => JSON.parse(localStorage.getItem('atlas-preferences-v2') ?? '{}').confirmation,
   );
@@ -278,7 +285,7 @@ try {
   );
   assert(runtimeErrors.length === 0, `Offline runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    `Offline smoke passed: ${builtAssets.length} generated JS/CSS assets and 28 achievement images precached, collection artwork, live rules layouts and both lazy dialogs opened for the first time offline.`,
+    `Offline smoke passed: ${builtAssets.length} generated JS/CSS assets and 100 achievement images precached, collection artwork, live rules layouts and both lazy dialogs opened for the first time offline.`,
   );
 } catch (error) {
   if (runtimeErrors.length > 0)

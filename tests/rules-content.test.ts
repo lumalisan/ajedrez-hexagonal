@@ -46,10 +46,10 @@ describe('contenido del reglamento', () => {
       'Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
     );
     expect(sharedText).toContain(
-      'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un soldado, este podrá atacarlo.',
+      'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un asaltador, este podrá atacarlo.',
     );
     expect(sharedText).toContain(
-      'el tanque, el lanzamisiles y el embestidor pueden ser abandonados para convertirse en soldados, lo que les permite igualmente atacar al dron en ese mismo turno.',
+      'el tanque, el lanzamisiles y el embestidor pueden convertirse en asaltadores, lo que les permite igualmente atacar al dron en ese mismo turno.',
     );
     expect(sharedText).not.toContain('El vehículo puede abandonarse');
   });
@@ -61,7 +61,7 @@ describe('contenido del reglamento', () => {
     expect(FORTRESS_DAMAGE_PER_HIT).toBe(1);
     expect(FORTRESS_SACRIFICE_ATTACKERS).toEqual(['soldier', 'capturer', 'fast']);
     expect(text).toContain(`Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto`);
-    expect(text).toContain('Soldado, Capturador y Embestidor se sacrifican');
+    expect(text).toContain('Asaltador, Capturador y Embestidor se sacrifican');
     expect(text).toContain('1, 2 o 3 puntos de vida');
   });
 
@@ -86,7 +86,7 @@ describe('contenido del reglamento', () => {
 
     expect(text).toContain('dos capas: suelo y aire');
     expect(text).toContain('máximo una unidad terrestre y una unidad aérea');
-    expect(text).toContain('Tanque, Lanzamisiles y Embestidor pueden ser abandonados');
+    expect(text).toContain('Tanque, Lanzamisiles y Embestidor pueden convertirse en Asaltadores');
     expect(text).toContain('no concede un segundo turno independiente');
   });
 

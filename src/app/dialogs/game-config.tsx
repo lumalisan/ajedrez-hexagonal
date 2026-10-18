@@ -19,7 +19,7 @@ import { Button } from '../components/ui/button';
 import { useGame } from '../game-context';
 
 type MatchClockValue = '' | 300 | 600 | 1200;
-type TurnClockValue = '' | 30 | 60 | 120;
+type TurnClockValue = '' | 30 | 60 | 90;
 
 const FORTRESS_HP_OPTIONS: readonly { value: FortressHp; label: string }[] = [
   { value: 1, label: '1' },
@@ -43,8 +43,8 @@ const MATCH_CLOCK_OPTIONS: readonly { value: MatchClockValue; label: string }[] 
 const TURN_CLOCK_OPTIONS: readonly { value: TurnClockValue; label: string }[] = [
   { value: '', label: 'Sin límite' },
   { value: 30, label: '30 segundos' },
-  { value: 60, label: '1 minuto' },
-  { value: 120, label: '2 minutos' },
+  { value: 60, label: '60 segundos' },
+  { value: 90, label: '90 segundos' },
 ];
 
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {

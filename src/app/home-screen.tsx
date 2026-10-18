@@ -80,7 +80,7 @@ export function HomeScreen() {
                   />
                 </svg>
               </button>
-              <p className="home-intro">Elige cómo quieres disputar la batalla.</p>
+              <p className="home-intro">Elige el modo de juego</p>
               <nav className="home-navigation mode-navigation" aria-label="Tipo de partida">
                 <button
                   type="button"
@@ -231,11 +231,6 @@ export function HomeScreen() {
       </aside>
       <div className="home-utility-actions" aria-label="Accesos rápidos">
         <SoundButton home />
-      </div>
-      <div className="demo-status" aria-hidden="true">
-        <span className="demo-live-dot" />
-        <span>Partida de demostración</span>
-        <strong>IA Cian vs. IA Ámbar</strong>
       </div>
     </section>
   );

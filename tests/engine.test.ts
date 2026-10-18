@@ -211,7 +211,7 @@ describe('geometría y despliegue', () => {
   });
 });
 
-describe('Soldado y apilamientos terrestres', () => {
+describe('Asaltador y apilamientos terrestres', () => {
   it('solo avanza por arco frontal y actualiza orientación', () => {
     const state = base([soldier('soldier', 0, hex(0, 0), 0)]);
     const moves = getLegalActionsForPiece(state, 'soldier').filter(
@@ -279,7 +279,7 @@ describe('Soldado y apilamientos terrestres', () => {
     expect(getPiece(next, 'soldier')?.position).toEqual(hex(0, -1));
   });
 
-  it('puede elegir entre avanzar bajo un Avión enemigo o atacarlo', () => {
+  it('puede elegir entre avanzar bajo un Caza enemigo o atacarlo', () => {
     const state = base([
       soldier('soldier', 0, hex(0, 0), 0),
       { id: 'enemy-airplane', type: 'airplane', owner: 1, position: hex(0, -1), facing: 3 },
@@ -292,7 +292,7 @@ describe('Soldado y apilamientos terrestres', () => {
     const attack = actions.find((action) => action.kind === 'move' && action.targetId);
     expect(quietMove && describeAction(state, quietMove)).toContain('se moverá');
     expect(quietMove && markerKind(state, quietMove)).toBe('move');
-    expect(attack && describeAction(state, attack)).toContain('atacará Avión');
+    expect(attack && describeAction(state, attack)).toContain('atacará Caza');
     expect(attack && markerKind(state, attack)).toBe('capture');
 
     const moved = perform(state, quietMove!);
@@ -325,7 +325,7 @@ describe('Paso terrestre bajo aeronaves', () => {
       label: 'Lanzamisiles',
       piece: { id: 'ground', type: 'long', owner: 0, position: hex(0, 0) } as Piece,
     },
-  ])('$label puede situarse bajo un Avión enemigo, pero no bajo un Dron', ({ piece }) => {
+  ])('$label puede situarse bajo un Caza enemigo, pero no bajo un Dron', ({ piece }) => {
     const airplaneState = base([
       piece,
       { id: 'airplane', type: 'airplane', owner: 1, position: hex(1, 0), facing: 3 },
@@ -358,7 +358,7 @@ describe('Paso terrestre bajo aeronaves', () => {
     },
   );
 
-  it('el Embestidor atraviesa un Avión enemigo sin dañarlo', () => {
+  it('el Embestidor atraviesa un Caza enemigo sin dañarlo', () => {
     const state = base([
       { id: 'fast', type: 'fast', owner: 0, position: hex(0, 0) },
       { id: 'airplane', type: 'airplane', owner: 1, position: hex(1, 0), facing: 3 },
@@ -429,7 +429,7 @@ describe('Capturador', () => {
     );
   });
 
-  it('puede convertir un Dron o un Avión enemigo situado encima', () => {
+  it('puede convertir un Dron o un Caza enemigo situado encima', () => {
     const droneState = base([
       { id: 'capturer', type: 'capturer', owner: 0, position: hex(0, 0) },
       { id: 'air', type: 'drone', owner: 1, position: hex(0, 0) },
@@ -659,7 +659,7 @@ describe('Embestidor y Dron', () => {
     expect(getPiece(next, 'enemy-air')).toBeUndefined();
   });
 
-  it('Dron captura un Avión rival y no puede atravesarlo', () => {
+  it('Dron captura un Caza rival y no puede atravesarlo', () => {
     const state = base([
       { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
       { id: 'airplane', type: 'airplane', owner: 1, position: hex(2, 0), facing: 3 },
@@ -706,7 +706,7 @@ describe('Embestidor y Dron', () => {
   });
 });
 
-describe('Avión', () => {
+describe('Caza', () => {
   it('distingue la orientación al registrar posiciones para triple repetición', () => {
     const north = base([
       { id: 'airplane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 0 },
@@ -882,7 +882,7 @@ describe('Avión', () => {
     expect(result.events.some((event) => event.type === 'intercept')).toBe(true);
   });
 
-  it('un Avión aliado bloquea el paso y el aterrizaje de los Drones', () => {
+  it('un Caza aliado bloquea el paso y el aterrizaje de los Drones', () => {
     const state = base([
       { id: 'drone', type: 'drone', owner: 0, position: hex(0, 0) },
       { id: 'airplane', type: 'airplane', owner: 0, position: hex(1, 0), facing: 3 },
@@ -898,7 +898,7 @@ describe('Avión', () => {
 
 describe('Escudo antiaéreo', () => {
   it.each([hex(2, 0), hex(1, 1)])(
-    'permite ordenar el vuelo del Avión más allá de la primera intercepción (%j)',
+    'permite ordenar el vuelo del Caza más allá de la primera intercepción (%j)',
     (shield) => {
       const state = base([
         { id: 'plane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 2 },
@@ -933,7 +933,7 @@ describe('Escudo antiaéreo', () => {
     },
   );
 
-  it.each([0, 1] as const)('mantiene el bloqueo aéreo del Avión con propietario %s', (owner) => {
+  it.each([0, 1] as const)('mantiene el bloqueo aéreo del Caza con propietario %s', (owner) => {
     const state = base([
       { id: 'plane', type: 'airplane', owner: 0, position: hex(0, 0), facing: 2 },
       { id: 'aa', type: 'antiAir', owner: 1, position: hex(2, 0) },
@@ -1039,7 +1039,7 @@ describe('Escudo antiaéreo', () => {
     expect(getLegalActionsForPiece(state, 'aa')).toEqual([]);
   });
 
-  it('solo Soldado y Embestidor lo destruyen por ocupación; Capturador lo convierte', () => {
+  it('solo Asaltador y Embestidor lo destruyen por ocupación; Capturador lo convierte', () => {
     const soldierState = base([
       soldier('soldier', 0, hex(0, 0), 0),
       { id: 'aa', type: 'antiAir', owner: 1, position: hex(0, -1) },
@@ -1071,7 +1071,7 @@ describe('Escudo antiaéreo', () => {
 });
 
 describe('Fortaleza, transformación y finales', () => {
-  it('Soldado causa 1 HP a Fortaleza y se sacrifica', () => {
+  it('Asaltador causa 1 HP a Fortaleza y se sacrifica', () => {
     const state = base([
       fortress('fort-amber-close', 1, hex(0, -1)),
       soldier('soldier', 0, hex(0, 0), 0),
@@ -1213,7 +1213,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(next.outcome).toEqual({ type: 'win', winner: 0, reason: 'fortress' });
   });
 
-  it('tanque se transforma y mueve como Soldado en el mismo turno', () => {
+  it('tanque se transforma y mueve como Asaltador en el mismo turno', () => {
     const state = base([
       { id: 'medium', type: 'medium', owner: 0, position: hex(0, 0), cannon: 3 },
     ]);
@@ -1229,7 +1229,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(transformed?.type).toBe('soldier');
     expect(transformed?.position).toEqual(hex(0, -1));
     if (transformed?.type === 'soldier') expect(transformed.facing).toBe(0);
-    expect(next.history[0].text).toContain('Tanque fue abandonado; el Soldado avanzó');
+    expect(next.history[0].text).toContain('Tanque se convirtió en Asaltador; el Asaltador avanzó');
     expect(getPiece(state, 'medium')?.type).toBe('medium');
   });
 
@@ -1240,7 +1240,7 @@ describe('Fortaleza, transformación y finales', () => {
   ] as const)('abandono de $name para contraatacar', ({ type, name }) => {
     it.each([
       { type: 'drone', name: 'Dron' },
-      { type: 'airplane', name: 'Avión' },
+      { type: 'airplane', name: 'Caza' },
     ] as const)('identifica al $name superior en la orden y el historial', (target) => {
       const vehicle: Piece =
         type === 'medium'
@@ -1259,13 +1259,13 @@ describe('Fortaleza, transformación y finales', () => {
         (candidate) => candidate.facing === 0 && candidate.attackAboveId === 'air',
       );
       expect(describeAction(state, action)).toBe(
-        `${name} será abandonado; el Soldado atacará al ${target.name} superior`,
+        `${name} se convertirá en Asaltador; el Asaltador atacará al ${target.name} superior`,
       );
       const next = perform(state, action);
       expect(getPiece(next, 'air')).toBeUndefined();
       expect(getPiece(next, 'vehicle')?.type).toBe('soldier');
       expect(next.history[0].text).toContain(
-        `${name} fue abandonado; el Soldado neutralizó al ${target.name} superior`,
+        `${name} se convirtió en Asaltador; el Asaltador neutralizó al ${target.name} superior`,
       );
     });
   });
@@ -1362,7 +1362,7 @@ describe('Fortaleza, transformación y finales', () => {
     expect(result.events).toContainEqual({ type: 'draw' });
   });
 
-  it('conserva el turno rival aunque su única orden disponible sea girar un Soldado', () => {
+  it('conserva el turno rival aunque su única orden disponible sea girar un Asaltador', () => {
     const state = base([
       soldier('blue-soldier', 0, hex(0, 0), 0),
       { id: 'amber-aa', type: 'antiAir', owner: 1, position: hex(4, 0) },

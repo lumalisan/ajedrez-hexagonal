@@ -484,6 +484,9 @@
 .achievement-notification .achievement-icon {
   width: 66px;
 }
+.achievement-notification .achievement-insignia {
+  width: 84px;
+}
 
 .achievement-notification-copy {
   min-width: 0;
@@ -811,11 +814,14 @@
 }
 .achievement-art {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   width: 100%;
-  min-height: 72px;
+  min-height: 140px;
 }
 .achievements-browser .achievement-icon {
-  width: 64px;
+  width: min(100%, 144px);
   margin-inline: auto;
 }
 .achievements-browser .achievement-description {
@@ -843,12 +849,11 @@
   min-width: 0;
 }
 .achievements-browser .achievement-modes {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
   margin: 0;
-  gap: 0;
-  flex-direction: column;
+  gap: 2px;
+  flex-direction: row;
+  justify-content: center;
 }
 .achievement-mode button {
   display: grid;
@@ -984,17 +989,23 @@
     height: 32px;
   }
   .achievement-art {
-    min-height: 96px;
+    min-height: 148px;
   }
 }
 @media (max-height: 500px) {
   .achievements-browser {
     height: auto;
   }
+  .achievement-art {
+    min-height: 108px;
+  }
+  .achievements-browser .achievement-icon {
+    width: min(100%, 104px);
+  }
 }
 .achievements-browser .achievement-modes {
   width: 100%;
-  align-items: flex-end;
+  align-items: center;
   pointer-events: none;
 }
 .achievement-mode button,
@@ -1002,7 +1013,10 @@
   pointer-events: auto;
 }
 .achievement-mode > [role='tooltip'] {
-  max-width: calc(100% - 28px);
+  top: auto;
+  bottom: calc(100% + 4px);
+  right: 0;
+  max-width: 100%;
 }
 .achievements-profile .progression-summary progress {
   display: block;
@@ -1181,49 +1195,14 @@
 }
 
 .achievement-insignia {
-  --insignia-accent: var(--move);
-  color: var(--text);
   background: none;
   border-radius: 0;
-}
-.achievement-insignia[data-tier='2'] {
-  --insignia-accent: var(--blue);
-}
-.achievement-insignia[data-tier='3'] {
-  --insignia-accent: var(--convert);
-}
-.achievement-insignia[data-tier='4'],
-.achievement-insignia[data-tier='5'] {
-  --insignia-accent: var(--amber);
-}
-.insignia-plate {
-  fill: var(--surface-2);
-  stroke: var(--line-strong);
-}
-.insignia-rim,
-.insignia-divider {
-  fill: none;
-  stroke: var(--insignia-accent);
-  stroke-opacity: 0.45;
-}
-.insignia-motif {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-}
-.insignia-legend {
-  fill: currentColor;
-  font: 600 4.5px var(--font-display);
-  letter-spacing: 0.15px;
-}
-.insignia-rank {
-  stroke: var(--insignia-accent);
-  stroke-width: 2;
+  aspect-ratio: 512 / 400;
+  object-fit: contain;
 }
 .achievement-insignia.is-locked {
-  color: var(--muted);
-  filter: none;
-  --insignia-accent: var(--muted);
+  filter: saturate(0.45) brightness(0.85);
+}
+.high-contrast .achievement-insignia.is-locked {
+  filter: saturate(0.45);
 }

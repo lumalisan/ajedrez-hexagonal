@@ -94,15 +94,15 @@ export const BASIC_SCENARIOS: ScenarioDefinition[] = [
   scenario(
     'movement',
     '1 · Movimiento y orientación',
-    'Mueve el Soldado hacia su arco frontal.',
+    'Mueve el Asaltador hacia su arco frontal.',
     [soldier('academy-soldier', 0, 0, 0, 0)],
     { kind: 'perform-action', actionKind: 'move', pieceId: 'academy-soldier' },
     [
-      'Selecciona el Soldado situado en el centro.',
+      'Selecciona el Asaltador situado en el centro.',
       'Las tres marcas verdes señalan las casillas de su arco frontal.',
-      'Elige una marca y confirma la orden. Al moverse, el Soldado queda orientado hacia el destino.',
+      'Elige una marca y confirma la orden. Al moverse, el Asaltador queda orientado hacia el destino.',
     ],
-    'Has movido y reorientado el Soldado: cada avance también prepara su siguiente arco.',
+    'Has movido y reorientado el Asaltador: cada avance también prepara su siguiente arco.',
     {
       category: 'basic',
       difficulty: 1,
@@ -122,7 +122,7 @@ export const BASIC_SCENARIOS: ScenarioDefinition[] = [
     [
       'Selecciona el Capturador del centro.',
       'La red sobre la unidad rival señala una conversión, no un movimiento.',
-      'Elige al Soldado rival y confirma: cambiará de bando sin que el Capturador se desplace.',
+      'Elige al Asaltador rival y confirma: cambiará de bando sin que el Capturador se desplace.',
     ],
     'Conversión completada: has cambiado material y control sin ceder la casilla del Capturador.',
     {
@@ -166,7 +166,7 @@ export const BASIC_SCENARIOS: ScenarioDefinition[] = [
     [
       'Selecciona el Lanzamisiles.',
       'Solo puede disparar a exactamente tres hexágonos, aunque haya casillas vacías entre medias.',
-      'Elige el marcador rosa sobre el Soldado rival y confirma.',
+      'Elige el marcador rosa sobre el Asaltador rival y confirma.',
     ],
     'Has dominado el alcance exacto: la distancia correcta convierte espacio vacío en presión.',
     {
@@ -188,7 +188,7 @@ export const BASIC_SCENARIOS: ScenarioDefinition[] = [
     [
       'Selecciona el Dron situado al sur.',
       'Los Drones vuelan hasta tres casillas y pueden pasar sobre unidades terrestres.',
-      'Muévelo a la casilla de tu Soldado: ambos quedarán apilados en capas distintas.',
+      'Muévelo a la casilla de tu Asaltador: ambos quedarán apilados en capas distintas.',
     ],
     'Apilamiento completado: dos capas comparten espacio, pero conservan amenazas distintas.',
     {
@@ -221,16 +221,16 @@ export const BASIC_SCENARIOS: ScenarioDefinition[] = [
   ),
   scenario(
     'transform',
-    '7 · Abandono de vehículo',
-    'Convierte el Embestidor en Soldado.',
+    '7 · Conversión en asaltador',
+    'Convierte el Embestidor en Asaltador.',
     [{ id: 'academy-fast', type: 'fast', owner: 0, position: { q: 0, r: 0 } }],
     { kind: 'perform-action', actionKind: 'transform', pieceId: 'academy-fast' },
     [
       'Selecciona el Embestidor.',
-      'Pulsa Transformar: abandonar el Embestidor es permanente.',
-      'Elige la orientación del nuevo Soldado y confirma.',
+      'Pulsa «Convertir en asaltador»: la conversión del Embestidor es permanente.',
+      'Elige la orientación del nuevo Asaltador y confirma.',
     ],
-    'La tripulación continúa como Soldado: has cambiado potencia por acceso y orientación.',
+    'El Embestidor se ha convertido en Asaltador: has cambiado potencia por acceso y orientación.',
     {
       category: 'basic',
       difficulty: 1,
@@ -245,8 +245,8 @@ export const BASIC_SCENARIOS: ScenarioDefinition[] = [
     [soldier('academy-assault', 0, 4, 0, 1)],
     { kind: 'damage-fortress', owner: 1 },
     [
-      'Selecciona el Soldado situado junto a la Fortaleza rival.',
-      'El ataque causará 1 HP de daño y sacrificará al Soldado.',
+      'Selecciona el Asaltador situado junto a la Fortaleza rival.',
+      'El ataque causará 1 HP de daño y sacrificará al Asaltador.',
       'Elige la Fortaleza y confirma para completar el asalto.',
     ],
     'Asalto completado: el intercambio es correcto porque el objetivo estratégico decide la partida.',
@@ -390,7 +390,7 @@ export const STRATEGIC_SCENARIOS: ScenarioDefinition[] = [
     { kind: 'reach', pieceId: 'reach-scout', target: { q: 0, r: -2 } },
     [
       'El punto de extracción está dos hexágonos al norte.',
-      'El Soldado solo avanza dentro de su arco frontal.',
+      'El Asaltador solo avanza dentro de su arco frontal.',
       'Cada movimiento conserva o cambia su orientación según el destino; encadena dos avances al norte.',
     ],
     'Extracción completada: planificaste orientación y ruta como una sola decisión.',

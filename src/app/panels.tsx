@@ -460,7 +460,7 @@ function ActionChoice({ action, index }: { action: GameAction; index: number }) 
   ) {
     const attack = target?.id === occupancy.air.id;
     label = attack ? 'ATAQUE' : 'MOVIMIENTO';
-    detail = attack ? 'Destruir Avión' : 'Quedar bajo Avión';
+    detail = attack ? 'Destruir Caza' : 'Quedar bajo Caza';
   } else if (action.kind === 'shoot') {
     label = 'DISPARO';
     detail = `Atacar ${target ? PIECE_NAMES[target.type] : 'objetivo'}`;
@@ -590,7 +590,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
     );
     return (
       <DirectionPanel
-        title="Abandonar vehículo"
+        title="Convertir en asaltador"
         current={null}
         selected={mode.facing}
         dataName="transform-facing"
@@ -707,7 +707,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
           data-tutorial-highlight={guided && modeAllowed('transform') ? true : undefined}
           onClick={() => commands.setMode({ kind: 'transform', facing: null })}
         >
-          Abandonar vehículo
+          Convertir en asaltador
         </button>
       )}
     </div>
@@ -755,7 +755,7 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
             <p className="transform-warning">
               <WarningIcon className="transform-warning-icon" />
               <span>
-                Para realizar un desplazamiento o ataque como soldado en este mismo turno,
+                Para realizar un desplazamiento o ataque como asaltador en este mismo turno,
                 selecciona la casilla de destino antes de confirmar
               </span>
             </p>
