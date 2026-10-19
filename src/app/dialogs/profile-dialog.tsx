@@ -5,6 +5,7 @@ import { useGame } from '../game-context';
 import { ProfileAvatar } from '../components/profile-avatar';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { plainTabClassName } from '../components/ui/tabs';
 import { PROGRESSION_ACHIEVEMENTS, levelProgress, TIERS } from '../../progression';
 import { playerRecords, playerStatistics } from '../../profile-statistics';
 import { ProgressionSummary } from '../components/progression-summary';
@@ -46,7 +47,6 @@ function ProfileSettings() {
         if (draft.name.trim()) commands.updateProfile(draft);
       }}
     >
-      <h3>Configuración</h3>
       <p>Elige cómo quieres aparecer en Hexfortia.</p>
       <div className="profile-preview">
         <ProfileAvatar profile={draft} />
@@ -232,7 +232,7 @@ export function ProfileDialog() {
                     aria-selected={tab === item.id}
                     aria-controls={`profile-panel-${item.id}`}
                     tabIndex={tab === item.id ? 0 : -1}
-                    className="min-h-11 cursor-pointer rounded-control border border-transparent bg-transparent px-3 py-2 font-ui text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan aria-selected:border-line-strong aria-selected:bg-panel-raised aria-selected:text-ink"
+                    className={plainTabClassName}
                     onClick={() => setTab(item.id)}
                     onKeyDown={(event) => {
                       let next = index;

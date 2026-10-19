@@ -97,6 +97,10 @@ try {
       await page.locator('[data-home-action="rules"]').click();
       await page.locator('#rules-article').waitFor({ state: 'visible' });
       await audit('rules manual');
+      await page.locator('[data-rule-section="soldado"]').click();
+      await page.locator('#rules-article summary').press('Enter');
+      await page.locator('#rules-article details img').evaluate((image) => image.decode());
+      await audit('rules / official machine reference');
       await page.locator('[data-rule-section="desarrollo"]').click();
       await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();
       await audit('rules / live initial deployment');

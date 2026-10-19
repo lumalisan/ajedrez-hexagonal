@@ -3,7 +3,8 @@ import { rankingSummary } from '../../progression';
 import { useGame } from '../game-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { DialogClose } from '../components/dialog-close';
-import { Button } from '../components/ui/button';
+import { ProfileAvatar } from '../components/profile-avatar';
+import { ProgressionSummary } from '../components/progression-summary';
 
 export function RankingDialog() {
   const { snapshot, commands } = useGame();
@@ -40,11 +41,19 @@ export function RankingDialog() {
             </div>
           ))}
         </nav>
-        <p className="achievements-sidebar-note">Resultados del perfil de este navegador.</p>
+        <p className="achievements-sidebar-note">Tu progreso se guarda en este navegador.</p>
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
-          <h3 className="m-0 flex-1">{mode === 'online' ? 'En línea' : 'Vs. Hexfortia'}</h3>
+          <button
+            type="button"
+            className="achievements-player profile-link"
+            onClick={() => commands.openDialog({ kind: 'profile' })}
+          >
+            <ProfileAvatar profile={snapshot.profile} />
+            <strong>{snapshot.profile.name}</strong>
+          </button>
+          <ProgressionSummary showActivity={false} />
           <DialogClose label="Cerrar clasificación" />
         </header>
         <Tabs
@@ -53,11 +62,15 @@ export function RankingDialog() {
           className="ranking-periods"
         >
           <TabsList
-            className="achievements-toolbar flex gap-2"
+            className="achievements-toolbar flex flex-wrap gap-1"
             aria-label="Periodo de clasificación"
           >
-            <TabsTrigger value="month">Mensual</TabsTrigger>
-            <TabsTrigger value="all">Histórica</TabsTrigger>
+            <TabsTrigger value="month" variant="plain">
+              Mensual
+            </TabsTrigger>
+            <TabsTrigger value="all" variant="plain">
+              Histórica
+            </TabsTrigger>
           </TabsList>
           <TabsContent key={period} value={period} className="achievements-list ranking-content">
             {mode === 'online' ? (
@@ -117,30 +130,10 @@ export function RankingDialog() {
                     </tbody>
                   </table>
                 </div>
-                <p className="ranking-scroll-hint">Desliza la tabla para ver todas las columnas.</p>
-                <p>
-                  Hexfortia equivale a 600 puntos en Fácil, 1000 en Medio, 1400 en Difícil y 1800 en
-                  Experto. Neuronal comparte provisionalmente la valoración y las recompensas de
-                  Experto. El factor de ajuste disminuye a medida que juegas.
-                </p>
-                {period === 'month' && (
-                  <p>
-                    La puntuación mensual se calcula desde 1000 con las partidas de los últimos 30
-                    días naturales.
-                  </p>
-                )}
-                <p>
-                  La clasificación mundial y los logros TOP requieren perfiles conectados. Las
-                  partidas locales no tienen Elo.
-                </p>
               </>
             )}
           </TabsContent>
         </Tabs>
-        <footer className="achievements-footer">
-          <span>Tu progreso se guarda en este navegador.</span>
-          <Button onClick={commands.closeDialog}>Volver</Button>
-        </footer>
       </div>
     </section>
   );

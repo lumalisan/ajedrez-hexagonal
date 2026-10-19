@@ -53,6 +53,11 @@ try {
     .filter((file) => file.endsWith('.webp'))
     .map((file) => `/achievements/hexagonal/${file}`);
   assert(achievementImages.length === 100, 'The build must contain all 100 achievement images.');
+  const unitDirectory = resolve(server.config.root, server.config.build.outDir, 'units');
+  const unitImages = readdirSync(unitDirectory)
+    .filter((file) => file.endsWith('.webp'))
+    .map((file) => `/units/${file}`);
+  assert(unitImages.length === 9, 'The build must contain all nine official unit references.');
   assert(
     builtAssets.some((asset) => asset.endsWith('.js')),
     'The build must contain JavaScript.',
@@ -159,6 +164,11 @@ try {
   );
 
   offline = true;
+  const missingUnitImages = unitImages.filter((asset) => !cachedAssets.paths.includes(asset));
+  assert(
+    missingUnitImages.length === 0,
+    `All unit references must be precached before the manual is opened: ${missingUnitImages.join(', ')}`,
+  );
   await context.setOffline(true);
   const reload = await page.reload({ waitUntil: 'networkidle' });
   assert(
@@ -208,6 +218,15 @@ try {
   await page.locator('#game-dialog').waitFor({ state: 'hidden' });
 
   await page.locator('[data-home-action="rules"]').click();
+  await page.locator('[data-rule-section="soldado"]').click();
+  await page.locator('#rules-article summary').press('Enter');
+  await page.locator('#rules-article details img').evaluate((image) => image.decode());
+  assert(
+    (await page.locator('#rules-article details img').getAttribute('src'))?.endsWith(
+      '/units/soldier.webp',
+    ),
+    'The official Asaltador reference must open for the first time while offline.',
+  );
   await page.locator('[data-rule-section="desarrollo"]').click();
   const rulesPreview = page.locator('[data-rules-layout-preview]');
   await page.locator('[data-rules-layout-preview][data-renderer-status="ready"]').waitFor();

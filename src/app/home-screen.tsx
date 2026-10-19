@@ -44,7 +44,7 @@ export function HomeScreen() {
         <div className="home-brand">
           <img src="/atlas-mark.svg" alt="" width="58" height="58" />
           <div>
-            <span>ESTRATEGIA HEXAGONAL</span>
+            <span>JUEGO DE ESTRATEGIA HEXAGONAL</span>
             <h1>Hexfortia</h1>
           </div>
         </div>
@@ -186,19 +186,19 @@ export function HomeScreen() {
                   <MenuIcon kind="ranking" />
                   <span>Clasificación</span>
                 </button>
-                <button
-                  type="button"
-                  className="home-shortcut home-shortcut-story"
-                  data-home-action="story"
-                  onClick={() => commands.openDialog({ kind: 'story' })}
-                >
-                  <MenuIcon kind="dilemma" />
-                  <span>El dilema de Hexfortia</span>
-                </button>
               </nav>
             </>
           )}
         </div>
+        <button
+          type="button"
+          className="home-shortcut home-shortcut-story"
+          data-home-action="story"
+          onClick={() => commands.openDialog({ kind: 'story' })}
+        >
+          <MenuIcon kind="dilemma" />
+          <span>El dilema de Hexfortia</span>
+        </button>
         <button
           type="button"
           className="home-profile"

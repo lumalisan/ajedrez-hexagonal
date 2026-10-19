@@ -25,8 +25,8 @@ const browser = await chromium.launch({ executablePath, headless: true });
 let bytes = 0;
 try {
   const page = await browser.newPage();
-  for (const { id } of images) {
-    const source = await readFile(new URL(`originals/${id}.png`, root));
+  for (const { id, original } of images) {
+    const source = await readFile(new URL(original, root));
     const encoded = await page.evaluate(async (base64) => {
       const image = new Image();
       image.src = `data:image/png;base64,${base64}`;

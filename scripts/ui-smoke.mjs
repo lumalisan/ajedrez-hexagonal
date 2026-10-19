@@ -225,6 +225,18 @@ try {
     }
     await page.locator('[data-home-action="new"]').click();
     assert(
+      await page.locator('[data-home-action="story"]').isVisible(),
+      'The story must remain available when navigating to the new-match menu.',
+    );
+    const storyBox = await page.locator('[data-home-action="story"]').boundingBox();
+    const profileBox = await page.locator('.home-profile').boundingBox();
+    assert(
+      storyBox && profileBox && storyBox.y + storyBox.height <= profileBox.y,
+      'The persistent story button must appear immediately above the profile.',
+    );
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({ path: process.env.UI_SCREENSHOT + '-new-menu-' + mode + '.png' });
+    assert(
       (await page.locator('.home-intro').textContent()) === 'Elige el modo de juego.',
       'The new match menu must use the requested introduction.',
     );
@@ -680,6 +692,7 @@ try {
     'Rules must preserve the document emphasis and justified alignment.',
   );
 
+  await assertUnitReferences(desktop);
   await desktop.locator('[data-rule-section="fortaleza"]').click();
   assert(
     await desktop.locator('#rules-article').evaluate((article) => {
@@ -1302,7 +1315,7 @@ try {
   await cannonPage.locator('[data-transform-facing="3"]').click();
   assert(
     (await cannonPage.locator('.transform-warning').textContent()) ===
-      'Para realizar un desplazamiento o ataque como asaltador en este mismo turno, selecciona la casilla de destino antes de confirmar' &&
+      'Para realizar un desplazamiento o ataque como asaltador en este mismo turno, selecciona la casilla de destino antes de confirmar.' &&
       (await cannonPage.locator('.consequence-lens').count()) === 0,
     'A stationary transformation must show the destination reminder without the consequence card.',
   );
@@ -1711,6 +1724,7 @@ try {
     await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT}-mobile-home.png` });
   await assertAchievementsCatalog(mobile, 'Mobile');
   await mobile.locator('[data-home-action="rules"]').click();
+  await assertUnitReferences(mobile);
   await assertRulesLayouts(mobile, 'mobile');
   await mobile.locator('.rules-close').click();
   await selectMode(mobile, 'local');
@@ -2345,6 +2359,11 @@ try {
     await page.locator('[data-transform-facing="2"]').click();
     const attack = page.locator('[data-transform-attack]');
     assert(await attack.isVisible(), 'Selecting a direction must reveal the attack-above button.');
+    assert(
+      (await page.locator('.transform-warning').textContent()) ===
+        'Para realizar un desplazamiento o ataque como asaltador en este mismo turno, selecciona la casilla de destino o utiliza la opción «Atacar aeronave superior» antes de confirmar.',
+      'A transformation under an enemy aircraft must explain the attack-above option.',
+    );
     const attackBox = await attack.boundingBox();
     const compassBox = await page.locator('.direction-section .hex-compass').boundingBox();
     assert(
@@ -2936,6 +2955,47 @@ async function assertSelectMenuWithinViewport(page, label) {
     targets.length > 0 && targets.every(({ width, height }) => width >= 44 && height >= 44),
     `${label} must offer 44px touch targets: ${JSON.stringify(targets)}.`,
   );
+}
+
+async function assertUnitReferences(page) {
+  let count = 0;
+  for (const section of [
+    'soldado',
+    'capturador',
+    'tanque',
+    'lanzamisiles',
+    'embestidor',
+    'dron',
+    'avion',
+    'fortaleza',
+  ]) {
+    await page.locator(`[data-rule-section="${section}"]`).click();
+    const details = page.locator('#rules-article details');
+    for (let index = 0; index < (await details.count()); index++) {
+      const reference = details.nth(index);
+      await reference.locator('summary').focus();
+      await reference.locator('summary').press('Enter');
+      const image = reference.locator('img');
+      await image.scrollIntoViewIfNeeded();
+      await image.evaluate((node) => node.decode());
+      assert(
+        await image.evaluate((node) => {
+          const rect = node.getBoundingClientRect();
+          return (
+            node.naturalWidth > 0 &&
+            Boolean(node.alt) &&
+            rect.width > 0 &&
+            rect.left >= 0 &&
+            rect.right <= window.innerWidth
+          );
+        }),
+        `The ${section} reference must load with accessible text and fit the viewport.`,
+      );
+      await reference.locator('summary').press('Enter');
+      count++;
+    }
+  }
+  assert(count === 9, 'The manual must expose all nine official machine references.');
 }
 
 function watchErrors(page, errors) {

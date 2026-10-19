@@ -20,6 +20,10 @@ function offlinePrecache(): Plugin {
         .filter((fileName) => fileName.endsWith('.webp'))
         .map((fileName) => fileName.replaceAll('\\', '/'))
         .sort();
+      const unitDirectory = new URL('./public/units/', import.meta.url);
+      const unitImages = (await readdir(unitDirectory))
+        .filter((fileName) => fileName.endsWith('.webp'))
+        .sort();
       const hash = createHash('sha256').update(template);
       for (const asset of assets) {
         hash.update(asset.fileName);
@@ -28,6 +32,10 @@ function offlinePrecache(): Plugin {
       for (const fileName of achievementImages) {
         hash.update(fileName);
         hash.update(await readFile(new URL(fileName, achievementDirectory)));
+      }
+      for (const fileName of unitImages) {
+        hash.update(`units/${fileName}`);
+        hash.update(await readFile(new URL(fileName, unitDirectory)));
       }
       this.emitFile({
         type: 'asset',
@@ -39,6 +47,7 @@ function offlinePrecache(): Plugin {
             JSON.stringify([
               ...assets.map((asset) => `/${asset.fileName}`),
               ...achievementImages.map((fileName) => `/achievements/${fileName}`),
+              ...unitImages.map((fileName) => `/units/${fileName}`),
             ]),
           ),
       });

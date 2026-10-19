@@ -764,7 +764,15 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
               <WarningIcon className="transform-warning-icon" />
               <span>
                 Para realizar un desplazamiento o ataque como asaltador en este mismo turno,
-                selecciona la casilla de destino antes de confirmar
+                selecciona la casilla de destino
+                {legalActions.some(
+                  (candidate) =>
+                    candidate.kind === 'transform' &&
+                    candidate.facing === action.facing &&
+                    !candidate.to &&
+                    Boolean(candidate.attackAboveId),
+                ) && ' o utiliza la opción «Atacar aeronave superior»'}{' '}
+                antes de confirmar.
               </span>
             </p>
           )}

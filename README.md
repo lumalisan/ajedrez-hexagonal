@@ -2,6 +2,10 @@
 
 Juego táctico 2D para dos jugadores en tablero hexagonal. La interfaz utiliza React, TypeScript estricto y Vite; el tablero se representa con PixiJS 8 (WebGL, con respaldo Canvas). Las reglas se describen en `docs/especificacion_juego_hexagonal.md`.
 
+Los ejércitos están formados por máquinas controladas a distancia por humanos o por
+Hexfortia. Los [diseños oficiales de las nueve unidades](assets/units/README.md)
+pueden consultarse también en el manual del juego.
+
 ## Ejecutar
 
 El gestor de paquetes del proyecto es **pnpm**. La versión está fijada en el campo `packageManager` de `package.json`; las instrucciones para trabajar en el repositorio están en [AGENTS.md](AGENTS.md).

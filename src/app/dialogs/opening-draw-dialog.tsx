@@ -20,7 +20,7 @@ export function OpeningDrawDialog({ player }: { player: Player }) {
       <div
         className="opening-coin"
         data-revealed={revealed}
-        style={{ color: participantColor(participant, player) }}
+        style={{ color: revealed ? participantColor(participant, player) : 'var(--text)' }}
         aria-hidden="true"
       >
         ⬡
@@ -35,7 +35,6 @@ export function OpeningDrawDialog({ player }: { player: Player }) {
           <p>Sorteando…</p>
         )}
       </div>
-      <p>Ambos jugadores tienen la misma probabilidad de empezar.</p>
       <Button variant="primary" disabled={!revealed} onClick={commands.finishOpeningDraw}>
         Comenzar partida
       </Button>

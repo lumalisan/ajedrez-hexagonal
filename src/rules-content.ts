@@ -31,7 +31,7 @@ export const RULE_SECTIONS: RuleSection[] = [
     label: 'DESCRIPCIÓN DEL JUEGO',
     title: 'Descripción del juego',
     paragraphs: [
-      'Hexfortia es un juego de estrategia para dos jugadores en el que cada uno dirige un ejército con el objetivo de destruir la fortaleza enemiga.',
+      'Hexfortia es un juego de estrategia para dos jugadores en el que cada uno dirige a distancia un ejército de máquinas con el objetivo de destruir la fortaleza enemiga. Todas las unidades son máquinas: no hay personas en el campo de batalla. Quien las controla puede ser un humano o la IA Hexfortia.',
       'Cada jugador dispone de un conjunto de unidades con habilidades y funciones muy diferentes. La victoria dependerá de saber combinarlas, proteger las más valiosas y aprovechar las debilidades del rival.',
       'Los jugadores realizan sus turnos de forma alterna. En cada turno, el jugador activo podrá realizar una única acción con una de sus unidades, como desplazarse, atacar, disparar, girarse o utilizar una habilidad especial, según las características de dicha unidad.',
     ],

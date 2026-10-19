@@ -15,6 +15,7 @@ import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
 import { Input } from '../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { RULE_UNIT_APPEARANCES, UNIT_APPEARANCE } from '../../unit-appearance';
 
 const HORIZONTAL_RULE_TABS = '(max-width: 760px) and (orientation: portrait)';
 const LAYOUT_OPTIONS = MATCH_INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
@@ -27,7 +28,7 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
   const [horizontal, setHorizontal] = useState(
     () => window.matchMedia(HORIZONTAL_RULE_TABS).matches,
   );
-  const articleRef = useRef<HTMLElement>(null);
+  const articleRef = useRef<HTMLDivElement>(null);
   const focusArticleRef = useRef(false);
   const normalizedQuery = query.trim().toLocaleLowerCase('es');
   const visibleSections = RULE_SECTIONS.filter((section) =>
@@ -129,19 +130,19 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
             forceMount
             asChild
           >
-            <article ref={active ? articleRef : undefined} className="rules-article">
+            <div ref={active ? articleRef : undefined} className="rules-article">
               {active && <RuleArticle section={candidate} />}
-            </article>
+            </div>
           </TabsContent>
         );
       })}
       {!section && (
-        <article ref={articleRef} id="rules-article" className="rules-article">
+        <div ref={articleRef} id="rules-article" className="rules-article">
           <div className="rules-empty" role="status">
             <strong>Sin coincidencias</strong>
             <p>Prueba con el nombre de una unidad, acción o condición de victoria.</p>
           </div>
-        </article>
+        </div>
       )}
     </Tabs>
   );
@@ -170,6 +171,31 @@ function RuleArticle({ section }: { section: RuleSection }) {
         <span className="rules-kicker">HEXFORTIA</span>
         <h3 tabIndex={-1}>{section.title}</h3>
         <RuleParagraphs paragraphs={introductoryParagraphs} />
+        {RULE_UNIT_APPEARANCES[section.id]?.map((type) => {
+          const appearance = UNIT_APPEARANCE[type];
+          return (
+            <details key={type} className="mt-6">
+              <summary className="cursor-pointer rounded-sm text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--move)]">
+                Diseño de referencia: {appearance.name}
+              </summary>
+              <figure className="m-0 mt-3">
+                <img
+                  src={`${import.meta.env.BASE_URL}units/${type}.webp`}
+                  alt={appearance.description}
+                  width="768"
+                  height="512"
+                  loading="lazy"
+                  decoding="async"
+                  className="block h-auto w-full rounded-lg"
+                />
+                <figcaption className="mt-3 text-[var(--text)]">
+                  {appearance.description} Cian y Ámbar comparten el mismo modelo; cambia el color
+                  del bando.
+                </figcaption>
+              </figure>
+            </details>
+          );
+        })}
       </div>
       {section.demo ? (
         <RuleDemo demoId={section.demo} title={section.title} />

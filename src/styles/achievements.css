@@ -762,17 +762,28 @@
   padding: 20px 24px 16px;
 }
 .achievements-player {
-  display: flex;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-rows: 56px 9px;
   align-items: center;
-  gap: 12px;
+  gap: 3px 12px;
   max-width: 30%;
   overflow-wrap: anywhere;
   font: 600 18px / 1.3 var(--font-display);
 }
 .achievements-player .profile-avatar {
+  grid-row: 1 / span 2;
   width: 56px;
+  height: auto;
+  flex-shrink: 0;
+}
+.achievements-player .profile-avatar > svg {
   height: 56px;
   flex-shrink: 0;
+}
+.achievements-player > strong {
+  grid-column: 2;
+  grid-row: 1;
 }
 .achievements-profile .progression-summary {
   flex: 1;

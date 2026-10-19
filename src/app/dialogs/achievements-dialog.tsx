@@ -1,5 +1,6 @@
 import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
+import { plainTabClassName } from '../components/ui/tabs';
 import { useState } from 'react';
 import { ProfileAvatar } from '../components/profile-avatar';
 import {
@@ -149,7 +150,7 @@ export function AchievementsDialog() {
               <button
                 key={item.id}
                 type="button"
-                className="min-h-11 cursor-pointer rounded-control border border-transparent bg-transparent px-3 py-2 font-ui text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan aria-pressed:border-line-strong aria-pressed:bg-panel-raised aria-pressed:text-ink"
+                className={plainTabClassName}
                 aria-pressed={filter === item.id}
                 data-achievement-filter={item.id}
                 onClick={() => setFilter(item.id)}

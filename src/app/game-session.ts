@@ -1809,6 +1809,17 @@ export function createGameSession(): GameSession {
   }
 
   function loadRecordIntoMatch(record: MatchRecord): void {
+    // Pending legacy saves may still opt into repetition draws. Retire that rule
+    // when resuming play, while keeping completed recordings reproducible.
+    if (
+      record.config.victory.repetition > 0 &&
+      !replayRecord(record, record.actions.length).outcome
+    ) {
+      record = {
+        ...record,
+        config: { ...record.config, victory: { ...record.config.victory, repetition: 0 } },
+      };
+    }
     returnToOutcome = false;
     tutorial = null;
     operationEpoch++;

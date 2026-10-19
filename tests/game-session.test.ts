@@ -130,6 +130,56 @@ describe('sesión que conecta React con el juego', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(['continue', 'import'] as const)(
+    'desactiva la triple repetición en un guardado pendiente al cargarlo por %s',
+    async (source) => {
+      const config = createClassicConfig({ mode: 'local' });
+      config.victory.repetition = 3;
+      config.options.orientationOnlyTurnLimit = null;
+      let record = createMatchRecord(config);
+      const soldiers = [0, 1].map((owner) =>
+        record.initialState.pieces.find((p) => p.owner === owner && p.type === 'soldier')!,
+      );
+      const cycle: GameAction[] = [
+        { kind: 'rotate', pieceId: soldiers[0].id, facing: 1 },
+        { kind: 'rotate', pieceId: soldiers[1].id, facing: 4 },
+        { kind: 'rotate', pieceId: soldiers[0].id, facing: 0 },
+        { kind: 'rotate', pieceId: soldiers[1].id, facing: 3 },
+      ];
+      // Stop before the third occurrence so this remains a pending legacy match.
+      for (let ply = 0; ply < 4; ply++) record = appendAction(record, cycle[ply]);
+      expect(replayRecord(record).outcome).toBeNull();
+      const session = createSession();
+      if (source === 'continue') {
+        saveActiveMatch(record);
+        session.commands.continueMatch();
+      } else {
+        session.commands.loadRecord(record);
+      }
+      expect(session.getSnapshot().matchConfig?.victory.repetition).toBe(0);
+      expect(record.config.victory.repetition).toBe(3);
+      for (let ply = 4; ply < 12; ply++) {
+        session.commands.prepareAction(cycle[ply % 4]);
+        await session.commands.commitPending();
+      }
+      expect(session.getSnapshot().state.ply).toBe(12);
+      expect(session.getSnapshot().state.outcome).toBeNull();
+      const restored = parseRecord(serializeRecord(session.getSnapshot().matchRecord!));
+      expect(restored.config.victory.repetition).toBe(0);
+      expect(replayRecord(restored).outcome).toBeNull();
+
+      // A completed historical draw must retain its original result on import.
+      for (let ply = 4; ply < 12 && !replayRecord(record).outcome; ply++) {
+        record = appendAction(record, cycle[ply % 4]);
+      }
+      const historicalOutcome = { type: 'draw', reason: 'repetition' };
+      expect(replayRecord(record).outcome).toEqual(historicalOutcome);
+      session.commands.loadRecord(parseRecord(serializeRecord(record)));
+      expect(session.getSnapshot().state.outcome).toEqual(historicalOutcome);
+      expect(session.getSnapshot().matchConfig?.victory.repetition).toBe(3);
+    },
+  );
+
   it.each([0, 1] as const)(
     'sortea el turno %i antes de activar reloj o IA y conserva el resultado',
     async (winner) => {
