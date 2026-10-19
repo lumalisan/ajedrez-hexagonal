@@ -1,0 +1,238 @@
+{
+  "format": "hex-value-training-v1",
+  "featureSchema": "hex-sparse-v1",
+  "inputSize": 5183,
+  "backend": "numpy",
+  "numpyVersion": "2.3.5",
+  "seed": 20261019,
+  "epochsRequested": 120,
+  "epochs": 24,
+  "bestEpoch": 8,
+  "earlyStopped": true,
+  "samples": 1532,
+  "maxSamples": null,
+  "datasetSha256": "9a1efc2ba975c99ffea545a9001eb0a9fa8a1b67cb2bc5c6d4da707e1a132387",
+  "samplesWithOutcome": 0,
+  "teacherWeight": 1.0,
+  "batchSize": 128,
+  "learningRate": 0.0005,
+  "weightDecay": 0.001,
+  "optimizer": "AdamW",
+  "residualSymmetry": "antisymmetric",
+  "trainingObjective": "raw-paired-perspectives-mse",
+  "split": {
+    "method": "sha256-game-id",
+    "validationFractionRequested": 0.2,
+    "trainingGames": [
+      "failure-pair-1-neural-0",
+      "failure-pair-1-neural-1",
+      "selfplay-1802-0",
+      "selfplay-1802-1",
+      "selfplay-1802-10",
+      "selfplay-1802-11",
+      "selfplay-1802-12",
+      "selfplay-1802-13",
+      "selfplay-1802-16",
+      "selfplay-1802-17",
+      "selfplay-1802-19",
+      "selfplay-1802-2",
+      "selfplay-1802-20",
+      "selfplay-1802-21",
+      "selfplay-1802-22",
+      "selfplay-1802-23",
+      "selfplay-1802-25",
+      "selfplay-1802-26",
+      "selfplay-1802-28",
+      "selfplay-1802-29",
+      "selfplay-1802-3",
+      "selfplay-1802-31",
+      "selfplay-1802-32",
+      "selfplay-1802-33",
+      "selfplay-1802-34",
+      "selfplay-1802-36",
+      "selfplay-1802-37",
+      "selfplay-1802-38",
+      "selfplay-1802-39",
+      "selfplay-1802-4",
+      "selfplay-1802-40",
+      "selfplay-1802-41",
+      "selfplay-1802-42",
+      "selfplay-1802-43",
+      "selfplay-1802-44",
+      "selfplay-1802-46",
+      "selfplay-1802-47",
+      "selfplay-1802-5",
+      "selfplay-1802-6",
+      "selfplay-1802-8"
+    ],
+    "validationGames": [
+      "selfplay-1802-14",
+      "selfplay-1802-15",
+      "selfplay-1802-18",
+      "selfplay-1802-24",
+      "selfplay-1802-27",
+      "selfplay-1802-30",
+      "selfplay-1802-35",
+      "selfplay-1802-45",
+      "selfplay-1802-7",
+      "selfplay-1802-9"
+    ],
+    "trainingSamples": 1208,
+    "validationSamples": 324
+  },
+  "featureOverlap": {
+    "method": "sha256-uint32le-sorted-active-feature-indices",
+    "trainingUniqueFeatureVectors": 1206,
+    "validationUniqueFeatureVectors": 324,
+    "sharedUniqueFeatureVectors": 0,
+    "validationSamplesSeenInTraining": 0,
+    "validationSampleOverlapFraction": 0.0,
+    "warning": null
+  },
+  "loss": {
+    "name": "normalized-target-mse",
+    "initialValidation": 0.017488967848846484,
+    "validation": 0.01627970237379224,
+    "rawValidation": 0.01684832383221474,
+    "training": 0.02023969704905165,
+    "zeroBaselineValidation": 0.017382725058845205,
+    "trainingMeanBaselineValidation": 0.017382725058845205,
+    "teacherBaselineValidation": 0.0,
+    "validationAgainstTeacher": 0.01627970237379224
+  },
+  "datasetSettings": {
+    "input": ".ai-lab/pilot-positions-v2.jsonl",
+    "arena": ".ai-lab/arena-expert15s.json",
+    "output": ".ai-lab/residual-v2.jsonl",
+    "positions": 768,
+    "budget-ms": 1000,
+    "depth": 5,
+    "seed": 280319,
+    "residual-scale": 2000
+  },
+  "target": "classic-residual-v1",
+  "residualScale": 2000,
+  "history": [
+    {
+      "epoch": 1,
+      "trainingMse": 0.02461781577030792,
+      "validationMse": 0.016977575219004306
+    },
+    {
+      "epoch": 2,
+      "trainingMse": 0.02416866146745968,
+      "validationMse": 0.016795639836906042
+    },
+    {
+      "epoch": 3,
+      "trainingMse": 0.02379566661503319,
+      "validationMse": 0.01668781684269962
+    },
+    {
+      "epoch": 4,
+      "trainingMse": 0.023248212506978613,
+      "validationMse": 0.01655423198636789
+    },
+    {
+      "epoch": 5,
+      "trainingMse": 0.022634728302651595,
+      "validationMse": 0.016420618817007834
+    },
+    {
+      "epoch": 6,
+      "trainingMse": 0.021899853951166223,
+      "validationMse": 0.016338074420697724
+    },
+    {
+      "epoch": 7,
+      "trainingMse": 0.021209282851801275,
+      "validationMse": 0.016325659493399394
+    },
+    {
+      "epoch": 8,
+      "trainingMse": 0.02023969704905165,
+      "validationMse": 0.01627970237379224
+    },
+    {
+      "epoch": 9,
+      "trainingMse": 0.01932598639861108,
+      "validationMse": 0.016390683547345828
+    },
+    {
+      "epoch": 10,
+      "trainingMse": 0.018450767478714786,
+      "validationMse": 0.016551231367738874
+    },
+    {
+      "epoch": 11,
+      "trainingMse": 0.01757665774741064,
+      "validationMse": 0.016688391405155552
+    },
+    {
+      "epoch": 12,
+      "trainingMse": 0.01670152043036682,
+      "validationMse": 0.016913095000877846
+    },
+    {
+      "epoch": 13,
+      "trainingMse": 0.01588343580553026,
+      "validationMse": 0.0172722294373833
+    },
+    {
+      "epoch": 14,
+      "trainingMse": 0.015070082338878583,
+      "validationMse": 0.017414285317620747
+    },
+    {
+      "epoch": 15,
+      "trainingMse": 0.014296651958682908,
+      "validationMse": 0.0177038853371597
+    },
+    {
+      "epoch": 16,
+      "trainingMse": 0.013447962951534935,
+      "validationMse": 0.01820030783102291
+    },
+    {
+      "epoch": 17,
+      "trainingMse": 0.012692808112621337,
+      "validationMse": 0.01851414000554864
+    },
+    {
+      "epoch": 18,
+      "trainingMse": 0.011998815375626096,
+      "validationMse": 0.018925560583805703
+    },
+    {
+      "epoch": 19,
+      "trainingMse": 0.01127638908548199,
+      "validationMse": 0.019205125859580865
+    },
+    {
+      "epoch": 20,
+      "trainingMse": 0.010554625159634344,
+      "validationMse": 0.019813008022202396
+    },
+    {
+      "epoch": 21,
+      "trainingMse": 0.009876683876390183,
+      "validationMse": 0.020329816396922377
+    },
+    {
+      "epoch": 22,
+      "trainingMse": 0.0092538059361076,
+      "validationMse": 0.020813732292093386
+    },
+    {
+      "epoch": 23,
+      "trainingMse": 0.008654017712977696,
+      "validationMse": 0.021248702537966565
+    },
+    {
+      "epoch": 24,
+      "trainingMse": 0.008070416566386003,
+      "validationMse": 0.02176763667938566
+    }
+  ],
+  "binaryBytes": 1337200
+}

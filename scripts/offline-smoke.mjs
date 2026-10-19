@@ -37,7 +37,7 @@ try {
   const assetsDirectory = resolve(server.config.root, server.config.build.outDir, 'assets');
   assert(existsSync(assetsDirectory), 'Production assets are missing. Run pnpm build first.');
   const builtAssets = readdirSync(assetsDirectory, { recursive: true })
-    .filter((file) => /\.(?:js|css)$/.test(file))
+    .filter((file) => /\.(?:js|css|bin)$/.test(file))
     .map((file) => `/assets/${file.replaceAll('\\', '/')}`);
   const achievementDirectory = resolve(
     server.config.root,
@@ -61,6 +61,8 @@ try {
     builtAssets.some((asset) => asset.endsWith('.css')),
     'The build must contain CSS.',
   );
+  const neuralModel = builtAssets.find((asset) => /\/hex-value-[^/]+\.bin$/.test(asset));
+  assert(neuralModel, 'The experimental neural model must be emitted as a versioned build asset.');
   const dialogChunks = ['game-dialogs', 'utility-dialogs'].map((name) => {
     const chunk = builtAssets.find((asset) => new RegExp(`/${name}-[^/]+\\.js$`).test(asset));
     assert(chunk, `Missing lazy ${name} chunk. Run pnpm build with the current source.`);
@@ -146,7 +148,7 @@ try {
   const missingAssets = builtAssets.filter((asset) => !cachedAssets.paths.includes(asset));
   assert(
     missingAssets.length === 0,
-    `All generated JS and CSS, including unopened lazy chunks, must be precached: ${missingAssets.join(', ')}`,
+    `All generated JS, CSS and models must be precached: ${missingAssets.join(', ')}`,
   );
   const missingAchievementImages = achievementImages.filter(
     (asset) => !cachedAssets.paths.includes(asset),
@@ -165,6 +167,13 @@ try {
   );
   await page.locator('[data-home-action="new"]').waitFor({ state: 'visible' });
   assert(await page.evaluate(() => !navigator.onLine), 'The browser must remain offline.');
+  const modelMagic = await page.evaluate(async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Offline neural model unavailable');
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return new TextDecoder().decode(bytes.subarray(0, 4));
+  }, neuralModel);
+  assert(modelMagic === 'HXNN', 'The trained neural model must load from the offline cache.');
 
   await page.locator('[data-home-action="achievements"]').click();
   await page.getByRole('heading', { name: 'Logros', exact: true }).waitFor();
@@ -285,7 +294,7 @@ try {
   );
   assert(runtimeErrors.length === 0, `Offline runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
-    `Offline smoke passed: ${builtAssets.length} generated JS/CSS assets and 100 achievement images precached, collection artwork, live rules layouts and both lazy dialogs opened for the first time offline.`,
+    `Offline smoke passed: ${builtAssets.length} generated JS/CSS/model assets and 100 achievement images precached, neural weights loaded offline, collection artwork, live rules layouts and both lazy dialogs opened for the first time offline.`,
   );
 } catch (error) {
   if (runtimeErrors.length > 0)

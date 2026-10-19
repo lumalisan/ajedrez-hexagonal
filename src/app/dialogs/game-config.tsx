@@ -33,6 +33,7 @@ const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'tactical', label: 'Medio' },
   { value: 'commander', label: 'Difícil' },
   { value: 'expert', label: 'Experto' },
+  { value: 'neural', label: 'Neuronal' },
 ];
 const MATCH_CLOCK_OPTIONS: readonly { value: MatchClockValue; label: string }[] = [
   { value: '', label: 'Sin límite' },

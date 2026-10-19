@@ -67,7 +67,7 @@ export function createPresetConfig(preset: MatchPresetId, input: MatchConfigInpu
     setup,
     options: {
       ...config.options,
-      noProgressPlyLimit: preset === 'skirmish' ? 60 : preset === 'siege' ? 160 : 120,
+      noProgressPlyLimit: null,
     },
   };
 }

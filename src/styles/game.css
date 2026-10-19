@@ -5813,29 +5813,27 @@ button.history-card:disabled {
 }
 .home-shortcut-story {
   grid-column: 1 / -1;
-  min-height: 52px;
-  padding: 6px 16px;
+  min-height: 56px;
+  padding: 12px 44px;
   background:
-    url('/story-texture.svg') repeat,
-    var(--surface-2);
-  color: var(--amber);
-  clip-path: polygon(
-    12px 0,
-    calc(100% - 12px) 0,
-    100% 50%,
-    calc(100% - 12px) 100%,
-    12px 100%,
-    0 50%
-  );
+    url('/story-paper.jpg') center / cover,
+    #dfcea9;
+  color: #33291d;
+  position: relative;
+  border: 4px double #77603c;
+  border-radius: 3px;
   flex-direction: row;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px 8px;
-  text-align: left;
+  justify-content: center;
+  text-align: center;
+}
+.home-shortcut-story:hover:enabled {
+  background:
+    url('/story-paper.jpg') center / cover,
+    #ecdbb6;
 }
 .home-shortcut-story > span {
-  flex: 1;
+  width: 100%;
 }
 .home-shortcut-story small {
   width: 100%;
@@ -6037,10 +6035,16 @@ button.history-card:disabled {
   font-size: 16px;
 }
 .home-shortcut-story > svg {
+  position: absolute;
+  left: 10px;
   width: 28px;
   height: 28px;
   padding: 4px;
-  color: var(--move);
+  color: inherit;
+  background: transparent;
+}
+.home-shortcut-story:hover:enabled > svg {
+  color: inherit;
   background: transparent;
 }
 .home-shortcut-story:focus-visible {

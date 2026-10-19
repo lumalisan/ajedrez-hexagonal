@@ -335,7 +335,11 @@ describe('machine player', () => {
   it('uses the match draw rules instead of inventing a no-progress draw', () => {
     const state = createChoiceState();
     state.noProgressPlyCount = 119;
-    const standard = searchMachineActionWithMetadata(state, { depth: 1, budgetMs: 1_000 });
+    const standard = searchMachineActionWithMetadata(state, {
+      depth: 1,
+      budgetMs: 1_000,
+      resolutionRules: { repetition: 3, noProgressPlyLimit: 120 },
+    });
     const unlimited = searchMachineActionWithMetadata(state, {
       depth: 1,
       budgetMs: 1_000,

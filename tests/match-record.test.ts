@@ -159,8 +159,9 @@ describe('configuración, invariantes y diario', () => {
 
   it('valida classic-v2 y todos los escenarios', () => {
     const config = createClassicConfig({ mode: 'local' });
-    expect(config.victory.repetition).toBe(3);
-    expect(config.options.noProgressPlyLimit).toBe(120);
+    expect(config.victory.repetition).toBe(0);
+    expect(config.options.noProgressPlyLimit).toBeNull();
+    expect(config.options.orientationOnlyTurnLimit).toBe(5);
     expect(validateMatchConfig(config)).toEqual([]);
     expect(validateState(createMatchRecord(config).initialState, config)).toEqual([]);
     for (const scenario of SCENARIOS) {

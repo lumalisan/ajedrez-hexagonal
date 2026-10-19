@@ -30,6 +30,7 @@ export type DialogState =
   | { kind: 'abandon' }
   | { kind: 'mode'; initial?: boolean }
   | { kind: 'resign' }
+  | { kind: 'orientation-loss' }
   | { kind: 'draw-offer' }
   | { kind: 'blockade' }
   | { kind: 'outcome' }

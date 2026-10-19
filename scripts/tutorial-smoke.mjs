@@ -48,6 +48,13 @@ try {
     await page.locator('[data-home-action="tutorial"]').click();
     await page.locator('#game-canvas[data-renderer-status="ready"]').waitFor();
     await page.locator('#app.tutorial-active #tutorial-panel[data-tutorial-step="0.1"]').waitFor();
+    const profileName = await page.evaluate(async () => {
+      const { loadUserProfile } = await import('/src/user-profile.ts');
+      return loadUserProfile().name;
+    });
+    assert((await page.locator('#blue-fortress').textContent()).includes(profileName));
+    assert((await page.locator('#blue-fortress').textContent()).includes('Expansionista'));
+    assert((await page.locator('#amber-fortress').textContent()).includes('Hexfortia'));
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
@@ -234,6 +241,15 @@ try {
           .click();
       } else if (!['rotate', 'orient'].includes(plan.action.kind) && plan.id !== '3.3') {
         await clickHex(page, plan.id === '12.3' ? plan.target : plan.destination);
+        if (plan.id === '9.4') {
+          const overflight = page.locator('[data-action-choice]').filter({ hasText: 'SOBREVUELO' });
+          const kamikaze = page.locator('[data-action-choice]').filter({ hasText: 'KAMIKAZE' });
+          assert(await overflight.isDisabled());
+          assert(await kamikaze.isEnabled());
+          assert.equal(await kamikaze.getAttribute('data-tutorial-highlight'), 'true');
+          assert.equal(await page.locator('#pending-card .confirm-button').count(), 0);
+          assert(await page.locator('.tutorial-command-arrow').isVisible());
+        }
         const choices = page.locator('[data-action-choice]:not(:disabled)');
         if (await choices.count()) await choices.first().click();
       }

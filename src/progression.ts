@@ -21,6 +21,8 @@ export const AI_RATINGS: Record<AiDifficulty, number> = {
   tactical: 1000,
   commander: 1400,
   expert: 1800,
+  // Provisional game rating, shared with Expert; this is not a measured neural Elo.
+  neural: 1800,
 };
 const DIFFICULTIES: AiDifficulty[] = ['recruit', 'tactical', 'commander', 'expert'];
 const STORAGE_KEY = 'hexagonal:progression:v1';
@@ -293,7 +295,11 @@ export function evaluateProgressionMatch(
   const difficulty =
     machineIndex === -1
       ? 0
-      : DIFFICULTIES.indexOf(record.config.participants[machineIndex].difficulty ?? 'recruit');
+      : DIFFICULTIES.indexOf(
+          record.config.participants[machineIndex].difficulty === 'neural'
+            ? 'expert'
+            : (record.config.participants[machineIndex].difficulty ?? 'recruit'),
+        );
   const metrics = analyzeRecord(record, owner);
   const next = structuredClone(progress);
   const prior = next.matches[record.createdAt];

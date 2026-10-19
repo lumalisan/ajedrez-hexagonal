@@ -1270,7 +1270,7 @@ describe('Fortaleza, transformación y finales', () => {
     });
   });
 
-  it('la tercera repetición declara tablas automáticamente', () => {
+  it('conserva las tablas por repetición al reproducir reglas antiguas', () => {
     let state = base([
       soldier('blue-soldier', 0, hex(0, -2), 0),
       soldier('amber-soldier', 1, hex(0, 2), 3),
@@ -1284,10 +1284,11 @@ describe('Fortaleza, transformación y finales', () => {
 
     const rotate = (pieceId: string, facing: Direction): void => {
       if (state.outcome) return;
-      state = perform(
+      state = applyAction(
         state,
         findAction(state, pieceId, 'rotate', (action) => action.facing === facing),
-      );
+        { repetition: 3, noProgressPlyLimit: 120 },
+      ).state;
     };
     for (let cycle = 0; cycle < 3 && !state.outcome; cycle += 1) {
       rotate('blue-soldier', 1);

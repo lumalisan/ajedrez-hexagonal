@@ -44,7 +44,7 @@ export function DesignSystemPreview() {
           Sistema de diseño
         </h1>
         <p className="m-0 max-w-prose text-base leading-relaxed text-muted">
-          Protocolo Hexagonal. Componentes, estados y comportamiento compartidos por la interfaz.
+          Hexfortia. Componentes, estados y comportamiento compartidos por la interfaz.
         </p>
         <div className="flex flex-wrap gap-x-8 gap-y-2">
           <Field className="grid-cols-[44px_auto] items-center justify-start">

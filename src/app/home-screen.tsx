@@ -36,7 +36,7 @@ export function HomeScreen() {
     <section
       id="home-screen"
       className="home-screen"
-      aria-label="Portada de Protocolo Hexagonal"
+      aria-label="Portada de Hexfortia"
       hidden={snapshot.homeView === null}
       inert={snapshot.homeView === null}
     >
@@ -45,11 +45,7 @@ export function HomeScreen() {
           <img src="/atlas-mark.svg" alt="" width="58" height="58" />
           <div>
             <span>ESTRATEGIA HEXAGONAL</span>
-            <h1>
-              Protocolo
-              <br />
-              Hexagonal
-            </h1>
+            <h1>Hexfortia</h1>
           </div>
         </div>
         <div ref={menuRef} id="home-menu-content" className="home-menu-content">
@@ -80,7 +76,7 @@ export function HomeScreen() {
                   />
                 </svg>
               </button>
-              <p className="home-intro">Elige el modo de juego</p>
+              <p className="home-intro">Elige el modo de juego.</p>
               <nav className="home-navigation mode-navigation" aria-label="Tipo de partida">
                 <button
                   type="button"

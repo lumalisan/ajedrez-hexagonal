@@ -63,6 +63,7 @@ import {
   parseRecord,
   replayRecord,
   serializeRecord,
+  resolutionRulesForConfig,
   setAcademySession,
 } from '../match-record';
 import { MatchController } from '../match-controller';
@@ -341,6 +342,7 @@ export function createGameSession(): GameSession {
 
   function closeDialog(): void {
     if (currentDialog?.kind === 'first-turn') return;
+    if (currentDialog?.kind === 'orientation-loss') cancelDraft();
     currentDialog = returnToOutcome && state.outcome ? { kind: 'outcome' } : null;
     returnToOutcome = false;
     dialogError = null;
@@ -379,6 +381,8 @@ export function createGameSession(): GameSession {
 
   function acceptProgression(result: ProgressionUpdate): void {
     if (result.progress === progression) return;
+    const before = levelProgress(progression.xp);
+    const after = levelProgress(result.progress.xp);
     progression = result.progress;
     if (!savePlayerProgression(progression) && !achievementStorageWarningShown) {
       achievementStorageWarningShown = true;
@@ -388,6 +392,8 @@ export function createGameSession(): GameSession {
     if (achievementQueue.length && !achievementNotification && achievementTimer === null)
       achievementTimer = later(showNextAchievement, 750);
     if (result.xpEarned) showToast(`+${result.xpEarned} XP`);
+    if (after.tier > before.tier)
+      showToast(`¡Has subido de categoría! ${before.category} → ${after.category}.`);
     render();
   }
 
@@ -929,9 +935,12 @@ export function createGameSession(): GameSession {
       }
     }
     if (!state.outcome && selected?.owner === state.activePlayer) {
-      const matching = actionsAtHex(state, visibleActions, hex).filter((action) =>
-        tutorialAllowsAction(action, true),
-      );
+      const candidates = actionsAtHex(state, visibleActions, hex);
+      // Preserve the normal maneuver choice; prepareAction still rejects overflight.
+      const matching =
+        step?.id === '9.4' && candidates.some((action) => tutorialAllowsAction(action))
+          ? candidates
+          : candidates.filter((action) => tutorialAllowsAction(action, true));
       if (matching.length === 1) {
         setPending(matching[0]);
         return;
@@ -1036,6 +1045,7 @@ export function createGameSession(): GameSession {
 
   function shouldConfirmAction(action: GameAction): boolean {
     if (tutorial) return true;
+    if (wouldLoseByOrientation(action)) return true;
     if (preferences.confirmation === 'always') return true;
     if (action.kind === 'move' && getPiece(state, action.pieceId)?.type === 'medium') return true;
     if (preferences.confirmation === 'quick') return action.kind === 'transform';
@@ -1055,7 +1065,25 @@ export function createGameSession(): GameSession {
 
   async function commitPending(): Promise<void> {
     if (!pendingAction || animating || isMachineTurn() || replayCursor !== null) return;
+    if (wouldLoseByOrientation(pendingAction)) {
+      if (currentDialog?.kind !== 'orientation-loss') {
+        openDialog({ kind: 'orientation-loss' });
+        return;
+      }
+      currentDialog = null;
+    }
     await executeTurn(pendingAction);
+  }
+
+  function wouldLoseByOrientation(action: GameAction): boolean {
+    if (tutorial || activeScenario) return false;
+    if (action.kind !== 'rotate' && action.kind !== 'orient') return false;
+    const preview = applyAction(
+      state,
+      action,
+      matchConfig ? resolutionRulesForConfig(matchConfig) : undefined,
+    );
+    return preview.ok && preview.state.outcome?.reason === 'orientation';
   }
 
   async function executeTurn(action: GameAction, automatic = false): Promise<void> {
@@ -1235,6 +1263,9 @@ export function createGameSession(): GameSession {
         action = await aiStrategy.chooseAction(state, matchConfig, {
           maxMs: expiredTurn ? difficultyBudget('recruit') : difficultyBudget(difficulty),
           signal: searchSignal,
+          onFallback: (message) => {
+            if (!disposed && epoch === operationEpoch && !searchSignal.aborted) showToast(message);
+          },
           onProgress: (metadata) => {
             if (
               disposed ||
@@ -1737,6 +1768,7 @@ export function createGameSession(): GameSession {
       setup: scenario.initialState.pieces.map((piece) => ({ id: piece.id, piece })),
       options: {
         ...matchConfig.options,
+        orientationOnlyTurnLimit: null,
         allowUndo: true,
         clockSeconds: null,
         turnClockSeconds: null,
@@ -1998,7 +2030,7 @@ export function createGameSession(): GameSession {
   function exportCurrentMatch(): void {
     if (!matchRecord) return;
     const id = matchRecord.config.definitionId.replace(/[^a-z0-9_-]+/gi, '-');
-    downloadText(`protocolo-hexagonal-${id}.json`, serializeRecord(matchRecord));
+    downloadText(`hexfortia-${id}.json`, serializeRecord(matchRecord));
   }
 
   async function importMatchFile(file: File): Promise<void> {

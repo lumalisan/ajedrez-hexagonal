@@ -5,7 +5,7 @@ import type { SearchMetadata } from '../src/ai';
 import type { GameRenderer, GameSession, GameSnapshot } from '../src/app/contracts';
 import { createGameSession } from '../src/app/game-session';
 import { loadAchievementProgress } from '../src/achievements';
-import { createPlayerProgression, savePlayerProgression } from '../src/progression';
+import { createPlayerProgression, savePlayerProgression, xpForLevel } from '../src/progression';
 import { getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
 import { createInitialPieces } from '../src/setup';
@@ -216,6 +216,25 @@ describe('sesión que conecta React con el juego', () => {
     expect(loadMatchHistory()[0].durationSeconds).toBe(30);
   });
 
+  it('anuncia el ascenso de categoría una sola vez al obtener XP', async () => {
+    const progress = createPlayerProgression();
+    progress.xp = xpForLevel(5) - 25;
+    progress.activity = { lastDay: '2026-09-20', streak: 2, best: 2 };
+    savePlayerProgression(progress);
+    const session = createSession();
+    session.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().toasts.map((toast) => toast.message)).toContain(
+      '¡Has subido de categoría! Principiante → Avanzado.',
+    );
+    session.dispose();
+    session.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      session.getSnapshot().toasts.filter((toast) => toast.message.includes('categoría')),
+    ).toHaveLength(1);
+  });
+
   it('registra actividad al montar y conserva el aviso después del ciclo de Strict Mode', async () => {
     const progress = createPlayerProgression();
     progress.activity = { lastDay: '2026-09-20', streak: 2, best: 2 };
@@ -234,7 +253,7 @@ describe('sesión que conecta React con el juego', () => {
     expect(collaborators.playAchievement).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['recruit', 'tactical', 'commander', 'expert'] as const)(
+  it.each(['recruit', 'tactical', 'commander', 'expert', 'neural'] as const)(
     'asigna una semilla por partida y otra en la revancha para %s',
     async (difficulty) => {
       let nextSeed = 31;
@@ -1525,6 +1544,36 @@ describe('sesión que conecta React con el juego', () => {
     expectIdle(false);
   });
 
+  it.each(['always', 'critical', 'quick'] as const)(
+    'advierte antes de perder por orientación con confirmación %s y permite cancelar',
+    async (confirmation) => {
+      const session = createSession();
+      session.commands.loadRecord(savedRecord(8));
+      session.commands.updatePreferences({ confirmation });
+      const state = structuredClone(session.getSnapshot().state);
+      const order = rotation(state);
+      session.commands.prepareAction(order);
+      expect(session.getSnapshot().state.ply).toBe(8);
+      await session.commands.commitPending();
+      expect(session.getSnapshot().dialog?.kind).toBe('orientation-loss');
+      expect(session.getSnapshot().state).toEqual(state);
+      session.commands.closeDialog();
+      expect(session.getSnapshot().pendingAction).toBeNull();
+      expect(session.getSnapshot().state).toEqual(state);
+      session.commands.prepareAction(order);
+      await session.commands.commitPending();
+      await session.commands.commitPending();
+      expect(session.getSnapshot().state.outcome).toEqual({
+        type: 'win',
+        winner: 1,
+        reason: 'orientation',
+      });
+      expect(
+        replayRecord(parseRecord(serializeRecord(session.getSnapshot().matchRecord!))).outcome,
+      ).toEqual(session.getSnapshot().state.outcome);
+    },
+  );
+
   it('conserva las animaciones de órdenes con el idle desactivado por defecto', async () => {
     const session = createSession();
     const renderer = rendererDouble();
@@ -1558,6 +1607,7 @@ describe('sesión que conecta React con el juego', () => {
       expect(budget.signal?.aborted).toBe(true);
       const current = structuredClone(session.getSnapshot().state);
       const currentRecord = structuredClone(session.getSnapshot().matchRecord);
+      const currentToasts = structuredClone(session.getSnapshot().toasts);
       const lateProgress: SearchMetadata = {
         requestedDepth: 9,
         completedDepth: 9,
@@ -1568,11 +1618,13 @@ describe('sesión que conecta React con el juego', () => {
         candidatesConsidered: 10,
       };
       budget.onProgress?.(lateProgress);
+      budget.onFallback?.('Aviso tardío de una partida anterior');
       search.resolve(rotation(searchState));
       await vi.advanceTimersByTimeAsync(0);
 
       expect(session.getSnapshot().state).toEqual(current);
       expect(session.getSnapshot().matchRecord).toEqual(currentRecord);
+      expect(session.getSnapshot().toasts).toEqual(currentToasts);
       expect(session.getSnapshot().machineThinking).toBe(false);
       expect(session.getSnapshot().machineSearch).toBeNull();
       expect(session.getSnapshot().homeView).toBe(destination === 'inicio' ? 'main' : null);

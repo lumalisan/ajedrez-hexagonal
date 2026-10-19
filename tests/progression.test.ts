@@ -67,6 +67,7 @@ describe('experiencia, niveles y categorías', () => {
     (plies) => {
       const config = createClassicConfig({ mode: 'local', noProgressPlyLimit: null });
       config.victory.repetition = 0;
+      config.options.orientationOnlyTurnLimit = null; // Legacy long-match fixtures.
       let record = createMatchRecord(config);
       for (let i = 0; i < plies; i++) {
         const action = getAllLegalActions(replayRecord(record)).find((a) => a.kind === 'rotate')!;
@@ -111,6 +112,8 @@ describe('experiencia, niveles y categorías', () => {
     ['commander', 1, 75],
     ['expert', 0, 50],
     ['expert', 1, 100],
+    ['neural', 0, 50],
+    ['neural', 1, 100],
   ] as const)(
     'otorga XP contra %s con resultado %i incluso al rendirse sin órdenes',
     (difficulty, win, xp) => {
@@ -142,6 +145,7 @@ describe('experiencia, niveles y categorías', () => {
       noProgressPlyLimit: null,
     });
     config.victory.repetition = 0;
+    config.options.orientationOnlyTurnLimit = null; // Legacy long-match fixtures.
     let record = createMatchRecord(config);
     for (let index = 0; index < 204; index++) {
       const rotation = getAllLegalActions(replayRecord(record)).find(

@@ -1,0 +1,261 @@
+{
+  "format": "hex-neural-pilot-v1",
+  "date": "2026-10-18",
+  "referenceGitHead": "907531180a758f87ca69bf18bd21012d4575d3aa",
+  "sourceSha256WithLf": {
+    "src/ai.ts": "e8706fdce5ad5c28307dc55c572ff89d75d4b534ce2b908c7faf5709c4f06a96",
+    "src/ai-neural.ts": "0839e3df6d80af9b58c8cd43291beba12e85db40a057193dbb37bf344ad228cb",
+    "src/engine.ts": "514e50e943d9e20d882926c041e8a99b8ad193d606bb415a20956c5a67068057",
+    "src/hex.ts": "1a0167e7a41820340e5d87e0a38da1ef2fd51c876ea0ca042f2a9aa9e4c66754",
+    "src/classic-rules.ts": "f4542bb6d7978fcf3e5bc413ed410afaa2703759e7ce6ad7573d954b036fe0c8",
+    "src/setup.ts": "6901a2f28cc145e0853079401f75e83513ae8f59f8aa12c47278a86229ab46c0"
+  },
+  "model": {
+    "path": "src/ai-models/hex-value.bin",
+    "sha256": "77175d7abee920293d82a5117cbf61882b22b1b9e0d6bc0adf31f332b79e7557",
+    "schema": "hex-sparse-v1",
+    "inputSize": 5183,
+    "bytes": 1336920
+  },
+  "training": {
+    "samples": 3852,
+    "knownOutcomes": 730,
+    "split": {
+      "trainingGames": 38,
+      "validationGames": 10
+    },
+    "epochs": 13,
+    "bestEpoch": 1,
+    "loss": {
+      "name": "normalized-target-mse",
+      "initialValidation": 0.06102952261239394,
+      "validation": 0.054711478465412224,
+      "training": 0.0317115153567919,
+      "zeroBaselineValidation": 0.056662572956766986,
+      "trainingMeanBaselineValidation": 0.056662572956766986,
+      "teacherBaselineValidation": 0.006812241632847965,
+      "validationAgainstTeacher": 0.04832406694813549
+    },
+    "featureOverlap": {
+      "method": "sha256-uint32le-sorted-active-feature-indices",
+      "trainingUniqueFeatureVectors": 3082,
+      "validationUniqueFeatureVectors": 770,
+      "sharedUniqueFeatureVectors": 0,
+      "validationSamplesSeenInTraining": 0,
+      "validationSampleOverlapFraction": 0,
+      "warning": null
+    },
+    "datasetSha256": "3ce8f8293b49685609db8ee3fbc74bc406a0feca6f1510d5b72675c4430eacd8",
+    "datasetSettings": {
+      "help": false,
+      "budget-ms": 250,
+      "depth": 1,
+      "max-plies": 96,
+      "seed": 1802,
+      "opening-plies": 6,
+      "games": 48,
+      "sample-every": 2,
+      "exploration": 0.12,
+      "output": ".ai-lab/pilot-positions-v2.jsonl",
+      "overwrite": true
+    }
+  },
+  "browser": {
+    "format": "hex-neural-browser-v1",
+    "createdAt": "2026-10-18T16:57:03.603Z",
+    "note": "Ambos tamaños usan el mismo ordenador; no representan rendimiento de un móvil físico.",
+    "runs": [
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "maximumParityError": 2.8421709430404007e-13,
+        "vectors": 16,
+        "iterations": 2000,
+        "inferenceMs": 13.399999976158142,
+        "averageInferenceMs": 0.006699999988079071,
+        "modelBytes": 1336920,
+        "workerSearch": {
+          "requestedDepth": 2,
+          "completedDepth": 2,
+          "nodes": 99,
+          "elapsedMs": 28.799999952316284,
+          "timedOut": false,
+          "score": -132.79037041947024,
+          "candidatesConsidered": 8
+        },
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+      },
+      {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "maximumParityError": 2.8421709430404007e-13,
+        "vectors": 16,
+        "iterations": 2000,
+        "inferenceMs": 16.100000023841858,
+        "averageInferenceMs": 0.00805000001192093,
+        "modelBytes": 1336920,
+        "workerSearch": {
+          "requestedDepth": 2,
+          "completedDepth": 2,
+          "nodes": 99,
+          "elapsedMs": 15.5,
+          "timedOut": false,
+          "score": -132.79037041947024,
+          "candidatesConsidered": 8
+        },
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0"
+      }
+    ]
+  },
+  "arena": {
+    "settings": {
+      "help": false,
+      "budget-ms": 15000,
+      "depth": 9,
+      "max-plies": 80,
+      "seed": 927451,
+      "opening-plies": 6,
+      "pairs": 1,
+      "output": ".ai-lab/arena-expert15s.json",
+      "model": "src/ai-models/hex-value.bin"
+    },
+    "referenceExpert": {
+      "difficulty": "expert",
+      "personality": "balanced",
+      "depth": 9,
+      "budgetMs": 15000
+    },
+    "standardExpertCaps": true,
+    "environment": {
+      "node": "v24.14.1",
+      "platform": "win32",
+      "architecture": "x64"
+    },
+    "rules": {
+      "repetition": 3,
+      "noProgressPlyLimit": 120
+    },
+    "modelSha256": "77175d7abee920293d82a5117cbf61882b22b1b9e0d6bc0adf31f332b79e7557",
+    "summary": {
+      "wins": 0,
+      "draws": 0,
+      "losses": 2,
+      "inconclusive": 0,
+      "completed": 2,
+      "score": 0,
+      "scoreInterval95": [0, 0.6576197724933469],
+      "intervalMethod": "Wilson aproximado: tablas cuentan 0,5; no corrige correlación entre partidas del mismo par.",
+      "interpretation": "Ensayo experimental. Los límites de jugadas producen partidas inconclusas; no prueban superioridad."
+    },
+    "metrics": {
+      "classical": {
+        "searches": 63,
+        "elapsedMs": 945579.9555999995,
+        "nodes": 4000832,
+        "depthSum": 222,
+        "maxDepth": 5,
+        "timedOut": 63,
+        "depthZero": 0,
+        "averageDepth": 3.5238095238095237,
+        "averageElapsedMs": 15009.205644444437
+      },
+      "neural": {
+        "searches": 62,
+        "elapsedMs": 930426.9609000003,
+        "nodes": 4374004,
+        "depthSum": 233,
+        "maxDepth": 5,
+        "timedOut": 62,
+        "depthZero": 0,
+        "averageDepth": 3.7580645161290325,
+        "averageElapsedMs": 15006.886466129037
+      }
+    },
+    "games": [
+      {
+        "id": "pair-1-neural-0",
+        "neuralPlayer": 0,
+        "layout": 3,
+        "fortressHp": 1,
+        "initialPly": 6,
+        "finalPly": 54,
+        "outcome": {
+          "type": "win",
+          "winner": 1,
+          "reason": "fortress"
+        },
+        "termination": "engine-outcome",
+        "elapsedMs": 720428.9407,
+        "metrics": {
+          "classical": {
+            "searches": 24,
+            "elapsedMs": 360248.0055000001,
+            "nodes": 1310976,
+            "depthSum": 73,
+            "maxDepth": 5,
+            "timedOut": 24,
+            "depthZero": 0,
+            "averageDepth": 3.0416666666666665,
+            "averageElapsedMs": 15010.333562500004
+          },
+          "neural": {
+            "searches": 24,
+            "elapsedMs": 360174.51310000016,
+            "nodes": 1396596,
+            "depthSum": 71,
+            "maxDepth": 5,
+            "timedOut": 24,
+            "depthZero": 0,
+            "averageDepth": 2.9583333333333335,
+            "averageElapsedMs": 15007.271379166674
+          }
+        }
+      },
+      {
+        "id": "pair-1-neural-1",
+        "neuralPlayer": 1,
+        "layout": 3,
+        "fortressHp": 1,
+        "initialPly": 6,
+        "finalPly": 83,
+        "outcome": {
+          "type": "win",
+          "winner": 0,
+          "reason": "fortress"
+        },
+        "termination": "engine-outcome",
+        "elapsedMs": 1155591.7705,
+        "metrics": {
+          "classical": {
+            "searches": 39,
+            "elapsedMs": 585331.9500999994,
+            "nodes": 2689856,
+            "depthSum": 149,
+            "maxDepth": 5,
+            "timedOut": 39,
+            "depthZero": 0,
+            "averageDepth": 3.8205128205128207,
+            "averageElapsedMs": 15008.511541025626
+          },
+          "neural": {
+            "searches": 38,
+            "elapsedMs": 570252.4478000001,
+            "nodes": 2977408,
+            "depthSum": 162,
+            "maxDepth": 5,
+            "timedOut": 38,
+            "depthZero": 0,
+            "averageDepth": 4.2631578947368425,
+            "averageElapsedMs": 15006.643363157897
+          }
+        }
+      }
+    ],
+    "status": "complete"
+  },
+  "interpretation": "Experto clásico ganó ambas partidas de un único par de la disposición 3 con Fortaleza de 1 HP. El candidato no se promociona. Es un piloto limitado, no una estimación general de Elo. Acciones y estados completos: .ai-lab/arena-expert15s.json."
+}

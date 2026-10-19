@@ -50,7 +50,7 @@ export function StoryDialog() {
       <aside className="rules-sidebar">
         <div className="rules-heading story-heading">
           <div>
-            <span className="rules-kicker">HISTORIA DE PROTOCOLO HEXAGONAL</span>
+            <span className="rules-kicker">HISTORIA DE HEXFORTIA</span>
             <h2>El dilema de Hexfortia</h2>
           </div>
         </div>

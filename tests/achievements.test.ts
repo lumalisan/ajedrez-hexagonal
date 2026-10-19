@@ -177,6 +177,11 @@ describe('logros de partidas', () => {
     expect(evaluate(playedMatch({ mode: 'local', clockSeconds: null })).unlocked).not.toContain(id);
   });
 
+  it('cuenta una victoria neuronal para el logro existente de Experto', () => {
+    const result = evaluate(playedMatch({ mode: 'machine', difficulty: 'neural' }));
+    expect(result.unlocked.filter((id) => id.startsWith('ai-'))).toEqual(['ai-expert']);
+  });
+
   it('mantiene progreso acumulativo al terminar partidas distintas', () => {
     let progress: AchievementProgress = createAchievementProgress();
     const template = playedMatch();

@@ -1,4 +1,4 @@
-# Protocolo Hexagonal
+# Hexfortia
 
 Juego táctico 2D para dos jugadores en tablero hexagonal. La interfaz utiliza React, TypeScript estricto y Vite; el tablero se representa con PixiJS 8 (WebGL, con respaldo Canvas). Las reglas se describen en `docs/especificacion_juego_hexagonal.md`.
 
@@ -38,6 +38,11 @@ pnpm exec node scripts/progression-smoke.mjs
 
 Tras `pnpm build`, `pnpm test:offline` comprueba la recarga y la primera apertura de los diálogos y selectores sin conexión. Vite genera la precarga de todos los recursos de producción para que los diálogos puedan cargarse bajo demanda también offline.
 
+El [laboratorio de IA neuronal](docs/ia-neuronal.md) permite generar posiciones, entrenar un
+evaluador pequeño en CPU, comprobarlo en el navegador y enfrentarlo a Experto con partidas
+emparejadas. «Neuronal» carga el candidato experimental; los cuatro niveles clásicos conservan
+su evaluación anterior.
+
 ## Arquitectura
 
 La aplicación es una SPA local, sin backend. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión.
@@ -56,7 +61,7 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 
 ## Modos y datos
 
-- **Partida libre:** local o contra IA. Contra la IA puedes elegir la dificultad: Fácil, Medio, Difícil o Experto. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil.
+- **Partida libre:** local o contra IA. Contra la IA puedes elegir la dificultad: Fácil, Medio, Difícil, Experto o Neuronal. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil. Neuronal ejecuta una red pequeña en el navegador; Experto conserva su evaluación clásica.
 - **Puntos de vida de la Fortaleza:** elige 1, 2 o 3 al crear cualquier partida libre; la opción predeterminada es 1.
 - **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 60 segundos o 90 segundos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites. Al agotar el tiempo de turno, la IA realiza una jugada por ti; la tercera vez que un mismo jugador lo agota durante la partida, pierde. Agotar el tiempo total concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes y las veces que cada jugador ha agotado el tiempo de turno se conservan al guardar y continuar.
 - **Disposiciones iniciales:** Frente clásico (antes Frente blindado: 5 asaltadores, 4 tanques y 18 piezas por jugador) y Frente extendido (11 asaltadores, 2 tanques retrasados y 22 piezas por jugador). Ambas incluyen un lanzamisiles y un caza. Los guardados con formaciones anteriores siguen siendo compatibles.
@@ -71,11 +76,13 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 - El visor de repetición permite recorrer la partida sin modificarla.
 - PWA instalable con caché offline del shell.
 
-Los guardados declaran versión y ruleset. Una repetición importada se reconstruye acción por acción y se rechaza si contiene una orden ilegal. El desenlace terminal también forma parte del registro: victoria por Fortaleza, tiempo o rendición, y tablas por bloqueo, repetición o falta de progreso sobreviven al autoguardado, la exportación y la reproducción.
+Los guardados declaran versión y ruleset. Una repetición importada se reconstruye acción por acción y se rechaza si contiene una orden ilegal. El desenlace terminal también forma parte del registro: victoria por Fortaleza, tiempo o rendición, por cinco turnos de orientación, y tablas por bloqueo sobreviven al autoguardado, la exportación y la reproducción.
 
-Cada partida contra la IA y cada revancha generan una semilla nueva. Todos los niveles, incluido Experto, pueden elegir entre órdenes de valoración muy próxima; el margen se estrecha al subir la dificultad y se respetan las victorias forzadas y su distancia. Si una jugada es claramente superior, puede repetirse aunque cambie la semilla. Continuar o importar una partida conserva su semilla, y las repeticiones reproducen las acciones registradas.
+Cada partida contra la IA y cada revancha generan una semilla nueva. Los niveles clásicos, incluido Experto, pueden elegir entre órdenes de valoración muy próxima; el margen se estrecha al subir la dificultad y se respetan las victorias forzadas y su distancia. Neuronal elige la orden mejor valorada por su búsqueda. Si una jugada es claramente superior, puede repetirse aunque cambie la semilla. Continuar o importar una partida conserva su semilla, y las repeticiones reproducen las acciones registradas.
 
-Los presupuestos máximos de cálculo por turno son: Fácil, 0,25 segundos; Medio, 2 segundos; Difícil, 5 segundos; y Experto, 15 segundos. Buscan hasta 1, 3, 5 y 9 medias jugadas respectivamente, con extensiones para resolver intercambios y amenazas a la Fortaleza. Todos los niveles, incluido Fácil, utilizan búsqueda en un Worker y pueden responder antes si terminan el análisis. Solo se utilizan iteraciones terminadas: la profundidad efectiva depende de la posición y del dispositivo. Si el Worker no está disponible, el respaldo limita su tiempo para mantener la respuesta de la interfaz. Una semilla explícita permite repetir las decisiones con el mismo estado y profundidad completada; no garantiza que equipos distintos alcancen la misma profundidad dentro del límite de tiempo.
+Los presupuestos máximos de cálculo por turno son: Fácil, 0,25 segundos; Medio, 2 segundos; Difícil, 5 segundos; Experto y Neuronal, 15 segundos. Buscan hasta 1, 3, 5 y 9 medias jugadas respectivamente, con extensiones para resolver intercambios y amenazas a la Fortaleza. Todos los niveles, incluido Fácil, utilizan búsqueda en un Worker y pueden responder antes si terminan el análisis. Solo se utilizan iteraciones terminadas: la profundidad efectiva depende de la posición y del dispositivo. Si el Worker no está disponible, el respaldo limita su tiempo para mantener la respuesta de la interfaz. Si los pesos neuronales no se pueden cargar, se avisa y Experto juega ese turno. Una semilla explícita permite repetir las decisiones con el mismo estado y profundidad completada; no garantiza que equipos distintos alcancen la misma profundidad dentro del límite de tiempo.
+
+Neuronal comparte provisionalmente las recompensas y la valoración de juego de Experto. Los resultados de sus ensayos se documentan en [las iteraciones del laboratorio](docs/ia-neuronal-iteraciones.md).
 
 La IA valora el coste real de convertir un vehículo en Asaltador y comprueba esas capturas inmediatas también al elegir una jugada de respaldo por falta de tiempo. Para el Caza, considera las salidas legales sin intercepción, el espacio de maniobra y el rumbo hacia objetivos, evitando avances sin utilidad que lo encierren contra un borde.
 
@@ -95,7 +102,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 - Cada casilla admite una capa terrestre y una aérea, con una unidad como máximo en cada capa. Al atacar una casilla compartida se elige un único objetivo.
 - El Escudo antiaéreo protege su propia casilla y las seis adyacentes. Las aeronaves enemigas que entran o cruzan esa zona son interceptadas en la primera casilla protegida. Tanque y Lanzamisiles no pueden disparar por una trayectoria protegida; el Caza no puede disparar contra una casilla protegida.
 - Tanque, Lanzamisiles y Embestidor pueden transformarse en Asaltador. La orientación elegida y el posible avance o ataque inmediato del Asaltador forman una sola orden.
-- La tercera aparición de la misma posición, con el mismo jugador al turno, produce tablas. La configuración estándar también declara tablas tras 120 medias jugadas (`plies`) sin bajas, intercepciones ni daño a Fortaleza; el límite efectivo queda guardado en cada partida.
+- Un jugador pierde tras cinco turnos propios consecutivos dedicados únicamente a orientar asaltadores o cañones de tanques. Cualquier otra acción reinicia su contador. Antes de confirmar el quinto cambio, una advertencia permite cancelar o confirmar la derrota. No hay tablas automáticas por repetición ni por 120 medias jugadas.
 - Si un jugador no tiene acciones legales, el turno pasa. Si ninguno de los dos bandos puede destruir la Fortaleza rival, hay tablas por bloqueo; los jugadores también pueden acordar ese resultado.
 
 ## Controles

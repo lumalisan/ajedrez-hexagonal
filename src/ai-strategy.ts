@@ -1,5 +1,6 @@
 import { searchMachineAction } from './ai';
 import type { SearchMetadata } from './ai';
+import { createNeuralEvaluator } from './ai-neural';
 import { resolutionRulesForConfig } from './match-record';
 import type { AiDifficulty, GameAction, GameState, MatchConfig } from './types';
 
@@ -7,6 +8,7 @@ export interface AiBudget {
   maxMs: number;
   signal?: AbortSignal;
   onProgress?: (metadata: Readonly<SearchMetadata>) => void;
+  onFallback?: (message: string) => void;
 }
 
 export interface AiStrategy {
@@ -19,6 +21,7 @@ const DIFFICULTY: Record<AiDifficulty, { depth: number; maxMs: number }> = {
   tactical: { depth: 3, maxMs: 2_000 },
   commander: { depth: 5, maxMs: 5_000 },
   expert: { depth: 9, maxMs: 15_000 },
+  neural: { depth: 9, maxMs: 15_000 },
 };
 
 const MAIN_THREAD_MAX_MS = 400;
@@ -27,10 +30,51 @@ export function difficultyBudget(difficulty: AiDifficulty): number {
   return DIFFICULTY[difficulty].maxMs;
 }
 
+async function loadBundledNeuralModel(signal?: AbortSignal): Promise<ArrayBuffer> {
+  const response = await fetch(new URL('./ai-models/hex-value.bin', import.meta.url), { signal });
+  if (!response.ok) throw new Error('No se pudo cargar el modelo neuronal.');
+  const bytes = await response.arrayBuffer();
+  createNeuralEvaluator(bytes);
+  return bytes;
+}
+
 export class WorkerAiStrategy implements AiStrategy {
   #worker: Worker | null = null;
   #cancelSearch: (() => void) | null = null;
   #requestId = 0;
+  readonly #modelBytes?: ArrayBuffer;
+  #bundledModelBytes?: ArrayBuffer;
+  #operation = 0;
+
+  /** Experimental model supplied explicitly; normal matches retain classic Expert. */
+  constructor(modelBytes?: ArrayBuffer) {
+    this.#modelBytes = modelBytes?.slice(0);
+  }
+
+  /** Explicit candidate factory for experiments, independent of the selected level. */
+  static async createNeuralCandidate(): Promise<WorkerAiStrategy> {
+    return new WorkerAiStrategy(await loadBundledNeuralModel());
+  }
+
+  async #loadNeuralModel(signal?: AbortSignal): Promise<ArrayBuffer | undefined> {
+    if (this.#bundledModelBytes) return this.#bundledModelBytes;
+    const controller = new AbortController();
+    const abort = (): void => controller.abort();
+    this.#cancelSearch = abort;
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const bytes = await loadBundledNeuralModel(controller.signal);
+      if (controller.signal.aborted) return undefined;
+      this.#bundledModelBytes = bytes;
+      return bytes;
+    } catch (error) {
+      if (controller.signal.aborted) return undefined;
+      throw error;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      if (this.#cancelSearch === abort) this.#cancelSearch = null;
+    }
+  }
 
   async chooseAction(
     state: GameState,
@@ -39,12 +83,25 @@ export class WorkerAiStrategy implements AiStrategy {
   ): Promise<GameAction | null> {
     if (budget.signal?.aborted) return null;
     this.dispose();
+    const operation = this.#operation;
     const participant = config.participants[state.activePlayer];
     const difficulty = participant.difficulty ?? 'recruit';
+    let modelBytes = this.#modelBytes;
+    if (difficulty === 'neural' && !modelBytes) {
+      try {
+        modelBytes = await this.#loadNeuralModel(budget.signal);
+      } catch {
+        if (budget.signal?.aborted || operation !== this.#operation) return null;
+        budget.onFallback?.(
+          'No se pudo cargar la red. Experto jugará este turno; se reintentará en el siguiente.',
+        );
+      }
+      if (budget.signal?.aborted || operation !== this.#operation) return null;
+    }
     const personality = participant.personality ?? 'balanced';
     const seed = participant.seed;
     const choiceOptions = {
-      difficulty,
+      difficulty: difficulty === 'neural' ? ('expert' as const) : difficulty,
       personality,
       seed,
       resolutionRules: resolutionRulesForConfig(config),
@@ -58,6 +115,7 @@ export class WorkerAiStrategy implements AiStrategy {
         budgetMs: Math.min(budgetMs, MAIN_THREAD_MAX_MS),
         ...choiceOptions,
         onProgress: budget.onProgress,
+        ...(modelBytes ? { evaluate: createNeuralEvaluator(modelBytes) } : {}),
       });
       return budget.signal?.aborted ? null : action;
     };
@@ -122,7 +180,14 @@ export class WorkerAiStrategy implements AiStrategy {
         return;
       }
       try {
-        worker.postMessage({ id, state, depth: settings.depth, budgetMs, ...choiceOptions });
+        worker.postMessage({
+          id,
+          state,
+          depth: settings.depth,
+          budgetMs,
+          ...choiceOptions,
+          ...(modelBytes ? { modelBytes } : {}),
+        });
       } catch {
         onError();
       }
@@ -130,6 +195,7 @@ export class WorkerAiStrategy implements AiStrategy {
   }
 
   dispose(): void {
+    this.#operation += 1;
     this.#cancelSearch?.();
     this.#worker?.terminate();
     this.#worker = null;

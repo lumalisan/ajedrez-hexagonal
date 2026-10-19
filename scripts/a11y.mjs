@@ -58,8 +58,10 @@ try {
       await audit('home');
       await page.locator('.home-profile').click();
       await audit('profile / overview');
-      await page.getByRole('button', { name: 'Estadísticas y récords', exact: true }).click();
-      await audit('profile / statistics and records');
+      await page.getByRole('tab', { name: 'Estadísticas', exact: true }).click();
+      await audit('profile / statistics');
+      await page.getByRole('tab', { name: 'Récords', exact: true }).click();
+      await audit('profile / records');
       await page.getByRole('button', { name: 'Configuración', exact: true }).click();
       await audit('profile / settings');
       await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
@@ -76,18 +78,18 @@ try {
 
       await page.locator('[data-home-action="ranking"]').click();
       await page.getByRole('heading', { name: 'Clasificación', exact: true }).waitFor();
-      await audit('ranking / historical results');
-      await openSelect(page, 'Periodo');
-      await audit('ranking / period selector');
-      await chooseSelectOption(page, 'Periodo', 'Últimos 30 días');
-      await audit('ranking / monthly results');
-      await chooseSelectOption(page, 'Modalidad', 'En línea');
-      await audit('ranking / online availability');
+      await audit('ranking / online monthly default');
+      await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
+      await audit('ranking / online historical');
+      await page.getByRole('button', { name: 'Vs. Hexfortia', exact: true }).click();
+      await audit('ranking / machine monthly');
+      await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
+      await audit('ranking / machine historical');
       await page.keyboard.press('Escape');
       await page.locator('#game-dialog').waitFor({ state: 'hidden' });
 
       await page.locator('[data-home-action="profile"]').click();
-      await page.getByRole('heading', { name: 'Tu perfil', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Perfil', exact: true }).waitFor();
       await audit('profile / experience and level');
       await page.keyboard.press('Escape');
       await page.locator('#game-dialog').waitFor({ state: 'hidden' });
@@ -115,6 +117,8 @@ try {
       await audit('AI configuration / open difficulty menu');
       await chooseSelectOption(page, 'Nivel', 'Experto');
       await audit('AI configuration / expert');
+      await chooseSelectOption(page, 'Nivel', 'Neuronal');
+      await audit('AI configuration / neural');
       await page.locator('[data-back-menu]').click();
       await page.locator('[data-home-mode="local"]').click();
       await page.locator('[data-start-free]').waitFor({ state: 'visible' });

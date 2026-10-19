@@ -8,6 +8,9 @@ import {
 } from './engine';
 import { actionKey } from './action-identity';
 import { airplanePositionScore } from './ai-airplane';
+import type { NeuralEvaluator } from './ai-neural';
+import { RepetitionHasher } from './ai-position';
+import { evaluateRangedState, rangedActionPriority, rangedMaterialBonus } from './ai-ranged';
 import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
 import type {
   AiDifficulty,
@@ -51,6 +54,12 @@ interface SearchContext {
   tacticalDepth: number;
   rootMustDefend: boolean;
   resolutionRules?: Readonly<ActionResolutionRules>;
+  evaluate?: NeuralEvaluator;
+  advanced: boolean;
+  history: Map<string, number>;
+  repetitionHasher?: RepetitionHasher;
+  fortressDamageThreats?: WeakMap<GameState, Map<Player, boolean>>;
+  rangedPlay: boolean;
 }
 
 interface Transposition {
@@ -167,6 +176,7 @@ const VARIATION: Record<AiDifficulty, { window: number; temperature: number; lim
   tactical: { window: 35, temperature: 18, limit: 4 },
   commander: { window: 18, temperature: 8, limit: 4 },
   expert: { window: 10, temperature: 4, limit: 4 },
+  neural: { window: 0, temperature: 0, limit: 1 },
 };
 
 /** Quick one-ply choice for demonstrations and lightweight callers. */
@@ -203,6 +213,12 @@ export interface SearchOptions {
   personality?: AiPersonality;
   difficulty?: AiDifficulty;
   resolutionRules?: Readonly<ActionResolutionRules>;
+  /** Optional learned evaluator; omitting it preserves the classic Expert baseline. */
+  evaluate?: NeuralEvaluator;
+  /** Candidate-only search; classic remains the unchanged tournament reference. */
+  searchProfile?: 'classic' | 'pvs-history' | 'pvs-threats';
+  /** Defaults on for pvs-threats; false isolates the prior candidate in tactical comparisons. */
+  rangedPlay?: boolean;
   /** Called after each completed iteration with a read-only search snapshot. */
   onProgress?: (metadata: Readonly<SearchMetadata>) => void;
 }
@@ -241,6 +257,7 @@ export function searchMachineActionWithMetadata(
     };
   }
 
+  const searchProfile = options.searchProfile ?? options.evaluate?.searchProfile ?? 'classic';
   const context: SearchContext = {
     rootPlayer: state.activePlayer,
     personality: options.personality ?? 'balanced',
@@ -250,12 +267,21 @@ export function searchMachineActionWithMetadata(
     killers: new Map(),
     evaluation: new WeakMap(),
     fortressThreats: new WeakMap(),
-    variationWindow: VARIATION[options.difficulty ?? 'expert'].window,
-    maxMoves: (options.difficulty ?? 'expert') === 'expert' ? 28 : MAX_SEARCH_MOVES,
-    maxRootMoves: (options.difficulty ?? 'expert') === 'expert' ? 48 : MAX_ROOT_SEARCH_MOVES,
-    tacticalDepth: (options.difficulty ?? 'expert') === 'expert' ? 4 : 2,
+    variationWindow:
+      searchProfile !== 'classic' ? 0 : VARIATION[options.difficulty ?? 'expert'].window,
+    maxMoves: ['expert', 'neural'].includes(options.difficulty ?? 'expert') ? 28 : MAX_SEARCH_MOVES,
+    maxRootMoves: ['expert', 'neural'].includes(options.difficulty ?? 'expert')
+      ? 48
+      : MAX_ROOT_SEARCH_MOVES,
+    tacticalDepth: ['expert', 'neural'].includes(options.difficulty ?? 'expert') ? 4 : 2,
     rootMustDefend: false,
     resolutionRules: options.resolutionRules,
+    evaluate: options.evaluate,
+    advanced: searchProfile !== 'classic',
+    history: new Map(),
+    repetitionHasher: searchProfile !== 'classic' ? new RepetitionHasher() : undefined,
+    fortressDamageThreats: searchProfile === 'pvs-threats' ? new WeakMap() : undefined,
+    rangedPlay: options.rangedPlay ?? searchProfile === 'pvs-threats',
   };
   context.rootMustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
   const initial = orderActions(state, actions, context.rootPlayer, context.personality, context);
@@ -287,7 +313,9 @@ export function searchMachineActionWithMetadata(
   }
 
   const random = createSeededRandom(seedForState(options.seed, state));
-  const action = chooseNearBest(ranked, options.difficulty ?? 'expert', random);
+  const action = context.advanced
+    ? (ranked[0]?.action ?? null)
+    : chooseNearBest(ranked, options.difficulty ?? 'expert', random);
   const metadata: SearchMetadata = {
     requestedDepth,
     completedDepth,
@@ -365,7 +393,7 @@ function alphaBeta(
   if (state.outcome) return terminalScore(state, context.rootPlayer, ply);
   if (depth <= 0) return quiescence(state, alpha, beta, context, ply, context.tacticalDepth);
 
-  const key = positionKey(state);
+  const key = positionKey(state, context.repetitionHasher);
   const cached = context.table.get(key);
   const originalAlpha = alpha;
   const originalBeta = beta;
@@ -387,6 +415,8 @@ function alphaBeta(
     [...(cached?.actionKey ? [cached.actionKey] : []), ...killers],
     context.personality,
     mustDefend ? Infinity : context.maxMoves,
+    context.advanced ? context.history : undefined,
+    context.rangedPlay,
   );
   let bestScore = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
   let bestActionKey: string | undefined;
@@ -404,9 +434,21 @@ function alphaBeta(
     // Search late, quiet moves one ply less, then re-search if they surprise us.
     const reduce = depth >= 3 && index >= 8 && !tactical && !mustDefend;
     if (reduce) childDepth -= 1;
-    let score = alphaBeta(result.state, childDepth, alpha, beta, context, ply + 1);
+    const scout = context.advanced && index > 0 && Number.isFinite(maximizing ? alpha : beta);
+    let score = scout
+      ? alphaBeta(
+          result.state,
+          childDepth,
+          maximizing ? alpha : Math.max(alpha, beta - 0.000001),
+          maximizing ? Math.min(beta, alpha + 0.000001) : beta,
+          context,
+          ply + 1,
+        )
+      : alphaBeta(result.state, childDepth, alpha, beta, context, ply + 1);
     if (reduce && ((maximizing && score > alpha) || (!maximizing && score < beta))) {
       score = alphaBeta(result.state, depth - 1, alpha, beta, context, ply + 1);
+    } else if (scout && score > alpha && score < beta) {
+      score = alphaBeta(result.state, childDepth, alpha, beta, context, ply + 1);
     }
 
     if (maximizing ? score > bestScore : score < bestScore) {
@@ -416,7 +458,14 @@ function alphaBeta(
     if (maximizing) alpha = Math.max(alpha, bestScore);
     else beta = Math.min(beta, bestScore);
     if (alpha >= beta) {
-      if (!tactical) rememberKiller(context, ply, actionKey(action));
+      if (!tactical) {
+        const key = actionKey(action);
+        rememberKiller(context, ply, key);
+        if (context.advanced) {
+          const previous = context.history.get(key) ?? 0;
+          context.history.set(key, previous + depth * depth * 20 * (1 - previous / 5000));
+        }
+      }
       break;
     }
   }
@@ -444,9 +493,11 @@ function quiescence(
   }
   let value = evaluateSearchState(state, context);
 
-  // A threatened last Fortress point is the equivalent of check: passing is
-  // not a legal substitute for a defense, and a quiet block must be searched.
-  const mustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
+  // The candidate also extends threats to the first HP, including quiet
+  // approaches that allow a countercapture before a second hit can win.
+  const mustDefend = context.fortressDamageThreats
+    ? hasImmediateFortressDamage(state, otherPlayer(state.activePlayer), context)
+    : hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
   if (remaining <= 0 && !mustDefend) return value;
   if (mustDefend) {
     value = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
@@ -516,6 +567,33 @@ function hasImmediateFortressWin(
   return threatened;
 }
 
+function hasImmediateFortressDamage(
+  state: GameState,
+  attacker: Player,
+  context: SearchContext,
+): boolean {
+  const fortress = fortressOf(state, otherPlayer(attacker));
+  if (!fortress || state.outcome) return false;
+  if (fortress.hp === 1) return hasImmediateFortressWin(state, attacker, context);
+  const cached = context.fortressDamageThreats?.get(state)?.get(attacker);
+  if (cached !== undefined) return cached;
+  const attackingState =
+    state.activePlayer === attacker ? state : { ...state, activePlayer: attacker };
+  const threatened = getAllLegalActions(attackingState).some((action) => {
+    if (!(
+      ('targetId' in action && action.targetId === fortress.id) ||
+      ('to' in action && action.to && hexKey(action.to) === hexKey(fortress.position))
+    ))
+      return false;
+    const result = applyAction(attackingState, action, context.resolutionRules);
+    return result.ok && (fortressOf(result.state, fortress.owner)?.hp ?? 0) < fortress.hp;
+  });
+  const threats = context.fortressDamageThreats?.get(state) ?? new Map<Player, boolean>();
+  threats.set(attacker, threatened);
+  context.fortressDamageThreats?.set(state, threats);
+  return threatened;
+}
+
 function orderActions(
   state: GameState,
   actions: GameAction[],
@@ -538,7 +616,7 @@ function orderActions(
           : 0;
       let score = context
         ? evaluateSearchState(result.state, context)
-        : evaluateState(result.state, rootPlayer, personality);
+        : evaluateClassicState(result.state, rootPlayer, personality);
       score += (maximizing ? 1 : -1) * (tacticalScore - transformationRisk * 12) * weights.tactics;
       score += (maximizing ? 1 : -1) * stableActionBias(action, state.ply);
       return {
@@ -557,14 +635,26 @@ function orderActions(
 }
 
 function evaluateSearchState(state: GameState, context: SearchContext): number {
+  // A learned estimate never overrides a result established by the rules engine.
+  if (state.outcome) return terminalScore(state, context.rootPlayer, 0);
   const cached = context.evaluation.get(state);
   if (cached !== undefined) return cached;
-  const score = evaluateState(state, context.rootPlayer, context.personality);
+  let score = context.evaluate
+    ? context.evaluate(state, context.rootPlayer, context.resolutionRules)
+    : evaluateClassicState(state, context.rootPlayer, context.personality);
+  if (context.rangedPlay) score += evaluateRangedState(state, context.rootPlayer);
+  if (!Number.isFinite(score) || Math.abs(score) >= MATE_SCORE / 2) {
+    throw new Error('La evaluación de posición debe ser finita y menor que una victoria.');
+  }
   context.evaluation.set(state, score);
   return score;
 }
 
-function evaluateState(state: GameState, player: Player, personality: AiPersonality): number {
+export function evaluateClassicState(
+  state: GameState,
+  player: Player,
+  personality: AiPersonality = 'balanced',
+): number {
   if (state.outcome) return terminalScore(state, player, 0);
   const weights = PERSONALITY_WEIGHTS[personality];
   const enemy = otherPlayer(player);
@@ -614,6 +704,8 @@ function selectSearchActions(
   forcedKeys: string[],
   personality: AiPersonality,
   maxMoves: number,
+  history?: ReadonlyMap<string, number>,
+  rangedPlay = false,
 ): GameAction[] {
   const forced = new Set(forcedKeys);
   const priorities = new Map<GameAction, number>();
@@ -643,7 +735,8 @@ function selectSearchActions(
         target?.type === 'fortress'
           ? 90_000
           : target
-            ? materialValue(target) * (action.kind === 'convert' ? 24 : 12)
+            ? (materialValue(target) + (rangedPlay ? rangedMaterialBonus(target) : 0)) *
+              (action.kind === 'convert' ? 24 : 12)
             : 0;
       priorities.set(
         action,
@@ -673,7 +766,8 @@ function selectSearchActions(
         cannon: action.cannon,
       });
     }
-    score += stableActionBias(action, state.ply);
+    score += (history?.get(key) ?? 0) + stableActionBias(action, state.ply);
+    if (rangedPlay) score += rangedActionPriority(state, action);
     priorities.set(action, score);
     const destination = 'to' in action && action.to ? hexKey(action.to) : '-';
     quiet.push({ action, score, group: `${action.pieceId}:${action.kind}:${destination}` });
@@ -885,7 +979,7 @@ function fortressOf(
   );
 }
 
-function positionKey(state: GameState): string {
+function positionKey(state: GameState, repetitionHasher?: RepetitionHasher): string {
   const pieces = state.pieces
     .map((piece) => {
       const facing = piece.type === 'soldier' || piece.type === 'airplane' ? piece.facing : '-';
@@ -896,7 +990,7 @@ function positionKey(state: GameState): string {
     })
     .sort()
     .join('|');
-  return `${state.activePlayer}:${state.firstFortressDamageBy ?? '-'}:${state.noProgressPlyCount ?? 0}:${repetitionHash(state)}:${pieces}`;
+  return `${state.activePlayer}:${state.firstFortressDamageBy ?? '-'}:${state.noProgressPlyCount ?? 0}${state.orientationOnlyTurns?.some(Boolean) ? ':orientation=' + state.orientationOnlyTurns.join(',') : ''}:${repetitionHasher ? repetitionHasher.hash(state.positionCounts) : repetitionHash(state)}:${pieces}`;
 }
 
 function repetitionHash(state: GameState): number {

@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import { searchMachineActionWithMetadata } from './ai';
+import { createNeuralEvaluator } from './ai-neural';
 import type { ActionResolutionRules } from './engine';
 import type { AiDifficulty, AiPersonality, GameState } from './types';
 
@@ -13,6 +14,7 @@ interface SearchRequest {
   personality: AiPersonality;
   resolutionRules: Readonly<ActionResolutionRules>;
   seed?: number;
+  modelBytes?: ArrayBuffer;
 }
 
 self.addEventListener('message', (event: MessageEvent<SearchRequest>) => {
@@ -24,6 +26,7 @@ self.addEventListener('message', (event: MessageEvent<SearchRequest>) => {
     personality: request.personality,
     seed: request.seed,
     resolutionRules: request.resolutionRules,
+    ...(request.modelBytes ? { evaluate: createNeuralEvaluator(request.modelBytes) } : {}),
     onProgress: (metadata) => {
       self.postMessage({ id: request.id, type: 'progress', metadata });
     },

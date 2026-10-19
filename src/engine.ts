@@ -13,8 +13,7 @@ import {
 } from './hex';
 import { actionKey } from './action-identity';
 import {
-  CLASSIC_NO_PROGRESS_LIMIT,
-  CLASSIC_REPETITION_LIMIT,
+  CLASSIC_ORIENTATION_TURN_LIMIT,
   FORTRESS_DAMAGE_PER_HIT,
   FORTRESS_SACRIFICE_ATTACKERS,
 } from './classic-rules';
@@ -69,11 +68,13 @@ export interface ActionResolutionRules {
   repetition: number | null;
   /** Consecutive plies without capture or Fortress damage; null disables it. */
   noProgressPlyLimit: number | null;
+  orientationOnlyTurnLimit?: number | null;
 }
 
 export const DEFAULT_ACTION_RESOLUTION_RULES: Readonly<ActionResolutionRules> = {
-  repetition: CLASSIC_REPETITION_LIMIT,
-  noProgressPlyLimit: CLASSIC_NO_PROGRESS_LIMIT,
+  repetition: null,
+  noProgressPlyLimit: null,
+  orientationOnlyTurnLimit: CLASSIC_ORIENTATION_TURN_LIMIT,
 };
 
 export function createInitialState(): GameState {
@@ -101,6 +102,9 @@ export function cloneState(state: GameState): GameState {
     ...state,
     pieces: state.pieces.map(clonePiece),
     positionCounts: { ...state.positionCounts },
+    ...(state.orientationOnlyTurns
+      ? { orientationOnlyTurns: [...state.orientationOnlyTurns] as [number, number] }
+      : {}),
     outcome: state.outcome ? { ...state.outcome } : null,
     history: state.history.map((entry) => ({ ...entry })),
   };
@@ -174,6 +178,13 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
   }
   if (state.activePlayer !== 0 && state.activePlayer !== 1)
     errors.push('El jugador activo no es válido.');
+  if (
+    state.orientationOnlyTurns !== undefined &&
+    (!Array.isArray(state.orientationOnlyTurns) ||
+      state.orientationOnlyTurns.length !== 2 ||
+      state.orientationOnlyTurns.some((count) => !Number.isSafeInteger(count) || count < 0))
+  )
+    errors.push('Los contadores de turnos de orientación no son válidos.');
   if (!Number.isInteger(state.ply) || state.ply < 0)
     errors.push('El contador de turnos no es válido.');
   if (
@@ -727,6 +738,11 @@ export function applyAction(
   if (!actor) return failure(state, 'La unidad ya no está disponible.');
 
   executeAction(next, action, events);
+  next.orientationOnlyTurns ??= [0, 0];
+  next.orientationOnlyTurns[state.activePlayer] =
+    action.kind === 'rotate' || action.kind === 'orient'
+      ? next.orientationOnlyTurns[state.activePlayer] + 1
+      : 0;
   purgeAirUnitsInEnemyZones(next, events);
   next.noProgressPlyCount = madeProgress(events) ? 0 : (state.noProgressPlyCount ?? 0) + 1;
   next.ply += 1;
@@ -736,6 +752,20 @@ export function applyAction(
     text: describeResolvedAction(state, action, events),
   });
   if (next.history.length > 80) next.history.shift();
+
+  if (
+    rules.orientationOnlyTurnLimit != null &&
+    next.orientationOnlyTurns[state.activePlayer] >= rules.orientationOnlyTurnLimit
+  ) {
+    next.outcome = { type: 'win', winner: otherPlayer(state.activePlayer), reason: 'orientation' };
+    events.push({ type: 'victory', owner: otherPlayer(state.activePlayer) });
+    next.history.push({
+      id: next.ply,
+      player: state.activePlayer,
+      text: outcomeText(next.outcome),
+    });
+    return { ok: true, state: next, events };
+  }
 
   const defeated = findDefeatedPlayer(next);
   if (defeated !== null) {
@@ -803,6 +833,7 @@ function passTurnIfBlocked(state: GameState, events: GameEvent[]): void {
   )
     return;
   const blockedPlayer = state.activePlayer;
+  if (state.orientationOnlyTurns) state.orientationOnlyTurns[blockedPlayer] = 0;
   state.activePlayer = otherPlayer(blockedPlayer);
   events.push({ type: 'pass', owner: blockedPlayer });
   state.history.push({
@@ -1402,11 +1433,13 @@ export function outcomeText(outcome: Outcome): string {
     return 'Tablas por bloqueo';
   }
   const reason =
-    outcome.reason === 'timeout'
-      ? 'tiempo agotado'
-      : outcome.reason === 'resignation'
-        ? 'rendición rival'
-        : 'Fortaleza destruida';
+    outcome.reason === 'orientation'
+      ? 'cinco turnos rivales consecutivos de orientación'
+      : outcome.reason === 'timeout'
+        ? 'tiempo agotado'
+        : outcome.reason === 'resignation'
+          ? 'rendición rival'
+          : 'Fortaleza destruida';
   return `${PLAYER_NAMES[outcome.winner]} vence · ${reason}`;
 }
 

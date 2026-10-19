@@ -21,6 +21,12 @@
     "test:design-system": "node scripts/design-system-smoke.mjs",
     "test:offline": "node scripts/offline-smoke.mjs",
     "test:watch": "vitest",
+    "ai:generate": "node scripts/ai/generate.mjs",
+    "ai:relabel": "node scripts/ai/relabel.mjs",
+    "ai:train": "node scripts/ai/train.mjs",
+    "ai:test-training": "node scripts/ai/train.mjs --self-test",
+    "ai:arena": "node scripts/ai/arena.mjs",
+    "ai:browser": "node scripts/ai/browser-smoke.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

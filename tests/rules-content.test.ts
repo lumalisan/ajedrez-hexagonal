@@ -71,8 +71,9 @@ describe('contenido del reglamento', () => {
 
     expect(CLASSIC_REPETITION_LIMIT).toBe(3);
     expect(CLASSIC_NO_PROGRESS_LIMIT).toBe(120);
-    expect(text).toContain('tercera aparición');
-    expect(text).toContain(`${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies)`);
+    expect(text).toContain('cinco turnos propios consecutivos');
+    expect(text).toContain('cancelar la orden');
+    expect(text).not.toContain('tablas por repetición');
     expect(text).toContain('tablas por bloqueo');
     expect(text).toContain('acordar ese desenlace');
     expect(text).toContain('tiempo agotado');

@@ -42,6 +42,7 @@ describe('match insights', () => {
         repetition: 0,
       },
     };
+    config.options.orientationOnlyTurnLimit = null; // Legacy recording.
     const rules = resolutionRulesForConfig(config);
     let record = createMatchRecord(config, initial);
     let state = initial;

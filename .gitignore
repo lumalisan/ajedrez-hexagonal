@@ -6,3 +6,6 @@ coverage/
 *.log
 .DS_Store
 .agents
+.ai-lab/
+__pycache__/
+.venv/

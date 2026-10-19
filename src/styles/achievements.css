@@ -1042,12 +1042,6 @@
 }
 
 /* Profile inherits the collection browser navigation and modal proportions. */
-.profile-header {
-  justify-content: space-between;
-}
-.profile-header .achievements-player {
-  max-width: 85%;
-}
 .profile-content {
   padding: 0 24px 32px;
 }
@@ -1072,9 +1066,6 @@
   width: 100%;
   accent-color: var(--blue);
 }
-.profile-achievements button {
-  justify-self: start;
-}
 .profile-ratings {
   margin: 0;
 }
@@ -1095,9 +1086,6 @@
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
-}
-.profile-records {
-  margin-top: 32px;
 }
 .profile-content .ranking-table th {
   white-space: normal;
@@ -1205,4 +1193,26 @@
 }
 .high-contrast .achievement-insignia.is-locked {
   filter: saturate(0.45);
+}
+
+.ranking-periods {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.ranking-periods > [role='tablist'] {
+  justify-content: flex-start;
+}
+.ranking-browser .ranking-content {
+  padding-top: 24px;
+}
+.ranking-browser .achievements-sidebar h2 {
+  font-size: clamp(24px, 2vw, 30px);
+}
+.ranking-browser .achievements-main {
+  display: flex;
+  flex-direction: column;
+}
+.ranking-browser .ranking-content {
+  flex: 1;
 }

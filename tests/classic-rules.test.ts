@@ -26,9 +26,10 @@ describe('contrato de reglas classic-v2', () => {
     expect(fortressAttackSummary(3)).toContain('Cada impacto causa 1 punto');
   });
 
-  it('mantiene la nota de reglas alineada con la tercera repetición', () => {
+  it('mantiene la nota de reglas alineada con la derrota por orientación', () => {
     expect(CLASSIC_RULES_NOTE).toContain('classic-v2');
-    expect(CLASSIC_RULES_NOTE).toContain('tercera repetición');
+    expect(CLASSIC_RULES_NOTE).toContain('cinco turnos propios consecutivos');
+    expect(CLASSIC_RULES_NOTE).not.toContain('terminan en tablas');
     expect(CLASSIC_RULES_NOTE).toContain('reduce 1 punto');
   });
 });

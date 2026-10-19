@@ -88,7 +88,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'ai-expert',
     'Captcha superado',
-    'Gana una partida contra la IA en dificultad Experto.',
+    'Gana una partida contra la IA en dificultad Experto o Neuronal.',
     'matches',
   ),
   achievement(
@@ -388,6 +388,7 @@ export function evaluateMatchAchievements(
         tactical: 'ai-tactical',
         commander: 'ai-commander',
         expert: 'ai-expert',
+        neural: 'ai-expert',
       };
       const id = difficultyAchievement[difficulty];
       if (id) earned.add(id);

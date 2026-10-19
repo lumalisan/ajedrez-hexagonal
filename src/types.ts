@@ -90,7 +90,7 @@ export interface GameEvent {
 }
 
 export type Outcome =
-  | { type: 'win'; winner: Player; reason: 'fortress' | 'resignation' | 'timeout' }
+  | { type: 'win'; winner: Player; reason: 'fortress' | 'resignation' | 'timeout' | 'orientation' }
   | { type: 'draw'; reason: 'blockade' | 'repetition' | 'no-progress' };
 
 export interface BattleLogEntry {
@@ -110,6 +110,8 @@ export interface GameState {
    * Optional so version 2 saves created before the no-progress rule still load.
    */
   noProgressPlyCount?: number;
+  /** Consecutive orientation-only turns, tracked independently for each player. */
+  orientationOnlyTurns?: [number, number];
   outcome: Outcome | null;
   history: BattleLogEntry[];
 }
@@ -146,7 +148,7 @@ export type ConfirmationMode = 'always' | 'critical' | 'quick';
 
 export type GameMode = 'local' | 'machine' | 'academy';
 
-export type AiDifficulty = 'recruit' | 'tactical' | 'commander' | 'expert';
+export type AiDifficulty = 'recruit' | 'tactical' | 'commander' | 'expert' | 'neural';
 
 export type AiPersonality = 'balanced' | 'aggressive' | 'guardian' | 'ambush';
 
@@ -185,8 +187,10 @@ export interface MatchOptions {
   clockSeconds: number | null;
   /** Null or absent disables the independent per-turn countdown. */
   turnClockSeconds?: number | null;
-  /** Null disables the automatic draw. Defaults to 120 in classic games. */
+  /** Historical recording option. New games disable this draw by default. */
   noProgressPlyLimit?: number | null;
+  /** Absent in legacy recordings; null disables the orientation penalty. */
+  orientationOnlyTurnLimit?: number | null;
   allowUndo: boolean;
 }
 

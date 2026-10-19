@@ -1,9 +1,5 @@
 import { allBoardHexes, hexKey } from './hex';
-import {
-  CLASSIC_NO_PROGRESS_LIMIT,
-  CLASSIC_REPETITION_LIMIT,
-  CLASSIC_RULESET_ID,
-} from './classic-rules';
+import { CLASSIC_RULESET_ID, CLASSIC_ORIENTATION_TURN_LIMIT } from './classic-rules';
 import { createInitialPieces, type InitialLayout } from './setup';
 import type {
   AiDifficulty,
@@ -68,8 +64,8 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     handoffScreen: input.handoffScreen ?? false,
     clockSeconds: input.clockSeconds ?? null,
     turnClockSeconds: input.turnClockSeconds ?? null,
-    noProgressPlyLimit:
-      input.noProgressPlyLimit === undefined ? CLASSIC_NO_PROGRESS_LIMIT : input.noProgressPlyLimit,
+    noProgressPlyLimit: input.noProgressPlyLimit ?? null,
+    orientationOnlyTurnLimit: CLASSIC_ORIENTATION_TURN_LIMIT,
     allowUndo: true,
   };
   const pieces = createInitialPieces(input.fortressHp ?? 2, input.initialLayout ?? 1);
@@ -81,7 +77,7 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
     setup: pieces.map((piece) => ({ id: piece.id, piece })),
     victory: {
       kind: 'classic-fortress',
-      repetition: CLASSIC_REPETITION_LIMIT,
+      repetition: 0,
       blockade: true,
     },
     options,
@@ -90,6 +86,9 @@ export function createClassicConfig(input: MatchConfigInput): MatchConfig {
 
 export function validateMatchConfig(config: MatchConfig): string[] {
   const errors: string[] = [];
+  const orientationLimit = config.options.orientationOnlyTurnLimit;
+  if (orientationLimit != null && orientationLimit !== CLASSIC_ORIENTATION_TURN_LIMIT)
+    errors.push('El límite de turnos de orientación debe ser cinco.');
   if (config.rulesetId !== CLASSIC_RULESET_ID) errors.push('Ruleset no compatible.');
   if (!config.definitionId.trim()) errors.push('La definición no tiene identificador.');
   if (config.participants.length !== 2) errors.push('La partida necesita dos participantes.');

@@ -66,6 +66,24 @@ export function UtilityDialogs() {
           </p>
         </ConfirmationDialog>
       );
+    case 'orientation-loss':
+      return (
+        <ConfirmationDialog
+          eyebrow="ADVERTENCIA DE DERROTA"
+          title="Este cambio de orientación te hará perder"
+          cancelLabel="Cancelar acción"
+          confirmLabel="Confirmar y perder la partida"
+          confirmAttribute="data-confirm-orientation-loss"
+          onConfirm={() => void commands.commitPending()}
+          danger
+        >
+          <p>
+            Será tu quinto turno consecutivo dedicado únicamente a cambiar la orientación de un
+            asaltador o del cañón de un tanque. Si confirmas definitivamente, perderás la partida.
+          </p>
+          <p>Puedes cancelar y elegir otra acción.</p>
+        </ConfirmationDialog>
+      );
     case 'resign':
       return (
         <ConfirmationDialog

@@ -68,19 +68,35 @@ try {
     if (layout === '3') {
       await page.locator('.home-profile').click();
       await page
-        .getByRole('heading', { name: 'Tu perfil', exact: true })
+        .getByRole('tab', { name: 'Puntuación actual', exact: true })
         .waitFor({ state: 'visible' });
       assert(
-        await page.getByRole('heading', { name: 'Tu perfil', exact: true }).isVisible(),
+        (await page
+          .getByRole('tab', { name: 'Puntuación actual', exact: true })
+          .getAttribute('aria-selected')) === 'true',
         'Profile must open its overview by default.',
       );
       assert(
-        (await page.locator('.profile-content').textContent()).includes('Nivel 0'),
+        (await page.locator('.achievements-profile').textContent()).includes('Nivel 0'),
         'A new player must begin at level 0.',
       );
       if (process.env.UI_SCREENSHOT)
         await page.screenshot({ path: process.env.UI_SCREENSHOT + '-profile-' + mode + '.png' });
-      await page.getByRole('button', { name: 'Estadísticas y récords', exact: true }).click();
+      assert(
+        (await page
+          .getByRole('button', { name: 'Estadísticas y récords', exact: true })
+          .count()) === 0,
+        'Profile navigation must only contain overview and settings.',
+      );
+      await page.getByRole('tab', { name: 'Estadísticas', exact: true }).click();
+      assert(
+        await page
+          .getByRole('table', { name: 'Estadísticas del jugador', exact: true })
+          .isVisible(),
+      );
+      assert(
+        await page.getByRole('table', { name: 'Récords del jugador', exact: true }).isHidden(),
+      );
       assert(
         (await page.locator('.profile-content table').count()) === 2,
         'Profile must contain statistics and records tables.',
@@ -88,6 +104,18 @@ try {
       assert(
         (await page.locator('.profile-content table').nth(0).locator('tbody tr').count()) === 4,
         'Statistics must contain three modes and total.',
+      );
+      await page.getByRole('tab', { name: 'Estadísticas', exact: true }).press('ArrowRight');
+      assert(
+        await page
+          .getByRole('tab', { name: 'Récords', exact: true })
+          .evaluate((tab) => tab === document.activeElement),
+      );
+      assert(
+        await page.getByRole('table', { name: 'Récords del jugador', exact: true }).isVisible(),
+      );
+      assert(
+        await page.getByRole('table', { name: 'Estadísticas del jugador', exact: true }).isHidden(),
       );
       assert(
         (await page.locator('.profile-content table').nth(1).locator('tbody tr').count()) === 2,
@@ -124,10 +152,12 @@ try {
       );
       await page.locator('.home-profile').click();
       await page
-        .getByRole('heading', { name: 'Tu perfil', exact: true })
+        .getByRole('tab', { name: 'Puntuación actual', exact: true })
         .waitFor({ state: 'visible' });
       assert(
-        await page.getByRole('heading', { name: 'Tu perfil', exact: true }).isVisible(),
+        (await page
+          .getByRole('tab', { name: 'Puntuación actual', exact: true })
+          .getAttribute('aria-selected')) === 'true',
         'Reopening the profile must reset its section.',
       );
       await page.getByRole('button', { name: 'Configuración', exact: true }).click();
@@ -138,9 +168,64 @@ try {
         'Closing profile must discard unsaved edits.',
       );
     }
+    if (layout === '3') {
+      assert(
+        (await page.locator('.home-brand h1').textContent()) === 'Hexfortia',
+        'The home title must use Hexfortia.',
+      );
+      const centered = await page.locator('.home-shortcut-story').evaluate((button) => {
+        const title = button.querySelector('span').getBoundingClientRect();
+        const box = button.getBoundingClientRect();
+        return Math.abs((title.left + title.right) / 2 - (box.left + box.right) / 2) < 1;
+      });
+      assert(centered, 'The story title must be centered within its framed button.');
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({ path: process.env.UI_SCREENSHOT + '-home-' + mode + '.png' });
+      await page.locator('[data-home-action="ranking"]').click();
+      await page.getByRole('tab', { name: 'Mensual', exact: true }).waitFor();
+      assert(
+        (await page
+          .getByRole('tab', { name: 'Mensual', exact: true })
+          .getAttribute('aria-selected')) === 'true',
+        'Monthly must be the default ranking tab.',
+      );
+      assert(
+        (await page
+          .getByRole('button', { name: 'En línea', exact: true })
+          .getAttribute('aria-current')) === 'page',
+        'Online must be the default ranking mode.',
+      );
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({
+          path: process.env.UI_SCREENSHOT + '-ranking-online-' + mode + '.png',
+        });
+      await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
+      await page.getByRole('button', { name: 'Vs. Hexfortia', exact: true }).click();
+      assert(
+        (await page
+          .getByRole('tab', { name: 'Mensual', exact: true })
+          .getAttribute('aria-selected')) === 'true',
+        'Switching ranking mode must show the monthly tab first.',
+      );
+      assert(
+        await page.locator('.ranking-table').isVisible(),
+        'Machine ranking must display its table.',
+      );
+      await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
+      await page.getByRole('tab', { name: 'Histórica', exact: true }).evaluate(async (tab) => {
+        await Promise.all(
+          tab.getAnimations().map((animation) => animation.finished.catch(() => {})),
+        );
+      });
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({
+          path: process.env.UI_SCREENSHOT + '-ranking-machine-' + mode + '.png',
+        });
+      await page.getByRole('button', { name: 'Cerrar clasificación', exact: true }).click();
+    }
     await page.locator('[data-home-action="new"]').click();
     assert(
-      (await page.locator('.home-intro').textContent()) === 'Elige el modo de juego',
+      (await page.locator('.home-intro').textContent()) === 'Elige el modo de juego.',
       'The new match menu must use the requested introduction.',
     );
     await page.locator(`[data-home-mode="${mode}"]`).click();
@@ -152,8 +237,9 @@ try {
       await difficulty.waitFor({ state: 'visible' });
       assert((await difficulty.count()) === 1, 'AI must have a single difficulty selector.');
       assert(
-        (await selectOptionLabels(page, 'Nivel')).join('|') === 'Fácil|Medio|Difícil|Experto',
-        'AI must offer four clearly ordered difficulty levels.',
+        (await selectOptionLabels(page, 'Nivel')).join('|') ===
+          'Fácil|Medio|Difícil|Experto|Neuronal',
+        'AI must retain the classic levels and offer the separate neural level.',
       );
       assert(
         (await page.locator('[data-ai-doctrine], .doctrine-grid').count()) === 0,
@@ -344,6 +430,13 @@ try {
     }
     if (mode === 'machine') {
       await chooseSelectOption(page, 'Nivel', 'Experto');
+      await chooseSelectOption(page, 'Nivel', 'Neuronal');
+      assert(
+        (await page.locator('#neural-description').count()) === 0,
+        'Neural level must not show helper text beneath the selector.',
+      );
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-neural-mobile.png` });
       await chooseSelectOption(page, 'Nivel', 'Difícil');
     }
     assert(
@@ -643,7 +736,7 @@ try {
     await desktop.evaluate(() => !document.documentElement.classList.contains('modal-open')),
     'Closing a modal must restore the page scroll state.',
   );
-  assert((await desktop.title()) === 'Protocolo Hexagonal', 'Document title missing.');
+  assert((await desktop.title()) === 'Hexfortia', 'Document title missing.');
   await assertFullscreenAvailable(desktop, 'Match');
   assert(
     (await desktop.locator('#threat-toggle').count()) === 0 &&
@@ -2172,28 +2265,131 @@ try {
   );
   await tutorialMenu.close();
 
-  const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  watchErrors(solo, runtimeErrors);
-  await solo.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
-  await selectMode(solo, 'machine');
-  await assertHistoryControlsHidden(solo, 'Machine matches');
-  assert(
-    await solo.locator('#blockade-button').isHidden(),
-    'Draw proposals must be hidden when there is no second human player.',
-  );
-  await clickHex(solo, 0, -2);
-  await doubleClickHex(solo, 0, -1);
-  await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 25_000 });
-  await solo.locator('#turn-chip strong').filter({ hasText: 'en mando' }).waitFor();
-  assert(
-    (await solo.locator('#battle-log li').count()) >= 2,
-    'The machine must answer the human move with a legal move.',
-  );
-  assert(
-    (await solo.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
-    'Solo mode must keep the board viewed from the human side.',
-  );
-  await solo.close();
+  for (const difficulty of ['Experto', 'Neuronal']) {
+    const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    watchErrors(solo, runtimeErrors);
+    await solo.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+    await selectMode(solo, 'machine', difficulty);
+    const savedDifficulty = await solo.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config.participants[1]
+          .difficulty,
+    );
+    assert(
+      savedDifficulty === (difficulty === 'Neuronal' ? 'neural' : 'expert'),
+      'Solo mode must persist the selected AI level.',
+    );
+    await assertHistoryControlsHidden(solo, 'Machine matches');
+    assert(
+      await solo.locator('#blockade-button').isHidden(),
+      'Draw proposals must be hidden when there is no second human player.',
+    );
+    await clickHex(solo, 0, -2);
+    await doubleClickHex(solo, 0, -1);
+    await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 25_000 });
+    await solo.locator('#turn-chip strong').filter({ hasText: 'en mando' }).waitFor();
+    assert(
+      (await solo.locator('#battle-log li').count()) >= 2,
+      'The machine must answer the human move with a legal move.',
+    );
+    assert(
+      (await solo.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
+      'Solo mode must keep the board viewed from the human side.',
+    );
+    await solo.close();
+  }
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    const page = await browser.newPage({ viewport, reducedMotion: 'reduce' });
+    watchErrors(page, runtimeErrors);
+    await page.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
+    await page.evaluate(async () => {
+      const { createClassicConfig } = await import('/src/game-config.ts');
+      const { createGameState } = await import('/src/engine.ts');
+      const { createMatchRecord } = await import('/src/match-record.ts');
+      const pieces = [
+        { id: 'f0', type: 'fortress', owner: 0, position: { q: -5, r: 0 }, hp: 2 },
+        { id: 'f1', type: 'fortress', owner: 1, position: { q: 5, r: 0 }, hp: 2 },
+        { id: 'vehicle', type: 'medium', owner: 0, position: { q: 0, r: 0 }, cannon: 0 },
+        { id: 'enemy-air', type: 'drone', owner: 1, position: { q: 0, r: 0 } },
+        { id: 's1', type: 'soldier', owner: 1, position: { q: 2, r: 0 }, facing: 3 },
+      ];
+      const config = createClassicConfig({ mode: 'local' });
+      config.setup = pieces.map((piece) => ({ id: piece.id, piece }));
+      const state = createGameState(pieces);
+      state.orientationOnlyTurns = [4, 0];
+      const record = createMatchRecord(config, state);
+      localStorage.setItem('atlas-match-classic-v2', JSON.stringify(record));
+      localStorage.setItem(
+        'atlas-pending-matches-v1',
+        JSON.stringify([{ record, resumedAt: record.updatedAt }]),
+      );
+      localStorage.setItem(
+        'atlas-preferences-v2',
+        JSON.stringify({ confirmation: 'quick', reducedMotion: true, sound: false }),
+      );
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('[data-home-action="continue"]').click();
+    await page.locator('[data-continue-match]').first().click();
+    await clickHex(page, 0, 0);
+    await page.locator('[data-piece-choice="vehicle"]').click();
+    await page.locator('[data-command="transform"]').click();
+    assert(
+      (await page.locator('[data-transform-attack]').count()) === 0,
+      'Attacking above must require an explicit compass direction.',
+    );
+    await page.locator('[data-transform-facing="2"]').click();
+    const attack = page.locator('[data-transform-attack]');
+    assert(await attack.isVisible(), 'Selecting a direction must reveal the attack-above button.');
+    const attackBox = await attack.boundingBox();
+    const compassBox = await page.locator('.direction-section .hex-compass').boundingBox();
+    assert(
+      compassBox && attackBox && attackBox.y >= compassBox.y + compassBox.height,
+      'The attack-above button must appear below the compass.',
+    );
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({
+        path: process.env.UI_SCREENSHOT + '-transform-' + viewport.width + '.png',
+      });
+    await attack.click();
+    await page.locator('.confirm-button').click();
+    await page.waitForFunction(() => {
+      const record = JSON.parse(localStorage.getItem('atlas-match-classic-v2'));
+      return record?.actions[0]?.attackAboveId === 'enemy-air' && record.actions[0].facing === 2;
+    });
+    await page.locator('#undo-action:not([disabled])').click();
+    await clickHex(page, 0, 0);
+    await page.locator('[data-piece-choice="vehicle"]').click();
+    await page.locator('[data-command="orient"]').click();
+    await page.locator('[data-direction-order="1"]').click();
+    await page.locator('.confirm-button').click();
+    await page
+      .getByRole('heading', { name: 'Este cambio de orientación te hará perder', exact: true })
+      .waitFor();
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({
+        path: process.env.UI_SCREENSHOT + '-orientation-warning-' + viewport.width + '.png',
+      });
+    await page.getByRole('button', { name: 'Cancelar acción', exact: true }).click();
+    assert(
+      await page.locator('#pending-card').isHidden(),
+      'Cancelling the defeat warning must discard the order.',
+    );
+    await page.locator('[data-command="orient"]').click();
+    await page.locator('[data-direction-order="1"]').click();
+    await page.locator('.confirm-button').click();
+    await page.locator('[data-confirm-orientation-loss]').click();
+    await page.waitForFunction(() =>
+      JSON.parse(localStorage.getItem('atlas-match-history-v1') ?? '[]').some(
+        (entry) => entry.outcome.reason === 'orientation',
+      ),
+    );
+    await page.close();
+  }
 
   assert(runtimeErrors.length === 0, `Browser runtime errors:\n${runtimeErrors.join('\n')}`);
   console.log(
@@ -2214,7 +2410,7 @@ async function tapHex(page, q, r) {
   await page.touchscreen.tap(point.x, point.y);
 }
 
-async function selectMode(page, mode) {
+async function selectMode(page, mode, difficulty = 'Experto') {
   if (await page.locator('#home-screen').isVisible()) {
     if (!(await page.locator(`[data-home-mode="${mode}"]`).isVisible()))
       await page.locator('[data-home-action="new"]').click();
@@ -2223,7 +2419,14 @@ async function selectMode(page, mode) {
     await page.locator(`[data-game-mode="${mode}"]`).click();
   }
   if (mode === 'machine') {
-    await chooseSelectOption(page, 'Nivel', 'Experto');
+    await chooseSelectOption(page, 'Nivel', 'Neuronal');
+    assert(
+      (await page.locator('#neural-description').count()) === 0,
+      'Neural level must not show helper text beneath the selector.',
+    );
+    if (process.env.UI_SCREENSHOT)
+      await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-neural-desktop.png` });
+    await chooseSelectOption(page, 'Nivel', difficulty);
     if (process.env.UI_SCREENSHOT)
       await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-ai-desktop.png` });
   }

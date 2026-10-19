@@ -116,7 +116,7 @@ export function parseRecord(value: string): MatchRecord {
     throw new ReplayError('El archivo no contiene JSON válido.');
   }
   if (!parsed || typeof parsed !== 'object' || !('version' in parsed))
-    throw new ReplayError('El archivo no es una repetición de Protocolo Hexagonal.');
+    throw new ReplayError('El archivo no es una repetición de Hexfortia.');
   const candidate = parsed as MatchRecord;
   if (candidate.version !== 2) throw new ReplayError('Versión de guardado incompatible.');
   if (!Array.isArray(candidate.actions))
@@ -183,6 +183,7 @@ export function resolutionRulesForConfig(config: MatchConfig): ActionResolutionR
     repetition: config.victory.repetition > 0 ? config.victory.repetition : null,
     // Missing means this is a legacy v2 recording created before the rule existed.
     noProgressPlyLimit: config.options.noProgressPlyLimit ?? null,
+    orientationOnlyTurnLimit: config.options.orientationOnlyTurnLimit ?? null,
   };
 }
 
@@ -287,13 +288,14 @@ function isOutcome(value: unknown): value is Outcome {
   return (
     candidate.type === 'win' &&
     (candidate.winner === 0 || candidate.winner === 1) &&
-    ['fortress', 'resignation', 'timeout'].includes(String(candidate.reason))
+    ['fortress', 'resignation', 'timeout', 'orientation'].includes(String(candidate.reason))
   );
 }
 
 function isBoardGeneratedOutcome(outcome: Outcome): boolean {
   return (
     outcome.reason === 'fortress' ||
+    outcome.reason === 'orientation' ||
     outcome.reason === 'repetition' ||
     outcome.reason === 'no-progress'
   );

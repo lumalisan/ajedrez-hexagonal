@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ai from '../src/ai';
@@ -74,7 +75,7 @@ describe('Worker AI strategy', () => {
     vi.unstubAllGlobals();
   });
 
-  it.each(['recruit', 'tactical', 'commander', 'expert'] as const)(
+  it.each(['recruit', 'tactical', 'commander', 'expert', 'neural'] as const)(
     'does no work for an already aborted %s request',
     async (difficulty) => {
       const controller = new AbortController();
@@ -131,7 +132,7 @@ describe('Worker AI strategy', () => {
       expect.objectContaining({
         depth: 1,
         budgetMs: 120,
-        resolutionRules: { repetition: null, noProgressPlyLimit: 60 },
+        resolutionRules: { repetition: null, noProgressPlyLimit: 60, orientationOnlyTurnLimit: 5 },
       }),
     );
     worker.message({ id: 1, type: 'result', action, metadata });
@@ -158,7 +159,7 @@ describe('Worker AI strategy', () => {
       difficulty: 'expert',
       personality: 'balanced',
       seed: 42,
-      resolutionRules: { repetition: 3, noProgressPlyLimit: 160 },
+      resolutionRules: { repetition: null, noProgressPlyLimit: 160, orientationOnlyTurnLimit: 5 },
     });
     worker.message({ id: 99, type: 'progress', metadata });
     expect(onProgress).not.toHaveBeenCalled();
@@ -170,6 +171,103 @@ describe('Worker AI strategy', () => {
     expect(worker.terminate).toHaveBeenCalled();
     expect(ai.searchMachineAction).not.toHaveBeenCalled();
   });
+
+  it('sends an explicit experimental model without transferring or retaining caller memory', async () => {
+    const bytes = new Uint8Array([72, 88, 78, 78]).buffer;
+    strategy.dispose();
+    strategy = new WorkerAiStrategy(bytes);
+    new Uint8Array(bytes)[0] = 0;
+    const config = createClassicConfig({ mode: 'machine', difficulty: 'expert' });
+    const pending = strategy.chooseAction(position(), config, { maxMs: 100 });
+    const worker = lastWorker();
+    const request = worker.postMessage.mock.calls[0][0] as { modelBytes: ArrayBuffer };
+    expect(request.modelBytes).not.toBe(bytes);
+    expect([...new Uint8Array(request.modelBytes)]).toEqual([72, 88, 78, 78]);
+    worker.message({ id: 1, type: 'result', action, metadata });
+    await expect(pending).resolves.toEqual(action);
+  });
+
+  it('rejects an incompatible candidate before constructing a strategy', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(4) }),
+    );
+    await expect(WorkerAiStrategy.createNeuralCandidate()).rejects.toThrow('Cabecera');
+    expect(FakeWorker.instances).toHaveLength(0);
+  });
+
+  it('loads Neuronal once, uses Expert limits and keeps subsequent Expert turns classical', async () => {
+    const file = readFileSync(new URL('../src/ai-models/hex-value.bin', import.meta.url));
+    const bytes = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+    const fetchModel = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => bytes });
+    vi.stubGlobal('fetch', fetchModel);
+    const config = createClassicConfig({ mode: 'machine', difficulty: 'neural' });
+    expect(difficultyBudget('neural')).toBe(15_000);
+    for (const [index, difficulty] of ['neural', 'expert', 'neural'].entries()) {
+      config.participants[1].difficulty = difficulty as 'neural' | 'expert';
+      const pending = strategy.chooseAction(position(), config, { maxMs: 30_000 });
+      await vi.waitFor(() => expect(FakeWorker.instances).toHaveLength(index + 1));
+      const worker = lastWorker();
+      const request = worker.postMessage.mock.calls[0][0] as { modelBytes?: ArrayBuffer };
+      expect(worker.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          depth: 9,
+          budgetMs: 15_000,
+          difficulty: 'expert',
+        }),
+      );
+      if (difficulty === 'neural') expect(request.modelBytes?.byteLength).toBe(bytes.byteLength);
+      else expect(request.modelBytes).toBeUndefined();
+      worker.message({ id: index + 1, type: 'result', action, metadata });
+      await expect(pending).resolves.toEqual(action);
+    }
+    expect(fetchModel).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces a failed model load and plays a classical Expert turn', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    const onFallback = vi.fn();
+    const config = createClassicConfig({ mode: 'machine', difficulty: 'neural' });
+    const pending = strategy.chooseAction(position(), config, { maxMs: 100, onFallback });
+    await vi.waitFor(() => expect(FakeWorker.instances).toHaveLength(1));
+    expect(onFallback).toHaveBeenCalledWith(expect.stringContaining('Experto jugará este turno'));
+    expect(lastWorker().postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ difficulty: 'expert' }),
+    );
+    expect(lastWorker().postMessage.mock.calls[0][0]).not.toHaveProperty('modelBytes');
+    lastWorker().message({ id: 1, type: 'result', action, metadata });
+    await expect(pending).resolves.toEqual(action);
+  });
+
+  it.each(['abort', 'dispose'] as const)(
+    'does not create a Worker after %s during model loading',
+    async (cancel) => {
+      let finishFetch!: (response: { ok: boolean; arrayBuffer(): Promise<ArrayBuffer> }) => void;
+      const fetchModel = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finishFetch = resolve;
+          }),
+      );
+      vi.stubGlobal('fetch', fetchModel);
+      const controller = new AbortController();
+      const onFallback = vi.fn();
+      const config = createClassicConfig({ mode: 'machine', difficulty: 'neural' });
+      const pending = strategy.chooseAction(position(), config, {
+        maxMs: 100,
+        signal: controller.signal,
+        onFallback,
+      });
+      if (cancel === 'abort') controller.abort();
+      else strategy.dispose();
+      const options = fetchModel.mock.calls[0] as unknown as [URL, RequestInit];
+      expect(options[1].signal?.aborted).toBe(true);
+      finishFetch({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+      await expect(pending).resolves.toBeNull();
+      expect(FakeWorker.instances).toHaveLength(0);
+      expect(onFallback).not.toHaveBeenCalled();
+    },
+  );
 
   it('settles and terminates an aborted search and ignores late messages', async () => {
     const controller = new AbortController();
@@ -253,7 +351,11 @@ describe('Worker AI strategy', () => {
           budgetMs: 400,
           difficulty: 'expert',
           seed: 81,
-          resolutionRules: { repetition: 3, noProgressPlyLimit: null },
+          resolutionRules: {
+            repetition: null,
+            noProgressPlyLimit: null,
+            orientationOnlyTurnLimit: 5,
+          },
           onProgress,
         }),
       );
@@ -303,7 +405,7 @@ describe('Worker AI strategy', () => {
       difficulty: 'commander',
       personality: 'balanced',
       seed: 3,
-      resolutionRules: { repetition: null, noProgressPlyLimit: 60 },
+      resolutionRules: { repetition: null, noProgressPlyLimit: 60, orientationOnlyTurnLimit: 5 },
     };
 
     scope.dispatchEvent(new MessageEvent('message', { data: request }));

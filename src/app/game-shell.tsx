@@ -27,15 +27,11 @@ function Header() {
     Boolean(snapshot.tutorial);
   return (
     <header className="topbar" inert={snapshot.homeView !== null}>
-      <div
-        className="brand"
-        role="img"
-        aria-label="Protocolo Hexagonal: Estrategia Hexagonal - Protocolo Hexagonal"
-      >
+      <div className="brand" role="img" aria-label="Hexfortia: estrategia hexagonal">
         <img src="/atlas-mark.svg" alt="" width="38" height="38" />
         <div>
           <span className="eyebrow">ESTRATEGIA HEXAGONAL</span>
-          <strong>Protocolo Hexagonal</strong>
+          <strong>Hexfortia</strong>
         </div>
       </div>
       <MatchStatus />

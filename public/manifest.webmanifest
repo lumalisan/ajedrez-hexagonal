@@ -1,6 +1,6 @@
 {
-  "name": "Protocolo Hexagonal",
-  "short_name": "Protocolo Hex",
+  "name": "Hexfortia",
+  "short_name": "Hexfortia",
   "description": "Juego táctico hexagonal para dos personas o contra la máquina.",
   "start_url": "/",
   "display": "standalone",

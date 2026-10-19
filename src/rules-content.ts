@@ -1,10 +1,6 @@
 import type { RuleDemoId } from './rules-demo';
 import { TURN_TIMEOUT_LIMIT } from './match-clock';
-import {
-  CLASSIC_NO_PROGRESS_LIMIT,
-  CLASSIC_REPETITION_LIMIT,
-  FORTRESS_DAMAGE_PER_HIT,
-} from './classic-rules';
+import { FORTRESS_DAMAGE_PER_HIT } from './classic-rules';
 
 export interface RuleParagraph {
   text: string;
@@ -35,7 +31,7 @@ export const RULE_SECTIONS: RuleSection[] = [
     label: 'DESCRIPCIÓN DEL JUEGO',
     title: 'Descripción del juego',
     paragraphs: [
-      'Protocolo Hexagonal es un juego de estrategia para dos jugadores en el que cada uno dirige un ejército con el objetivo de destruir la fortaleza enemiga.',
+      'Hexfortia es un juego de estrategia para dos jugadores en el que cada uno dirige un ejército con el objetivo de destruir la fortaleza enemiga.',
       'Cada jugador dispone de un conjunto de unidades con habilidades y funciones muy diferentes. La victoria dependerá de saber combinarlas, proteger las más valiosas y aprovechar las debilidades del rival.',
       'Los jugadores realizan sus turnos de forma alterna. En cada turno, el jugador activo podrá realizar una única acción con una de sus unidades, como desplazarse, atacar, disparar, girarse o utilizar una habilidad especial, según las características de dicha unidad.',
     ],
@@ -235,13 +231,9 @@ export const RULE_SECTIONS: RuleSection[] = [
         'acordar ese desenlace',
       ),
       emphasize(
-        `La tercera aparición de una misma posición, con el mismo jugador al turno, produce tablas por repetición. El umbral de classic-v2 es ${CLASSIC_REPETITION_LIMIT}.`,
-        'tercera aparición',
-        'tablas por repetición',
-      ),
-      emphasize(
-        `La configuración estándar declara tablas tras ${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies) consecutivas sin una baja, una intercepción ni daño a una fortaleza. Una conversión del Capturador cambia de bando a la unidad, pero no reinicia este contador.`,
-        `${CLASSIC_NO_PROGRESS_LIMIT} medias jugadas (plies)`,
+        'Un jugador pierde si dedica cinco turnos propios consecutivos únicamente a cambiar la orientación de sus asaltadores o de los cañones de sus tanques. Desplazarse, atacar, disparar, capturar o convertirse en asaltador reinicia su contador. Antes de confirmar el quinto cambio, una advertencia permite cancelar la orden o confirmarla definitivamente y perder la partida.',
+        'cinco turnos propios consecutivos',
+        'cancelar la orden',
       ),
       `En partidas locales puedes configurar dos límites de tiempo independientes: por turno (sin límite, 30 segundos, 1 minuto o 2 minutos) y total por jugador (sin límite, 5 minutos, 10 minutos o 20 minutos). El tiempo por turno se reinicia al comenzar cada turno; el total solo se consume mientras juega ese bando. Al agotar el tiempo de turno, la IA realiza una jugada por ese jugador. Si un mismo jugador lo agota ${TURN_TIMEOUT_LIMIT} veces durante la partida, pierde. Agotar el tiempo total o rendirse también concede la victoria al rival. Las partidas contra Hexfortia siempre se juegan con tiempo ilimitado.`,
       peerHeading('Registro y continuidad'),

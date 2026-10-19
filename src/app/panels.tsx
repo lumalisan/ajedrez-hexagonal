@@ -119,7 +119,11 @@ function FortressStatus({ player }: { player: Player }) {
   const faction = player === 0 ? 'blue' : 'amber';
   const clock = snapshot.matchRecord?.clock;
   const turnTimeouts = clock?.turnTimeouts?.[player] ?? 0;
-  const participant = snapshot.matchConfig?.participants[player];
+  const participant = snapshot.tutorial
+    ? player === 0
+      ? { kind: 'human' as const, name: snapshot.profile.name, faction: 'expansionist' as const }
+      : { kind: 'machine' as const, name: 'Hexfortia' }
+    : snapshot.matchConfig?.participants[player];
   const name = participantLabel(participant, PLAYER_NAMES[player]);
   return (
     <div
@@ -208,7 +212,9 @@ export function MatchStatus() {
         ) : (
           <>
             <span>{snapshot.tutorial ? 'TUTORIAL' : `TURNO ${Math.floor(state.ply / 2) + 1}`}</span>
-            <strong>{snapshot.tutorial ? 'Práctica con Cian' : commander}</strong>
+            <strong>
+              {snapshot.tutorial ? `Práctica con ${snapshot.profile.name}` : commander}
+            </strong>
             {activeScenario && (
               <small>
                 {scenarioLessonAt(activeScenario, state.ply - activeScenario.initialState.ply)}
@@ -412,8 +418,8 @@ function DirectionPanel({
     <div className="control-section direction-section">
       <h3>{title}</h3>
       <p>Elige un rumbo en la brújula.</p>
-      {children}
       <DirectionCompass {...props} />
+      {children}
       <button type="button" className="text-button cancel-mode" onClick={commands.cancelDraft}>
         Volver
       </button>
@@ -585,7 +591,9 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
     const attackAbove = legalActions.find(
       (action) =>
         action.kind === 'transform' &&
-        action.facing === (mode.facing ?? 0) &&
+        mode.facing !== null &&
+        action.facing === mode.facing &&
+        !action.to &&
         Boolean(action.attackAboveId),
     );
     return (

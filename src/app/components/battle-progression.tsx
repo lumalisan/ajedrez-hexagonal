@@ -82,6 +82,8 @@ export function BattleProgressionPanel({
     const entry = PROGRESSION_ACHIEVEMENTS.find((item) => item.id === reward.achievementId);
     return entry ? [entry] : [];
   });
+  const previousCategory = levelProgress(before);
+  const nextCategory = levelProgress(after);
   const gainedLevels = levelProgress(after).level - levelProgress(before).level;
   const delta = battle ? battle.ratingAfter - battle.ratingBefore : 0;
   return (
@@ -124,6 +126,13 @@ export function BattleProgressionPanel({
             {`¡Has subido ${gainedLevels === 1 ? 'un nivel' : `${gainedLevels} niveles`}! Nivel ${levelProgress(before).level} → ${levelProgress(after).level}.`}
           </p>
         )}
+        {frame.xp === after &&
+          frame.fullLevel === null &&
+          nextCategory.tier > previousCategory.tier && (
+            <p className="my-2 text-sm text-accent" data-category-promotion>
+              ¡Has subido de categoría! {previousCategory.category} → {nextCategory.category}.
+            </p>
+          )}
       </div>
       {rewards.length > 0 ? (
         <ul className="battle-rewards" aria-label="XP obtenida">

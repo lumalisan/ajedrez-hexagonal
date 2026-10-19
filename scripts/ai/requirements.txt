@@ -1,0 +1,3 @@
+numpy>=2.0,<3.0
+# Optional backend: install a CPU PyTorch build in your virtual environment.
+# The default NumPy backend does not require PyTorch.

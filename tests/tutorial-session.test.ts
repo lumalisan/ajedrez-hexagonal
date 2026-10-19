@@ -99,6 +99,30 @@ async function completeStep(session: GameSession): Promise<void> {
 }
 
 describe('sesión del tutorial guiado', () => {
+  it('muestra sobrevuelo y kamikaze antes de confirmar, pero solo permite kamikaze en 9.4', async () => {
+    const session = createSession();
+    while (currentStep(session).id !== '9.4') session.commands.navigateTutorial(1);
+    const before = session.getSnapshot().state;
+    const step = currentStep(session);
+    session.commands.selectPiece(step.pieceId!);
+    session.commands.selectHex(step.target!);
+    const mode = session.getSnapshot().mode;
+    expect(mode.kind).toBe('actionChoice');
+    expect(session.getSnapshot().pendingAction).toBeNull();
+    if (mode.kind !== 'actionChoice') throw new Error('Debe mostrar las maniobras.');
+    const overflight = mode.actions.find((action) => action.kind === 'move' && !action.kamikaze);
+    const kamikaze = mode.actions.find((action) => action.kind === 'move' && action.kamikaze);
+    expect(overflight).toBeDefined();
+    expect(kamikaze).toBeDefined();
+    session.commands.prepareAction(overflight!);
+    expect(session.getSnapshot().pendingAction).toBeNull();
+    session.commands.prepareAction(kamikaze!);
+    expect(session.getSnapshot().pendingAction).toEqual(kamikaze);
+    expect(session.getSnapshot().state).toEqual(before);
+    await commit(session);
+    expect(currentStep(session).id).toBe('10.1');
+    session.dispose();
+  });
   const sessions: GameSession[] = [];
 
   function createSession() {

@@ -183,8 +183,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 5,
     title: 'El tanque (2/6)',
     paragraphs: [
-      'Al seleccionar una unidad con disparo a distancia, se indican mediante círculos rojos las casillas a las que puede disparar.',
-      'Al seleccionar una casilla de desplazamiento, los círculos rojos se desplazan para mostrar la nueva zona de disparo de la unidad si se confirma el desplazamiento.',
+      'Al seleccionar una unidad con disparo a distancia, las casillas a las que puede disparar aparecen marcadas con un contorno rojo.',
+      'Al seleccionar una casilla de desplazamiento, los contornos rojos se desplazan para mostrar la nueva zona de disparo de la unidad si se confirma el desplazamiento.',
     ],
     instruction: 'Selecciona la casilla indicada para desplazar al tanque hacia el norte.',
     interaction: 'prepare',
@@ -429,7 +429,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     title: 'Ataques sobre casillas compartidas (2/5)',
     paragraphs: [
       'El panel de mando indica que la casilla seleccionada contiene un dron y un asaltador enemigos.',
-      'Cuando dos unidades enemigas comparten una misma casilla y esta puede ser atacada por una unidad aliada, solo puede atacarse una de las dos unidades en cada acción. En ningún caso un mismo ataque puede destruir o afectar a ambas unidades.',
+      'Cuando dos unidades enemigas comparten una misma casilla y esta puede ser atacada por una unidad aliada, solo puede atacarse una de las dos unidades en cada acción. En ningún caso un mismo ataque puede afectar a ambas unidades.',
     ],
     instruction: 'Pulsa «Siguiente» para continuar.',
     interaction: 'next',

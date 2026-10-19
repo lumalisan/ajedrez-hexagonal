@@ -86,7 +86,7 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
             <h2>Reglas</h2>
           </div>
         </div>
-        <p>Selecciona una sección para consultar las reglas de Protocolo Hexagonal.</p>
+        <p>Selecciona una sección para consultar las reglas de Hexfortia.</p>
         <label className="rules-search">
           <span className="sr-only">Buscar en las reglas</span>
           <Input
@@ -167,7 +167,7 @@ function RuleArticle({ section }: { section: RuleSection }) {
   return (
     <>
       <div className="rules-copy">
-        <span className="rules-kicker">PROTOCOLO HEXAGONAL</span>
+        <span className="rules-kicker">HEXFORTIA</span>
         <h3 tabIndex={-1}>{section.title}</h3>
         <RuleParagraphs paragraphs={introductoryParagraphs} />
       </div>

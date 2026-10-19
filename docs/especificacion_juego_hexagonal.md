@@ -183,7 +183,7 @@ Cuando una pieza ataca o intenta capturar una casilla que contiene **un Dron ene
 ## 7. Condición de victoria y resolución de empates
 
 1. **Victoria por destrucción:** Gana la partida el jugador que consiga reducir a 0 los puntos de vida de la Fortaleza rival (sección 4.8).
-2. **Turno sin acciones:** Si un jugador no dispone de ninguna acción legal, pasa automáticamente y el rival vuelve a jugar. Esta situación no termina la partida ni se considera tablas. Las tablas por bloqueo solo pueden acordarse mediante la propuesta manual; la triple repetición sí finaliza la partida automáticamente. En ambos casos, el resultado se determina según las siguientes condiciones:
+2. **Turno sin acciones:** Si un jugador no dispone de ninguna acción legal, pasa automáticamente y el rival vuelve a jugar. Esta situación no termina la partida ni se considera tablas. Las tablas por bloqueo solo pueden acordarse mediante la propuesta manual; no hay tablas automáticas por repetición ni por un límite de medias jugadas. Un jugador pierde tras cinco turnos propios consecutivos dedicados únicamente a orientar asaltadores o cañones de tanques; antes del quinto cambio se advierte y se permite cancelar. En ambos casos, el resultado se determina según las siguientes condiciones:
    - Si **ambas** Fortalezas se encuentran intactas (ambas con 2 HP), la partida se declara oficialmente en **tablas** (empate).
    - Si alguna de las Fortalezas fue dañada previamente (reduciendo su vida a 1 HP mediante el ataque de sacrificio de un Asaltador o un Capturador), **ganará la partida el jugador que haya logrado infligir ese primer daño**.
 

@@ -47,7 +47,7 @@ function ProfileSettings() {
       }}
     >
       <h3>Configuración</h3>
-      <p>Elige cómo quieres aparecer en Protocolo Hexagonal.</p>
+      <p>Elige cómo quieres aparecer en Hexfortia.</p>
       <div className="profile-preview">
         <ProfileAvatar profile={draft} />
         <strong>{draft.name || 'Tu nombre'}</strong>
@@ -137,8 +137,12 @@ function ProfileSettings() {
 
 const SECTIONS = [
   { id: 'profile', label: 'Tu perfil' },
-  { id: 'statistics', label: 'Estadísticas y récords' },
   { id: 'settings', label: 'Configuración' },
+] as const;
+const PROFILE_TABS = [
+  { id: 'rating', label: 'Puntuación actual' },
+  { id: 'statistics', label: 'Estadísticas' },
+  { id: 'records', label: 'Récords' },
 ] as const;
 const MODES = [
   { id: 'online', label: 'En línea' },
@@ -147,8 +151,9 @@ const MODES = [
 ] as const;
 
 export function ProfileDialog() {
-  const { snapshot, commands } = useGame();
+  const { snapshot } = useGame();
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
+  const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
   const { progression, profile } = snapshot;
   const unlocked = PROGRESSION_ACHIEVEMENTS.filter(
     (entry) => progression.unlockedAt[entry.id],
@@ -181,7 +186,7 @@ export function ProfileDialog() {
         </p>
       </aside>
       <div className="achievements-main">
-        <header className="achievements-profile profile-header">
+        <header className="achievements-profile">
           <button
             type="button"
             className="achievements-player profile-link"
@@ -190,13 +195,12 @@ export function ProfileDialog() {
             <ProfileAvatar profile={profile} />
             <strong>{profile.name}</strong>
           </button>
+          <ProgressionSummary showActivity={false} />
           <DialogClose label="Cerrar perfil" />
         </header>
         <div id="profile-content" className="profile-content">
           {section === 'profile' && (
             <>
-              <h3>Tu perfil</h3>
-              <ProgressionSummary />
               <div className="profile-achievements">
                 <div>
                   <strong>
@@ -209,117 +213,171 @@ export function ProfileDialog() {
                   max={PROGRESSION_ACHIEVEMENTS.length}
                   aria-label="Progresión en logros"
                 />
-                <Button onClick={() => commands.openDialog({ kind: 'achievements' })}>
-                  Ver logros
-                </Button>
+                <small className="profile-note">
+                  Racha de actividad: {progression.activity.streak} días · Mejor:{' '}
+                  {progression.activity.best}
+                </small>
               </div>
-              <h3>Puntuación y clasificación</h3>
-              <dl className="profile-ratings">
-                {MODES.filter((mode) => mode.id !== 'local').map((mode) => (
-                  <div key={mode.id}>
-                    <dt>{mode.label}</dt>
-                    <dd>
-                      <strong>{progression.ratings[mode.id]} Elo</strong>
-                      <span>Posición actual: Sin clasificación</span>
-                    </dd>
-                  </div>
+              <div
+                className="flex flex-wrap gap-1 mb-4"
+                role="tablist"
+                aria-label="Datos de tu perfil"
+              >
+                {PROFILE_TABS.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    id={`profile-tab-${item.id}`}
+                    aria-selected={tab === item.id}
+                    aria-controls={`profile-panel-${item.id}`}
+                    tabIndex={tab === item.id ? 0 : -1}
+                    className="min-h-11 cursor-pointer rounded-control border border-transparent bg-transparent px-3 py-2 font-ui text-sm font-semibold text-muted transition-colors hover:bg-panel-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan aria-selected:border-line-strong aria-selected:bg-panel-raised aria-selected:text-ink"
+                    onClick={() => setTab(item.id)}
+                    onKeyDown={(event) => {
+                      let next = index;
+                      if (event.key === 'ArrowRight') next = (index + 1) % PROFILE_TABS.length;
+                      else if (event.key === 'ArrowLeft')
+                        next = (index + PROFILE_TABS.length - 1) % PROFILE_TABS.length;
+                      else if (event.key === 'Home') next = 0;
+                      else if (event.key === 'End') next = PROFILE_TABS.length - 1;
+                      else return;
+                      event.preventDefault();
+                      setTab(PROFILE_TABS[next].id);
+                      document.getElementById(`profile-tab-${PROFILE_TABS[next].id}`)?.focus();
+                    }}
+                  >
+                    {item.label}
+                  </button>
                 ))}
-              </dl>
-              <p className="profile-note">
-                Las posiciones requieren una clasificación compartida. Las partidas en línea aún no
-                están disponibles.
-              </p>
-            </>
-          )}
-          {section === 'statistics' && (
-            <>
-              <h3>Estadísticas y récords</h3>
-              <div
-                className="ranking-table-scroll"
-                role="region"
-                aria-label="Estadísticas del jugador"
-                tabIndex={0}
-              >
-                <table className="ranking-table">
-                  <caption>Estadísticas del jugador</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Modo</th>
-                      {[
-                        'Partidas jugadas',
-                        'Victorias',
-                        'Tablas',
-                        'Derrotas',
-                        '% de Victorias',
-                      ].map((label) => (
-                        <th scope="col" key={label}>
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...MODES, { id: undefined, label: 'Total' }].map((mode) => {
-                      const stats = playerStatistics(progression, mode.id);
-                      return (
-                        <tr key={mode.label}>
-                          <th scope="row">{mode.label}</th>
-                          <td>{stats.played}</td>
-                          <td>{stats.wins}</td>
-                          <td>{stats.draws}</td>
-                          <td>{stats.losses}</td>
-                          <td>
-                            {stats.winPercentage.toLocaleString('es-ES', {
-                              maximumFractionDigits: 1,
-                            })}
-                            %
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               </div>
               <div
-                className="ranking-table-scroll profile-records"
-                role="region"
-                aria-label="Récords del jugador"
+                role="tabpanel"
+                id="profile-panel-rating"
+                aria-labelledby="profile-tab-rating"
+                hidden={tab !== 'rating'}
                 tabIndex={0}
               >
-                <table className="ranking-table">
-                  <caption>Récords del jugador</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Modo</th>
-                      {[
-                        'Mejor puntuación',
-                        'Mejor posición en la clasificación mensual',
-                        'Mejor posición en la clasificación histórica',
-                        'Mayor racha de victorias consecutivas',
-                      ].map((label) => (
-                        <th scope="col" key={label}>
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {MODES.filter((mode) => mode.id !== 'local').map((mode) => {
-                      const records = playerRecords(progression, mode.id);
-                      return (
-                        <tr key={mode.id}>
-                          <th scope="row">{mode.label}</th>
-                          <td>{records.bestRating}</td>
-                          <td>Sin clasificación</td>
-                          <td>Sin clasificación</td>
-                          <td>{records.bestStreak}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <dl className="profile-ratings">
+                  {MODES.filter((mode) => mode.id !== 'local').map((mode) => (
+                    <div key={mode.id}>
+                      <dt>{mode.label}</dt>
+                      <dd>
+                        <strong>{progression.ratings[mode.id]} Elo</strong>
+                        <span>Posición actual: Sin clasificación</span>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="profile-note">
+                  Las posiciones requieren una clasificación compartida. Las partidas en línea aún
+                  no están disponibles.
+                </p>
               </div>
-              <p className="ranking-scroll-hint">Desliza las tablas para ver todas las columnas.</p>
+              <div
+                role="tabpanel"
+                id="profile-panel-statistics"
+                aria-labelledby="profile-tab-statistics"
+                hidden={tab !== 'statistics'}
+                tabIndex={0}
+              >
+                <div
+                  className="ranking-table-scroll"
+                  role="region"
+                  aria-label="Estadísticas del jugador"
+                  tabIndex={0}
+                >
+                  <table className="ranking-table">
+                    <caption>Estadísticas del jugador</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Modo</th>
+                        {[
+                          'Partidas jugadas',
+                          'Victorias',
+                          'Tablas',
+                          'Derrotas',
+                          '% de Victorias',
+                        ].map((label) => (
+                          <th scope="col" key={label}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...MODES, { id: undefined, label: 'Total' }].map((mode) => {
+                        const stats = playerStatistics(progression, mode.id);
+                        return (
+                          <tr key={mode.label}>
+                            <th scope="row">{mode.label}</th>
+                            <td>{stats.played}</td>
+                            <td>{stats.wins}</td>
+                            <td>{stats.draws}</td>
+                            <td>{stats.losses}</td>
+                            <td>
+                              {stats.winPercentage.toLocaleString('es-ES', {
+                                maximumFractionDigits: 1,
+                              })}
+                              %
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div
+                role="tabpanel"
+                id="profile-panel-records"
+                aria-labelledby="profile-tab-records"
+                hidden={tab !== 'records'}
+                tabIndex={0}
+              >
+                <div
+                  className="ranking-table-scroll"
+                  role="region"
+                  aria-label="Récords del jugador"
+                  tabIndex={0}
+                >
+                  <table className="ranking-table">
+                    <caption>Récords del jugador</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Modo</th>
+                        {[
+                          'Mejor puntuación',
+                          'Mejor posición en la clasificación mensual',
+                          'Mejor posición en la clasificación histórica',
+                          'Mayor racha de victorias consecutivas',
+                        ].map((label) => (
+                          <th scope="col" key={label}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MODES.filter((mode) => mode.id !== 'local').map((mode) => {
+                        const records = playerRecords(progression, mode.id);
+                        return (
+                          <tr key={mode.id}>
+                            <th scope="row">{mode.label}</th>
+                            <td>{records.bestRating}</td>
+                            <td>Sin clasificación</td>
+                            <td>Sin clasificación</td>
+                            <td>{records.bestStreak}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {tab !== 'rating' && (
+                <p className="ranking-scroll-hint">Desliza la tabla para ver todas las columnas.</p>
+              )}
             </>
           )}
           {section === 'settings' && <ProfileSettings />}
