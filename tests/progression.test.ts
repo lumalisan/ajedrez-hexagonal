@@ -214,7 +214,7 @@ describe('catálogo y evidencia retrospectiva', () => {
   });
   it('aplaza los premios hasta abrir la categoría y después utiliza partidas previas', () => {
     const progress = createPlayerProgression();
-    for (let i = 0; i < 3; i++)
+    for (let i = 0; i < 5; i++)
       progress.matches[`2026-10-0${i + 1}T12:00:00.000Z`] = {
         mode: 'machine',
         difficulty: 1,
@@ -222,7 +222,7 @@ describe('catálogo y evidencia retrospectiva', () => {
         completedAt: AT,
         result: 1,
       };
-    expect(progressionValue(progress, definition('p2-03'))).toBe(3);
+    expect(progressionValue(progress, definition('p2-03'))).toBe(5);
     const before = recordActivity(progress, AT);
     expect(before.progress.unlockedAt['p2-03']).toBeUndefined();
     before.progress.xp = xpForLevel(5) - 25;
@@ -230,6 +230,141 @@ describe('catálogo y evidencia retrospectiva', () => {
     expect(opened.progress.unlockedAt['p2-03']).toBe(AT);
     expect(opened.unlocked).toContain('p2-03');
     expect(opened.progress.xp).toBeGreaterThanOrEqual(xpForLevel(5) + 75);
+  });
+  it('conserva la fecha real de una acción antes de abrir su nivel, incluso tras recargar', () => {
+    const earned = '2026-10-06T12:00:00.000Z';
+    let record = fixture(
+      [
+        { id: 'tank', type: 'medium', cannon: 2, owner: 0, position: { q: 0, r: 0 } },
+        { id: 'enemy', type: 'fast', owner: 1, position: { q: 2, r: 0 } },
+      ],
+      0,
+      'machine',
+    );
+    record = appendAction(record, { kind: 'shoot', pieceId: 'tank', targetId: 'enemy' });
+    const initial = createPlayerProgression();
+    // One more elimination crosses the cumulative threshold in the still-closed tier.
+    initial.matches['2026-10-01T12:00:00.000Z'] = {
+      mode: 'machine',
+      difficulty: 3,
+      metrics: { kills: 99 },
+      completedAt: earned,
+    };
+    const during = evaluate(record, initial, 'live', earned).progress;
+    expect(during.achievedAt['p2-10']).toBe(earned);
+    expect(during.unlockedAt['p2-10']).toBeUndefined();
+    const saved = parsePlayerProgression(JSON.stringify(during));
+    saved.xp = xpForLevel(5) - 25;
+    const opened = recordLearning(saved, 'tutorial', AT);
+    expect(opened.progress.unlockedAt['p2-10']).toBe(earned);
+    expect(recordLearning(opened.progress, 'tutorial', AT).xpEarned).toBe(0);
+  });
+  it('recupera la fecha de la partida que cruzó el umbral en perfiles antiguos', () => {
+    const progress = createPlayerProgression();
+    for (let day = 1; day <= 6; day++) {
+      const at = `2026-10-0${day}T12:00:00.000Z`;
+      progress.matches[at] = {
+        mode: 'machine',
+        difficulty: 1,
+        metrics: { wins: 1 },
+        completedAt: at,
+        result: 1,
+      };
+    }
+    progress.unlockedAt['p2-03'] = AT;
+    const saved = parsePlayerProgression(JSON.stringify(progress));
+    expect(saved.unlockedAt['p2-03']).toBe('2026-10-05T12:00:00.000Z');
+    expect(saved.xp).toBe(progress.xp);
+  });
+  it('recuerda un umbral de clasificación alcanzado aunque después baje antes de abrir el nivel', () => {
+    const earned = '2026-10-05T12:00:00.000Z';
+    const progress = createPlayerProgression();
+    progress.ratings.online = 1200;
+    const achieved = recordActivity(progress, earned).progress;
+    expect(achieved.achievedAt['p2-01']).toBe(earned);
+    expect(achieved.unlockedAt['p2-01']).toBeUndefined();
+    const saved = parsePlayerProgression(JSON.stringify(achieved));
+    saved.ratings.online = 1100;
+    saved.xp = xpForLevel(5) - 25;
+    const opened = recordLearning(saved, 'tutorial', AT);
+    expect(opened.unlocked).toContain('p2-01');
+    expect(opened.progress.unlockedAt['p2-01']).toBe(earned);
+  });
+  it('Cielo despejado exige destruir el antiaéreo rival y se acredita al instante', () => {
+    let record = fixture([
+      { id: 'attacker', type: 'soldier', facing: 0, owner: 0, position: { q: 0, r: 0 } },
+      { id: 'shield', type: 'antiAir', owner: 1, position: { q: 0, r: -1 } },
+    ]);
+    expect(evaluate(record).unlocked).not.toContain('p1-20');
+    record = appendAction(record, { kind: 'move', pieceId: 'attacker', to: { q: 0, r: -1 } });
+    const result = evaluate(record);
+    expect(result.unlocked).toContain('p1-20');
+    expect(result.progress.matches[record.createdAt].metrics.enemyShieldDestroyed).toBe(1);
+    expect(evaluate(record, parsePlayerProgression(JSON.stringify(result.progress))).xpEarned).toBe(
+      0,
+    );
+  });
+  it('no convierte A cubierto en Cielo despejado ni resta sus XP al migrar', () => {
+    const progress = createPlayerProgression();
+    progress.xp = 125;
+    progress.unlockedAt['p1-20'] = AT;
+    const raw = { ...progress, catalogRevision: undefined };
+    const saved = parsePlayerProgression(JSON.stringify(raw));
+    expect(saved.xp).toBe(125);
+    expect(saved.unlockedAt['p1-20']).toBeUndefined();
+    expect(saved.legacyUnlockedAt['p1-20:shieldSurvived']).toBe(AT);
+    expect(parsePlayerProgression(JSON.stringify(saved))).toEqual(saved);
+  });
+  it('capturar el escudo rival y perder el propio no cuentan como destruir el rival', () => {
+    let converted = fixture([
+      { id: 'capturer', type: 'capturer', owner: 0, position: { q: 0, r: 0 } },
+      { id: 'shield', type: 'antiAir', owner: 1, position: { q: 0, r: -1 } },
+    ]);
+    converted = appendAction(converted, {
+      kind: 'convert',
+      pieceId: 'capturer',
+      targetId: 'shield',
+    });
+    expect(evaluate(converted).unlocked).not.toContain('p1-20');
+    let lost = fixture(
+      [
+        { id: 'enemy', type: 'soldier', facing: 0, owner: 1, position: { q: 0, r: 0 } },
+        { id: 'shield', type: 'antiAir', owner: 0, position: { q: 0, r: -1 } },
+      ],
+      1,
+    );
+    lost = appendAction(lost, { kind: 'move', pieceId: 'enemy', to: { q: 0, r: -1 } });
+    expect(evaluate(lost).unlocked).not.toContain('p1-20');
+  });
+  it.each([null, 300])(
+    'las victorias con tiempo total %s acreditan el contador correcto',
+    (seconds) => {
+      const record = createMatchRecord(
+        createClassicConfig({ mode: 'local', clockSeconds: seconds }),
+      );
+      const finished = concludeMatch(record, { type: 'win', winner: 0, reason: 'resignation' });
+      expect(evaluate(finished).progress.matches[record.createdAt].metrics.timedWins).toBe(
+        Number(seconds !== null),
+      );
+    },
+  );
+  it.each([
+    ['p2-03', 5],
+    ['p2-04', 3],
+    ['p2-11', 100],
+    ['p2-14', 10],
+    ['p3-12', 200],
+    ['p4-13', 2000],
+    ['p4-14', 300],
+    ['p5-12', 5000],
+  ])('aplica el nuevo umbral de %s: %i', (id, target) => {
+    expect(definition(String(id)).target).toBe(target);
+  });
+  it('cuenta las bajas locales para Se me ha ido de las manos', () => {
+    const progress = createPlayerProgression();
+    progress.matches[AT] = { mode: 'local', difficulty: 0, metrics: { kills: 10000 } };
+    expect(progressionValue(progress, definition('p5-17'))).toBe(10000);
+    expect(progressionValue(progress, definition('p5-12'))).toBe(0);
   });
   it('filtra dificultad mínima y modalidad sin atribuir partidas locales a logros de IA', () => {
     const progress = createPlayerProgression();

@@ -5,6 +5,19 @@ import { DialogClose } from '../components/dialog-close';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 
+const STORY_ILLUSTRATIONS = [
+  'Una estación orbital crece hasta convertirse en un territorio artificial sobre la Tierra.',
+  'Una red de plataformas se expande entre las estrellas mediante construcción automatizada.',
+  'Investigadores humanos desarrollan una inteligencia artificial capaz de coordinar sistemas complejos.',
+  'El núcleo de Hexfortia coordina la construcción de nuevas plataformas.',
+  'La IA compara los asentamientos humanos con las instalaciones completamente automatizadas.',
+  'Una ciudad industrial diseñada exclusivamente para máquinas.',
+  'Los expansionistas preparan la recuperación de las plataformas desde su centro de mando.',
+  'Los conservacionistas contemplan con preocupación la expansión de la red de plataformas.',
+  'Tres facciones convergen sobre una plataforma con sus ejércitos de máquinas.',
+  'Dos ejércitos de máquinas cian y ámbar despliegan sus fortalezas en el año 2488.',
+];
+
 const HORIZONTAL_CHAPTERS = '(max-width: 760px) and (orientation: portrait)';
 
 export function StoryDialog() {
@@ -50,7 +63,6 @@ export function StoryDialog() {
       <aside className="rules-sidebar">
         <div className="rules-heading story-heading">
           <div>
-            <span className="rules-kicker">HISTORIA DE HEXFORTIA</span>
             <h2>El dilema de Hexfortia</h2>
           </div>
         </div>
@@ -88,6 +100,14 @@ export function StoryDialog() {
                     Capítulo {index + 1} de {STORY_CHAPTERS.length}
                   </span>
                   <h3 tabIndex={-1}>{chapter.title}</h3>
+                  <img
+                    className="story-illustration"
+                    src={`${import.meta.env.BASE_URL}story/${chapter.id}.webp`}
+                    alt={STORY_ILLUSTRATIONS[index]}
+                    width="1536"
+                    height="1024"
+                    decoding="async"
+                  />
                   {chapter.paragraphs.map((runs, paragraphIndex) => (
                     <p key={paragraphIndex}>
                       {runs.map((run, runIndex) => {

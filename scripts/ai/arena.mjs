@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { promotionPossible } from './selfplay-policy.mjs';
 
 import {
   EXPERT_BUDGET_MS,
@@ -22,10 +24,15 @@ async function main() {
   const options = parseArguments(process.argv.slice(2), {
     ...commonArguments,
     model: { type: 'string', required: true },
+    'reference-model': { type: 'string' },
+    'reference-root': { type: 'string' },
     pairs: { type: 'number', default: 4, integer: true, min: 1, max: 10_000 },
     output: { type: 'string', default: '.ai-lab/arena.json' },
     'candidate-profile': { type: 'string', default: 'model' },
     ablation: { type: 'boolean', default: false },
+    resume: { type: 'boolean', default: false },
+    'stop-on-rejection': { type: 'boolean', default: false },
+    'minimum-score': { type: 'number', default: 0.6, min: 0, max: 1 },
   });
   if (options.help) {
     console.log(`Compara el candidato con Experto clásico balanced, con los mismos límites.
@@ -36,13 +43,55 @@ El presupuesto actual de Experto es 15000 ms y profundidad máxima 9.
 Un presupuesto reducido es un ensayo diferente. Las truncadas se cuentan como inconclusas.
 --candidate-profile model|classic|pvs-history|pvs-threats controla el buscador del candidato.
 --ablation conserva el perfil y sus heurísticas tácticas, pero omite la corrección neuronal.
+--reference-model ruta sustituye Experto por otro modelo congelado, con los mismos límites.
+--reference-root carpeta usa un buscador congelado, exigiendo idénticas reglas del motor.
+--resume continúa el informe existente desde su último checkpoint de cuatro órdenes.
+--stop-on-rejection termina si ya es imposible alcanzar el filtro de promoción.
 El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir el navegador.`);
     return;
   }
   const bytes = await readModelBytes(options.model);
   const modules = await loadGameModules();
+  let referenceModules;
   try {
+    const referenceSources = {};
+    if (options['reference-root']) {
+      for (const file of ['engine.ts', 'classic-rules.ts', 'hex.ts', 'types.ts']) {
+        const sourceHash = async (root) =>
+          createHash('sha256')
+            .update(await readFile(resolve(root, 'src', file)))
+            .digest('hex');
+        if ((await sourceHash('.')) !== (await sourceHash(options['reference-root']))) {
+          throw new Error(`La referencia no usa las mismas reglas: ${file}`);
+        }
+      }
+      for (const file of [
+        'ai.ts',
+        'ai-airplane.ts',
+        'ai-ranged.ts',
+        'ai-material.ts',
+        'ai-position.ts',
+        'ai-neural.ts',
+        'action-identity.ts',
+      ]) {
+        try {
+          referenceSources[file] = createHash('sha256')
+            .update(await readFile(resolve(options['reference-root'], 'src', file)))
+            .digest('hex');
+        } catch (error) {
+          if (error.code !== 'ENOENT' || file !== 'ai-material.ts') throw error;
+          referenceSources[file] = null;
+        }
+      }
+      referenceModules = await loadGameModules({ root: options['reference-root'] });
+    }
     const evaluate = modules.neural.createNeuralEvaluator(bytes);
+    const referenceBytes = options['reference-model']
+      ? await readModelBytes(options['reference-model'])
+      : undefined;
+    const referenceEvaluate = referenceBytes
+      ? (referenceModules ?? modules).neural.createNeuralEvaluator(referenceBytes)
+      : undefined;
     const metadata = modules.neural.parseNeuralModel(bytes).metadata;
     const profile =
       options['candidate-profile'] === 'model'
@@ -55,7 +104,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
     const standardExpertCaps =
       options['budget-ms'] === EXPERT_BUDGET_MS && options.depth === EXPERT_DEPTH;
     const metrics = { classical: newSearchMetrics(), neural: newSearchMetrics() };
-    const report = {
+    let report = {
       format: 'hexagonal-neural-arena',
       version: 1,
       status: 'running',
@@ -83,6 +132,14 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
         depth: 9,
         budgetMs: 15_000,
       },
+      referenceModel: referenceBytes
+        ? {
+            path: resolve(options['reference-model']),
+            sha256: createHash('sha256').update(new Uint8Array(referenceBytes)).digest('hex'),
+          }
+        : null,
+      referenceRoot: options['reference-root'] ? resolve(options['reference-root']) : null,
+      referenceSources,
       standardExpertCaps,
       budgetDescription: standardExpertCaps
         ? 'Presupuesto y profundidad máxima del Experto actual.'
@@ -98,9 +155,50 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
       summary: summarizeArena([]),
       metrics: {},
     };
+    if (options.resume) {
+      const saved = JSON.parse(await readFile(resolve(options.output), 'utf8'));
+      const settings = ({ resume: _resume, ...rest }) => {
+        void _resume;
+        return rest;
+      };
+      if (
+        JSON.stringify(settings(saved.settings)) !== JSON.stringify(settings(options)) ||
+        saved.model.sha256 !== report.model.sha256 ||
+        saved.referenceModel?.sha256 !== report.referenceModel?.sha256 ||
+        JSON.stringify(saved.referenceSources ?? {}) !== JSON.stringify(report.referenceSources)
+      ) {
+        throw new Error('El torneo guardado no coincide con los parámetros o modelos actuales.');
+      }
+      if (['complete', 'rejected'].includes(saved.status)) return;
+      report = saved;
+      report.status = 'running';
+      delete report.error;
+      for (const game of [...report.games, ...(report.inProgress ? [report.inProgress] : [])]) {
+        for (const search of game.searches) addSearchMetrics(metrics[search.evaluator], search);
+      }
+    }
     await writeJsonCheckpoint(options.output, report);
     console.log(report.budgetDescription);
     try {
+      const rejectIfImpossible = async () => {
+        if (
+          !options['stop-on-rejection'] ||
+          promotionPossible(report.games, {
+            pairs: options.pairs,
+            minimumScore: options['minimum-score'],
+          })
+        )
+          return false;
+        report.status = 'rejected';
+        report.rejection =
+          'No puede alcanzar los mínimos aunque gane todas las partidas restantes.';
+        delete report.inProgress;
+        report.finishedAt = new Date().toISOString();
+        await writeJsonCheckpoint(options.output, report);
+        console.log(report.rejection);
+        return true;
+      };
+      if (await rejectIfImpossible()) return;
       for (let pair = 0; pair < options.pairs; pair += 1) {
         const opening = createOpening(modules, {
           seed: options.seed,
@@ -110,19 +208,23 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
         });
         for (const neuralPlayer of [0, 1]) {
           const gameId = `pair-${pair + 1}-neural-${neuralPlayer}`;
-          let state = modules.engine.cloneState(opening.state);
-          const firstPly = state.ply;
-          const actions = [...opening.actions];
-          const searches = [];
+          if (report.games.some((game) => game.gameId === gameId)) continue;
+          const partial = report.inProgress?.gameId === gameId ? report.inProgress : undefined;
+          let state = modules.engine.cloneState(partial?.finalState ?? opening.state);
+          const firstPly = opening.state.ply;
+          const actions = [...(partial?.actions ?? opening.actions)];
+          const searches = [...(partial?.searches ?? [])];
           const gameMetrics = { classical: newSearchMetrics(), neural: newSearchMetrics() };
-          const startedAt = performance.now();
+          for (const search of searches) addSearchMetrics(gameMetrics[search.evaluator], search);
+          const startedAt = performance.now() - (partial?.elapsedMs ?? 0);
           console.log(
             `${gameId}: inicio; disposición ${opening.initialLayout}, HP ${opening.fortressHp}.`,
           );
           while (!state.outcome && state.ply - firstPly < options['max-plies']) {
             const player = state.activePlayer;
             const kind = player === neuralPlayer ? 'neural' : 'classical';
-            const search = modules.ai.searchMachineActionWithMetadata(state, {
+            const searchModules = kind === 'classical' ? (referenceModules ?? modules) : modules;
+            const search = searchModules.ai.searchMachineActionWithMetadata(state, {
               depth: options.depth,
               budgetMs: options['budget-ms'],
               difficulty: 'expert',
@@ -136,7 +238,9 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
                       : evaluate,
                     searchProfile: profile,
                   }
-                : {}),
+                : referenceEvaluate
+                  ? { evaluate: referenceEvaluate }
+                  : {}),
             });
             addSearchMetrics(metrics[kind], search.metadata);
             addSearchMetrics(gameMetrics[kind], search.metadata);
@@ -200,6 +304,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
             `${gameId}: ${state.outcome ? JSON.stringify(state.outcome) : 'inconclusa (límite de jugadas)'}; ` +
               `${report.summary.wins} V / ${report.summary.draws} T / ${report.summary.losses} D / ${report.summary.inconclusive} inconclusas (red).`,
           );
+          if (await rejectIfImpossible()) return;
         }
       }
       report.status = 'complete';
@@ -213,6 +318,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
       throw error;
     }
   } finally {
+    await referenceModules?.close();
     await modules.close();
   }
 }

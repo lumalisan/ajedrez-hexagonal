@@ -59,7 +59,10 @@ export interface MatchEvidence {
 }
 export interface PlayerProgression {
   version: 1;
+  catalogRevision: 2;
   xp: number;
+  /** First satisfaction, including achievements in tiers that are still locked. */
+  achievedAt: Partial<Record<ProgressionAchievementId, string>>;
   unlockedAt: Partial<Record<ProgressionAchievementId, string>>;
   registeredMatchIds: string[];
   matches: Record<string, MatchEvidence>;
@@ -81,7 +84,9 @@ export interface ProgressionUpdate {
 export function createPlayerProgression(): PlayerProgression {
   return {
     version: 1,
+    catalogRevision: 2,
     xp: 0,
+    achievedAt: {},
     unlockedAt: {},
     registeredMatchIds: [],
     matches: {},
@@ -208,19 +213,39 @@ function unlock(progress: PlayerProgression, at: string, previousXp: number): Pr
     changed = false;
     const tier = levelProgress(progress.xp).tier;
     for (const entry of PROGRESSION_ACHIEVEMENTS) {
-      if (
-        entry.tier > tier ||
-        progress.unlockedAt[entry.id] ||
-        progressionValue(progress, entry) < entry.target
-      )
+      if (!progress.achievedAt[entry.id] && progressionValue(progress, entry) < entry.target)
         continue;
-      progress.unlockedAt[entry.id] = at;
+      progress.achievedAt[entry.id] ??= historicalAchievementDate(progress, entry) ?? at;
+      if (entry.tier > tier || progress.unlockedAt[entry.id]) continue;
+      progress.unlockedAt[entry.id] = progress.achievedAt[entry.id];
       progress.xp += TIERS[entry.tier].xp;
       unlocked.push(entry.id);
       changed = true;
     }
   }
   return { progress, unlocked, xpEarned: progress.xp - previousXp };
+}
+
+/** Older profiles retain completion dates, but not the dates of individual orders. */
+function historicalAchievementDate(
+  progress: PlayerProgression,
+  definition: ProgressionAchievement,
+): string | undefined {
+  if (!definition.modes.length || definition.metric === 'onlineRating') return;
+  let total = 0;
+  let streak = 0;
+  for (const match of eligibleFacts(progress, definition)
+    .filter((entry) => entry.completedAt)
+    .sort((a, b) => Date.parse(a.completedAt!) - Date.parse(b.completedAt!))) {
+    const value = match.metrics[definition.metric] ?? 0;
+    if (definition.metric === 'winStreak') {
+      streak = match.result === 1 ? streak + 1 : 0;
+      total = Math.max(total, streak);
+    } else {
+      total = MAX_METRICS.has(definition.metric) ? Math.max(total, value) : total + value;
+    }
+    if (total >= definition.target) return match.completedAt;
+  }
 }
 export function recordActivity(progress: PlayerProgression, at: string): ProgressionUpdate {
   const day = localDay(at);
@@ -473,6 +498,7 @@ function analyzeRecord(record: MatchRecord, owner: Player): Metrics {
       if (event.type === 'destroy' || event.type === 'intercept') {
         if (victim.type !== 'fortress') {
           bump('kills');
+          if (victim.type === 'antiAir') metrics.enemyShieldDestroyed = 1;
           if (
             own &&
             actor &&
@@ -543,7 +569,7 @@ function addCompletionMetrics(
   metrics.longMatches = Number(turns >= 50);
   metrics.longWins = Number(win && turns >= 50);
   metrics.quickWins = Number(win && turns < 40);
-  metrics.timedWins = Number(win && record.config.options.clockSeconds !== null);
+  metrics.timedWins = Number(win && (record.config.options.clockSeconds ?? 0) > 0);
   metrics.blitzWins = Number(win && record.config.options.clockSeconds === 300);
   metrics.cleanWins = Number(win && !final.pieces.some((p) => p.owner !== owner));
   metrics.lastSurvivorWins = Number(
@@ -559,10 +585,6 @@ function addCompletionMetrics(
   metrics.halfEnemies = Number(
     (metrics.kills ?? 0) >=
       record.initialState.pieces.filter((p) => p.owner !== owner).length * 0.5,
-  );
-  const shields = initialOwn.filter((p) => p.type === 'antiAir');
-  metrics.shieldSurvived = Number(
-    shields.length > 0 && shields.every((p) => survivingIds.has(p.id)),
   );
   metrics.year2488 = Number(day.startsWith('2488-'));
 }
@@ -640,6 +662,11 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
     for (const entry of PROGRESSION_ACHIEVEMENTS) {
       const at = value.unlockedAt[entry.id];
       if (timestamp(at)) fresh.unlockedAt[entry.id] = at;
+    }
+  if (object(value.achievedAt))
+    for (const entry of PROGRESSION_ACHIEVEMENTS) {
+      const at = value.achievedAt[entry.id];
+      if (timestamp(at)) fresh.achievedAt[entry.id] = at;
     }
   if (object(value.matches))
     for (const [id, match] of Object.entries(value.matches)) {
@@ -727,6 +754,20 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
   if (object(value.legacyUnlockedAt))
     for (const [id, at] of Object.entries(value.legacyUnlockedAt))
       if (timestamp(at)) fresh.legacyUnlockedAt[id] = at;
+  // This slot now rewards a different feat. Preserve its old award and XP separately.
+  if (value.catalogRevision !== 2) {
+    const oldShield = fresh.unlockedAt['p1-20'];
+    if (oldShield) fresh.legacyUnlockedAt['p1-20:shieldSurvived'] = oldShield;
+    delete fresh.unlockedAt['p1-20'];
+    delete fresh.achievedAt['p1-20'];
+  }
+  for (const entry of PROGRESSION_ACHIEVEMENTS) {
+    const unlocked = fresh.unlockedAt[entry.id];
+    const achieved = fresh.achievedAt[entry.id] ?? historicalAchievementDate(fresh, entry);
+    if (achieved) fresh.achievedAt[entry.id] = achieved;
+    if (unlocked && achieved && Date.parse(achieved) < Date.parse(unlocked))
+      fresh.unlockedAt[entry.id] = achieved;
+  }
   return fresh;
 }
 export function loadPlayerProgression(legacy: AchievementProgress): PlayerProgression {

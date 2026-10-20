@@ -14,6 +14,57 @@ import train
 
 
 class TrainingTests(unittest.TestCase):
+    def test_threshold_split_never_moves_old_training_games_into_validation(self):
+        samples = [train.Sample(f"game-{index}", (index,), 0, None) for index in range(100)]
+        _, _, first = train.split_games(samples[:30], 17, 0.2, "hash-threshold")
+        _, _, extended = train.split_games(samples, 17, 0.2, "hash-threshold")
+        self.assertTrue(set(first["trainingGames"]).issubset(extended["trainingGames"]))
+        self.assertTrue(set(first["validationGames"]).issubset(extended["validationGames"]))
+        self.assertEqual(first["method"], "sha256-game-id-threshold")
+
+    def test_projected_gradient_matches_finite_differences(self):
+        features = [(0, 2, 4), (1, 3, 5)]
+        target = np.array([0.3, -0.3], dtype=np.float32)
+        parameters = train.initial_parameters(19, 3, 0)
+        parameters["b1"][:] = 0.3
+        parameters["b2"][:] = 0.3
+        def loss():
+            output = train.predict(parameters, features)
+            return train.mse((output - output[[1, 0]]) / 2, target)
+        numerical = {}
+        for name, index in [("w3", (0,)), ("w2", (0, 0)), ("w1", (0, 0)), ("b3", (0,))]:
+            original = parameters[name][index].copy()
+            parameters[name][index] = original + 0.001
+            high = loss()
+            parameters[name][index] = original - 0.001
+            low = loss()
+            parameters[name][index] = original
+            numerical[(name, index)] = (high - low) / 0.002
+        backend = train.NumpyBackend(parameters, 0.0002, 0)
+        backend.train_batch(features, target, [1, 0])
+        for (name, index), expected in numerical.items():
+            self.assertAlmostEqual(float(backend.first_moment[name][index] / 0.1), expected, delta=0.0001)
+
+    def test_warm_start_preserves_weights_and_rejects_incompatible_models(self):
+        parameters = train.initial_parameters(19, 3, 0)
+        path = self.folder / "initial.bin"
+        header = {"target": "classic-residual-v1", "residualScale": 2000}
+        metadata = {"format": "hex-value-v1", "featureSchema": train.FEATURE_SCHEMA,
+                    "inputSize": train.INPUT_SIZE, "hiddenSizes": [64, 32], "outputScale": 10000,
+                    "evaluation": "classic-residual-v1", "residualScale": 2000,
+                    "residualSymmetry": "antisymmetric"}
+        train.export_model(path, parameters, metadata)
+        restored = train.read_initial_model(path, header, True)
+        for name in parameters:
+            np.testing.assert_array_equal(restored[name], parameters[name])
+        with self.assertRaisesRegex(ValueError, "incompatible"):
+            train.read_initial_model(path, {**header, "residualScale": 1000}, True)
+        with self.assertRaisesRegex(ValueError, "incompatible"):
+            train.read_initial_model(path, header, False)
+        path.write_bytes(path.read_bytes()[:-4])
+        with self.assertRaisesRegex(ValueError, "longitud"):
+            train.read_initial_model(path, header, True)
+
     def test_perspective_projection_removes_bias_without_mixing_game_positions(self):
         rows = [
             {"kind": "sample", "gameId": f"g{index // 2}", "ply": 10,

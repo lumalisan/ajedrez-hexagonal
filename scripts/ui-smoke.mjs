@@ -616,25 +616,11 @@ try {
   await desktop.locator('#rules-article').waitFor({ state: 'visible' });
   await assertFullscreenAvailable(desktop, 'Rules');
   assert(
-    (await desktop.locator('[data-rule-section]').count()) === 12,
-    'Rules must expose the twelve requested sections.',
+    (await desktop.locator('[data-rule-section]').count()) === 14,
+    'Rules must expose the fourteen requested sections.',
   );
-  await desktop.locator('[data-rule-search]').fill('capturador');
-  const filteredRuleCount = await desktop.locator('[data-rule-section]:not([hidden])').count();
-  assert(
-    filteredRuleCount > 0 &&
-      filteredRuleCount < 12 &&
-      !(await desktop.locator('[data-rule-section="capturador"]').isHidden()),
-    'Rules search must filter the navigation.',
-  );
+  assert((await desktop.locator('[data-rule-search]').count()) === 0, 'Rules search was removed.');
   const filteredTab = desktop.locator('[data-rule-section="capturador"]');
-  await filteredTab.focus();
-  await filteredTab.press('ArrowDown');
-  assert(
-    !(await desktop.locator('[data-rule-section][aria-selected="true"]').isHidden()),
-    'Keyboard navigation must not activate a filtered-out rules section.',
-  );
-  await desktop.locator('[data-rule-search]').fill('');
   await filteredTab.focus();
   await filteredTab.press('Enter');
   assert(
@@ -661,11 +647,13 @@ try {
           canvas.getAttribute('role') === 'img' &&
           Boolean(canvas.getAttribute('aria-label')) &&
           rect.width > 0 &&
-          rect.height > 0
+          rect.height > 0 &&
+          Math.abs(rect.height - canvas.parentElement.getBoundingClientRect().height) < 3
         );
       }),
     'Capturer rules must mount a visible, accessible game-board demonstration.',
   );
+  await desktop.locator('.rule-demo-canvas').scrollIntoViewIfNeeded();
   await desktop
     .locator('.rule-demo-canvas[data-rule-demo-scene="2/3"]')
     .waitFor({ timeout: 8_000 });
@@ -673,13 +661,11 @@ try {
     (await desktop.locator('.rule-demo-canvas').getAttribute('data-perspective')) === '2d',
     'Rules demonstrations must use the flat board.',
   );
-  await desktop.locator('[data-demo-toggle]').click();
-  await desktop.locator('[data-demo-restart]').click();
-  await desktop.locator('[data-demo-step]').click();
-  await desktop.locator('[data-demo-step]').click();
   assert(
-    (await desktop.locator('.rule-demo-canvas').getAttribute('data-rule-demo-scene')) === '2/3',
-    'Rules demonstrations must support pausing, restarting and manual steps.',
+    (await desktop
+      .locator('.rule-demo-controls, .rule-demo-badge, [data-rule-demo-caption]')
+      .count()) === 0,
+    'Demos must show the animation without visible controls or captions.',
   );
   assert(
     (await desktop.locator('#rules-article strong').allTextContents()).some(
@@ -710,7 +696,7 @@ try {
   await desktop.locator('[data-rule-section="casillas-compartidas"]').click();
   assert(
     (await desktop.locator('#rules-article').textContent())?.includes(
-      'el tanque, el lanzamisiles y el embestidor pueden convertirse en asaltadores',
+      'ambos pueden convertirse en asaltadores y atacar al dron durante ese mismo turno',
     ),
     'Updated shared-cell attack wording is missing.',
   );
@@ -1990,20 +1976,11 @@ try {
   await compactPortrait.getByRole('button', { name: 'Abandonar tutorial', exact: true }).click();
 
   await compactPortrait.locator('[data-home-action="rules"]').click();
-  await compactPortrait.locator('[data-rule-search]').waitFor();
+  await compactPortrait.locator('#rules-article').waitFor();
   await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait rules', '#game-dialog');
-  await assertVisibleFormFontSize(compactPortrait, '#game-dialog', 16);
-  await compactPortrait.locator('[data-rule-search]').fill('unidad completamente inexistente');
-  await compactPortrait.locator('.rules-empty').waitFor();
-  assert(
-    (await compactPortrait.locator('.rules-empty').getAttribute('role')) === 'status' &&
-      (await compactPortrait.locator('.rules-empty').textContent())?.includes(
-        'Sin coincidencias',
-      ) &&
-      (await compactPortrait.locator('[data-rule-section]:not([hidden])').count()) === 0,
-    'Rules search must present an accessible empty state when there are no results.',
-  );
-  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait empty rules', '#game-dialog');
+  await compactPortrait.locator('[data-rule-section="experiencia"]').click();
+  await compactPortrait.locator('.rules-table').waitFor();
+  await assertNoHorizontalOverflow(compactPortrait, 'Compact portrait experience', '#game-dialog');
   await compactPortrait.locator('.rules-close').click();
   await compactPortrait.close();
 
@@ -2970,11 +2947,9 @@ async function assertUnitReferences(page) {
     'fortaleza',
   ]) {
     await page.locator(`[data-rule-section="${section}"]`).click();
-    const details = page.locator('#rules-article details');
+    const details = page.locator('#rules-article .rule-unit-reference');
     for (let index = 0; index < (await details.count()); index++) {
       const reference = details.nth(index);
-      await reference.locator('summary').focus();
-      await reference.locator('summary').press('Enter');
       const image = reference.locator('img');
       await image.scrollIntoViewIfNeeded();
       await image.evaluate((node) => node.decode());
@@ -2991,7 +2966,6 @@ async function assertUnitReferences(page) {
         }),
         `The ${section} reference must load with accessible text and fit the viewport.`,
       );
-      await reference.locator('summary').press('Enter');
       count++;
     }
   }

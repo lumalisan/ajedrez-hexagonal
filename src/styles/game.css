@@ -103,7 +103,7 @@ button:disabled {
 
 .brand strong {
   overflow: hidden;
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
   font-weight: 650;
   letter-spacing: 0.02em;
@@ -2417,7 +2417,7 @@ button:disabled {
   max-width: 10ch;
   margin: 4px 0 0;
   color: var(--text);
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(31px, 3vw, 43px);
   font-weight: 760;
   letter-spacing: -0.025em;
@@ -2479,7 +2479,7 @@ button:disabled {
 }
 
 .home-nav-button span {
-  font-family: 'Bahnschrift', 'Segoe UI Variable', sans-serif;
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 720;
   letter-spacing: 0.035em;
@@ -2696,7 +2696,7 @@ button:disabled {
 
 /* Reglamento: navegación estable a la izquierda y lectura/ilustración a la derecha. */
 .game-dialog:has(.rules-shell) {
-  width: min(1180px, calc(100vw - 40px));
+  width: min(1480px, calc(100vw - 40px));
   max-width: none;
   height: min(820px, calc(100dvh - 40px));
   max-height: none;
@@ -2714,7 +2714,7 @@ button:disabled {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   background: var(--surface);
 }
 
@@ -2749,27 +2749,10 @@ button:disabled {
   line-height: 1.55;
 }
 
-.rules-search {
-  display: block;
-  margin-bottom: 12px;
-}
-
-.rules-search input {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 1px solid rgba(181, 205, 205, 0.28);
-  border-radius: 8px;
-  background: #071820;
-  color: var(--text);
-}
-
-.rules-search input::placeholder {
-  color: #829799;
-}
-
 .rules-navigation {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   min-height: 0;
   gap: 6px;
   padding-right: 5px;
@@ -2778,6 +2761,7 @@ button:disabled {
 }
 
 .rules-navigation button {
+  height: auto;
   min-height: 43px;
   padding: 9px 12px;
   border: 1px solid rgba(181, 205, 205, 0.18);
@@ -2785,11 +2769,8 @@ button:disabled {
   background: rgba(17, 42, 52, 0.62);
   color: #bfd0d0;
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.25;
+  font: 600 14px / 1.3 var(--font-display);
   text-align: left;
-  text-transform: uppercase;
 }
 
 .rules-navigation button:hover,
@@ -2811,14 +2792,14 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 32px;
-  padding: clamp(28px, 4vw, 50px);
+  padding: clamp(24px, 3vw, 32px);
   overflow: auto;
   background:
     radial-gradient(circle at 88% 12%, rgba(54, 185, 255, 0.055), transparent 30%), var(--surface);
 }
 
 .rules-article:has(.rule-media) {
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
   align-items: start;
 }
 
@@ -2902,65 +2883,6 @@ button:disabled {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.rule-demo-controls {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.rule-demo-controls button {
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid var(--muted);
-  border-radius: 8px;
-  background: #102832;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.rule-demo-controls button:hover {
-  background: #1a3d49;
-}
-
-.rule-demo-controls button:focus-visible {
-  outline: 2px solid var(--move);
-  outline-offset: 3px;
-}
-
-.rule-demo-controls button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.rule-demo-badge {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 9px;
-  border: 1px solid rgba(181, 205, 205, 0.26);
-  border-radius: 999px;
-  background: rgba(7, 24, 32, 0.9);
-  color: #c9d8d5;
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.rule-demo-badge i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--move);
-  box-shadow: 0 3px 9px rgba(85, 224, 193, 0.48);
 }
 
 .rule-media figcaption {
@@ -4320,28 +4242,6 @@ html {
   display: none;
 }
 
-.rules-empty {
-  display: grid;
-  max-width: 42ch;
-  min-height: 220px;
-  align-content: center;
-  justify-items: start;
-  gap: 8px;
-}
-
-.rules-empty strong {
-  color: var(--text);
-  font-family: var(--font-display);
-  font-size: clamp(22px, 4vw, 32px);
-}
-
-.rules-empty p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
 @media (max-width: 760px) {
   .topbar {
     padding-top: max(6px, env(safe-area-inset-top));
@@ -4492,10 +4392,6 @@ html {
 
   .rules-heading h2 {
     font-size: 23px;
-  }
-
-  .rules-search {
-    margin-top: 9px;
   }
 
   .rules-navigation {
@@ -6032,8 +5928,13 @@ button.history-card:disabled {
   }
 }
 
-.home-shortcut-story > span {
+.home-nav-button span,
+.home-shortcut > span,
+.home-profile-copy strong {
   font-family: var(--font-display);
+}
+
+.home-shortcut-story > span {
   font-size: 16px;
 }
 .home-shortcut-story > svg {
@@ -6348,5 +6249,52 @@ button.history-card:disabled {
   body.replay-active .board-arena .canvas-wrap {
     height: 100%;
     min-height: 0;
+  }
+}
+
+/* Reading surfaces share the width of Profile, Ranking and Achievements. */
+.game-dialog:has(.rules-shell) {
+  width: min(1480px, calc(100vw - 40px));
+}
+.rule-demo .rule-media-stage {
+  height: auto;
+  aspect-ratio: var(--rule-demo-aspect, 1.3);
+}
+.rule-media-stage > .rule-demo-canvas {
+  position: absolute;
+  inset: 0;
+}
+.rule-unit-reference {
+  margin: 24px 0 0;
+}
+.rule-unit-reference img,
+.story-illustration {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--control-radius);
+}
+.story-illustration {
+  margin: 0 0 24px;
+}
+.rules-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.rules-table th,
+.rules-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+@media (max-width: 700px) {
+  .game-dialog:has(.rules-shell) {
+    width: calc(100vw - 12px);
   }
 }

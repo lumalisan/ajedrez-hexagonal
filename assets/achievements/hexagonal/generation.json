@@ -23,9 +23,17 @@
     },
     {
       "id": "p1-04",
-      "subject": "a single tall handled victory cup with an angular stem and cyan gem",
-      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a single tall handled victory cup with an angular stem and cyan gem. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
-      "original": "originals/p1-04.png"
+      "subject": "Replace the trophy with one single upright golden hexagonal game token on the summit of a small stepped burgundy and gold hexagonal podium. Below it lie two fallen flat broken token fragments. Convey only one victorious token remaining. No cup, trophy, crown, humans or chess pieces.",
+      "prompt": "Edit target: the attached existing game achievement badge. Replace the trophy with one single upright golden hexagonal game token on the summit of a small stepped burgundy and gold hexagonal podium. Below it lie two fallen flat broken token fragments. Convey only one victorious token remaining. No cup, trophy, crown, humans or chess pieces. Preserve the exact chunky beveled gold horizontal hexagonal frame, cyan corner gems, dark burgundy opaque enamel interior, polished sculpted gold collectible style and framing. Only replace the central subject as requested. Single landscape badge. No text, numerals, watermark or extra border. Transparent outside the badge.",
+      "original": "originals-refined/p1-04.png",
+      "revisions": [
+        {
+          "subject": "a single tall handled victory cup with an angular stem and cyan gem",
+          "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a single tall handled victory cup with an angular stem and cyan gem. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+          "original": "originals/p1-04.png"
+        }
+      ],
+      "revisedAt": "2026-10-20"
     },
     {
       "id": "p1-05",
@@ -161,15 +169,23 @@
     },
     {
       "id": "p1-20",
-      "subject": "The official fixed ESCUDO ANTIAÉREO installation with its two grounded supports, curved radar reflector and central emitter standing intact behind a symbolic broad golden shield medallion. No turret or wheels.",
-      "prompt": "Use case: stylized-concept. Create ONE finished premium game achievement badge for Protocolo Hexagonal. Image 1 is STYLE AND FRAME reference ONLY: keep its chunky polished GOLD beveled horizontal six-sided hexagonal frame with long flat top/bottom and points left/right, burgundy enamel interior, tiny cyan corner gemstones, warm sculpted 3D collectible. Replace the book completely. Additional images are OFFICIAL MACHINE DESIGN references: preserve exact vehicle shapes, wheel/track count, sensors and proportions; translate graphite surfaces into polished golden sculpture with restrained cyan or amber enamel. All units are remotely controlled machines. No humans, humanoids, soldiers, helmets, cockpit, seats, limbs, text, letters, numbers, watermark, holographic effects, extra badges. Frontal landscape badge 1.3:1, subject large and readable, whole frame visible with small margin. Transparent ONLY outside the badge, opaque burgundy inside. SUBJECT: The official fixed ESCUDO ANTIAÉREO installation with its two grounded supports, curved radar reflector and central emitter standing intact behind a symbolic broad golden shield medallion. No turret or wheels.",
-      "original": "originals-canonical/p1-20.png",
+      "subject": "Keep the official mechanical anti-air unit silhouette: a wide curved semicircular radar dish on two low tracked/wheeled rectangular base pods. Show its central dish visibly broken into two halves with a jagged gap, cyan inset strips extinguished, several small debris fragments below, and a clean gold sunburst behind signifying cleared skies. Remove the small foreground shield completely. No humans, helmets, weapons firing, cup or text.",
+      "prompt": "Edit target: the attached existing game achievement badge. Keep the official mechanical anti-air unit silhouette: a wide curved semicircular radar dish on two low tracked/wheeled rectangular base pods. Show its central dish visibly broken into two halves with a jagged gap, cyan inset strips extinguished, several small debris fragments below, and a clean gold sunburst behind signifying cleared skies. Remove the small foreground shield completely. No humans, helmets, weapons firing, cup or text. Preserve the exact chunky beveled gold horizontal hexagonal frame, cyan corner gems, dark burgundy opaque enamel interior, polished sculpted gold collectible style and framing. Only replace the central subject as requested. Single landscape badge. No text, numerals, watermark or extra border. Transparent outside the badge.",
+      "original": "originals-refined/p1-20.png",
       "previousGeneration": {
         "subject": "a domed golden anti-aircraft shield sheltering a tiny aircraft",
         "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a domed golden anti-aircraft shield sheltering a tiny aircraft. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
         "original": "originals/p1-20.png"
       },
-      "referenceUnits": ["antiAir"]
+      "referenceUnits": ["antiAir"],
+      "revisions": [
+        {
+          "subject": "The official fixed ESCUDO ANTIAÉREO installation with its two grounded supports, curved radar reflector and central emitter standing intact behind a symbolic broad golden shield medallion. No turret or wheels.",
+          "prompt": "Use case: stylized-concept. Create ONE finished premium game achievement badge for Protocolo Hexagonal. Image 1 is STYLE AND FRAME reference ONLY: keep its chunky polished GOLD beveled horizontal six-sided hexagonal frame with long flat top/bottom and points left/right, burgundy enamel interior, tiny cyan corner gemstones, warm sculpted 3D collectible. Replace the book completely. Additional images are OFFICIAL MACHINE DESIGN references: preserve exact vehicle shapes, wheel/track count, sensors and proportions; translate graphite surfaces into polished golden sculpture with restrained cyan or amber enamel. All units are remotely controlled machines. No humans, humanoids, soldiers, helmets, cockpit, seats, limbs, text, letters, numbers, watermark, holographic effects, extra badges. Frontal landscape badge 1.3:1, subject large and readable, whole frame visible with small margin. Transparent ONLY outside the badge, opaque burgundy inside. SUBJECT: The official fixed ESCUDO ANTIAÉREO installation with its two grounded supports, curved radar reflector and central emitter standing intact behind a symbolic broad golden shield medallion. No turret or wheels.",
+          "original": "originals-canonical/p1-20.png"
+        }
+      ],
+      "revisedAt": "2026-10-20"
     },
     {
       "id": "p2-01",
@@ -215,9 +231,17 @@
     },
     {
       "id": "p2-06",
-      "subject": "a golden command baton resting over a fan of seven differently shaped unit tokens",
-      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden command baton resting over a fan of seven differently shaped unit tokens. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
-      "original": "originals/p2-06.png"
+      "subject": "Replace the central collection of medieval unit symbols with a large golden command baton resting over a fan of seven identical small hexagonal order tokens, each with only a simple cyan inset dot. This is abstract command coordination for using every unit type. No horses, bows, towers, wings, swords, shields, chess pieces, letters or unit depictions.",
+      "prompt": "Edit target: the attached existing game achievement badge. Replace the central collection of medieval unit symbols with a large golden command baton resting over a fan of seven identical small hexagonal order tokens, each with only a simple cyan inset dot. This is abstract command coordination for using every unit type. No horses, bows, towers, wings, swords, shields, chess pieces, letters or unit depictions. Preserve the exact chunky beveled gold horizontal hexagonal frame, cyan corner gems, dark burgundy opaque enamel interior, polished sculpted gold collectible style and framing. Only replace the central subject as requested. Single landscape badge. No text, numerals, watermark or extra border. Transparent outside the badge.",
+      "original": "originals-refined/p2-06.png",
+      "revisions": [
+        {
+          "subject": "a golden command baton resting over a fan of seven differently shaped unit tokens",
+          "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden command baton resting over a fan of seven differently shaped unit tokens. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+          "original": "originals/p2-06.png"
+        }
+      ],
+      "revisedAt": "2026-10-20"
     },
     {
       "id": "p2-07",
@@ -431,9 +455,17 @@
     },
     {
       "id": "p3-11",
-      "subject": "a golden wheelbarrow full of amber armor debris",
-      "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden wheelbarrow full of amber armor debris. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
-      "original": "originals/p3-11.png"
+      "subject": "Keep the wheelbarrow and replace ALL contents with unrecognizable mechanical debris: irregular crumpled metal plates, small cogs, bent rods and angular scraps. No helmets, human remains, bones, skulls, faces or recognizable vehicle/unit parts.",
+      "prompt": "Edit target: the attached existing game achievement badge. Keep the wheelbarrow and replace ALL contents with unrecognizable mechanical debris: irregular crumpled metal plates, small cogs, bent rods and angular scraps. No helmets, human remains, bones, skulls, faces or recognizable vehicle/unit parts. Preserve the exact chunky beveled gold horizontal hexagonal frame, cyan corner gems, dark burgundy opaque enamel interior, polished sculpted gold collectible style and framing. Only replace the central subject as requested. Single landscape badge. No text, numerals, watermark or extra border. Transparent outside the badge.",
+      "original": "originals-refined/p3-11.png",
+      "revisions": [
+        {
+          "subject": "a golden wheelbarrow full of amber armor debris",
+          "prompt": "Use case: stylized-concept. Create ONE game achievement badge. Image 1 is a STYLE REFERENCE ONLY: keep its polished chunky GOLD beveled horizontal six-sided hexagon frame, dark burgundy enamel interior, tiny cyan corner gems, warm 3D sculpted game collectible material. REPLACE the open book completely. This badge's UNIQUE CENTRAL SUBJECT: a golden wheelbarrow full of amber armor debris. Make that subject large, clear and readable as a small game icon. Straight-on frontal view, landscape 1.3:1. Flat long top and bottom edges, points left and right. Frame fully inside canvas with small 4% margin; transparent outside badge, opaque burgundy inside. No book unless explicitly requested. No text, letters, numerals, watermarks, square backdrop, extra badges, holographic effects. Exactly ONE badge, NOT a sheet.",
+          "original": "originals/p3-11.png"
+        }
+      ],
+      "revisedAt": "2026-10-20"
     },
     {
       "id": "p3-12",

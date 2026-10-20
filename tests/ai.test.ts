@@ -61,7 +61,7 @@ describe('machine player', () => {
     expect(result?.state.pieces.some((piece) => piece.id === 'human-soldier')).toBe(false);
   });
 
-  it('advanced search sees a recapture that the quick one-ply evaluation overlooks', () => {
+  it('both the fallback and advanced search avoid an immediate recapture', () => {
     const pieces: Piece[] = [
       { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
       { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
@@ -79,7 +79,7 @@ describe('machine player', () => {
     const quickChoice = chooseMachineAction(state);
     const advanced = searchMachineAction(state, { depth: 3, budgetMs: 1_000 });
 
-    expect(quickChoice).toMatchObject({
+    expect(quickChoice).not.toMatchObject({
       kind: 'move',
       pieceId: 'machine-fast',
       to: { q: 0, r: -2 },

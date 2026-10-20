@@ -26,6 +26,33 @@ function position(airplane: Airplane, otherPieces: Piece[] = []) {
 }
 
 describe('airplane flight evaluation', () => {
+  it('does not mistake a corridor blocked by another aircraft for open runway', () => {
+    const airplane = plane(0, 0, 0);
+    const clear = position(airplane);
+    const blocked = position(airplane, [
+      { id: 'traffic', type: 'drone', owner: 1, position: { q: 0, r: -2 } },
+    ]);
+    expect(airplanePositionScore(clear, airplane)).toBeGreaterThan(
+      airplanePositionScore(blocked, airplane) + 20,
+    );
+  });
+
+  it('rejects flight corridors intercepted before a destination outside the shield', () => {
+    const airplane = plane(0, 0, 0);
+    const trapped = position(airplane, [
+      { id: 'shield', type: 'antiAir', owner: 0, position: { q: 0, r: 0 } },
+    ]);
+    const flights = getPreviewActionsForPiece(trapped, airplane.id).filter(
+      (action) => action.kind === 'move' && !action.kamikaze,
+    );
+    expect(flights.length).toBeGreaterThan(0);
+    for (const flight of flights) {
+      expect(
+        applyAction(trapped, flight).state.pieces.some((piece) => piece.id === airplane.id),
+      ).toBe(false);
+    }
+    expect(airplanePositionScore(trapped, airplane)).toBeLessThan(-250);
+  });
   it('values inward manoeuvring room above facing out of the same edge hex', () => {
     const inward = plane(5, -2, 5);
     const outward = plane(5, -2, 2);

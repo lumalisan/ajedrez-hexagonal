@@ -17,6 +17,11 @@ child.on('error', (error) => {
   console.error(`No se pudo ejecutar Python: ${error.message}. Configura AI_PYTHON.`);
   process.exitCode = 1;
 });
+const stop = () => child.kill();
+process.once('SIGINT', stop);
+process.once('SIGTERM', stop);
 child.on('exit', (code) => {
+  process.removeListener('SIGINT', stop);
+  process.removeListener('SIGTERM', stop);
   process.exitCode = code ?? 1;
 });

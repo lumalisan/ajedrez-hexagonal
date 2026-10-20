@@ -157,9 +157,11 @@ export function describeSearchMetrics(metrics) {
   };
 }
 
-export async function loadGameModules() {
+export async function loadGameModules(options = {}) {
   const { createServer } = await import('vite');
-  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const root = options.root
+    ? resolve(options.root)
+    : fileURLToPath(new URL('../../', import.meta.url));
   const server = await createServer({
     root,
     configFile: false,
@@ -168,13 +170,15 @@ export async function loadGameModules() {
     appType: 'custom',
   });
   try {
-    const [ai, engine, setup, neural] = await Promise.all([
+    const [ai, engine, setup, neural, ranged, records] = await Promise.all([
       server.ssrLoadModule('/src/ai.ts'),
       server.ssrLoadModule('/src/engine.ts'),
       server.ssrLoadModule('/src/setup.ts'),
       server.ssrLoadModule('/src/ai-neural.ts'),
+      server.ssrLoadModule('/src/ai-ranged.ts'),
+      server.ssrLoadModule('/src/match-record.ts'),
     ]);
-    return { ai, engine, setup, neural, close: () => server.close() };
+    return { ai, engine, setup, neural, ranged, records, close: () => server.close() };
   } catch (error) {
     await server.close();
     throw error;

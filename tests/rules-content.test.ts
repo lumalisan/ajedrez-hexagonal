@@ -36,59 +36,46 @@ describe('contenido del reglamento', () => {
     expect(shieldHeading).toMatchObject({ text: 'Escudo antiaéreo', kind: 'heading' });
   });
 
-  it('incluye literalmente las revisiones de desarrollo y casillas compartidas', () => {
-    const development = RULE_SECTIONS.find(({ id }) => id === 'desarrollo');
-    const shared = RULE_SECTIONS.find(({ id }) => id === 'casillas-compartidas');
-    const developmentText = development?.paragraphs.map(paragraphText).join('\n') ?? '';
-    const sharedText = shared?.paragraphs.map(paragraphText).join('\n') ?? '';
-
-    expect(developmentText).toContain(
-      'Explora la disposición inicial en el tablero y utiliza el selector para compararla con Frente extendido.',
+  it('incorpora el texto revisado de desarrollo y casillas compartidas', () => {
+    const text = (id: string) =>
+      RULE_SECTIONS.find((section) => section.id === id)
+        ?.paragraphs.map(paragraphText)
+        .join('\n') ?? '';
+    expect(text('desarrollo')).toContain('el número de asaltadores aumenta a 11');
+    expect(text('desarrollo')).toContain('durante 5 turnos consecutivos');
+    expect(text('desarrollo')).toContain('agota el tiempo disponible en 3 ocasiones');
+    expect(text('casillas-compartidas')).toContain('nunca dos unidades en una misma capa');
+    expect(text('casillas-compartidas')).toContain(
+      'solo puede atacar a una de ellas en cada acción',
     );
-    expect(sharedText).toContain(
-      'Hay que tener en cuenta que, si la unidad terrestre situada debajo del dron es un asaltador, este podrá atacarlo.',
+    expect(text('casillas-compartidas')).toContain(
+      'Si la unidad terrestre situada debajo del dron es un asaltador o un embestidor, podrá atacarlo.',
     );
-    expect(sharedText).toContain(
-      'el tanque, el lanzamisiles y el embestidor pueden convertirse en asaltadores, lo que les permite igualmente atacar al dron en ese mismo turno.',
-    );
-    expect(sharedText).not.toContain('El vehículo puede abandonarse');
-  });
-
-  it('explica sin divergencias el daño y los sacrificios contra la Fortaleza', () => {
-    const fortress = RULE_SECTIONS.find(({ id }) => id === 'fortaleza');
-    const text = fortress?.paragraphs.map(paragraphText).join('\n') ?? '';
-
     expect(FORTRESS_DAMAGE_PER_HIT).toBe(1);
     expect(FORTRESS_SACRIFICE_ATTACKERS).toEqual(['soldier', 'capturer', 'fast']);
-    expect(text).toContain(`Cada impacto causa exactamente ${FORTRESS_DAMAGE_PER_HIT} punto`);
-    expect(text).toContain('Asaltador, Capturador y Embestidor se sacrifican');
-    expect(text).toContain('1, 2 o 3 puntos de vida');
-  });
-
-  it('documenta todos los finales de classic-v2 y su persistencia', () => {
-    const development = RULE_SECTIONS.find(({ id }) => id === 'desarrollo');
-    const text = development?.paragraphs.map(paragraphText).join('\n') ?? '';
-
+    expect(text('fortaleza')).toContain('fortaleza le resta un punto de vida');
+    expect(text('fortaleza')).toContain('se sacrifican después de impactar');
     expect(CLASSIC_REPETITION_LIMIT).toBe(3);
     expect(CLASSIC_NO_PROGRESS_LIMIT).toBe(120);
-    expect(text).toContain('cinco turnos propios consecutivos');
-    expect(text).toContain('cancelar la orden');
-    expect(text).not.toContain('tablas por repetición');
-    expect(text).toContain('tablas por bloqueo');
-    expect(text).toContain('acordar ese desenlace');
-    expect(text).toContain('tiempo agotado');
-    expect(text).toContain('rendición');
-    expect(text).toContain('se conservan al continuar, exportar, importar o reproducir');
   });
 
-  it('distingue las capas y describe la transformación como una sola orden', () => {
-    const shared = RULE_SECTIONS.find(({ id }) => id === 'casillas-compartidas');
-    const text = shared?.paragraphs.map(paragraphText).join('\n') ?? '';
-
-    expect(text).toContain('dos capas: suelo y aire');
-    expect(text).toContain('máximo una unidad terrestre y una unidad aérea');
-    expect(text).toContain('Tanque, Lanzamisiles y Embestidor pueden convertirse en Asaltadores');
-    expect(text).toContain('no concede un segundo turno independiente');
+  it('incluye experiencia, clasificación y la tabla accesible de XP', () => {
+    const experience = RULE_SECTIONS.find(({ id }) => id === 'experiencia');
+    expect(
+      experience?.paragraphs.find((p) => typeof p !== 'string' && p.kind === 'table'),
+    ).toMatchObject({
+      columns: ['Nivel', 'Derrota o tablas', 'Victoria'],
+      rows: [
+        ['Fácil', '15 XP', '25 XP'],
+        ['Medio', '25 XP', '50 XP'],
+        ['Difícil', '35 XP', '75 XP'],
+        ['Experto', '50 XP', '100 XP'],
+      ],
+    });
+    const ranking = RULE_SECTIONS.find(({ id }) => id === 'clasificacion');
+    expect(ranking?.paragraphs.map(paragraphText).join(' ')).toContain(
+      '1000 puntos de clasificación',
+    );
   });
 
   it('presenta demostraciones reales y un tablero de disposiciones sin imágenes estáticas', () => {

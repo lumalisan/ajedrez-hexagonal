@@ -47,6 +47,11 @@ evaluador pequeño en CPU, comprobarlo en el navegador y enfrentarlo a Experto c
 emparejadas. «Neuronal» carga el candidato experimental; los cuatro niveles clásicos conservan
 su evaluación anterior.
 
+`pnpm ai:selfplay --publish` automatiza autojuego, entrenamiento y evaluación contra el campeón
+y Experto. Solo instala candidatos que superen los filtros y la comprobación del navegador.
+Permite reanudar y conserva modelos anteriores; una ronda completa puede durar más de un día.
+Consulta [el funcionamiento y los comandos de autojuego](docs/ia-autojuego.md).
+
 ## Arquitectura
 
 La aplicación es una SPA local, sin backend. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión.
@@ -88,7 +93,7 @@ Los presupuestos máximos de cálculo por turno son: Fácil, 0,25 segundos; Medi
 
 Neuronal comparte provisionalmente las recompensas y la valoración de juego de Experto. Los resultados de sus ensayos se documentan en [las iteraciones del laboratorio](docs/ia-neuronal-iteraciones.md).
 
-La IA valora el coste real de convertir un vehículo en Asaltador y comprueba esas capturas inmediatas también al elegir una jugada de respaldo por falta de tiempo. Para el Caza, considera las salidas legales sin intercepción, el espacio de maniobra y el rumbo hacia objetivos, evitando avances sin utilidad que lo encierren contra un borde.
+La IA valora la conservación del Embestidor y del Caza, el coste de transformar vehículos y las recapturas inmediatas, también al elegir una jugada de respaldo por falta de tiempo. Para el Caza, considera las salidas legales sin intercepción durante todo el trayecto, los corredores ocupados y la continuidad de dos vuelos. Es una estimación de movilidad; la búsqueda sigue resolviendo las respuestas enemigas con el motor. Las [pruebas estratégicas y ensayos de desarrollo](docs/ia-estrategia-2026-10-20.md) documentan los cambios y sus límites.
 
 ## Logros
 

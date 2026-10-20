@@ -58,6 +58,11 @@ try {
     .filter((file) => file.endsWith('.webp'))
     .map((file) => `/units/${file}`);
   assert(unitImages.length === 9, 'The build must contain all nine official unit references.');
+  const storyDirectory = resolve(server.config.root, server.config.build.outDir, 'story');
+  const storyImages = readdirSync(storyDirectory)
+    .filter((file) => file.endsWith('.webp'))
+    .map((file) => `/story/${file}`);
+  assert(storyImages.length === 10, 'The build must contain all ten chapter illustrations.');
   assert(
     builtAssets.some((asset) => asset.endsWith('.js')),
     'The build must contain JavaScript.',
@@ -170,6 +175,10 @@ try {
     `All unit references must be precached before the manual is opened: ${missingUnitImages.join(', ')}`,
   );
   await context.setOffline(true);
+  assert(
+    storyImages.every((asset) => cachedAssets.paths.includes(asset)),
+    'Every chapter illustration must be precached before opening the story.',
+  );
   const reload = await page.reload({ waitUntil: 'networkidle' });
   assert(
     reload?.fromServiceWorker(),
@@ -219,10 +228,9 @@ try {
 
   await page.locator('[data-home-action="rules"]').click();
   await page.locator('[data-rule-section="soldado"]').click();
-  await page.locator('#rules-article summary').press('Enter');
-  await page.locator('#rules-article details img').evaluate((image) => image.decode());
+  await page.locator('#rules-article .rule-unit-reference img').evaluate((image) => image.decode());
   assert(
-    (await page.locator('#rules-article details img').getAttribute('src'))?.endsWith(
+    (await page.locator('#rules-article .rule-unit-reference img').getAttribute('src'))?.endsWith(
       '/units/soldier.webp',
     ),
     'The official Asaltador reference must open for the first time while offline.',
@@ -241,6 +249,18 @@ try {
       (await rulesPreview.getAttribute('data-piece-count')) === '44',
     'The live rules board must show the selected complete deployment offline.',
   );
+  await page.locator('.rules-close').click();
+
+  await page.locator('[data-home-action="story"]').click();
+  for (let chapter = 1; chapter <= 10; chapter++) {
+    await page.locator(`[data-story-chapter="chapter-${chapter}"]`).click();
+    const artwork = page.locator('.story-illustration');
+    await artwork.evaluate((image) => image.decode());
+    assert(
+      await artwork.evaluate((image) => image.naturalWidth > 0),
+      `Chapter ${chapter} illustration must load on its first visit offline.`,
+    );
+  }
   await page.locator('.rules-close').click();
 
   await page.locator('[data-home-action="new"]').click();

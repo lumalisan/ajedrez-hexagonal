@@ -8,6 +8,7 @@ import {
 } from './engine';
 import { actionKey } from './action-identity';
 import { airplanePositionScore } from './ai-airplane';
+import { AI_PIECE_VALUE as PIECE_VALUE, materialValue } from './ai-material';
 import type { NeuralEvaluator } from './ai-neural';
 import { RepetitionHasher } from './ai-position';
 import { evaluateRangedState, rangedActionPriority, rangedMaterialBonus } from './ai-ranged';
@@ -26,18 +27,6 @@ const MATE_SCORE = 1_000_000;
 const TIMEOUT_CHECK_INTERVAL = 64;
 const MAX_SEARCH_MOVES = 24;
 const MAX_ROOT_SEARCH_MOVES = 40;
-
-const PIECE_VALUE: Record<PieceType, number> = {
-  soldier: 100,
-  capturer: 320,
-  medium: 420,
-  long: 400,
-  fast: 500,
-  drone: 450,
-  airplane: 460,
-  antiAir: 300,
-  fortress: 0,
-};
 
 interface SearchContext {
   rootPlayer: Player;
@@ -610,14 +599,14 @@ function orderActions(
       if (!result.ok) return null;
       const key = actionKey(action);
       const tacticalScore = tacticalDelta(state, result.state, state.activePlayer);
-      const transformationRisk =
+      const replyRisk =
         !result.state.outcome && result.state.activePlayer !== state.activePlayer
-          ? bestTransformationGain(result.state, resolutionRules)
+          ? bestImmediateGain(result.state, resolutionRules)
           : 0;
       let score = context
         ? evaluateSearchState(result.state, context)
         : evaluateClassicState(result.state, rootPlayer, personality);
-      score += (maximizing ? 1 : -1) * (tacticalScore - transformationRisk * 12) * weights.tactics;
+      score += (maximizing ? 1 : -1) * (tacticalScore - replyRisk * 12) * weights.tactics;
       score += (maximizing ? 1 : -1) * stableActionBias(action, state.ply);
       return {
         action,
@@ -842,30 +831,27 @@ function materialBalance(state: GameState, player: Player): number {
 
 /**
  * The initial ranking is also the fallback when no search iteration completes.
- * Inspect immediate transformation attacks through the engine so that a tank's
- * firing arc never becomes a false safe zone, even on a short search budget.
+ * Inspect all immediate tactical replies through the engine. A capture bonus
+ * must not hide the recapture when the clock expires before depth one finishes.
  */
-function bestTransformationGain(
+function bestImmediateGain(
   state: GameState,
   rules: Readonly<ActionResolutionRules> | undefined,
 ): number {
   const player = state.activePlayer;
-  const enemies = state.pieces.filter((piece) => piece.owner !== player);
   let bestGain = 0;
   let before: number | undefined;
   for (const piece of state.pieces) {
-    if (
-      piece.owner !== player ||
-      !['medium', 'long', 'fast'].includes(piece.type) ||
-      !enemies.some((target) => hexDistance(piece.position, target.position) <= 1)
-    )
-      continue;
+    if (piece.owner !== player) continue;
     const examined = new Set<string>();
     for (const action of getLegalActionsForPiece(state, piece.id)) {
-      if (action.kind !== 'transform' || !isTacticalAction(state, action)) continue;
+      if (!isTacticalAction(state, action)) continue;
       // Facings can alter the resulting position, but not this immediate
       // material exchange. Keep target/layer variants distinct.
-      const exchange = `${action.to ? hexKey(action.to) : '-'}:${action.attackAboveId ?? '-'}`;
+      const exchange =
+        action.kind === 'transform'
+          ? `${action.to ? hexKey(action.to) : '-'}:${action.attackAboveId ?? '-'}`
+          : actionKey(action);
       if (examined.has(exchange)) continue;
       examined.add(exchange);
       const result = applyAction(state, action, rules);
@@ -919,12 +905,6 @@ function firingPressureScore(
         (target.type === 'fortress' ? (target.hp === 1 ? 240 : 100) : materialValue(target) * 0.12),
       0,
     );
-}
-
-function materialValue(piece: Piece): number {
-  return piece.type === 'long'
-    ? 180 + 110 * (piece.missilesRemaining ?? 2)
-    : PIECE_VALUE[piece.type];
 }
 
 function ambushPressureScore(state: GameState, piece: Piece): number {

@@ -1,5 +1,6 @@
 import { mkdir, open } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { trainingTarget } from './selfplay-policy.mjs';
 
 import {
   TEACHER_SCALE,
@@ -14,6 +15,7 @@ import {
   normalizedTeacher,
   outcomeForPerspective,
   parseArguments,
+  readModelBytes,
   seededRandom,
   validateSparseFeatures,
 } from './shared.mjs';
@@ -22,6 +24,7 @@ async function main() {
   const options = parseArguments(process.argv.slice(2), {
     ...commonArguments,
     games: { type: 'number', default: 12, integer: true, min: 1, max: 100_000 },
+    'game-offset': { type: 'number', default: 0, integer: true, min: 0, max: 1_000_000_000 },
     'budget-ms': { ...commonArguments['budget-ms'], default: 250 },
     depth: { ...commonArguments.depth, default: 3 },
     'max-plies': { ...commonArguments['max-plies'], default: 120 },
@@ -29,6 +32,11 @@ async function main() {
     exploration: { type: 'number', default: 0.12, min: 0, max: 1 },
     output: { type: 'string', default: '.ai-lab/positions.jsonl' },
     overwrite: { type: 'boolean', default: false },
+    model: { type: 'string' },
+    'opponent-model': { type: 'string' },
+    residual: { type: 'boolean', default: false },
+    'outcome-weight': { type: 'number', default: 0, min: 0, max: 1 },
+    'outcome-decay': { type: 'number', default: 0.98, min: 0, max: 1 },
   });
   if (options.help) {
     console.log(`Genera posiciones de autojuego etiquetadas por Experto (balanced).
@@ -37,6 +45,10 @@ async function main() {
     --output .ai-lab/positions.jsonl [--overwrite]
 Presupuesto mínimo: 20 ms. Exploración: probabilidad de jugar una acción legal aleatoria.
 Las partidas truncadas conservan outcome:null; se separan por gameId al entrenar.
+--model ruta juega con la red; alterna autojuego y partidas contra Experto.
+--opponent-model ruta añade un rival histórico. --residual exporta correcciones clásicas.
+En modo residual, --outcome-weight 0.25 añade hasta 500 puntos por resultado real,
+descontados por --outcome-decay 0.98 por orden hasta el final.
 La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la profundidad.`);
     return;
   }
@@ -46,6 +58,15 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
   let modules;
   try {
     modules = await loadGameModules();
+    if (options['opponent-model'] && !options.model) {
+      throw new Error('--opponent-model requiere --model.');
+    }
+    const evaluate = options.model
+      ? modules.neural.createNeuralEvaluator(await readModelBytes(options.model))
+      : undefined;
+    const opponent = options['opponent-model']
+      ? modules.neural.createNeuralEvaluator(await readModelBytes(options['opponent-model']))
+      : undefined;
     const rules = { ...modules.engine.DEFAULT_ACTION_RESOLUTION_RULES };
     const metadata = {
       kind: 'metadata',
@@ -55,8 +76,25 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
       inputSize: modules.neural.NEURAL_INPUT_SIZE,
       featureEncoding: 'sparse-binary-indices',
       teacherScale: TEACHER_SCALE,
+      ...(options.residual
+        ? {
+            target: 'classic-residual-v1',
+            residualScale: 2000,
+            residualBaseline: 'classic+ranged-v1',
+            labelVersion: 'bounded-outcome-v2',
+            evaluationVersion: 'strategic-v2',
+          }
+        : {}),
       createdAt: new Date().toISOString(),
-      teacher: { difficulty: 'expert', personality: 'balanced', normalized: 'tanh(score/10000)' },
+      teacher: {
+        difficulty: 'expert',
+        personality: 'balanced',
+        normalized: 'tanh(score/10000)',
+        model: options.model ?? null,
+        opponents: evaluate
+          ? ['self', 'classic', ...(opponent ? ['historical'] : [])]
+          : ['classic'],
+      },
       settings: options,
       rules,
       layouts: [3, 5],
@@ -70,13 +108,14 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
     let sampleCount = 0;
     let inconclusive = 0;
     for (let index = 0; index < options.games; index += 1) {
+      const gameIndex = index + options['game-offset'];
       const opening = createOpening(modules, {
         seed: options.seed,
-        index,
+        index: gameIndex,
         openingPlies: options['opening-plies'],
         fortressHp: options['fortress-hp'],
       });
-      const gameId = `selfplay-${options.seed}-${index}`;
+      const gameId = `selfplay-${options.seed}-${gameIndex}`;
       const random = seededRandom(deriveSeed(opening.seed, 0));
       const samples = [];
       const actions = [...opening.actions];
@@ -84,7 +123,16 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
       let state = opening.state;
       let skippedLabels = 0;
       const firstPly = state.ply;
+      const matchup = gameIndex % (opponent ? 3 : 2);
+      const modelPlayer = Math.floor(gameIndex / (opponent ? 3 : 2)) % 2;
       while (!state.outcome && state.ply - firstPly < options['max-plies']) {
+        const evaluator = !evaluate
+          ? undefined
+          : matchup === 0 || state.activePlayer === modelPlayer
+            ? evaluate
+            : matchup === 2
+              ? opponent
+              : undefined;
         const search = modules.ai.searchMachineActionWithMetadata(state, {
           depth: options.depth,
           budgetMs: options['budget-ms'],
@@ -92,6 +140,7 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
           personality: 'balanced',
           seed: deriveSeed(opening.seed, state.ply),
           resolutionRules: rules,
+          ...(evaluator ? { evaluate: evaluator } : {}),
         });
         addSearchMetrics(metrics, search.metadata);
         if ((state.ply - firstPly) % options['sample-every'] === 0) {
@@ -110,6 +159,9 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
                 ply: state.ply,
                 completedDepth: search.metadata.completedDepth,
                 teacherScore: score,
+                baseline:
+                  modules.ai.evaluateClassicState(state, perspective) +
+                  (options.residual ? modules.ranged.evaluateRangedState(state, perspective) : 0),
               });
             }
           } else {
@@ -126,10 +178,22 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
         state = next;
       }
       for (const sample of samples) {
+        const outcome = outcomeForPerspective(state.outcome, sample.perspective);
+        const teacher = trainingTarget({
+          teacher: sample.teacher,
+          teacherScore: sample.teacherScore,
+          baseline: sample.baseline,
+          outcome,
+          outcomeWeight: options['outcome-weight'],
+          residual: options.residual,
+          remainingPlies: state.ply - sample.ply,
+          outcomeDecay: options['outcome-decay'],
+        });
         await file.write(
           `${JSON.stringify({
             ...sample,
-            outcome: outcomeForPerspective(state.outcome, sample.perspective),
+            teacher,
+            outcome,
           })}\n`,
         );
       }
@@ -137,6 +201,14 @@ La semilla reproduce aperturas y variedad. Un corte por tiempo puede cambiar la 
         `${JSON.stringify({
           kind: 'game',
           gameId,
+          matchup: !evaluate
+            ? 'classic'
+            : matchup === 0
+              ? 'self'
+              : matchup === 2
+                ? 'historical'
+                : 'classic',
+          modelPlayer,
           seed: opening.seed,
           initialLayout: opening.initialLayout,
           fortressHp: opening.fortressHp,

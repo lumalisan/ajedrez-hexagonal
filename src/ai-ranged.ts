@@ -1,4 +1,5 @@
 import { getFiringRangeCells, isProtectedByPlayer } from './engine';
+import { materialValue } from './ai-material';
 import { directionBetween, hexDistance, hexKey, stepHex } from './hex';
 import type { GameAction, GameState, Piece, Player } from './types';
 
@@ -12,26 +13,8 @@ export function rangedMaterialBonus(piece: Piece): number {
 }
 
 function targetValue(piece: Piece): number {
-  switch (piece.type) {
-    case 'fortress':
-      return piece.hp === 1 ? 900 : 600;
-    case 'airplane':
-      return 460 + rangedMaterialBonus(piece);
-    case 'long':
-      return 180 + (piece.missilesRemaining ?? 2) * 160;
-    case 'fast':
-      return 500;
-    case 'drone':
-      return 450;
-    case 'medium':
-      return 420;
-    case 'capturer':
-      return 320;
-    case 'antiAir':
-      return 300;
-    case 'soldier':
-      return 100;
-  }
+  if (piece.type === 'fortress') return piece.hp === 1 ? 900 : 600;
+  return materialValue(piece) + rangedMaterialBonus(piece);
 }
 
 function batteryScore(

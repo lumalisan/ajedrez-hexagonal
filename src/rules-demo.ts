@@ -5,7 +5,8 @@ import {
   getFiringRangeCells,
   getLegalActionsForPiece,
 } from './engine';
-import { equalHex } from './hex';
+import { ALL_DIRECTIONS, addHex, DIRECTION_VECTORS, equalHex, isOnBoard } from './hex';
+import { projectHex } from './rendering/model';
 import { RULE_SEQUENCES } from './rules-sequences';
 import { BoardRenderer, type RenderModel } from './renderer';
 import type {
@@ -195,7 +196,16 @@ export function mountRuleDemo(
         return [
           ...scene.state.pieces
             .filter((piece) => !piece.id.startsWith('demo-'))
-            .map((piece) => piece.position),
+            .flatMap((piece) =>
+              piece.type === 'antiAir'
+                ? [
+                    piece.position,
+                    ...ALL_DIRECTIONS.map((direction) =>
+                      addHex(piece.position, DIRECTION_VECTORS[direction]),
+                    ).filter(isOnBoard),
+                  ]
+                : [piece.position],
+            ),
           ...(destination ? [destination] : []),
         ];
       }),
@@ -207,6 +217,8 @@ export function mountRuleDemo(
       canvas.getAttribute(name),
     ]),
   );
+  const stage = canvas.parentElement;
+  const originalStageAspect = stage?.style.getPropertyValue('--rule-demo-aspect');
   let sceneIndex = 0;
   let framedSequence: number | null = null;
   let timer: number | null = null;
@@ -247,7 +259,15 @@ export function mountRuleDemo(
     const scene = scenes[sceneIndex];
     // Keep the camera stable within an animation, then center the next independent sequence.
     if (framedSequence !== scene.sequence) {
-      renderer.setFrame(sequenceFrames[scene.sequence], demoId === 'fortaleza' ? 105 : undefined);
+      const positions = sequenceFrames[scene.sequence];
+      const padding = 48;
+      renderer.setFrame(positions, padding);
+      const points = positions.map((position) => projectHex(position, Math.PI, 0));
+      const width =
+        Math.max(...points.map(({ x }) => x)) - Math.min(...points.map(({ x }) => x)) + padding * 2;
+      const height =
+        Math.max(...points.map(({ y }) => y)) - Math.min(...points.map(({ y }) => y)) + padding * 2;
+      canvas.parentElement?.style.setProperty('--rule-demo-aspect', `${width} / ${height}`);
       framedSequence = scene.sequence;
     }
     const token = ++cycleToken;
@@ -394,6 +414,8 @@ export function mountRuleDemo(
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       observer.disconnect();
       renderer.destroy();
+      if (originalStageAspect) stage?.style.setProperty('--rule-demo-aspect', originalStageAspect);
+      else stage?.style.removeProperty('--rule-demo-aspect');
       for (const [name, value] of originalAttributes) restoreAttribute(canvas, name, value);
     },
   };

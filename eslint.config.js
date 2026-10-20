@@ -7,7 +7,8 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default tseslint.config(
   {
-    ignores: ['coverage/**', 'dist/**', 'node_modules/**'],
+    // Local datasets and frozen experiment checkouts are generated, not project sources.
+    ignores: ['coverage/**', 'dist/**', 'node_modules/**', '.ai-lab/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

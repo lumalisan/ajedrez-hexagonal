@@ -106,7 +106,7 @@ def read_dataset(path: Path, max_samples: int | None) -> tuple[dict, list[Sample
     return header, samples
 
 
-def split_games(samples: list[Sample], seed: int, fraction: float) -> tuple[list[int], list[int], dict]:
+def split_games(samples: list[Sample], seed: int, fraction: float, policy: str = "ranked") -> tuple[list[int], list[int], dict]:
     games = sorted({sample.game_id for sample in samples})
     if len(games) < 2:
         raise ValueError("se necesitan al menos dos partidas para separar entrenamiento y validación")
@@ -115,11 +115,16 @@ def split_games(samples: list[Sample], seed: int, fraction: float) -> tuple[list
         games, key=lambda game: hashlib.sha256(f"{seed}:{game}".encode("utf-8")).digest()
     )
     validation_count = min(len(games) - 1, max(1, round(len(games) * fraction)))
-    validation_games = set(ordered_games[:validation_count])
+    if policy == "hash-threshold":
+        validation_games = {game for game in games if int.from_bytes(hashlib.sha256(f"{seed}:{game}".encode("utf-8")).digest(), "big") / 2**256 < fraction}
+        if not validation_games or len(validation_games) == len(games):
+            raise ValueError("la partición estable necesita más partidas para contener entrenamiento y validación; no se reasignan partidas conocidas")
+    else:
+        validation_games = set(ordered_games[:validation_count])
     train = [index for index, sample in enumerate(samples) if sample.game_id not in validation_games]
     validation = [index for index, sample in enumerate(samples) if sample.game_id in validation_games]
     details = {
-        "method": "sha256-game-id",
+        "method": "sha256-game-id-threshold" if policy == "hash-threshold" else "sha256-game-id",
         "validationFractionRequested": fraction,
         "trainingGames": sorted(set(games) - validation_games),
         "validationGames": sorted(validation_games),
@@ -139,6 +144,17 @@ def targets(samples: list[Sample], teacher_weight: float) -> np.ndarray:
         ],
         dtype=np.float32,
     )
+
+
+def label_statistics(samples: list[Sample], indices: list[int], target: np.ndarray) -> dict:
+    values = target[indices]
+    return {
+        "samples": len(indices),
+        "games": len({samples[index].game_id for index in indices}),
+        "samplesWithOutcome": sum(samples[index].outcome is not None for index in indices),
+        "clippedTargets": int(np.count_nonzero(np.abs(values) >= 0.999)),
+        "meanAbsoluteTarget": float(np.mean(np.abs(values))),
+    }
 
 
 def split_summary(details: dict) -> dict:
@@ -216,14 +232,18 @@ class NumpyBackend:
         self.weight_decay = weight_decay
         self.step = 0
 
-    def train_batch(self, features: list[tuple[int, ...]], target: np.ndarray) -> None:
+    def train_batch(self, features: list[tuple[int, ...]], target: np.ndarray, partners: list[int] | None = None) -> None:
         p = self.parameters
         first_pre = sparse_first_layer(p, features)
         first = np.maximum(first_pre, 0)
         second_pre = first @ p["w2"] + p["b2"]
         second = np.maximum(second_pre, 0)
         output = np.tanh(second @ p["w3"] + p["b3"][0])
-        output_delta = (2 / len(features)) * (output - target) * (1 - output * output)
+        if partners is None:
+            output_delta = (2 / len(features)) * (output - target) * (1 - output * output)
+        else:
+            error = (output - output[partners]) / 2 - target
+            output_delta = (error - error[partners]) / len(features) * (1 - output * output)
         second_delta = output_delta[:, None] * p["w3"][None, :] * (second_pre > 0)
         first_delta = (second_delta @ p["w2"].T) * (first_pre > 0)
         first_gradient = np.zeros_like(p["w1"])
@@ -281,7 +301,7 @@ class TorchBackend:
             lr=learning_rate,
         )
 
-    def train_batch(self, features: list[tuple[int, ...]], target: np.ndarray) -> None:
+    def train_batch(self, features: list[tuple[int, ...]], target: np.ndarray, partners: list[int] | None = None) -> None:
         torch = self.torch
         p = self.parameters
         indices = torch.tensor([index for active in features for index in active], dtype=torch.long)
@@ -292,7 +312,8 @@ class TorchBackend:
         first = torch.relu(first + p["b1"])
         second = torch.relu(first @ p["w2"] + p["b2"])
         output = torch.tanh(second @ p["w3"] + p["b3"][0])
-        loss = torch.mean((output - torch.from_numpy(target)) ** 2)
+        projected = output if partners is None else (output - output[partners]) / 2
+        loss = torch.mean((projected - torch.from_numpy(target)) ** 2)
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(list(p.values()), 5.0)
@@ -342,6 +363,38 @@ def export_model(path: Path, parameters: dict[str, np.ndarray], metadata: dict) 
     return path.stat().st_size
 
 
+def read_initial_model(path: Path, header: dict, antisymmetric: bool) -> dict[str, np.ndarray]:
+    raw = path.read_bytes()
+    if len(raw) < 8 or raw[:4] != b"HXNN":
+        raise ValueError("modelo inicial HXNN inválido")
+    length = struct.unpack("<I", raw[4:8])[0]
+    if not 0 < length <= MAX_METADATA_BYTES or 8 + length > len(raw):
+        raise ValueError("metadata del modelo inicial inválida")
+    metadata = json.loads(raw[8:8 + length])
+    if (metadata.get("format") != "hex-value-v1" or metadata.get("featureSchema") != FEATURE_SCHEMA
+            or metadata.get("inputSize") != INPUT_SIZE or metadata.get("hiddenSizes") != list(HIDDEN_SIZES)
+            or metadata.get("outputScale") != OUTPUT_SCALE
+            or metadata.get("evaluation", "standalone-v1") != header.get("target", "standalone-v1")
+            or metadata.get("residualScale") != header.get("residualScale")
+            or (metadata.get("residualSymmetry") == "antisymmetric") != antisymmetric):
+        raise ValueError("contrato del modelo inicial incompatible con el dataset")
+    offset = (8 + length + 3) // 4 * 4
+    shapes = {"w1": (INPUT_SIZE, 64), "b1": (64,), "w2": (64, 32), "b2": (32,), "w3": (32,), "b3": (1,)}
+    count = sum(math.prod(shape) for shape in shapes.values())
+    if len(raw) != offset + count * 4 or any(raw[8 + length:offset]):
+        raise ValueError("longitud del modelo inicial inválida")
+    weights = np.frombuffer(raw, dtype="<f4", offset=offset)
+    if not np.isfinite(weights).all():
+        raise ValueError("pesos del modelo inicial no finitos")
+    parameters = {}
+    start = 0
+    for name, shape in shapes.items():
+        end = start + math.prod(shape)
+        parameters[name] = weights[start:end].reshape(shape).copy()
+        start = end
+    return parameters
+
+
 def parity_vectors(parameters: dict[str, np.ndarray], samples: list[Sample], indices: list[int]) -> list[dict]:
     # Mirror JavaScript's Number accumulation, using the exact exported Float32 weights.
     p = {name: value.astype(np.float32).astype(np.float64) for name, value in parameters.items()}
@@ -371,8 +424,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=0.00001)
     parser.add_argument("--teacher-weight", type=float, default=0.7)
     parser.add_argument("--max-samples", type=int)
+    parser.add_argument("--initialize-model", type=Path, help="Continúa los pesos; reinicia AdamW")
+    parser.add_argument("--split-seed", type=int, help="Semilla de partición independiente de los pesos")
+    parser.add_argument("--split-policy", choices=("ranked", "hash-threshold"), default="ranked")
     parser.add_argument("--antisymmetric", action="store_true", help="Proyecta la corrección residual sobre perspectivas opuestas emparejadas")
     args = parser.parse_args()
+    if args.antisymmetric and args.batch_size % 2:
+        parser.error("--antisymmetric requiere --batch-size par")
     for name in ("epochs", "batch_size", "patience"):
         if getattr(args, name) < 1:
             parser.error(f"--{name.replace('_', '-')} debe ser mayor que cero")
@@ -421,10 +479,13 @@ def project_predictions(predictions: np.ndarray, indices: list[int], partners: l
 def main() -> int:
     args = parse_args()
     header, samples = read_dataset(args.input, args.max_samples)
+    if header.get("target") == "classic-residual-v1" and args.teacher_weight != 1 and any(sample.outcome is not None for sample in samples):
+        raise ValueError("las etiquetas residuales con resultados requieren --teacher-weight 1; el resultado ya se combina antes de calcular el residuo")
     if args.antisymmetric and header.get("target") != "classic-residual-v1":
         raise ValueError("--antisymmetric requiere un dataset residual")
     partners = perspective_partners(args.input, len(samples)) if args.antisymmetric else None
-    training, validation, split = split_games(samples, args.seed, args.validation_fraction)
+    split_seed = args.seed if args.split_seed is None else args.split_seed
+    training, validation, split = split_games(samples, split_seed, args.validation_fraction, args.split_policy)
     overlap = feature_overlap(samples, training, validation)
     if overlap["warning"]:
         print(
@@ -441,6 +502,8 @@ def main() -> int:
         float(np.mean([len(samples[index].features) for index in training])),
         float(target[training].mean()),
     )
+    if args.initialize_model:
+        parameters = read_initial_model(args.initialize_model, header, args.antisymmetric)
     backend_type = NumpyBackend if args.backend == "numpy" else TorchBackend
     backend = backend_type(parameters, args.learning_rate, args.weight_decay)
     best_parameters = backend.snapshot()
@@ -452,10 +515,15 @@ def main() -> int:
     rng = np.random.default_rng(args.seed)
     print(f"Entrenamiento: {len(training)} posiciones; validación: {len(validation)}; backend: {args.backend}", flush=True)
     for epoch in range(1, args.epochs + 1):
-        shuffled = rng.permutation(training)
+        if partners is None:
+            shuffled = rng.permutation(training)
+        else:
+            anchors = rng.permutation([index for index in training if index < partners[index]])
+            shuffled = np.array([index for anchor in anchors for index in (anchor, partners[anchor])])
         for start in range(0, len(shuffled), args.batch_size):
             batch = shuffled[start : start + args.batch_size]
-            backend.train_batch([samples[index].features for index in batch], target[batch])
+            local_partners = None if partners is None else [index ^ 1 for index in range(len(batch))]
+            backend.train_batch([samples[index].features for index in batch], target[batch], local_partners)
         parameters = backend.snapshot()
         if any(not np.isfinite(value).all() for value in parameters.values()):
             raise ValueError("el entrenamiento produjo pesos no finitos; reduce --learning-rate")
@@ -486,6 +554,7 @@ def main() -> int:
         "backend": args.backend,
         "numpyVersion": np.__version__,
         "seed": args.seed,
+        "splitSeed": split_seed,
         "epochsRequested": args.epochs,
         "epochs": len(history),
         "bestEpoch": best_epoch,
@@ -493,6 +562,7 @@ def main() -> int:
         "samples": len(samples),
         "maxSamples": args.max_samples,
         "datasetSha256": file_digest(args.input),
+        "initialModel": {"path": str(args.initialize_model), "sha256": file_digest(args.initialize_model)} if args.initialize_model else None,
         "samplesWithOutcome": sum(sample.outcome is not None for sample in samples),
         "teacherWeight": args.teacher_weight,
         "batchSize": args.batch_size,
@@ -500,9 +570,13 @@ def main() -> int:
         "weightDecay": args.weight_decay,
         "optimizer": "AdamW",
         "residualSymmetry": "antisymmetric" if args.antisymmetric else None,
-        "trainingObjective": "raw-paired-perspectives-mse" if args.antisymmetric else "raw-mse",
+        "trainingObjective": "projected-paired-perspectives-mse" if args.antisymmetric else "raw-mse",
         "split": split,
         "featureOverlap": overlap,
+        "labelStatistics": {
+            "training": label_statistics(samples, training, target),
+            "validation": label_statistics(samples, validation, target),
+        },
         "loss": {
             "name": "normalized-target-mse",
             "initialValidation": initial_loss,
@@ -516,6 +590,7 @@ def main() -> int:
         },
         "datasetSettings": header.get("settings"),
         "target": header.get("target", "standalone-v1"),
+        "evaluationVersion": header.get("evaluationVersion"),
         "residualScale": header.get("residualScale"),
         "history": history,
     }

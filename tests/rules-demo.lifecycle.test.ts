@@ -49,8 +49,16 @@ afterEach(() => {
 
 function createCanvas(): HTMLCanvasElement {
   const attributes = new Map([['aria-label', 'Vista original']]);
+  const properties = new Map([['--rule-demo-aspect', '1.5']]);
   return {
     dataset: {},
+    parentElement: {
+      style: {
+        getPropertyValue: (name: string) => properties.get(name) ?? '',
+        setProperty: (name: string, value: string) => properties.set(name, value),
+        removeProperty: (name: string) => properties.delete(name),
+      },
+    },
     getAttribute: (name: string) => attributes.get(name) ?? null,
     setAttribute: (name: string, value: string) => attributes.set(name, value),
     removeAttribute: (name: string) => attributes.delete(name),
@@ -85,7 +93,7 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
         { q: 0, r: 5 },
       ]),
     );
-    expect(renderer.setFrame.mock.lastCall?.[0]).not.toContainEqual({ q: 0, r: 4 });
+    expect(renderer.setFrame.mock.lastCall?.[0]).toContainEqual({ q: 0, r: 4 });
 
     demo.restart();
     expect(renderer.setFrame.mock.lastCall?.[0]).toEqual(fortressFrame);
@@ -145,6 +153,7 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
     const options = { reducedMotion: false, highContrast: false };
     const demo = mountRuleDemo(canvas, 'soldado', options);
     expect(canvas.getAttribute('aria-label')).not.toBe('Vista original');
+    expect(canvas.parentElement?.style.getPropertyValue('--rule-demo-aspect')).not.toBe('1.5');
     demo.destroy();
     demo.destroy();
     expect(vi.getTimerCount()).toBe(0);
@@ -152,6 +161,7 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
     expect(observer.disconnect).toHaveBeenCalledTimes(1);
     expect(removeListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
     expect(canvas.getAttribute('aria-label')).toBe('Vista original');
+    expect(canvas.parentElement?.style.getPropertyValue('--rule-demo-aspect')).toBe('1.5');
 
     const renderCount = renderer.setModel.mock.calls.length;
     demo.advanceStep();

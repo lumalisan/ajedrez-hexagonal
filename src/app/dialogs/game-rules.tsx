@@ -1,7 +1,7 @@
 import { DialogClose } from '../components/dialog-close';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules-content';
-import { mountRuleDemo, type RuleDemoController, type RuleDemoId } from '../../rules-demo';
+import { mountRuleDemo, type RuleDemoId } from '../../rules-demo';
 import { PIECE_NAMES } from '../../engine';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
 import {
@@ -13,7 +13,6 @@ import {
 import { useGame } from '../game-context';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
-import { Input } from '../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { RULE_UNIT_APPEARANCES, UNIT_APPEARANCE } from '../../unit-appearance';
 
@@ -24,17 +23,12 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
   const [selectedId, setSelectedId] = useState(
     () => RULE_SECTIONS.find((section) => section.id === sectionId)?.id ?? RULE_SECTIONS[0].id,
   );
-  const [query, setQuery] = useState('');
   const [horizontal, setHorizontal] = useState(
     () => window.matchMedia(HORIZONTAL_RULE_TABS).matches,
   );
   const articleRef = useRef<HTMLDivElement>(null);
   const focusArticleRef = useRef(false);
-  const normalizedQuery = query.trim().toLocaleLowerCase('es');
-  const visibleSections = RULE_SECTIONS.filter((section) =>
-    sectionMatches(section, normalizedQuery),
-  );
-  const section = visibleSections.find((candidate) => candidate.id === selectedId);
+  const section = RULE_SECTIONS.find((candidate) => candidate.id === selectedId)!;
 
   useEffect(() => {
     const media = window.matchMedia(HORIZONTAL_RULE_TABS);
@@ -58,15 +52,6 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
     }
   }
 
-  function changeQuery(value: string) {
-    setQuery(value);
-    const normalized = value.trim().toLocaleLowerCase('es');
-    const matches = RULE_SECTIONS.filter((candidate) => sectionMatches(candidate, normalized));
-    if (matches.length && !matches.some((candidate) => candidate.id === selectedId)) {
-      activate(matches[0].id, false);
-    }
-  }
-
   function panelId(id: string) {
     // Preserve the active article's public hook while every tab keeps an ARIA target.
     return id === section?.id ? 'rules-article' : `rules-article-${id}`;
@@ -83,25 +68,12 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
       <aside className="rules-sidebar">
         <div className="rules-heading">
           <div>
-            <span className="rules-kicker">MANUAL DE CAMPO</span>
             <h2>Reglas</h2>
           </div>
         </div>
         <p>Selecciona una sección para consultar las reglas de Hexfortia.</p>
-        <label className="rules-search">
-          <span className="sr-only">Buscar en las reglas</span>
-          <Input
-            type="search"
-            data-rule-search
-            placeholder="Buscar..."
-            autoComplete="off"
-            value={query}
-            onChange={(event) => changeQuery(event.currentTarget.value)}
-          />
-        </label>
         <TabsList className="rules-navigation" aria-label="Secciones del reglamento">
           {RULE_SECTIONS.map((candidate) => {
-            const filteredOut = !sectionMatches(candidate, normalizedQuery);
             return (
               <TabsTrigger
                 key={candidate.id}
@@ -109,8 +81,6 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
                 data-rule-section={candidate.id}
                 aria-controls={panelId(candidate.id)}
                 className={candidate.id === selectedId ? 'active' : undefined}
-                hidden={filteredOut}
-                disabled={filteredOut}
                 onClick={() => activate(candidate.id)}
               >
                 {candidate.label}
@@ -136,24 +106,7 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
           </TabsContent>
         );
       })}
-      {!section && (
-        <div ref={articleRef} id="rules-article" className="rules-article">
-          <div className="rules-empty" role="status">
-            <strong>Sin coincidencias</strong>
-            <p>Prueba con el nombre de una unidad, acción o condición de victoria.</p>
-          </div>
-        </div>
-      )}
     </Tabs>
-  );
-}
-
-function sectionMatches(section: RuleSection, query: string): boolean {
-  return (
-    !query ||
-    `${section.label} ${section.title} ${section.paragraphs.map(paragraphText).join(' ')}`
-      .toLocaleLowerCase('es')
-      .includes(query)
   );
 }
 
@@ -163,37 +116,26 @@ function paragraphText(paragraph: string | RuleParagraph): string {
 
 function RuleArticle({ section }: { section: RuleSection }) {
   const introductoryParagraphs = section.layoutPreview
-    ? section.paragraphs.slice(0, 2)
+    ? section.paragraphs.slice(0, 1)
     : section.paragraphs;
   return (
     <>
       <div className="rules-copy">
-        <span className="rules-kicker">HEXFORTIA</span>
         <h3 tabIndex={-1}>{section.title}</h3>
         <RuleParagraphs paragraphs={introductoryParagraphs} />
         {RULE_UNIT_APPEARANCES[section.id]?.map((type) => {
           const appearance = UNIT_APPEARANCE[type];
           return (
-            <details key={type} className="mt-6">
-              <summary className="cursor-pointer rounded-sm text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--move)]">
-                Diseño de referencia: {appearance.name}
-              </summary>
-              <figure className="m-0 mt-3">
-                <img
-                  src={`${import.meta.env.BASE_URL}units/${type}.webp`}
-                  alt={appearance.description}
-                  width="768"
-                  height="512"
-                  loading="lazy"
-                  decoding="async"
-                  className="block h-auto w-full rounded-lg"
-                />
-                <figcaption className="mt-3 text-[var(--text)]">
-                  {appearance.description} Cian y Ámbar comparten el mismo modelo; cambia el color
-                  del bando.
-                </figcaption>
-              </figure>
-            </details>
+            <figure key={type} className="rule-unit-reference">
+              <img
+                src={`${import.meta.env.BASE_URL}units/${type}.webp`}
+                alt={appearance.description}
+                width="768"
+                height="512"
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
           );
         })}
       </div>
@@ -203,7 +145,7 @@ function RuleArticle({ section }: { section: RuleSection }) {
         <>
           <RuleLayoutPreview />
           <div className="rules-copy rules-deployment-rest">
-            <RuleParagraphs paragraphs={section.paragraphs.slice(2)} />
+            <RuleParagraphs paragraphs={section.paragraphs.slice(1)} />
           </div>
         </>
       ) : null}
@@ -213,7 +155,37 @@ function RuleArticle({ section }: { section: RuleSection }) {
 
 function RuleParagraphs({ paragraphs }: { paragraphs: RuleSection['paragraphs'] }) {
   return paragraphs.map((paragraph, index) =>
-    typeof paragraph !== 'string' && paragraph.kind === 'heading' ? (
+    typeof paragraph !== 'string' && paragraph.kind === 'table' ? (
+      <div key={index} className="rules-table-wrap">
+        <table className="rules-table">
+          <caption className="sr-only">{paragraph.text}</caption>
+          <thead>
+            <tr>
+              {paragraph.columns?.map((column) => (
+                <th key={column} scope="col">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {paragraph.rows?.map((row) => (
+              <tr key={row[0]}>
+                {row.map((cell, cellIndex) =>
+                  cellIndex === 0 ? (
+                    <th key={cellIndex} scope="row">
+                      {cell}
+                    </th>
+                  ) : (
+                    <td key={cellIndex}>{cell}</td>
+                  ),
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : typeof paragraph !== 'string' && paragraph.kind === 'heading' ? (
       <h3 key={index} className="rules-peer-heading">
         {paragraph.text}
       </h3>
@@ -319,9 +291,6 @@ function RuleDemo({ demoId, title }: { demoId: RuleDemoId; title: string }) {
   const { snapshot } = useGame();
   const { reducedMotion, highContrast } = snapshot.preferences;
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const controllerRef = useRef<RuleDemoController | null>(null);
-  const [caption, setCaption] = useState('Preparando la demostración…');
-  const [playback, setPlayback] = useState({ paused: reducedMotion, reducedMotion });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -329,13 +298,8 @@ function RuleDemo({ demoId, title }: { demoId: RuleDemoId; title: string }) {
     const controller = mountRuleDemo(canvas, demoId, {
       reducedMotion,
       highContrast,
-      onSceneChange: (label, index, total) => setCaption(`${index + 1}/${total} · ${label}`),
-      onPlaybackChange: (paused, reduceMotion) =>
-        setPlayback({ paused, reducedMotion: reduceMotion }),
     });
-    controllerRef.current = controller;
     return () => {
-      controllerRef.current = null;
       controller.destroy();
     };
   }, [demoId, reducedMotion, highContrast]);
@@ -345,30 +309,6 @@ function RuleDemo({ demoId, title }: { demoId: RuleDemoId; title: string }) {
       <div className="rule-media-stage">
         <canvas ref={canvasRef} className="rule-demo-canvas" />
         <RendererStatus canvasRef={canvasRef} overlay />
-        <span className="rule-demo-badge" aria-hidden="true">
-          <i /> Demostración real
-        </span>
-      </div>
-      <figcaption data-rule-demo-caption>{caption}</figcaption>
-      <div className="rule-demo-controls" aria-label="Controles de la demostración">
-        <button
-          type="button"
-          data-demo-toggle
-          disabled={playback.reducedMotion}
-          onClick={() => controllerRef.current?.togglePlayback()}
-        >
-          {playback.reducedMotion
-            ? 'Movimiento reducido'
-            : playback.paused
-              ? 'Reproducir'
-              : 'Pausar'}
-        </button>
-        <button type="button" data-demo-step onClick={() => controllerRef.current?.advanceStep()}>
-          Paso a paso
-        </button>
-        <button type="button" data-demo-restart onClick={() => controllerRef.current?.restart()}>
-          Reiniciar
-        </button>
       </div>
     </figure>
   );
