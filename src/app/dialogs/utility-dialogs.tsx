@@ -55,14 +55,19 @@ export function UtilityDialogs() {
       return (
         <ConfirmationDialog
           eyebrow="ABANDONAR PARTIDA"
-          title="¿Volver al inicio?"
-          confirmLabel="Guardar y salir"
+          title={
+            snapshot.gameMode === 'online'
+              ? '¿Rendirse en esta partida en línea?'
+              : '¿Volver al inicio?'
+          }
+          confirmLabel={snapshot.gameMode === 'online' ? 'Rendirse' : 'Guardar y salir'}
           confirmAttribute="data-confirm-abandon"
           onConfirm={commands.abandon}
         >
           <p>
-            Volverás al menú de inicio. La partida se guardará durante 30 días para que puedas
-            retomarla más adelante. Transcurrido ese plazo, se registrará como perdida.
+            {snapshot.gameMode === 'online'
+              ? 'Rendirse concede la victoria al rival y finaliza la partida compartida. El reloj de una partida en línea continúa aunque cierres la pestaña.'
+              : 'Volverás al menú de inicio. La partida se guardará durante 30 días para que puedas retomarla más adelante. Transcurrido ese plazo, se registrará como perdida.'}
           </p>
         </ConfirmationDialog>
       );
@@ -88,7 +93,11 @@ export function UtilityDialogs() {
       return (
         <ConfirmationDialog
           eyebrow="CONFIRMAR RENDICIÓN"
-          title={`${PLAYER_NAMES[snapshot.state.activePlayer]} abandona la batalla`}
+          title={
+            snapshot.gameMode === 'online'
+              ? `${snapshot.profile.name} abandona la batalla`
+              : `${PLAYER_NAMES[snapshot.state.activePlayer]} abandona la batalla`
+          }
           confirmLabel="Rendirse"
           confirmAttribute="data-confirm-resign"
           onConfirm={commands.resign}
@@ -571,7 +580,14 @@ function OutcomeDialog() {
       <BattleProgressionPanel
         key={matchRecord?.createdAt}
         battle={evidence?.battle}
-        mode={evidence?.mode ?? (snapshot.gameMode === 'machine' ? 'machine' : 'local')}
+        mode={
+          evidence?.mode ??
+          (snapshot.gameMode === 'online'
+            ? 'online'
+            : snapshot.gameMode === 'machine'
+              ? 'machine'
+              : 'local')
+        }
       />
       {snapshot.isLocalMatch && snapshot.canUndo && (
         <div className="inline-actions">
@@ -585,6 +601,7 @@ function OutcomeDialog() {
           type="button"
           variant="secondary"
           data-rematch
+          hidden={snapshot.gameMode === 'online'}
           onClick={() => {
             commands.closeDialog();
             commands.resetGame();

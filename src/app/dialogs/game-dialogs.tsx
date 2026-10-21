@@ -4,10 +4,15 @@ import { loadActiveMatch } from '../../match-storage';
 import { useGame } from '../game-context';
 import { ConfigDialog } from './game-config';
 import { RulesDialog } from './game-rules';
+import { OnlineMenuDialog, OnlineSearchDialog } from './online-dialogs';
 
 export function GameDialogs() {
   const { snapshot } = useGame();
   switch (snapshot.dialog?.kind) {
+    case 'online':
+      return <OnlineMenuDialog />;
+    case 'online-search':
+      return <OnlineSearchDialog />;
     case 'config':
       return <ConfigDialog key={snapshot.dialog.mode} mode={snapshot.dialog.mode} />;
     case 'mode':
@@ -50,6 +55,15 @@ function ModeDialog({ initial }: { initial: boolean }) {
         </button>
       )}
       <div className="mode-choice" role="group" aria-label="Modo de juego">
+        <button
+          type="button"
+          className="mode-card"
+          data-game-mode="online"
+          onClick={() => commands.openDialog({ kind: 'online' })}
+        >
+          <strong>Batalla en línea</strong>
+          <small>Busca un rival o crea una partida privada.</small>
+        </button>
         <button
           type="button"
           className="mode-card"

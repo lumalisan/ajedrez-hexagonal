@@ -219,6 +219,7 @@ export function mountRuleDemo(
   );
   const stage = canvas.parentElement;
   const originalStageAspect = stage?.style.getPropertyValue('--rule-demo-aspect');
+  const originalStageWidth = stage?.style.getPropertyValue('--rule-demo-width');
   let sceneIndex = 0;
   let framedSequence: number | null = null;
   let timer: number | null = null;
@@ -267,7 +268,12 @@ export function mountRuleDemo(
         Math.max(...points.map(({ x }) => x)) - Math.min(...points.map(({ x }) => x)) + padding * 2;
       const height =
         Math.max(...points.map(({ y }) => y)) - Math.min(...points.map(({ y }) => y)) + padding * 2;
-      canvas.parentElement?.style.setProperty('--rule-demo-aspect', `${width} / ${height}`);
+      // A shared world-to-CSS scale keeps hexagons the same size across demonstrations.
+      // Include the renderer's 20px inset and the stage's 2px border in both dimensions.
+      const displayWidth = width * 1.5 + 22;
+      const displayHeight = height * 1.5 + 22;
+      stage?.style.setProperty('--rule-demo-width', `${displayWidth}px`);
+      stage?.style.setProperty('--rule-demo-aspect', `${displayWidth} / ${displayHeight}`);
       framedSequence = scene.sequence;
     }
     const token = ++cycleToken;
@@ -416,6 +422,8 @@ export function mountRuleDemo(
       renderer.destroy();
       if (originalStageAspect) stage?.style.setProperty('--rule-demo-aspect', originalStageAspect);
       else stage?.style.removeProperty('--rule-demo-aspect');
+      if (originalStageWidth) stage?.style.setProperty('--rule-demo-width', originalStageWidth);
+      else stage?.style.removeProperty('--rule-demo-width');
       for (const [name, value] of originalAttributes) restoreAttribute(canvas, name, value);
     },
   };

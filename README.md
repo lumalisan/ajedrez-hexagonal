@@ -32,6 +32,7 @@ pnpm test:coverage
 pnpm test:design-system
 pnpm test:ui
 pnpm test:a11y
+pnpm test:online
 pnpm test:tutorial
 pnpm exec node scripts/progression-smoke.mjs
 ```
@@ -54,7 +55,7 @@ Consulta [el funcionamiento y los comandos de autojuego](docs/ia-autojuego.md).
 
 ## Arquitectura
 
-La aplicación es una SPA local, sin backend. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión.
+La aplicación conserva sus modos locales como SPA y añade un servidor Node/Fastify para el multijugador, con Supabase Auth y PostgreSQL. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión. La [guía de multijugador](docs/multijugador.md) explica la arquitectura, la migración y la configuración del servidor.
 
 El motor de reglas sigue siendo TypeScript independiente de React, el DOM y el almacenamiento. PixiJS conserva la cámara, los glifos y las animaciones: `BoardCanvas` gestiona el renderer y sus eventos, mientras React se ocupa de la interfaz y su representación accesible. Los efectos liberan listeners, temporizadores y recursos gráficos al desmontarse.
 
@@ -66,7 +67,7 @@ Los selectores comparten `GameSelect`, basado en React Select con `unstyled` y `
 
 El [sistema de diseño](docs/design-system.md) reúne botones, campos, validación y controles compuestos con Radix UI en `src/app/components/ui/`. Los componentes son independientes de la sesión de juego y comparten tokens, foco y preferencias de accesibilidad. Con `pnpm dev`, el [catálogo de desarrollo](http://localhost:5173/design-system.html) permite probar sus estados e interacciones; no se incluye como entrada del build de producción. `pnpm test:design-system` comprueba el catálogo en navegador.
 
-La API y el multijugador online quedan para una etapa posterior. Esta migración no añade Nitro ni cambia el formato de guardados.
+**Batalla en línea** abre Buscar partida y Partida privada. La búsqueda pública se inicia con un clic: bando aleatorio, Fortaleza de 1 vida, turnos de 30 segundos, tiempo total sin límite y Frente clásico. Las privadas permiten personalizar las reglas. Para emparejar y jugar entre dispositivos hay que activar el servidor y Supabase siguiendo la [guía](docs/multijugador.md). El formato de guardados locales se conserva.
 
 ## Modos y datos
 
@@ -78,7 +79,7 @@ La API y el multijugador online quedan para una etapa posterior. Esta migración
 - En **Reglas → Desarrollo de la partida**, el tablero real muestra ambos ejércitos y permite comparar las dos disposiciones, con **Frente clásico** seleccionado por defecto. El selector solo cambia la vista del manual.
 - **Tutorial:** una bienvenida, 14 apartados y 42 pasos sobre el tablero, con objetivos señalados, órdenes restringidas y respuestas enemigas programadas. Anterior y Siguiente cambian de apartado; los ejercicios avanzan al realizarlos. Termina con una práctica libre en la que solo juega Cian hasta destruir la Fortaleza enemiga. Las flechas blancas indican casillas o botones del panel de mando y priorizan trayectorias diagonales libres de unidades y marcadores. Entrar o salir del tutorial conserva la partida guardada.
 - Autoguardado después de cada orden y al abandonar una partida. «Continuar partida» permite elegir entre las partidas pendientes; iniciar otra no borra las anteriores. Tras más de 30 días sin retomarse, una partida se registra como perdida en el historial y deja de aparecer entre las pendientes. En partidas locales, pierde el jugador que tenía el turno; contra la IA, pierde el jugador humano. La caducidad se comprueba al consultar o retomar las partidas.
-- El perfil abre Tu perfil, Estadísticas y récords y Configuración. Incluye XP, logros, racha, Elo, resultados y récords. Las posiciones compartidas y las partidas en línea están pendientes de conexión.
+- El perfil abre Tu perfil, Estadísticas y récords y Configuración. Incluye XP, logros, racha, Elo, resultados y récords. Las posiciones compartidas están pendientes; el Elo en línea se sincroniza con el servidor al jugar partidas públicas.
 - En partidas nuevas se elige Expansionista (cian) o Conservacionista (violeta). El marcador identifica al usuario y a Hexfortia o al Invitado. El primer turno se sortea visiblemente antes de activar el reloj y la IA. Hexfortia se juega siempre sin límite de tiempo.
 - El progreso empieza en nivel 0; mantiene los incrementos de XP de 125, 150, 175… Los logros Principiante, Avanzado y Experto otorgan 25, 75 y 200 XP. Contra Hexfortia, victoria / derrota o tablas: Fácil 25 / 15, Medio 50 / 25, Difícil 75 / 35, Experto 100 / 50. Las bonificaciones de duración y primera partida diaria se mantienen.
 - Ajustes y Configuración del perfil aplican los cambios con «Guardar cambios»; la X los descarta. Ajustes ofrece Exportar partida, Importar partida e Historial de resultados; la repetición se abre desde el tablero.

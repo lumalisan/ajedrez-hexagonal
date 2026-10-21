@@ -6,6 +6,8 @@
   "packageManager": "pnpm@11.22.0",
   "scripts": {
     "dev": "vite",
+    "dev:server": "tsx watch --env-file=.env.server server/main.ts",
+    "start:server": "tsx --env-file=.env.server server/main.ts",
     "build": "pnpm test:types && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
@@ -17,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:a11y": "node scripts/a11y.mjs",
+    "test:online": "tsx scripts/online-smoke.ts",
     "test:tutorial": "node scripts/tutorial-smoke.mjs",
     "test:design-system": "node scripts/design-system-smoke.mjs",
     "test:offline": "node scripts/offline-smoke.mjs",
@@ -36,6 +39,7 @@
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@typescript/native": "npm:typescript@7.0.2",
@@ -57,10 +61,15 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.1",
+    "@supabase/supabase-js": "^2.118.0",
+    "fastify": "^5.12.7",
+    "pg": "^8.23.1",
     "pixi.js": "^8.21.0",
     "radix-ui": "^1.6.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-select": "^5.10.2"
+    "react-select": "^5.10.2",
+    "tsx": "^4.23.15"
   }
 }

@@ -706,9 +706,9 @@ try {
 
   await desktop.locator('[data-home-action="new"]').click();
   assert(
-    (await desktop.locator('[data-home-mode]').count()) === 2 &&
+    (await desktop.locator('[data-home-mode]').count()) === 3 &&
       (await desktop.locator('.home-nav-button.unavailable').count()) === 0,
-    'New game menu must expose local and machine as playable modes.',
+    'New game menu must expose local, machine and the online submenu.',
   );
   await desktop.locator('[data-home-mode="local"]').click();
   assert(

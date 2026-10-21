@@ -165,7 +165,11 @@ function DialogHost() {
             }
           >
             <DialogBody>
-              {dialog.kind === 'config' || dialog.kind === 'mode' || dialog.kind === 'rules' ? (
+              {dialog.kind === 'config' ||
+              dialog.kind === 'mode' ||
+              dialog.kind === 'rules' ||
+              dialog.kind === 'online' ||
+              dialog.kind === 'online-search' ? (
                 <GameDialogs />
               ) : (
                 <UtilityDialogs />

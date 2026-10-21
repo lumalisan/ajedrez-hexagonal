@@ -5,6 +5,7 @@ import type { PlayerProgression, ProgressionAchievementId } from '../progression
 import type { UiMode } from '../match-store';
 import type { BoardRenderer } from '../renderer';
 import type { ScenarioProgress } from '../scenarios';
+import type { OnlineState, PrivateMatchSettings } from '../online-contracts';
 import type {
   GameAction,
   GameEvent,
@@ -18,7 +19,9 @@ import type {
 } from '../types';
 
 export type DialogState =
-  | { kind: 'config'; mode: 'local' | 'machine' }
+  | { kind: 'config'; mode: 'local' | 'machine' | 'private' }
+  | { kind: 'online' }
+  | { kind: 'online-search' }
   | { kind: 'rules'; sectionId?: string }
   | { kind: 'settings' }
   | { kind: 'profile' }
@@ -41,6 +44,12 @@ export type DialogState =
   | { kind: 'first-turn'; player: 0 | 1 };
 
 export interface GameSnapshot {
+  online: {
+    available: boolean;
+    busy: boolean;
+    state: OnlineState;
+    error: string | null;
+  };
   state: GameState;
   preferences: GamePreferences;
   profile: UserProfile;
@@ -84,6 +93,11 @@ export interface GameSnapshot {
 }
 
 export interface GameCommands {
+  startOnlineSearch(): void;
+  createPrivateMatch(settings: PrivateMatchSettings): void;
+  joinPrivateMatch(code: string): void;
+  cancelOnlineWaiting(): void;
+  resumeOnline(): void;
   openDialog(dialog: DialogState): void;
   closeDialog(): void;
   showHome(view?: 'main' | 'new'): void;

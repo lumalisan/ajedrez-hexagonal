@@ -73,8 +73,13 @@ function Header() {
           type="button"
           aria-label="Proponer tablas"
           title="Proponer tablas"
-          disabled={disabled || gameMode === 'machine'}
-          hidden={gameMode === 'machine' || Boolean(activeScenario) || Boolean(snapshot.tutorial)}
+          disabled={disabled || gameMode === 'machine' || gameMode === 'online'}
+          hidden={
+            gameMode === 'machine' ||
+            gameMode === 'online' ||
+            Boolean(activeScenario) ||
+            Boolean(snapshot.tutorial)
+          }
           onClick={() => commands.openDialog({ kind: 'draw-offer' })}
         >
           <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -183,7 +188,12 @@ function BoardToolbar() {
           aria-label={replayCursor === null ? 'Ver repetición' : 'Cerrar repetición'}
           title={replayCursor === null ? 'Ver repetición' : 'Cerrar repetición'}
           aria-expanded={replayCursor !== null}
-          disabled={!matchRecord || animating || machineThinking}
+          disabled={
+            !matchRecord ||
+            animating ||
+            machineThinking ||
+            (snapshot.gameMode === 'online' && !snapshot.state.outcome)
+          }
           onClick={() => {
             if (replayCursor === null) commands.openReplay();
             else commands.closeReplay();

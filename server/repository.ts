@@ -1,0 +1,47 @@
+import type { PrivateMatchSettings } from '../src/online-contracts';
+import type { SearchTicket } from '../src/online-matchmaking';
+import type { MatchRecord } from '../src/types';
+
+export interface OnlinePlayer {
+  id: string;
+  name: string;
+  elo: number;
+  played: number;
+}
+export interface QueueEntry extends SearchTicket {
+  seenAt: number;
+}
+export interface PrivateRoom {
+  code: string;
+  creatorId: string;
+  settings: PrivateMatchSettings;
+  expiresAt: number;
+}
+export interface OnlineMatch {
+  id: string;
+  players: [string, string];
+  record: MatchRecord;
+  revision: number;
+  ranked: boolean;
+  settled: boolean;
+  finishedBy: string[];
+}
+
+export interface OnlineTransaction {
+  player(id: string): Promise<OnlinePlayer | null>;
+  savePlayer(player: OnlinePlayer): Promise<void>;
+  queue(): Promise<QueueEntry[]>;
+  saveTicket(ticket: QueueEntry): Promise<void>;
+  removeTicket(playerId: string): Promise<void>;
+  rooms(): Promise<PrivateRoom[]>;
+  saveRoom(room: PrivateRoom): Promise<boolean>;
+  removeRoom(code: string): Promise<void>;
+  activeMatch(playerId: string): Promise<OnlineMatch | null>;
+  match(id: string): Promise<OnlineMatch | null>;
+  saveMatch(match: OnlineMatch): Promise<void>;
+}
+
+export interface OnlineRepository {
+  transaction<T>(lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T>;
+  activeMatches(): Promise<string[]>;
+}

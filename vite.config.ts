@@ -66,6 +66,7 @@ function offlinePrecache(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), offlinePrecache()],
+  server: { proxy: { '/api': 'http://127.0.0.1:3001' } },
   build: {
     rolldownOptions: {
       output: {

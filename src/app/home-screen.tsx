@@ -80,6 +80,15 @@ export function HomeScreen() {
               <nav className="home-navigation mode-navigation" aria-label="Tipo de partida">
                 <button
                   type="button"
+                  className="home-nav-button"
+                  data-home-mode="online"
+                  onClick={() => commands.openDialog({ kind: 'online' })}
+                >
+                  <span>Batalla en línea</span>
+                  <small>Busca un rival o comparte una partida privada</small>
+                </button>
+                <button
+                  type="button"
                   className="home-nav-button primary"
                   data-home-mode="machine"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}

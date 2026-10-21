@@ -119,26 +119,32 @@ function RuleArticle({ section }: { section: RuleSection }) {
     ? section.paragraphs.slice(0, 1)
     : section.paragraphs;
   return (
-    <>
+    <div
+      className={`rules-section${RULE_UNIT_APPEARANCES[section.id] ? ' rules-section-with-reference' : ''}`}
+    >
       <div className="rules-copy">
         <h3 tabIndex={-1}>{section.title}</h3>
         <RuleParagraphs paragraphs={introductoryParagraphs} />
-        {RULE_UNIT_APPEARANCES[section.id]?.map((type) => {
-          const appearance = UNIT_APPEARANCE[type];
-          return (
-            <figure key={type} className="rule-unit-reference">
-              <img
-                src={`${import.meta.env.BASE_URL}units/${type}.webp`}
-                alt={appearance.description}
-                width="768"
-                height="512"
-                loading="lazy"
-                decoding="async"
-              />
-            </figure>
-          );
-        })}
       </div>
+      {RULE_UNIT_APPEARANCES[section.id] && (
+        <div className="rule-unit-references">
+          {RULE_UNIT_APPEARANCES[section.id].map((type) => {
+            const appearance = UNIT_APPEARANCE[type];
+            return (
+              <figure key={type} className="rule-unit-reference">
+                <img
+                  src={`${import.meta.env.BASE_URL}units/${type}.webp`}
+                  alt={appearance.description}
+                  width="768"
+                  height="512"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+            );
+          })}
+        </div>
+      )}
       {section.demo ? (
         <RuleDemo demoId={section.demo} title={section.title} />
       ) : section.layoutPreview ? (
@@ -149,7 +155,7 @@ function RuleArticle({ section }: { section: RuleSection }) {
           </div>
         </>
       ) : null}
-    </>
+    </div>
   );
 }
 

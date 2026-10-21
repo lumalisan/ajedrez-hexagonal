@@ -270,8 +270,8 @@ export function ProfileDialog() {
                   ))}
                 </dl>
                 <p className="profile-note">
-                  Las posiciones requieren una clasificación compartida. Las partidas en línea aún
-                  no están disponibles.
+                  Las posiciones requieren una clasificación compartida. El Elo en línea se
+                  actualiza al terminar partidas públicas con el servidor conectado.
                 </p>
               </div>
               <div

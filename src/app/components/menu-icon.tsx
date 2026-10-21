@@ -6,6 +6,8 @@ const paths = {
   history: 'M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v6l4 2',
   ranking: 'M3 21V13h6v8m0 0V4h6v17m0 0V9h6v12',
   dilemma: 'm12 2 9 5v10l-9 5-9-5V7l9-5Zm0 5v5m0 0-5 4m5-4 5 4',
+  'match-search': 'm10 3 6 3.5v7L10 17l-6-3.5v-7L10 3Zm5 12 6 6',
+  'private-room': 'm12 2 8.7 5v10L12 22l-8.7-5V7L12 2Zm-3 9V9a3 3 0 0 1 6 0v2m-7 0h8v7H8v-7Zm4 3v1',
 };
 
 export function MenuIcon({ kind }: { kind: keyof typeof paths }) {

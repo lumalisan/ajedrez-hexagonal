@@ -25,6 +25,7 @@ import {
 import type { GameAction, GameState, MatchRecord } from '../src/types';
 import { installMemoryStorage } from './helpers/memory-storage';
 import { BASIC_SCENARIOS } from '../src/scenarios';
+import type { OnlineClient, OnlineState } from '../src/online-contracts';
 
 const collaborators = vi.hoisted(() => ({
   chooseAction: vi.fn<AiStrategy['chooseAction']>(),
@@ -128,6 +129,203 @@ describe('sesión que conecta React con el juego', () => {
     for (const session of sessions.splice(0)) session.dispose();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('busca directamente, ignora los filtros guardados y permite cancelar durante la conexión inicial', async () => {
+    localStorage.setItem(
+      'hexfortia-online-search-v1',
+      JSON.stringify({ turnSeconds: [90], layouts: [5] }),
+    );
+    const response = deferred<OnlineState>();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockReturnValueOnce(response.promise)
+      .mockResolvedValue({ status: 'idle' });
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.startOnlineSearch();
+    session.commands.startOnlineSearch();
+    expect(session.getSnapshot().dialog).toEqual({ kind: 'online-search' });
+    expect(session.getSnapshot().online.busy).toBe(true);
+    session.commands.closeDialog();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0][0]).toEqual({
+      kind: 'search',
+      name: session.getSnapshot().profile.name,
+    });
+    response.resolve({ status: 'searching', joinedAt: Date.now(), elo: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual(['search', 'cancel']);
+    expect(session.getSnapshot().online.state.status).toBe('idle');
+    expect(session.getSnapshot().dialog).toBeNull();
+  });
+
+  it('permite salir de la búsqueda cuando no hay servidor configurado', async () => {
+    const session = createGameSession({ onlineClient: null });
+    sessions.push(session);
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().online.error).toBeTruthy();
+    session.commands.cancelOnlineWaiting();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().dialog).toEqual({ kind: 'online' });
+  });
+
+  it('cancela al cerrar si se perdió la respuesta inicial y la reserva puede seguir en el servidor', async () => {
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockRejectedValueOnce(new Error('Sin conexión'))
+      .mockResolvedValue({ status: 'idle' });
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().online.error).toBe('Sin conexión');
+    session.commands.closeDialog();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual(['search', 'cancel']);
+    expect(session.getSnapshot().dialog).toBeNull();
+  });
+
+  it('ignora respuestas en línea después de dispose y cancela la petición', async () => {
+    const response = deferred<OnlineState>();
+    const request = vi.fn<OnlineClient['request']>().mockReturnValue(response.promise);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledOnce();
+    const signal = request.mock.calls[0][1];
+    session.dispose();
+    response.resolve({ status: 'searching', joinedAt: Date.now(), elo: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(signal.aborted).toBe(true);
+    expect(session.getSnapshot().online.state.status).toBe('idle');
+  });
+
+  it('solo confirma órdenes recibidas del servidor y fija la perspectiva del jugador en línea', async () => {
+    const config = createClassicConfig({ mode: 'local' });
+    config.options.allowUndo = false;
+    config.definitionId = 'online:ranked:test';
+    const record = createMatchRecord(config);
+    const response: OnlineState = {
+      status: 'playing',
+      matchId: 'match',
+      player: 1,
+      revision: 0,
+      record,
+      elo: 1120,
+      serverNow: Date.now(),
+    };
+    const request = vi.fn<OnlineClient['request']>().mockResolvedValue(response);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().gameMode).toBe('online');
+    expect(session.getSnapshot().viewPlayer).toBe(1);
+    expect(session.getSnapshot().isLocalMatch).toBe(false);
+    expect(session.getSnapshot().canUndo).toBe(false);
+    expect(session.getSnapshot().progression.ratings.online).toBe(1120);
+    session.commands.prepareAction(rotation(session.getSnapshot().state));
+    await session.commands.commitPending();
+    expect(session.getSnapshot().matchRecord?.currentAction).toBe(0);
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it.each(['searching', 'private-waiting'] as const)(
+    'encola una sola cancelación durante una consulta pendiente en %s',
+    async (status) => {
+      const waiting: OnlineState =
+        status === 'searching'
+          ? { status, joinedAt: Date.now(), elo: 1000 }
+          : { status, code: '123456', expiresAt: Date.now() + 600_000 };
+      const poll = deferred<OnlineState>();
+      const request = vi
+        .fn<OnlineClient['request']>()
+        .mockResolvedValueOnce(waiting)
+        .mockReturnValueOnce(poll.promise)
+        .mockResolvedValue({ status: 'idle' });
+      const session = createGameSession({ onlineClient: { request } });
+      sessions.push(session);
+      session.commands.resumeOnline();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(session.getSnapshot().online.busy).toBe(true);
+      session.commands.cancelOnlineWaiting();
+      session.commands.cancelOnlineWaiting();
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(request.mock.calls[1][1].aborted).toBe(false);
+      poll.resolve(waiting);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual([
+        'state',
+        'state',
+        'cancel',
+      ]);
+      expect(session.getSnapshot().online.state.status).toBe('idle');
+    },
+  );
+
+  it('descarta la cancelación encolada si la consulta pendiente encuentra una partida', async () => {
+    const poll = deferred<OnlineState>();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockResolvedValueOnce({ status: 'searching', joinedAt: Date.now(), elo: 1000 })
+      .mockReturnValueOnce(poll.promise);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.openDialog({ kind: 'online-search' });
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(1_000);
+    session.commands.cancelOnlineWaiting();
+    session.commands.closeDialog();
+    const config = createClassicConfig({ mode: 'local' });
+    config.options.allowUndo = false;
+    const record = createMatchRecord(config);
+    poll.resolve({
+      status: 'playing',
+      matchId: 'found',
+      player: 0,
+      revision: 0,
+      record,
+      elo: 1000,
+      serverNow: Date.now(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual(['search', 'state']);
+    expect(session.getSnapshot().gameMode).toBe('online');
+    expect(session.getSnapshot().online.state.status).toBe('playing');
+    expect(session.getSnapshot().state.outcome).toBeNull();
+    expect(session.getSnapshot().homeView).toBeNull();
+  });
+
+  it('conserva el emparejamiento si el servidor encuentra rival antes de procesar cancelar', async () => {
+    const record = createMatchRecord(createClassicConfig({ mode: 'local' }));
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockResolvedValueOnce({ status: 'searching', joinedAt: Date.now(), elo: 1000 })
+      .mockResolvedValueOnce({
+        status: 'playing',
+        matchId: 'race',
+        player: 1,
+        revision: 0,
+        record,
+        elo: 1000,
+        serverNow: Date.now(),
+      });
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.openDialog({ kind: 'online-search' });
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(0);
+    session.commands.closeDialog();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual(['search', 'cancel']);
+    expect(session.getSnapshot().online.state.status).toBe('playing');
+    expect(session.getSnapshot().gameMode).toBe('online');
+    expect(session.getSnapshot().state.outcome).toBeNull();
+    expect(session.getSnapshot().homeView).toBeNull();
   });
 
   it.each(['continue', 'import'] as const)(

@@ -5,29 +5,25 @@ import { PIECE_NAMES } from '../../engine';
 import { createClassicConfig } from '../../game-config';
 import { mountLayoutPreview, type LayoutPreview } from '../../layout-preview';
 import { TURN_TIMEOUT_LIMIT } from '../../match-clock';
-import { recordTelemetry } from '../../playtest-telemetry';
 import {
-  INITIAL_LAYOUTS,
-  MATCH_INITIAL_LAYOUTS,
-  createInitialPieces,
-  type InitialLayout,
-} from '../../setup';
+  FACTION_OPTIONS,
+  FORTRESS_HP_OPTIONS,
+  INITIAL_LAYOUT_OPTIONS,
+  MATCH_CLOCK_OPTIONS,
+  TURN_CLOCK_OPTIONS,
+  type MatchClockValue,
+  type TurnClockValue,
+} from '../../match-options';
+import { recordTelemetry } from '../../playtest-telemetry';
+import { INITIAL_LAYOUTS, createInitialPieces, type InitialLayout } from '../../setup';
 import type { AiDifficulty, FortressHp } from '../../types';
 import { GameSelect } from '../components/game-select';
 import { RendererStatus } from '../components/renderer-status';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { OnlineAvailability, OnlineWaiting } from './online-dialogs';
 import { useGame } from '../game-context';
 
-type MatchClockValue = '' | 300 | 600 | 1200;
-type TurnClockValue = '' | 30 | 60 | 90;
-
-const FORTRESS_HP_OPTIONS: readonly { value: FortressHp; label: string }[] = [
-  { value: 1, label: '1' },
-  { value: 2, label: '2' },
-  { value: 3, label: '3' },
-];
-const INITIAL_LAYOUT_OPTIONS: readonly { value: InitialLayout; label: string }[] =
-  MATCH_INITIAL_LAYOUTS.map(({ id, name }) => ({ value: id, label: name }));
 const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'recruit', label: 'Fácil' },
   { value: 'tactical', label: 'Medio' },
@@ -35,20 +31,8 @@ const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'expert', label: 'Experto' },
   { value: 'neural', label: 'Neuronal' },
 ];
-const MATCH_CLOCK_OPTIONS: readonly { value: MatchClockValue; label: string }[] = [
-  { value: '', label: 'Sin límite' },
-  { value: 300, label: '5 minutos' },
-  { value: 600, label: '10 minutos' },
-  { value: 1200, label: '20 minutos' },
-];
-const TURN_CLOCK_OPTIONS: readonly { value: TurnClockValue; label: string }[] = [
-  { value: '', label: 'Sin límite' },
-  { value: 30, label: '30 segundos' },
-  { value: 60, label: '60 segundos' },
-  { value: 90, label: '90 segundos' },
-];
 
-export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
+export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }) {
   const { snapshot, commands } = useGame();
   const { preferences } = snapshot;
   const [fortressHp, setFortressHp] = useState<FortressHp>(1);
@@ -63,6 +47,10 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   );
 
   function goBack() {
+    if (mode === 'private') {
+      commands.openDialog({ kind: 'online' });
+      return;
+    }
     if (snapshot.homeView) {
       commands.closeDialog();
       commands.setHomeView('new');
@@ -72,6 +60,16 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
   }
 
   function startMatch() {
+    if (mode === 'private') {
+      commands.createPrivateMatch({
+        faction,
+        fortressHp,
+        turnSeconds: turnClock,
+        totalSeconds: clock,
+        layout: initialLayout === 5 ? 5 : 3,
+      });
+      return;
+    }
     const config = createClassicConfig({
       mode,
       difficulty,
@@ -99,11 +97,41 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
     commands.startMatch(config);
   }
 
+  if (
+    mode === 'private' &&
+    (snapshot.online.state.status === 'private-waiting' ||
+      snapshot.online.state.status === 'searching')
+  ) {
+    return (
+      <>
+        <DialogClose label="Cerrar partida privada" className="dialog-corner-close" />
+        <span className="eyebrow">BATALLA EN LÍNEA</span>
+        <h2>Partida privada</h2>
+        <OnlineWaiting />
+      </>
+    );
+  }
+
   return (
     <>
       <DialogClose label="Cerrar configuración" className="dialog-corner-close config-close" />
-      <span className="eyebrow">NUEVA PARTIDA</span>
-      <h2>{mode === 'machine' ? 'Individual Vs. Hexfortia' : 'Batalla local'}</h2>
+      <span className="eyebrow">{mode === 'private' ? 'BATALLA EN LÍNEA' : 'NUEVA PARTIDA'}</span>
+      <h2>
+        {mode === 'private'
+          ? 'Partida privada'
+          : mode === 'machine'
+            ? 'Individual Vs. Hexfortia'
+            : 'Batalla local'}
+      </h2>
+      {mode === 'private' && <PrivateJoin />}
+      {mode === 'private' && (
+        <div className="mt-6 border-0 border-t border-solid border-line pt-5">
+          <h3 className="m-0">Crear una partida</h3>
+          <p className="mb-0 text-sm text-muted">
+            Elige las reglas. Tu rival jugará con el bando opuesto y la misma configuración.
+          </p>
+        </div>
+      )}
       <div className="match-configuration mt-6 grid gap-6 text-sm">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid min-w-0 content-start gap-2">
@@ -112,10 +140,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
               inputId="player-faction"
               value={faction}
               onChange={setFaction}
-              options={[
-                { value: 'expansionist', label: 'Expansionista · Azul cian' },
-                { value: 'conservationist', label: 'Conservacionista · Verde esmeralda' },
-              ]}
+              options={FACTION_OPTIONS}
             />
           </div>
           {mode === 'machine' && (
@@ -139,7 +164,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
             />
           </div>
         </div>
-        {mode === 'local' && (
+        {mode !== 'machine' && (
           <fieldset className="m-0 min-w-0 border-0 border-t border-solid border-line p-0 pt-5">
             <legend className="sr-only">Límites de tiempo</legend>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -214,11 +239,65 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' }) {
         <Button data-back-menu onClick={goBack}>
           Volver
         </Button>
-        <Button variant="primary" data-start-free onClick={startMatch}>
-          Crear partida
+        <Button
+          variant="primary"
+          data-start-free
+          loading={mode === 'private' && snapshot.online.busy}
+          onClick={startMatch}
+        >
+          {mode === 'private' ? 'Crear partida privada' : 'Crear partida'}
         </Button>
       </div>
     </>
+  );
+}
+
+function PrivateJoin() {
+  const { snapshot, commands } = useGame();
+  const [code, setCode] = useState('');
+  const [attempted, setAttempted] = useState(false);
+  const valid = /^[0-9]{6}$/.test(code);
+  return (
+    <section className="mt-6" aria-labelledby="private-join-title">
+      <h3 id="private-join-title" className="m-0">
+        Unirse con código
+      </h3>
+      <p className="text-sm text-muted">Pide al creador el código numérico de seis cifras.</p>
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          setAttempted(true);
+          if (valid) commands.joinPrivateMatch(code);
+        }}
+      >
+        <label htmlFor="private-code">Código de la partida</label>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <Input
+            id="private-code"
+            className="flex-1 basis-40"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={6}
+            pattern="[0-9]{6}"
+            value={code}
+            placeholder="000000"
+            aria-invalid={(attempted && !valid) || undefined}
+            aria-describedby={attempted && !valid ? 'private-code-error' : undefined}
+            onChange={(event) => setCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+          />
+          <Button type="submit" loading={snapshot.online.busy}>
+            Unirse a partida privada
+          </Button>
+        </div>
+        {attempted && !valid && (
+          <p id="private-code-error" role="alert" className="text-sm text-danger">
+            Introduce un código de seis cifras.
+          </p>
+        )}
+      </form>
+      <OnlineAvailability />
+    </section>
   );
 }
 

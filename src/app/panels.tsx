@@ -244,21 +244,27 @@ export function SelectionSummary() {
   const piece = selectedId ? getPiece(state, selectedId) : undefined;
   const text = state.outcome
     ? outcomeText(state.outcome)
-    : pendingAction
-      ? 'Confirma la acción en el panel de mando.'
-      : mode.kind === 'rotate' || mode.kind === 'orient' || mode.kind === 'transform'
-        ? 'Elige un rumbo en la brújula del panel de mando.'
-        : mode.kind === 'pieceChoice'
-          ? 'Casilla apilada. Elige una unidad en el panel de mando.'
-          : mode.kind === 'actionChoice'
-            ? 'Elige una acción en el panel de mando.'
-            : piece
-              ? piece.owner === state.activePlayer
-                ? selectedUnitInstruction(piece)
-                : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
-              : isMachineTurn
-                ? 'La máquina está calculando su siguiente orden.'
-                : `Turno de ${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])}. Selecciona una unidad propia.`;
+    : snapshot.gameMode === 'online' && snapshot.online.error
+      ? snapshot.online.error
+      : snapshot.gameMode === 'online' &&
+          snapshot.online.state.status === 'playing' &&
+          snapshot.online.state.player !== state.activePlayer
+        ? 'Turno del rival. Esperando su siguiente orden…'
+        : pendingAction
+          ? 'Confirma la acción en el panel de mando.'
+          : mode.kind === 'rotate' || mode.kind === 'orient' || mode.kind === 'transform'
+            ? 'Elige un rumbo en la brújula del panel de mando.'
+            : mode.kind === 'pieceChoice'
+              ? 'Casilla apilada. Elige una unidad en el panel de mando.'
+              : mode.kind === 'actionChoice'
+                ? 'Elige una acción en el panel de mando.'
+                : piece
+                  ? piece.owner === state.activePlayer
+                    ? selectedUnitInstruction(piece)
+                    : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
+                  : isMachineTurn
+                    ? 'La máquina está calculando su siguiente orden.'
+                    : `Turno de ${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])}. Selecciona una unidad propia.`;
   return (
     <div id="selection-summary" className="selection-summary">
       {snapshot.tutorial ? TUTORIAL_STEPS[snapshot.tutorial.stepIndex]?.instruction : text}

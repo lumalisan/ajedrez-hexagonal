@@ -75,8 +75,9 @@ export function RankingDialog() {
           <TabsContent key={period} value={period} className="achievements-list ranking-content">
             {mode === 'online' ? (
               <p>
-                Las partidas en línea aún no están disponibles. Tu puntuación inicial es de 1000
-                puntos.
+                Tu puntuación en línea es de {snapshot.progression.ratings.online} Elo. Las partidas
+                públicas actualizan este valor; la clasificación compartida todavía no está
+                disponible.
               </p>
             ) : (
               <>

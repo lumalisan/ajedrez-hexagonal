@@ -146,7 +146,7 @@ export interface GamePreferences {
 
 export type ConfirmationMode = 'always' | 'critical' | 'quick';
 
-export type GameMode = 'local' | 'machine' | 'academy';
+export type GameMode = 'local' | 'machine' | 'academy' | 'online';
 
 export type AiDifficulty = 'recruit' | 'tactical' | 'commander' | 'expert' | 'neural';
 

@@ -2694,7 +2694,7 @@ button:disabled {
   position: relative;
 }
 
-/* Reglamento: navegación estable a la izquierda y lectura/ilustración a la derecha. */
+/* Reglamento: navegación estable y ejemplos bajo el texto. */
 .game-dialog:has(.rules-shell) {
   width: min(1480px, calc(100vw - 40px));
   max-width: none;
@@ -2714,7 +2714,7 @@ button:disabled {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   background: var(--surface);
 }
 
@@ -2743,6 +2743,7 @@ button:disabled {
 }
 
 .rules-sidebar > p {
+  max-width: 32ch;
   margin: 14px 0 18px;
   color: #aebfc0;
   font-size: 12px;
@@ -2769,8 +2770,9 @@ button:disabled {
   background: rgba(17, 42, 52, 0.62);
   color: #bfd0d0;
   cursor: pointer;
-  font: 600 14px / 1.3 var(--font-display);
+  font: 700 14px / 1.3 var(--font-body);
   text-align: left;
+  white-space: nowrap;
 }
 
 .rules-navigation button:hover,
@@ -2798,13 +2800,27 @@ button:disabled {
     radial-gradient(circle at 88% 12%, rgba(54, 185, 255, 0.055), transparent 30%), var(--surface);
 }
 
-.rules-article:has(.rule-media) {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
+.rules-section {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
+  gap: 28px;
+}
+
+.rules-section-with-reference {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 28%);
+}
+
+.rule-unit-references {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  gap: 20px;
 }
 
 .rules-copy {
-  max-width: 70ch;
+  min-width: 0;
 }
 
 .rules-copy h3 {
@@ -2845,8 +2861,7 @@ button:disabled {
 }
 
 .rule-media {
-  position: sticky;
-  top: 0;
+  width: 100%;
   margin: 0;
 }
 
@@ -2868,15 +2883,9 @@ button:disabled {
   aspect-ratio: 1;
 }
 
-@media (min-width: 1081px) {
-  .rule-layout-preview {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-
-  .rules-deployment-rest {
-    grid-column: 1;
-  }
+.rule-layout-preview {
+  width: min(100%, 620px);
+  justify-self: center;
 }
 
 .rule-demo-canvas {
@@ -2908,13 +2917,15 @@ button:disabled {
 }
 
 @media (max-width: 1080px) {
-  .rules-article:has(.rule-media) {
+  .rules-section-with-reference {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .rule-media {
-    position: static;
-    width: min(100%, 620px);
+  .rule-unit-references {
+    grid-column: 1;
+    grid-row: auto;
+    width: min(100%, 280px);
+    justify-self: end;
   }
 
   .rule-media-stage {
@@ -4605,6 +4616,7 @@ html {
 
   .rules-navigation button {
     min-width: 0;
+    white-space: normal;
   }
 
   .rules-article,
@@ -5895,10 +5907,12 @@ button.history-card:disabled {
   text-wrap: balance;
 }
 .story-article .rules-copy {
+  display: flow-root;
   width: 100%;
   margin-inline: auto;
 }
 .story-pagination {
+  clear: both;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -6252,20 +6266,22 @@ button.history-card:disabled {
   }
 }
 
-/* Reading surfaces share the width of Profile, Ranking and Achievements. */
+/* Reading dialogs use the available screen independently of the other menus. */
 .game-dialog:has(.rules-shell) {
   width: min(1480px, calc(100vw - 40px));
 }
 .rule-demo .rule-media-stage {
+  width: min(100%, var(--rule-demo-width, 400px));
   height: auto;
   aspect-ratio: var(--rule-demo-aspect, 1.3);
+  margin-inline: auto;
 }
 .rule-media-stage > .rule-demo-canvas {
   position: absolute;
   inset: 0;
 }
 .rule-unit-reference {
-  margin: 24px 0 0;
+  margin: 8px 0 0;
 }
 .rule-unit-reference img,
 .story-illustration {
@@ -6275,7 +6291,9 @@ button.history-card:disabled {
   border-radius: var(--control-radius);
 }
 .story-illustration {
-  margin: 0 0 24px;
+  float: right;
+  width: 52%;
+  margin: 0 0 24px 28px;
 }
 .rules-table-wrap {
   overflow-x: auto;
@@ -6293,8 +6311,221 @@ button.history-card:disabled {
   text-align: left;
 }
 
+@media (max-width: 760px) {
+  .story-illustration {
+    float: none;
+    width: 100%;
+    margin: 0 0 24px;
+  }
+}
+
 @media (max-width: 700px) {
   .game-dialog:has(.rules-shell) {
     width: calc(100vw - 12px);
+  }
+}
+.online-mode-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.online-mode-card {
+  --online-mode-accent: var(--blue);
+  min-width: 0;
+  min-height: 244px;
+  justify-content: center;
+  border-color: color-mix(in srgb, var(--online-mode-accent) 28%, var(--line));
+  background: var(--bg);
+  color: var(--text);
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+
+.online-mode-card[data-online-mode='private'] {
+  --online-mode-accent: var(--move);
+}
+
+.online-mode-card:hover,
+.online-mode-card:focus-visible {
+  border-color: var(--online-mode-accent);
+  background: color-mix(in srgb, var(--online-mode-accent) 8%, var(--bg));
+}
+
+.online-mode-card:active {
+  background: color-mix(in srgb, var(--online-mode-accent) 14%, var(--bg));
+}
+
+.online-mode-symbol {
+  width: 76px;
+  height: 76px;
+  color: var(--online-mode-accent);
+}
+
+.online-mode-symbol svg {
+  width: 64px;
+  height: 64px;
+}
+
+.online-menu-actions {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 761px) {
+  .game-dialog:has(.online-mode-choice) {
+    width: min(720px, calc(100vw - 40px));
+    max-height: calc(100dvh - 40px);
+  }
+}
+
+@media (max-width: 599px) {
+  .online-mode-choice {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .online-mode-card {
+    min-height: 188px;
+    gap: 8px;
+  }
+
+  .online-mode-symbol {
+    width: 60px;
+    height: 60px;
+  }
+
+  .online-mode-symbol svg {
+    width: 52px;
+    height: 52px;
+  }
+}
+
+/* One brief confirmation per successful clipboard write; no persistent effect loop. */
+.online-code-symbol {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  color: var(--move);
+}
+
+.online-code-hex {
+  opacity: 0.55;
+}
+
+.online-code-check {
+  display: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.online-code-feedback {
+  min-height: 20px;
+  color: var(--muted);
+}
+
+.online-room-code[data-copy-state='copied'] .online-code-copy {
+  display: none;
+}
+
+.online-room-code[data-copy-state='copied'] .online-code-content {
+  animation: private-code-confirm 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.online-room-code[data-copy-state='copied'] .online-code-hex {
+  opacity: 1;
+  transform-origin: center;
+  animation: private-code-hex 650ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.online-room-code[data-copy-state='copied'] .online-code-check {
+  display: block;
+  animation: private-code-check 450ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.online-room-code[data-copy-state='copied'] .online-code-feedback {
+  color: var(--move);
+}
+
+.online-room-code[data-copy-state='error'] .online-code-feedback {
+  color: var(--danger);
+}
+
+@keyframes private-code-confirm {
+  0% {
+    transform: scale(1);
+  }
+  28% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes private-code-hex {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.25) rotate(30deg);
+  }
+  100% {
+    transform: scale(1) rotate(60deg);
+  }
+}
+
+@keyframes private-code-check {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.reduced-motion .online-code-content,
+.reduced-motion .online-code-hex,
+.reduced-motion .online-code-check {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .online-code-content,
+  .online-code-hex,
+  .online-code-check {
+    animation: none !important;
+  }
+}
+
+/* The search animation runs only while the waiting view is mounted. */
+.online-search-indicator {
+  display: block;
+  justify-self: center;
+  width: 80px;
+  height: 80px;
+  margin: 8px auto;
+  object-fit: contain;
+  transform-origin: center;
+  animation: online-search-spin 6s linear infinite;
+}
+
+@keyframes online-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.reduced-motion .online-search-indicator {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .online-search-indicator {
+    animation: none;
   }
 }

@@ -99,7 +99,6 @@ export function StoryDialog() {
                   <span className="rules-kicker">
                     Capítulo {index + 1} de {STORY_CHAPTERS.length}
                   </span>
-                  <h3 tabIndex={-1}>{chapter.title}</h3>
                   <img
                     className="story-illustration"
                     src={`${import.meta.env.BASE_URL}story/${chapter.id}.webp`}
@@ -108,6 +107,7 @@ export function StoryDialog() {
                     height="1024"
                     decoding="async"
                   />
+                  <h3 tabIndex={-1}>{chapter.title}</h3>
                   {chapter.paragraphs.map((runs, paragraphIndex) => (
                     <p key={paragraphIndex}>
                       {runs.map((run, runIndex) => {

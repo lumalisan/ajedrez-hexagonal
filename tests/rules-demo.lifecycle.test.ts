@@ -66,6 +66,29 @@ function createCanvas(): HTMLCanvasElement {
 }
 
 describe('ciclo de vida de las demostraciones controladas por React', () => {
+  it('ajusta el tamaño de la demostración a su alcance y lo limpia al desmontar', () => {
+    const dimensions = (id: 'soldado' | 'casillas-compartidas') => {
+      const canvas = createCanvas();
+      const demo = mountRuleDemo(canvas, id, { reducedMotion: true, highContrast: false });
+      const width = Number.parseFloat(
+        canvas.parentElement!.style.getPropertyValue('--rule-demo-width'),
+      );
+      const [aspectWidth, aspectHeight] = canvas
+        .parentElement!.style.getPropertyValue('--rule-demo-aspect')
+        .split(' / ')
+        .map(Number);
+      demo.destroy();
+      expect(canvas.parentElement!.style.getPropertyValue('--rule-demo-width')).toBe('');
+      return { width, height: aspectHeight, aspectWidth };
+    };
+    const small = dimensions('soldado');
+    const large = dimensions('casillas-compartidas');
+    expect(large.width).toBeGreaterThan(small.width);
+    expect(large.height).toBeGreaterThan(small.height);
+    expect(small.aspectWidth).toBe(small.width);
+    expect(large.aspectWidth).toBe(large.width);
+  });
+
   it('centra cada animación de Fortaleza y Escudo sin mover la cámara entre sus pasos', () => {
     const demo = mountRuleDemo(createCanvas(), 'fortaleza', {
       reducedMotion: true,
@@ -149,6 +172,7 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
 
   it('libera recursos al desmontar y admite el remontaje de efectos en el mismo canvas', () => {
     const canvas = createCanvas();
+    canvas.parentElement?.style.setProperty('--rule-demo-width', '320px');
     const removeListener = vi.spyOn(document, 'removeEventListener');
     const options = { reducedMotion: false, highContrast: false };
     const demo = mountRuleDemo(canvas, 'soldado', options);
@@ -162,6 +186,7 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
     expect(removeListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
     expect(canvas.getAttribute('aria-label')).toBe('Vista original');
     expect(canvas.parentElement?.style.getPropertyValue('--rule-demo-aspect')).toBe('1.5');
+    expect(canvas.parentElement?.style.getPropertyValue('--rule-demo-width')).toBe('320px');
 
     const renderCount = renderer.setModel.mock.calls.length;
     demo.advanceStep();
