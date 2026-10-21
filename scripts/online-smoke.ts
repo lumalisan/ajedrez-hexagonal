@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer as createHttpServer } from 'node:http';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -6,6 +7,7 @@ import { chromium, type Page } from 'playwright-core';
 import { createServer } from 'vite';
 import { createOnlineApp } from '../server/app';
 import { OnlineService } from '../server/online-service';
+import { createVercelHandler } from '../server/vercel-handler';
 import { MemoryOnlineRepository } from '../tests/helpers/online-repository';
 import { replayRecord } from '../src/match-record';
 
@@ -17,7 +19,12 @@ const app = await createOnlineApp({
   origin: 'http://127.0.0.1:4176',
   authenticate: async (token) => tokens.get(token) ?? null,
 });
-await app.listen({ host: '127.0.0.1', port: 3002 });
+const handler = createVercelHandler(async () => app);
+const apiServer = createHttpServer((request, response) => void handler(request, response));
+await new Promise<void>((resolve, reject) => {
+  apiServer.once('error', reject);
+  apiServer.listen(3002, '127.0.0.1', resolve);
+});
 const server = await createServer({
   logLevel: 'silent',
   cacheDir: 'node_modules/.vite-online-smoke',
@@ -306,5 +313,9 @@ try {
 } finally {
   await browser.close();
   await server.close();
+  apiServer.closeAllConnections();
+  await new Promise<void>((resolve, reject) =>
+    apiServer.close((error) => (error ? reject(error) : resolve())),
+  );
   await app.close();
 }

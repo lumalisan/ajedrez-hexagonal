@@ -1,6 +1,7 @@
 # Multijugador: Node, Vite y Supabase
 
-El repositorio contiene el cliente React/Vite y un servidor Node con Fastify. Supabase aporta
+El repositorio contiene el cliente React/Vite y una API Node con Fastify. Ambos se despliegan
+en un mismo proyecto Vercel: la web como contenido estático y la API como funciones. Supabase aporta
 PostgreSQL y Auth. No se necesita una clave `service_role`: el navegador usa una clave publicable
 y Node verifica los JWT de Supabase con `getClaims`. La conexión PostgreSQL pertenece exclusivamente
 al servidor y utiliza un rol dedicado.
@@ -11,6 +12,10 @@ al servidor y utiliza un rol dedicado.
 - `src/online-contracts.ts`: solicitudes y respuestas compartidas.
 - `src/online-client.ts`: autenticación y transporte HTTP del navegador, inicializados al entrar
   en línea. El resto del juego funciona sin Supabase configurado.
+- `api/online.ts` y `api/health.ts`: entradas de Vercel, sin puertos ni intervalos persistentes.
+- `server/vercel-handler.ts`: adaptación de streams HTTP y arranque compartido por instancia.
+- `server/runtime.ts`: configuración, autenticación y pool PostgreSQL reutilizable; libera conexiones
+  inactivas antes de que Vercel suspenda una instancia con `attachDatabasePool`.
 - `server/app.ts`: límite HTTP, autenticación, origen, tamaño de cuerpo, límites de solicitudes
   y errores públicos. No acepta identidad ni Elo proporcionados por el cliente.
 - `server/online-service.ts`: casos de uso, reserva de rivales, salas, turnos, reloj y resultados.
@@ -50,6 +55,44 @@ La base de datos debe contener la migración y usuarios reales de Auth. No exist
 producción que omita la autenticación o sustituya rivales por bots. Las pruebas usan un repositorio
 transaccional en memoria y autenticación inyectada, exclusivamente desde los archivos de prueba.
 
+## Desplegar todo en Vercel
+
+1. Mantener el proyecto como **Vite**, con la raíz del repositorio como Root Directory.
+   `vercel.json` define `pnpm build`, salida `dist`, funciones Node de hasta 30 segundos y región
+   Dublín (cercana al proyecto Supabase actual). No configurar el proyecto como Fastify ni mover
+   Root Directory a `server/`: las funciones se detectan en `api/` junto al frontend.
+2. En **Settings → Environment Variables**, crear estas variables para **Production**:
+
+   | Variable                        | Valor                                                                             |
+   | ------------------------------- | --------------------------------------------------------------------------------- |
+   | `VITE_SUPABASE_URL`             | URL del proyecto Supabase.                                                        |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Clave publicable de Supabase.                                                     |
+   | `DATABASE_URL`                  | Conexión PostgreSQL del rol `hexfortia_server`, con contraseña y TLS verificado.  |
+   | `APP_ORIGIN`                    | URL exacta del juego, por ejemplo `https://mi-juego.vercel.app`, sin barra final. |
+
+   Las funciones reutilizan las dos variables públicas de Vite si no se proporcionan
+   `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` por separado. `DATABASE_URL` solo pertenece al servidor;
+   nunca debe tener prefijo `VITE_`. Los nombres `NEXT_PUBLIC_*` no se utilizan en este proyecto.
+   No es necesario subir `.env.local` ni `.env.server`.
+
+3. Usar la URL de conexión del pooler de Supabase para el rol dedicado. La conexión verificada
+   que funciona en local también puede configurarse en Vercel. Mantener
+   `sslmode=verify-full&sslrootcert=server/certificates/prod-ca-2021.crt`:
+   `vercel.json` incluye ese certificado público en ambas funciones. Cada instancia de Vercel
+   mantiene como máximo tres conexiones; el estado de las partidas sigue en PostgreSQL.
+4. Hacer **Redeploy** después de guardar las variables. Los valores `VITE_*` se incorporan durante
+   la compilación. No ejecutar `pnpm start:server` en Vercel ni configurar un proxy hacia localhost;
+   las funciones ya reciben `/api/online` y `/api/health` en el mismo dominio de la web.
+5. Abrir `https://TU-DOMINIO/api/health`: debe devolver `{"ok":true}`. Esta comprobación valida el
+   arranque y la configuración, pero no abre una conexión a PostgreSQL ni comprueba JWT reales.
+   Después crear una privada desde un navegador y entrar con otra identidad desde otro navegador
+   o dispositivo. Esto sí comprueba autenticación, permisos, base de datos y comunicación.
+
+Para probar un despliegue Preview contra otra base de datos, configurar sus variables Preview
+por separado y hacer coincidir `APP_ORIGIN` con su dominio. La API comprueba el origen exacto;
+no acepta todos los dominios `*.vercel.app`. La misma configuración se aplica a dominios propios.
+No se necesitan otro proveedor Node ni una nueva migración SQL para este despliegue.
+
 ## Comportamiento
 
 Buscar partida inicia la búsqueda directamente. Todas las partidas públicas nuevas usan Fortaleza
@@ -75,9 +118,8 @@ turno. El resultado y el cambio de Elo se guardan en la misma transacción una s
 
 Las reservas de cola y sala se serializan con un bloqueo asesor transaccional. Cada partida tiene
 su propio bloqueo y fila bloqueada al actualizarse: varios procesos Node pueden compartir la
-base de datos sin duplicar emparejamientos, movimientos o liquidaciones de Elo. El barrido de
-relojes se ejecuta cada segundo y respeta esos mismos bloqueos. No hay colas o salas en la
-memoria del proceso que se pierdan al reiniciar Node.
+base de datos sin duplicar emparejamientos, movimientos o liquidaciones de Elo. No hay colas
+ni salas en la memoria del proceso que se pierdan al reiniciar una función.
 
 La sincronización usa POST autenticado cada segundo; los reintentos tras fallo esperan tres
 segundos. Esto evita infraestructura adicional para la primera versión por turnos y permite
@@ -87,13 +129,18 @@ de capacidad: medir carga y latencias antes de ampliar, dividir el barrido por l
 el bloqueo global de cola si el volumen lo exige. Los límites HTTP actuales son por IP y proceso;
 un despliegue público con varias réplicas debe aplicar también límites compartidos en el proxy.
 
-Desplegar el build de Vite como contenido estático y Node como servicio persistente, próximos a
-la región de Supabase. El proxy del mismo origen debe enviar `/api/*` a Node; HTTPS es obligatorio
-en producción. Configurar `API_HOST=0.0.0.0` solo si la plataforma necesita escuchar fuera de
-localhost. `pnpm start:server` ejecuta el servicio TypeScript con `tsx`; el host necesita las
-dependencias de producción, incluido `tsx`. No basta con subir
-`dist/`: el build de Vite no compila ni despliega el backend. `/api/health` confirma que Node
-responde; no sustituye una comprobación de conectividad con Auth y PostgreSQL.
+En Vercel no se ejecuta un intervalo permanente ni se necesita Cron para mantener los turnos.
+Cada consulta o jugada reconstruye el reloj desde los tiempos guardados, resuelve los vencimientos
+pendientes y confirma el resultado en la transacción. Mientras haya un navegador conectado, su
+consulta cada segundo actualiza la partida. Si ambos se desconectan, el tiempo sigue transcurriendo;
+las jugadas automáticas y el resultado se materializan en la siguiente consulta, sin tiempo extra.
+El Elo se liquida entonces una sola vez. Una nueva instancia puede reconstruirlo todo desde la BD.
+
+En desarrollo, `server/main.ts` sigue ofreciendo el servicio persistente y un barrido cada segundo,
+como comodidad local. Las funciones reutilizan el mismo caso de uso y el mismo motor, pero no
+importan ese punto de entrada. Los límites por IP del plugin son por instancia, no un límite global
+compartido; Vercel Firewall puede complementar la protección en el borde. La función confía en
+los encabezados de proxy de Vercel para identificar la IP; el servidor local no confía en proxies.
 
 Los replays y los resultados en línea se conservan, pero esta entrega no incorpora clasificación
 global, vinculación de cuentas, invitación a revancha, oferta de tablas entre dispositivos ni
@@ -103,6 +150,8 @@ recompensas XP/logros en línea. Esos controles no deben resolver localmente una
 
 Las pruebas cubren reglas públicas fijas, filtros antiguos ignorados, reservas simultáneas, códigos
 consumidos y caducados, permisos, revisiones, jugadas ilegales, reloj del servidor y Elo idempotente.
+También cubren el adaptador de Vercel con streams HTTP reales, cuerpos malformados y grandes,
+arranques concurrentes, fallos de inicialización y recuperación tras un arranque en frío sin barrido.
 La validación real de la migración, los permisos del rol, los JWT y la conexión entre dispositivos
 requiere configurar un proyecto Supabase. Los dobles de repositorio no sustituyen esa prueba de
 integración con PostgreSQL. Antes de publicar, ejecutar esa integración y probar una partida
@@ -113,4 +162,6 @@ Referencias: [Fastify](https://fastify.dev/docs/latest/Guides/Getting-Started/),
 [claves publicables y secretas](https://supabase.com/docs/guides/api/api-keys),
 [verificación JWT](https://supabase.com/docs/reference/javascript/auth-getclaims),
 [identidades anónimas](https://supabase.com/docs/guides/auth/auth-anonymous),
-[transacciones de node-postgres](https://node-postgres.com/features/transactions).
+[transacciones de node-postgres](https://node-postgres.com/features/transactions),
+[funciones Node de Vercel](https://vercel.com/docs/functions/runtimes/node-js),
+[gestión de pools en Vercel](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#attachdatabasepool).

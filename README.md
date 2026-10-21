@@ -55,7 +55,7 @@ Consulta [el funcionamiento y los comandos de autojuego](docs/ia-autojuego.md).
 
 ## Arquitectura
 
-La aplicación conserva sus modos locales como SPA y añade un servidor Node/Fastify para el multijugador, con Supabase Auth y PostgreSQL. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión. La [guía de multijugador](docs/multijugador.md) explica la arquitectura, la migración y la configuración del servidor.
+La aplicación conserva sus modos locales como SPA y añade una API Node/Fastify para el multijugador, con Supabase Auth y PostgreSQL. La interfaz y la API se despliegan juntas en el mismo proyecto Vercel mediante las funciones de `api/` y `vercel.json`. React organiza las pantallas, los paneles y los diálogos. `GameSession` coordina la partida, la IA, las preferencias, el autoguardado y las repeticiones; los componentes leen su snapshot mediante `useSyncExternalStore` y ejecutan comandos sobre esa sesión. La [guía de multijugador](docs/multijugador.md) explica la arquitectura, la migración y la configuración del servidor.
 
 El motor de reglas sigue siendo TypeScript independiente de React, el DOM y el almacenamiento. PixiJS conserva la cámara, los glifos y las animaciones: `BoardCanvas` gestiona el renderer y sus eventos, mientras React se ocupa de la interfaz y su representación accesible. Los efectos liberan listeners, temporizadores y recursos gráficos al desmontarse.
 

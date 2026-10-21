@@ -19,11 +19,13 @@ export async function createOnlineApp(options: {
   authenticate: (token: string) => Promise<string | null>;
   origin: string;
   logger?: boolean;
+  trustProxy?: boolean;
 }) {
   const app = Fastify({
     logger: options.logger ?? false,
     bodyLimit: 16_384,
     requestTimeout: 15_000,
+    trustProxy: options.trustProxy ?? false,
   });
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
   app.setErrorHandler((error, request, reply) => {
@@ -43,7 +45,10 @@ export async function createOnlineApp(options: {
       .code(503)
       .send({ error: 'El servicio en línea no está disponible. Inténtalo de nuevo.' });
   });
-  app.get('/api/health', async () => ({ ok: true }));
+  app.get('/api/health', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { ok: true };
+  });
   app.post('/api/online', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (request.headers.origin && request.headers.origin !== options.origin)

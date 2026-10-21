@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "regions": ["dub1"],
+  "functions": {
+    "api/*.ts": {
+      "includeFiles": "server/certificates/*.crt",
+      "maxDuration": 30
+    }
+  }
+}

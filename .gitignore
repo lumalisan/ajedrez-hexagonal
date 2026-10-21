@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 .vite/
+.vercel/
 *.log
 .DS_Store
 .agents

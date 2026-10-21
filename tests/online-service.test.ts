@@ -216,6 +216,30 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     expect(replayRecord(ended.record).outcome?.reason).toBe('timeout');
     expect(ended.record.clock?.turnTimeouts).toContain(3);
   });
+  it('recupera los vencimientos tras un arranque en frío sin intervalos ni tiempo extra', async () => {
+    let now = 0;
+    const repository = new MemoryOnlineRepository();
+    const service = new OnlineService(repository, () => now);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    now = 30_001;
+    const resumed = playing(
+      await new OnlineService(repository, () => now).request(a, { kind: 'state' }),
+    );
+    expect(resumed.matchId).toBe(match.matchId);
+    expect(resumed.record.currentAction).toBe(1);
+    expect(resumed.record.clock?.turnRemainingMs).toBe(29_999);
+    now = 300_001;
+    const ended = playing(
+      await new OnlineService(repository, () => now).request(b, { kind: 'state' }),
+    );
+    expect(replayRecord(ended.record).outcome?.reason).toBe('timeout');
+    expect(ended.record.clock?.turnTimeouts).toContain(3);
+    const elo = repository.players.get(a)?.elo;
+    await new OnlineService(repository, () => now).request(a, { kind: 'state' });
+    expect(repository.players.get(a)?.elo).toBe(elo);
+    expect(repository.players.get(a)?.played).toBe(1);
+  });
   it('protege HTTP por token y origen, y valida cuerpos', async () => {
     const service = new OnlineService(new MemoryOnlineRepository());
     const app = await createOnlineApp({
