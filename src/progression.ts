@@ -1,9 +1,9 @@
-import { applyAction } from './engine';
-import { equalHex, hexDistance } from './hex';
-import { replayRecord, resolutionRulesForConfig } from './match-record';
-import { PROGRESSION_ACHIEVEMENTS } from './progression-catalog';
-import type { AchievementProgress } from './achievements';
-import type { AiDifficulty, MatchRecord, PieceType, Player } from './types';
+import { applyAction } from './engine.js';
+import { equalHex, hexDistance } from './hex.js';
+import { replayRecord, resolutionRulesForConfig } from './match-record.js';
+import { PROGRESSION_ACHIEVEMENTS } from './progression-catalog.js';
+import type { AchievementProgress } from './achievements.js';
+import type { AiDifficulty, MatchRecord, PieceType, Player } from './types.js';
 
 export { PROGRESSION_ACHIEVEMENTS };
 export type ProgressionAchievement = (typeof PROGRESSION_ACHIEVEMENTS)[number];

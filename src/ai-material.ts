@@ -1,4 +1,4 @@
-import type { Piece, PieceType } from './types';
+import type { Piece, PieceType } from './types.js';
 
 /** Strategic exchange values, not rules or UI scores. Persistent threats matter. */
 export const AI_PIECE_VALUE: Readonly<Record<PieceType, number>> = {

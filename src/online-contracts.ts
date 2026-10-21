@@ -1,5 +1,5 @@
-import type { Faction, MatchClockValue, TurnClockValue } from './match-options';
-import type { FortressHp, GameAction, MatchRecord, Player } from './types';
+import type { Faction, MatchClockValue, TurnClockValue } from './match-options.js';
+import type { FortressHp, GameAction, MatchRecord, Player } from './types.js';
 
 export interface PrivateMatchSettings {
   faction: Faction;

@@ -15,7 +15,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "test": "vitest run",
-    "test:types": "tsc --noEmit --project tsconfig.json",
+    "test:types": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project tsconfig.server.json",
     "test:coverage": "vitest run --coverage",
     "test:ui": "node scripts/ui-smoke.mjs",
     "test:a11y": "node scripts/a11y.mjs",
@@ -32,7 +32,8 @@
     "ai:arena": "node scripts/ai/arena.mjs",
     "ai:selfplay": "node scripts/ai/selfplay.mjs",
     "ai:browser": "node scripts/ai/browser-smoke.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:vercel": "node scripts/vercel-esm-smoke.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

@@ -1,7 +1,7 @@
-import { getFiringRangeCells, isProtectedByPlayer } from './engine';
-import { materialValue } from './ai-material';
-import { directionBetween, hexDistance, hexKey, stepHex } from './hex';
-import type { GameAction, GameState, Piece, Player } from './types';
+import { getFiringRangeCells, isProtectedByPlayer } from './engine.js';
+import { materialValue } from './ai-material.js';
+import { directionBetween, hexDistance, hexKey, stepHex } from './hex.js';
+import type { GameAction, GameState, Piece, Player } from './types.js';
 
 type RangedPiece = Extract<Piece, { type: 'airplane' | 'long' | 'medium' }>;
 

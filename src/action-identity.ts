@@ -1,5 +1,5 @@
-import { hexKey } from './hex';
-import type { GameAction } from './types';
+import { hexKey } from './hex.js';
+import type { GameAction } from './types.js';
 
 /** Stable domain identity for an order, independent of object property order. */
 export function actionKey(action: GameAction): string {

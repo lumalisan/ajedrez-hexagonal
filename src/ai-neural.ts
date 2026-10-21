@@ -1,7 +1,7 @@
-import { DEFAULT_ACTION_RESOLUTION_RULES, type ActionResolutionRules } from './engine';
-import { allBoardHexes } from './hex';
-import { evaluateClassicState } from './ai';
-import type { Direction, GameState, Piece, Player } from './types';
+import { DEFAULT_ACTION_RESOLUTION_RULES, type ActionResolutionRules } from './engine.js';
+import { allBoardHexes } from './hex.js';
+import { evaluateClassicState } from './ai.js';
+import type { Direction, GameState, Piece, Player } from './types.js';
 
 /** Change this identifier whenever the meaning or order of an input changes. */
 export const NEURAL_FEATURE_SCHEMA = 'hex-sparse-v1';

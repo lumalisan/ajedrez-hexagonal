@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { attachDatabasePool } from '@vercel/functions';
 import pg from 'pg';
-import { createOnlineApp } from './app';
-import { OnlineService } from './online-service';
-import { PostgresOnlineRepository } from './postgres-repository';
+import { createOnlineApp } from './app.js';
+import { OnlineService } from './online-service.js';
+import { PostgresOnlineRepository } from './postgres-repository.js';
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] || (fallback ? process.env[fallback] : undefined);

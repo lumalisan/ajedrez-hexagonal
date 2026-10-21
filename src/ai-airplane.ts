@@ -1,6 +1,6 @@
-import { getPreviewActionsForPiece, isProtectedByPlayer, occupancyAt } from './engine';
-import { directionBetween, hexDistance, isOnBoard, stepHex } from './hex';
-import type { Direction, GameAction, GameState, Piece } from './types';
+import { getPreviewActionsForPiece, isProtectedByPlayer, occupancyAt } from './engine.js';
+import { directionBetween, hexDistance, isOnBoard, stepHex } from './hex.js';
+import type { Direction, GameAction, GameState, Piece } from './types.js';
 
 type Airplane = Extract<Piece, { type: 'airplane' }>;
 

@@ -1,4 +1,4 @@
-import type { MatchClockSnapshot, Outcome, Player } from './types';
+import type { MatchClockSnapshot, Outcome, Player } from './types.js';
 
 export const TURN_TIMEOUT_LIMIT = 3;
 

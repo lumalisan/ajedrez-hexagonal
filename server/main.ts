@@ -1,4 +1,4 @@
-import { createOnlineRuntime } from './runtime';
+import { createOnlineRuntime } from './runtime.js';
 
 const { app, service } = await createOnlineRuntime();
 let sweeping = false;

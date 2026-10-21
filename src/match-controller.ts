@@ -1,5 +1,5 @@
-import { applyAction, getLegalActionsForPiece } from './engine';
-import { sameAction } from './action-identity';
+import { applyAction, getLegalActionsForPiece } from './engine.js';
+import { sameAction } from './action-identity.js';
 import {
   appendAction,
   concludeMatch,
@@ -7,15 +7,15 @@ import {
   resolutionRulesForConfig,
   setMatchClock,
   setReplayCursor,
-} from './match-record';
+} from './match-record.js';
 import {
   clockOutcome,
   pauseMatchClock,
   resumeMatchClock,
   switchMatchClock,
   tickMatchClock,
-} from './match-clock';
-import { MatchStore } from './match-store';
+} from './match-clock.js';
+import { MatchStore } from './match-store.js';
 import type {
   ActionResult,
   GameAction,
@@ -23,7 +23,7 @@ import type {
   MatchRecord,
   Outcome,
   Player,
-} from './types';
+} from './types.js';
 
 export class MatchController {
   record: MatchRecord;

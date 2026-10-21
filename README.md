@@ -33,6 +33,7 @@ pnpm test:design-system
 pnpm test:ui
 pnpm test:a11y
 pnpm test:online
+pnpm test:vercel
 pnpm test:tutorial
 pnpm exec node scripts/progression-smoke.mjs
 ```

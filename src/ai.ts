@@ -5,14 +5,14 @@ import {
   getLegalActionsForPiece,
   getPiece,
   type ActionResolutionRules,
-} from './engine';
-import { actionKey } from './action-identity';
-import { airplanePositionScore } from './ai-airplane';
-import { AI_PIECE_VALUE as PIECE_VALUE, materialValue } from './ai-material';
-import type { NeuralEvaluator } from './ai-neural';
-import { RepetitionHasher } from './ai-position';
-import { evaluateRangedState, rangedActionPriority, rangedMaterialBonus } from './ai-ranged';
-import { BOARD_RADIUS, hexDistance, hexKey } from './hex';
+} from './engine.js';
+import { actionKey } from './action-identity.js';
+import { airplanePositionScore } from './ai-airplane.js';
+import { AI_PIECE_VALUE as PIECE_VALUE, materialValue } from './ai-material.js';
+import type { NeuralEvaluator } from './ai-neural.js';
+import { RepetitionHasher } from './ai-position.js';
+import { evaluateRangedState, rangedActionPriority, rangedMaterialBonus } from './ai-ranged.js';
+import { BOARD_RADIUS, hexDistance, hexKey } from './hex.js';
 import type {
   AiDifficulty,
   AiPersonality,
@@ -21,7 +21,7 @@ import type {
   Piece,
   PieceType,
   Player,
-} from './types';
+} from './types.js';
 
 const MATE_SCORE = 1_000_000;
 const TIMEOUT_CHECK_INTERVAL = 64;

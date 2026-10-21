@@ -1,10 +1,10 @@
-import type { GameAction, GameEvent, GameState, Hex } from './types';
+import type { GameAction, GameEvent, GameState, Hex } from './types.js';
 
 export type UiMode =
   | { kind: 'default' }
   | { kind: 'rotate' }
   | { kind: 'orient' }
-  | { kind: 'transform'; facing: import('./types').Direction | null }
+  | { kind: 'transform'; facing: import('./types.js').Direction | null }
   | { kind: 'actionChoice'; actions: GameAction[] }
   | { kind: 'pieceChoice'; pieceIds: string[] };
 

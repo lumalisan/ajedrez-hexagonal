@@ -1,4 +1,4 @@
-import { createGameState, getPiece } from './engine';
+import { createGameState, getPiece } from './engine.js';
 import type {
   Direction,
   FortressHp,
@@ -9,7 +9,7 @@ import type {
   Player,
   ScenarioDefinition,
   ScenarioObjective,
-} from './types';
+} from './types.js';
 
 export type ScenarioProgressStatus = 'in-progress' | 'success' | 'failure';
 

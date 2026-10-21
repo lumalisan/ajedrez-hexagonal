@@ -1,4 +1,4 @@
-import type { PieceType } from './types';
+import type { PieceType } from './types.js';
 
 export const CLASSIC_RULESET_ID = 'classic-v2' as const;
 /** Historical thresholds retained for legacy recordings. New games disable these draws. */

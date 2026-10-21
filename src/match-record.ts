@@ -4,9 +4,9 @@ import {
   createGameState,
   validateState,
   type ActionResolutionRules,
-} from './engine';
-import { assertValidMatchConfig } from './game-config';
-import { createMatchClock, validateMatchClock } from './match-clock';
+} from './engine.js';
+import { assertValidMatchConfig } from './game-config.js';
+import { createMatchClock, validateMatchClock } from './match-clock.js';
 import type {
   AcademySessionMetadata,
   GameAction,
@@ -17,7 +17,7 @@ import type {
   MatchRecord,
   MatchStatistics,
   Outcome,
-} from './types';
+} from './types.js';
 
 export class ReplayError extends Error {}
 

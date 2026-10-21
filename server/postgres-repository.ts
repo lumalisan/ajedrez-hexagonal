@@ -6,7 +6,7 @@ import type {
   OnlineTransaction,
   PrivateRoom,
   QueueEntry,
-} from './repository';
+} from './repository.js';
 
 /** Tables are in a private schema; only the Node server's database role can access them. */
 export class PostgresOnlineRepository implements OnlineRepository {

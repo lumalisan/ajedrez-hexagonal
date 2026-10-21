@@ -1,4 +1,4 @@
-import type { Direction, FortressHp, Hex, Piece, PieceType, Player } from './types';
+import type { Direction, FortressHp, Hex, Piece, PieceType, Player } from './types.js';
 
 interface SetupPiece {
   type: PieceType;

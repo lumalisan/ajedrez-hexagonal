@@ -1,17 +1,22 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { sameAction } from '../src/action-identity';
-import { chooseMachineAction } from '../src/ai';
-import { createGameState, getAllLegalActions } from '../src/engine';
-import { createClassicConfig } from '../src/game-config';
-import { MatchController } from '../src/match-controller';
-import { createMatchRecord, replayRecord } from '../src/match-record';
-import { activeClockRemainingMs } from '../src/match-clock';
-import { calculateElo } from '../src/progression';
-import { matchSearchTickets, validPrivateCode } from '../src/online-matchmaking';
-import type { MatchedSettings } from '../src/online-matchmaking';
-import type { OnlineRequest, OnlineState, PrivateMatchSettings } from '../src/online-contracts';
-import type { GameAction } from '../src/types';
-import type { OnlineMatch, OnlinePlayer, OnlineRepository, OnlineTransaction } from './repository';
+import { sameAction } from '../src/action-identity.js';
+import { chooseMachineAction } from '../src/ai.js';
+import { createGameState, getAllLegalActions } from '../src/engine.js';
+import { createClassicConfig } from '../src/game-config.js';
+import { MatchController } from '../src/match-controller.js';
+import { createMatchRecord, replayRecord } from '../src/match-record.js';
+import { activeClockRemainingMs } from '../src/match-clock.js';
+import { calculateElo } from '../src/progression.js';
+import { matchSearchTickets, validPrivateCode } from '../src/online-matchmaking.js';
+import type { MatchedSettings } from '../src/online-matchmaking.js';
+import type { OnlineRequest, OnlineState, PrivateMatchSettings } from '../src/online-contracts.js';
+import type { GameAction } from '../src/types.js';
+import type {
+  OnlineMatch,
+  OnlinePlayer,
+  OnlineRepository,
+  OnlineTransaction,
+} from './repository.js';
 
 export class OnlineError extends Error {
   constructor(

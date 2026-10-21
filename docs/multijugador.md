@@ -58,7 +58,8 @@ transaccional en memoria y autenticación inyectada, exclusivamente desde los ar
 ## Desplegar todo en Vercel
 
 1. Mantener el proyecto como **Vite**, con la raíz del repositorio como Root Directory.
-   `vercel.json` define `pnpm build`, salida `dist`, funciones Node de hasta 30 segundos y región
+   `vercel.json` comprueba el arranque ESM con `pnpm test:vercel` antes de `pnpm build`, salida
+   `dist`, funciones Node de hasta 30 segundos y región
    Dublín (cercana al proyecto Supabase actual). No configurar el proyecto como Fastify ni mover
    Root Directory a `server/`: las funciones se detectan en `api/` junto al frontend.
 2. En **Settings → Environment Variables**, crear estas variables para **Production**:
@@ -152,6 +153,9 @@ Las pruebas cubren reglas públicas fijas, filtros antiguos ignorados, reservas 
 consumidos y caducados, permisos, revisiones, jugadas ilegales, reloj del servidor y Elo idempotente.
 También cubren el adaptador de Vercel con streams HTTP reales, cuerpos malformados y grandes,
 arranques concurrentes, fallos de inicialización y recuperación tras un arranque en frío sin barrido.
+`pnpm test:types` comprueba además los imports de la API con NodeNext. `pnpm test:vercel` transpila
+la API y sus dependencias locales a JavaScript y las arranca con Node nativo, sin Vite ni `tsx`.
+Esto detecta imports ESM sin extensión que funcionarían en desarrollo pero fallarían en Vercel.
 La validación real de la migración, los permisos del rol, los JWT y la conexión entre dispositivos
 requiere configurar un proyecto Supabase. Los dobles de repositorio no sustituyen esa prueba de
 integración con PostgreSQL. Antes de publicar, ejecutar esa integración y probar una partida

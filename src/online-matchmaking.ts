@@ -1,5 +1,5 @@
-import type { Faction, MatchClockValue } from './match-options';
-import type { FortressHp } from './types';
+import type { Faction, MatchClockValue } from './match-options.js';
+import type { FortressHp } from './types.js';
 
 export interface SearchTicket {
   playerId: string;

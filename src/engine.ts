@@ -10,14 +10,14 @@ import {
   hexKey,
   isOnBoard,
   stepHex,
-} from './hex';
-import { actionKey } from './action-identity';
+} from './hex.js';
+import { actionKey } from './action-identity.js';
 import {
   CLASSIC_ORIENTATION_TURN_LIMIT,
   FORTRESS_DAMAGE_PER_HIT,
   FORTRESS_SACRIFICE_ATTACKERS,
-} from './classic-rules';
-import { createInitialPieces } from './setup';
+} from './classic-rules.js';
+import { createInitialPieces } from './setup.js';
 import type {
   ActionResult,
   BattleLogEntry,
@@ -32,7 +32,7 @@ import type {
   PieceType,
   Player,
   MatchConfig,
-} from './types';
+} from './types.js';
 
 export const PIECE_NAMES: Record<PieceType, string> = {
   soldier: 'Asaltador',

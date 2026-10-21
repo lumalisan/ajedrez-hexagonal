@@ -1,1 +1,1 @@
-export { default } from './online';
+export { default } from './online.js';

@@ -1,6 +1,6 @@
-import { replayRecord } from './match-record';
-import { BASIC_SCENARIOS, SCENARIOS } from './scenarios';
-import type { GameEvent, GameState, MatchRecord, Player } from './types';
+import { replayRecord } from './match-record.js';
+import { BASIC_SCENARIOS, SCENARIOS } from './scenarios.js';
+import type { GameEvent, GameState, MatchRecord, Player } from './types.js';
 
 const STORAGE_KEY = 'atlas-achievements-v1';
 

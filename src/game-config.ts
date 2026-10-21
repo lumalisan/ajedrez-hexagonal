@@ -1,6 +1,6 @@
-import { allBoardHexes, hexKey } from './hex';
-import { CLASSIC_RULESET_ID, CLASSIC_ORIENTATION_TURN_LIMIT } from './classic-rules';
-import { createInitialPieces, type InitialLayout } from './setup';
+import { allBoardHexes, hexKey } from './hex.js';
+import { CLASSIC_RULESET_ID, CLASSIC_ORIENTATION_TURN_LIMIT } from './classic-rules.js';
+import { createInitialPieces, type InitialLayout } from './setup.js';
 import type {
   AiDifficulty,
   AiPersonality,
@@ -10,7 +10,7 @@ import type {
   MatchConfig,
   MatchOptions,
   Participant,
-} from './types';
+} from './types.js';
 
 export interface MatchConfigInput {
   mode: Exclude<GameMode, 'academy'>;

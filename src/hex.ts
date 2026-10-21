@@ -1,4 +1,4 @@
-import type { Direction, Hex } from './types';
+import type { Direction, Hex } from './types.js';
 
 export const BOARD_RADIUS = 5;
 export const HEX_WIDTH = 60;

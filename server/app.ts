@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import type { OnlineRequest } from '../src/online-contracts';
-import { OnlineError, type OnlineService } from './online-service';
+import type { OnlineRequest } from '../src/online-contracts.js';
+import { OnlineError, type OnlineService } from './online-service.js';
 
 const REQUEST_KINDS = [
   'state',

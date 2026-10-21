@@ -1,6 +1,6 @@
-import type { PrivateMatchSettings } from '../src/online-contracts';
-import type { SearchTicket } from '../src/online-matchmaking';
-import type { MatchRecord } from '../src/types';
+import type { PrivateMatchSettings } from '../src/online-contracts.js';
+import type { SearchTicket } from '../src/online-matchmaking.js';
+import type { MatchRecord } from '../src/types.js';
 
 export interface OnlinePlayer {
   id: string;

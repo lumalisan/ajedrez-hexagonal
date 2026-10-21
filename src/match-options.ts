@@ -1,5 +1,5 @@
-import { MATCH_INITIAL_LAYOUTS, type InitialLayout } from './setup';
-import type { FortressHp, Participant } from './types';
+import { MATCH_INITIAL_LAYOUTS, type InitialLayout } from './setup.js';
+import type { FortressHp, Participant } from './types.js';
 
 export type Faction = NonNullable<Participant['faction']>;
 export type MatchClockValue = '' | 300 | 600 | 1200;
