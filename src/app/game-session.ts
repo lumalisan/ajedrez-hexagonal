@@ -122,7 +122,11 @@ function createHomeDemoState() {
 
 /** Owns one local game session. React subscribes; rules and rendering stay independent. */
 export function createGameSession(
-  options: { onlineClient?: OnlineClient | null } = {},
+  options: {
+    onlineClient?: OnlineClient | null;
+    publicOnlineAllowed?: () => boolean;
+    onAccountRequired?: () => void;
+  } = {},
 ): GameSession {
   const onlineClient =
     options.onlineClient === undefined ? createOnlineClient() : options.onlineClient;
@@ -353,6 +357,10 @@ export function createGameSession(
   function openDialog(dialog: DialogState): void {
     reconcileExpiredMatches();
     if (currentDialog?.kind === 'first-turn') return;
+    if (dialog?.kind === 'online' && options.publicOnlineAllowed?.() === false) {
+      options.onAccountRequired?.();
+      return;
+    }
     const fromOutcome = currentDialog?.kind === 'outcome' || returnToOutcome;
     closeReplay();
     returnToOutcome = fromOutcome;
@@ -2322,6 +2330,10 @@ export function createGameSession(
 
   const commands: GameCommands = {
     startOnlineSearch() {
+      if (options.publicOnlineAllowed && !options.publicOnlineAllowed()) {
+        options.onAccountRequired?.();
+        return;
+      }
       if (onlineBusy || onlineCancellation) return;
       onlineBusy = true;
       onlineError = null;

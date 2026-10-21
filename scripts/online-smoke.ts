@@ -5,17 +5,19 @@ import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, type Page } from 'playwright-core';
 import { createServer } from 'vite';
-import { createOnlineApp } from '../server/app';
+import { createOnlineApp, type AuthIdentity } from '../server/app';
 import { OnlineService } from '../server/online-service';
+import { AccountService } from '../server/account-service';
 import { createVercelHandler } from '../server/vercel-handler';
 import { MemoryOnlineRepository } from '../tests/helpers/online-repository';
 import { replayRecord } from '../src/match-record';
 
 // This test injects identity and storage only at the server boundary. Production has no bypass.
 const repository = new MemoryOnlineRepository();
-const tokens = new Map<string, string>();
+const tokens = new Map<string, AuthIdentity>();
 const app = await createOnlineApp({
   service: new OnlineService(repository),
+  accounts: new AccountService(repository),
   origin: 'http://127.0.0.1:4176',
   authenticate: async (token) => tokens.get(token) ?? null,
 });
@@ -77,6 +79,13 @@ async function menu(page: Page) {
   await page.getByRole('heading', { name: 'Batalla en línea', exact: true }).waitFor();
 }
 
+async function signIn(page: Page) {
+  await page.getByLabel('Correo electrónico', { exact: true }).fill('jugador@example.test');
+  await page.getByLabel('Contraseña', { exact: true }).fill('test-password');
+  await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
+  await page.locator('[data-home-action="new"]').waitFor();
+}
+
 try {
   let identity = 0;
   for (const [name, viewport] of [
@@ -94,8 +103,13 @@ try {
         const id = `00000000-0000-4000-8000-${String(++identity).padStart(12, '0')}`;
         const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
         const token = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({ sub: id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })}.test`;
-        tokens.set(token, id);
+        tokens.set(token, { id, isAnonymous: true });
         await context.route('http://127.0.0.1:3002/auth/v1/**', async (route) => {
+          const registered = route.request().url().includes('grant_type=password');
+          if (registered) tokens.set(token, { id, isAnonymous: false });
+          const emailSignup =
+            route.request().url().includes('/signup') &&
+            Boolean(route.request().postDataJSON()?.email);
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -104,21 +118,32 @@ try {
               'Access-Control-Allow-Headers': '*',
               'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
             },
-            body: JSON.stringify({
-              access_token: token,
-              token_type: 'bearer',
-              expires_in: 3600,
-              refresh_token: `refresh-${id}`,
-              user: {
-                id,
-                aud: 'authenticated',
-                role: 'authenticated',
-                app_metadata: {},
-                user_metadata: {},
-                is_anonymous: true,
-                created_at: new Date().toISOString(),
-              },
-            }),
+            body: JSON.stringify(
+              emailSignup
+                ? {
+                    id,
+                    email: 'nuevo@example.test',
+                    aud: 'authenticated',
+                    is_anonymous: false,
+                    created_at: new Date().toISOString(),
+                  }
+                : {
+                    access_token: token,
+                    token_type: 'bearer',
+                    expires_in: 3600,
+                    refresh_token: `refresh-${id}`,
+                    user: {
+                      id,
+                      aud: 'authenticated',
+                      role: 'authenticated',
+                      app_metadata: {},
+                      user_metadata: {},
+                      is_anonymous: !registered,
+                      email: registered ? 'jugador@example.test' : undefined,
+                      created_at: new Date().toISOString(),
+                    },
+                  },
+            ),
           });
         });
         return context;
@@ -128,7 +153,108 @@ try {
       const [first, second] = await Promise.all(contexts.map((context) => context.newPage()));
       for (const page of [first, second])
         page.on('pageerror', (error) => errors.push(error.message));
+      await first.goto('http://127.0.0.1:4176', { waitUntil: 'networkidle' });
+      await first.locator('[data-home-action="new"]').click();
+      const entry = first.locator('[data-home-mode="online"]');
+      assert(await entry.getByText('Requiere cuenta · Inicia sesión o regístrate').isVisible());
+      await inspect(first, `${name}-account-required`);
+      await entry.focus();
+      await entry.press('Enter');
+      await first.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
+      assert.equal(await first.locator('#game-dialog').getAttribute('open'), null);
+      assert(
+        await first
+          .getByLabel('Correo electrónico', { exact: true })
+          .evaluate((element) => element === document.activeElement),
+      );
+      const accountDialog = first.locator('[data-account-dialog]');
+      const bounds = (await accountDialog.boundingBox())!;
+      // The dialog itself receives clicks on its border and padding, just like its backdrop.
+      await accountDialog.click({ position: { x: 1, y: bounds.height / 2 } });
+      assert(
+        await accountDialog.isVisible(),
+        'Clicking the inner border must not dismiss the modal.',
+      );
+      await accountDialog.click({ position: { x: 12, y: bounds.height / 2 } });
+      assert(
+        await accountDialog.isVisible(),
+        'Clicking interior whitespace must not dismiss the modal.',
+      );
+      await first.mouse.move(bounds.x + 12, bounds.y + bounds.height / 2);
+      await first.mouse.down();
+      await first.mouse.move(bounds.x - 6, bounds.y + bounds.height / 2);
+      await first.mouse.up();
+      assert(
+        await accountDialog.isVisible(),
+        'A drag from inside to outside must not dismiss the modal.',
+      );
+      await first.mouse.click(bounds.x - 6, bounds.y + bounds.height / 2);
+      await accountDialog.waitFor({ state: 'hidden' });
+      await entry.click();
+      await first.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
+      await first.keyboard.press('Escape');
+      await first.locator('[data-account-dialog]').waitFor({ state: 'hidden' });
+      assert(await entry.evaluate((element) => element === document.activeElement));
+      await entry.click();
+      await first.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
+      assert.equal(repository.tickets.size, 0, 'Guests must not enter the public queue.');
+      await inspect(first, `${name}-account-signin`);
+      await first.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
+      await first.getByLabel('Correo electrónico', { exact: true }).fill('nuevo@example.test');
+      await first.getByLabel('Contraseña', { exact: true }).fill('test-password');
+      await first.getByRole('button', { name: 'Mostrar contraseña', exact: true }).click();
+      assert.equal(
+        await first.getByLabel('Contraseña', { exact: true }).getAttribute('type'),
+        'text',
+      );
+      await first.getByRole('button', { name: 'Ocultar contraseña', exact: true }).click();
+      assert.equal(
+        await first.getByLabel('Contraseña', { exact: true }).getAttribute('type'),
+        'password',
+      );
+      await inspect(first, `${name}-account-signup`);
+      await first.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
+      await first
+        .getByText('Revisa tu correo para confirmar la cuenta.', { exact: false })
+        .waitFor();
+      await inspect(first, `${name}-account-confirmation`);
+      await first.getByRole('button', { name: 'Volver a iniciar sesión' }).click();
+      await first.getByRole('button', { name: '¿Olvidaste tu contraseña?' }).click();
+      await inspect(first, `${name}-account-recovery`);
+      await first.getByRole('button', { name: 'Enviar enlace' }).click();
+      await first.getByText('Si existe una cuenta con ese correo,', { exact: false }).waitFor();
+      await first.getByRole('button', { name: 'Volver a iniciar sesión' }).click();
+      await first.route(
+        '**/auth/v1/token?grant_type=password',
+        async (route) => {
+          await route.fulfill({
+            status: 400,
+            contentType: 'application/json',
+            headers: { 'Access-Control-Allow-Origin': '*' },
+            body: JSON.stringify({ code: 'invalid_credentials', msg: 'Invalid login credentials' }),
+          });
+        },
+        { times: 1 },
+      );
+      await first.getByLabel('Correo electrónico', { exact: true }).fill('jugador@example.test');
+      await first.getByLabel('Contraseña', { exact: true }).fill('test-password');
+      await first.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
+      await first.getByRole('alert').filter({ hasText: 'No se pudo iniciar sesión.' }).waitFor();
+      assert(
+        await first
+          .getByRole('alert')
+          .filter({ hasText: 'No se pudo iniciar sesión.' })
+          .evaluate((element) => element === document.activeElement),
+        'Failed authentication must move focus to its error message.',
+      );
+      assert.equal(
+        await first.getByLabel('Contraseña', { exact: true }).inputValue(),
+        'test-password',
+      );
+      await inspect(first, `${name}-account-signin-error`);
+      await signIn(first);
       await menu(first);
+      assert.equal(await first.locator('.online-account-requirement').count(), 0);
       const modeCards = first.locator('[data-online-mode]');
       assert.equal(await modeCards.count(), 2);
       for (const card of await modeCards.all()) {
@@ -264,6 +390,11 @@ try {
       await copyCode.press('Space');
       await first.getByText('¡Código copiado!', { exact: true }).waitFor();
       assert(await copyCode.evaluate((element) => element === document.activeElement));
+      await second.goto('http://127.0.0.1:4176', { waitUntil: 'networkidle' });
+      await second.locator('[data-home-action="new"]').click();
+      await second.locator('[data-home-mode="online"]').click();
+      await second.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
+      await signIn(second);
       await menu(second);
       await second.getByRole('button', { name: /^Partida privada/ }).click();
       await second.getByRole('textbox', { name: 'Código de la partida' }).fill(code);
@@ -302,8 +433,30 @@ try {
       );
       await first.locator('[data-new-game]').click();
       await first.locator('[data-home-action="new"]').waitFor();
+      await first.locator('.home-profile').click();
+      await first.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await first.getByLabel('Nombre de usuario', { exact: true }).fill('Perfil en la nube');
+      await first.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+      await first.locator('.home-profile').click();
+      await first.getByText('Progreso guardado en la nube', { exact: true }).waitFor();
+      await inspect(first, `${name}-account-cloud-profile`);
+      await first.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+      await first.getByRole('button', { name: /Iniciar sesión · Invitado/ }).waitFor();
+      assert(!(await first.locator('.home-profile').innerText()).includes('Perfil en la nube'));
+      // A fresh device cache must recover the saved profile, not its local guest identity.
+      await first.evaluate(() => {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('hexfortia:account:') || key.startsWith('hexfortia:cloud-meta:'))
+            localStorage.removeItem(key);
+        }
+      });
+      await first.getByRole('button', { name: /Iniciar sesión · Invitado/ }).click();
+      await first.getByLabel('Correo electrónico', { exact: true }).fill('jugador@example.test');
+      await first.getByLabel('Contraseña', { exact: true }).fill('test-password');
+      await first.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
+      await first.locator('.home-profile').filter({ hasText: 'Perfil en la nube' }).waitFor();
       console.log(
-        `${name}: direct public search, queued cancellation, centered search logo, reduced motion, private code copying (click, keyboard, repeat and denied clipboard), two clients, resignation and Axe passed.`,
+        `${name}: guest restrictions, signup, login, recovery, cloud save/restore, logout isolation, public search, private multiplayer and Axe passed.`,
       );
     } finally {
       await Promise.all(contexts.map((context) => context.close()));

@@ -9,6 +9,7 @@ import type {
 
 /** Transactional double: serialization and rollback let application tests exercise races. */
 export class MemoryOnlineRepository implements OnlineRepository {
+  accounts = new Map<string, Omit<import('../../src/cloud-contracts').CloudSave, 'elo'>>();
   players = new Map<string, OnlinePlayer>();
   tickets = new Map<string, QueueEntry>();
   privateRooms = new Map<string, PrivateRoom>();
@@ -22,8 +23,13 @@ export class MemoryOnlineRepository implements OnlineRepository {
         this.tickets,
         this.privateRooms,
         this.matches,
+        this.accounts,
       ] as const);
       const tx: OnlineTransaction = {
+        account: async (id) => structuredClone(this.accounts.get(id) ?? null),
+        saveAccount: async (id, save) => {
+          this.accounts.set(id, structuredClone(save));
+        },
         player: async (id) => structuredClone(this.players.get(id) ?? null),
         savePlayer: async (player) => {
           this.players.set(player.id, structuredClone(player));
@@ -59,7 +65,7 @@ export class MemoryOnlineRepository implements OnlineRepository {
       try {
         return await work(tx);
       } catch (error) {
-        [this.players, this.tickets, this.privateRooms, this.matches] = before;
+        [this.players, this.tickets, this.privateRooms, this.matches, this.accounts] = before;
         throw error;
       }
     });

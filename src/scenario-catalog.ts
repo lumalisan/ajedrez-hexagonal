@@ -1,3 +1,4 @@
+import { playerStorage } from './player-storage.js';
 import { createMatchRecord } from './match-record';
 import type { GameState, MatchConfig, ScenarioObjective } from './types';
 
@@ -68,7 +69,7 @@ function validateObjective(objective: ScenarioObjective): void {
 
 export function loadScenarioCatalog(): CustomScenario[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) ?? '[]') as unknown;
+    const parsed = JSON.parse(playerStorage.getItem(CATALOG_KEY) ?? '[]') as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.flatMap((candidate) => {
       try {
@@ -86,5 +87,5 @@ export function saveCustomScenario(scenario: CustomScenario): void {
   const valid = validateCustomScenario(scenario);
   const catalog = loadScenarioCatalog().filter((entry) => entry.id !== valid.id);
   catalog.push(valid);
-  localStorage.setItem(CATALOG_KEY, JSON.stringify(catalog));
+  playerStorage.setItem(CATALOG_KEY, JSON.stringify(catalog));
 }

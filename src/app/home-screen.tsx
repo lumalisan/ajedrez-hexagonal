@@ -5,6 +5,9 @@ import { useGame } from './game-context';
 import { SettingsIcon, SoundButton } from './shell-icons';
 import { MenuIcon } from './components/menu-icon';
 import { ProfileAvatar } from './components/profile-avatar';
+import { useAccount } from './account-context';
+import { Button } from './components/ui/button';
+import { OnlineAccountNotice } from './components/account-access';
 
 function readMenuSummary() {
   return {
@@ -14,6 +17,7 @@ function readMenuSummary() {
 }
 
 export function HomeScreen() {
+  const { account, controller } = useAccount();
   const { snapshot, commands } = useGame();
   const menuRef = useRef<HTMLDivElement>(null);
   const previousView = useRef(snapshot.homeView);
@@ -33,7 +37,7 @@ export function HomeScreen() {
     ? `${saved.length} partidas pendientes · Elige cuál retomar`
     : 'No hay partidas pendientes';
   return (
-    <section
+    <main
       id="home-screen"
       className="home-screen"
       aria-label="Portada de Hexfortia"
@@ -85,7 +89,11 @@ export function HomeScreen() {
                   onClick={() => commands.openDialog({ kind: 'online' })}
                 >
                   <span>Batalla en línea</span>
-                  <small>Busca un rival o comparte una partida privada</small>
+                  {account.user ? (
+                    <small>Busca un rival o comparte una partida privada</small>
+                  ) : (
+                    <OnlineAccountNotice />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -235,8 +243,18 @@ export function HomeScreen() {
         </button>
       </aside>
       <div className="home-utility-actions" aria-label="Accesos rápidos">
+        <Button
+          size="compact"
+          variant="ghost"
+          data-account-access
+          onClick={() =>
+            account.user ? commands.openDialog({ kind: 'profile' }) : controller.open('signin')
+          }
+        >
+          {account.user ? 'Mi cuenta' : 'Iniciar sesión · Invitado'}
+        </Button>
         <SoundButton home />
       </div>
-    </section>
+    </main>
   );
 }

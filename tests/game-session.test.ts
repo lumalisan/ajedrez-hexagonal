@@ -131,6 +131,30 @@ describe('sesión que conecta React con el juego', () => {
     vi.unstubAllGlobals();
   });
 
+  it('pide una cuenta antes de abrir el menú en línea y conserva la pantalla del invitado', () => {
+    let registered = false;
+    const onAccountRequired = vi.fn();
+    const request = vi.fn<OnlineClient['request']>();
+    const session = createGameSession({
+      onlineClient: { request },
+      publicOnlineAllowed: () => registered,
+      onAccountRequired,
+    });
+    sessions.push(session);
+    session.commands.setHomeView('new');
+    session.commands.openDialog({ kind: 'online' });
+    expect(onAccountRequired).toHaveBeenCalledOnce();
+    expect(session.getSnapshot().dialog).toBeNull();
+    expect(session.getSnapshot().homeView).toBe('new');
+    expect(request).not.toHaveBeenCalled();
+    session.commands.openDialog({ kind: 'mode' });
+    session.commands.openDialog({ kind: 'online' });
+    expect(session.getSnapshot().dialog).toEqual({ kind: 'mode' });
+    registered = true;
+    session.commands.openDialog({ kind: 'online' });
+    expect(session.getSnapshot().dialog).toEqual({ kind: 'online' });
+  });
+
   it('busca directamente, ignora los filtros guardados y permite cancelar durante la conexión inicial', async () => {
     localStorage.setItem(
       'hexfortia-online-search-v1',

@@ -1,3 +1,4 @@
+import { playerStorage } from './player-storage.js';
 import {
   concludeMatch,
   matchDurationSeconds,
@@ -57,7 +58,7 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
 export function loadPreferences(): GamePreferences {
   try {
     const raw =
-      localStorage.getItem(PREFERENCES_KEY) ?? localStorage.getItem(LEGACY_PREFERENCES_KEY);
+      playerStorage.getItem(PREFERENCES_KEY) ?? playerStorage.getItem(LEGACY_PREFERENCES_KEY);
     if (!raw) return { ...DEFAULT_PREFERENCES };
     const value = JSON.parse(raw) as Partial<GamePreferences>;
     return {
@@ -78,8 +79,8 @@ export function loadPreferences(): GamePreferences {
 
 export function savePreferences(preferences: GamePreferences): void {
   try {
-    localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
-    localStorage.setItem(LEGACY_PREFERENCES_KEY, JSON.stringify(preferences));
+    playerStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+    playerStorage.setItem(LEGACY_PREFERENCES_KEY, JSON.stringify(preferences));
   } catch {
     // Preferences remain active in memory when storage is unavailable.
   }
@@ -99,7 +100,7 @@ export function saveActiveMatch(record: MatchRecord): boolean {
 
 export function loadActiveMatch(): { record: MatchRecord | null; error?: string } {
   try {
-    const raw = localStorage.getItem(MATCH_KEY);
+    const raw = playerStorage.getItem(MATCH_KEY);
     if (!raw) return { record: null };
     return { record: parseRecord(raw) };
   } catch (error) {
@@ -122,7 +123,7 @@ export interface PendingMatch {
 
 function readPendingMatches(): PendingMatch[] {
   try {
-    const raw = localStorage.getItem(PENDING_KEY);
+    const raw = playerStorage.getItem(PENDING_KEY);
     if (raw === null) {
       const legacy = loadActiveMatch().record;
       if (
@@ -209,7 +210,7 @@ export function resumePendingMatch(id: string): MatchRecord | null {
 
 export function loadAcademyProgress(): string[] {
   try {
-    const value = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '[]') as unknown;
+    const value = JSON.parse(playerStorage.getItem(PROGRESS_KEY) ?? '[]') as unknown;
     return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
@@ -224,7 +225,7 @@ export function completeScenario(id: string): boolean {
 
 export function loadAcademyRecords(): AcademyRecord[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(ACADEMY_RECORDS_KEY) ?? '[]') as unknown;
+    const parsed = JSON.parse(playerStorage.getItem(ACADEMY_RECORDS_KEY) ?? '[]') as unknown;
     return Array.isArray(parsed)
       ? parsed.filter(
           (entry): entry is AcademyRecord =>
@@ -286,7 +287,7 @@ function bestMedal(
 
 export function loadMatchHistory(): MatchHistoryEntry[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') as unknown;
+    const parsed = JSON.parse(playerStorage.getItem(HISTORY_KEY) ?? '[]') as unknown;
     return Array.isArray(parsed) ? (parsed as MatchHistoryEntry[]).slice(0, 30) : [];
   } catch {
     return [];
@@ -311,7 +312,7 @@ export function resetAcademyProgress(): void {
 
 function safeSetItem(key: string, value: string): boolean {
   try {
-    localStorage.setItem(key, value);
+    playerStorage.setItem(key, value);
     return true;
   } catch {
     return false;
@@ -320,7 +321,7 @@ function safeSetItem(key: string, value: string): boolean {
 
 function safeRemoveItem(key: string): boolean {
   try {
-    localStorage.removeItem(key);
+    playerStorage.removeItem(key);
     return true;
   } catch {
     return false;

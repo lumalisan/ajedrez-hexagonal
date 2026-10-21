@@ -9,6 +9,8 @@ import { plainTabClassName } from '../components/ui/tabs';
 import { PROGRESSION_ACHIEVEMENTS, levelProgress, TIERS } from '../../progression';
 import { playerRecords, playerStatistics } from '../../profile-statistics';
 import { ProgressionSummary } from '../components/progression-summary';
+import { AccountStatus } from '../components/account-access';
+import { useAccount } from '../account-context';
 
 const emblemLabels = {
   fortress: 'Fortaleza',
@@ -36,6 +38,7 @@ const colorLabels = {
 };
 
 function ProfileSettings() {
+  const { account } = useAccount();
   const { snapshot, commands } = useGame();
   const unlockedOptions = (levelProgress(snapshot.progression.xp).tier + 1) * 2;
   const [draft, setDraft] = useState(snapshot.profile);
@@ -65,7 +68,10 @@ function ProfileSettings() {
         aria-describedby="profile-name-hint"
       />
       <small id="profile-name-hint">
-        Hasta 24 caracteres. El perfil se guarda en este navegador.
+        Hasta 24 caracteres.{' '}
+        {account.user
+          ? 'El perfil se guarda en tu cuenta.'
+          : 'El perfil se guarda en este navegador.'}
       </small>
       <fieldset>
         <legend>Emblema</legend>
@@ -151,6 +157,7 @@ const MODES = [
 ] as const;
 
 export function ProfileDialog() {
+  const { account } = useAccount();
   const { snapshot } = useGame();
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
   const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
@@ -182,8 +189,13 @@ export function ProfileDialog() {
           ))}
         </nav>
         <p className="achievements-sidebar-note">
-          Tu perfil y progreso se guardan en este navegador.
+          {account.user
+            ? 'Tu perfil y progreso se guardan en la nube.'
+            : 'Tu perfil y progreso se guardan en este navegador.'}
         </p>
+        <div className="mt-4">
+          <AccountStatus />
+        </div>
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">

@@ -5,12 +5,16 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { GameContext, useGame } from './game-context';
 import { createGameSession } from './game-session';
 import { GameShell } from './game-shell';
 import { AchievementNotification } from './components/achievement-notification';
+import { createAccountController } from '../account-controller';
+import { AccountContext, useAccount } from './account-context';
+import { AccountDialog, AccountStatus } from './components/account-access';
 
 const GameDialogs = lazy(() =>
   import('./dialogs/game-dialogs').then((module) => ({ default: module.GameDialogs })),
@@ -20,7 +24,38 @@ const UtilityDialogs = lazy(() =>
 );
 
 export function App() {
-  const [session] = useState(createGameSession);
+  const [accountController] = useState(createAccountController);
+  const account = useSyncExternalStore(accountController.subscribe, accountController.getSnapshot);
+  useEffect(() => accountController.start(), [accountController]);
+  return (
+    <AccountContext.Provider value={accountController}>
+      {account.ready ? (
+        <PlayerApplication key={account.generation} />
+      ) : (
+        <main className="grid min-h-dvh place-content-center gap-5 bg-canvas p-6 text-ink">
+          <h1 className="font-heading">Hexfortia</h1>
+          <p role="status">
+            {account.sync === 'offline'
+              ? 'No se pudo recuperar tu progreso.'
+              : 'Recuperando tu progreso…'}
+          </p>
+          {account.sync === 'offline' && <AccountStatus />}
+        </main>
+      )}
+      <AccountDialog />
+    </AccountContext.Provider>
+  );
+}
+
+function PlayerApplication() {
+  const { controller } = useAccount();
+  const [session] = useState(() =>
+    createGameSession({
+      publicOnlineAllowed: () => Boolean(controller.getSnapshot().user),
+      onAccountRequired: () => controller.open('signin'),
+    }),
+  );
+  useLayoutEffect(() => controller.bindSession(session.dispose), [controller, session]);
   useEffect(() => session.start(), [session]);
   return (
     <GameContext.Provider value={session}>
@@ -119,6 +154,7 @@ function DialogHost() {
     if (!isOpen) return;
     const events = new AbortController();
     const preventBackgroundScroll = (event: Event): void => {
+      if (event.target instanceof Element && event.target.closest('[data-account-dialog]')) return;
       if (event.target instanceof Node && !dialogRef.current?.contains(event.target))
         event.preventDefault();
     };

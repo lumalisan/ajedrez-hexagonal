@@ -1,7 +1,14 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import type { OnlineRequest } from '../src/online-contracts.js';
 import { OnlineError, type OnlineService } from './online-service.js';
+import type { AccountService } from './account-service.js';
+import type { CloudRequest } from '../src/cloud-contracts.js';
+
+export interface AuthIdentity {
+  id: string;
+  isAnonymous: boolean;
+}
 
 const REQUEST_KINDS = [
   'state',
@@ -16,7 +23,8 @@ const REQUEST_KINDS = [
 
 export async function createOnlineApp(options: {
   service: OnlineService;
-  authenticate: (token: string) => Promise<string | null>;
+  authenticate: (token: string) => Promise<AuthIdentity | null>;
+  accounts?: AccountService;
   origin: string;
   logger?: boolean;
   trustProxy?: boolean;
@@ -49,15 +57,19 @@ export async function createOnlineApp(options: {
     reply.header('Cache-Control', 'no-store');
     return { ok: true };
   });
-  app.post('/api/online', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store');
+  async function identity(request: FastifyRequest): Promise<AuthIdentity> {
     if (request.headers.origin && request.headers.origin !== options.origin)
       throw new OnlineError('Origen no permitido.', 403);
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Bearer ') || authorization.length > 8192)
       throw new OnlineError('Inicia sesión para jugar en línea.', 401);
-    const userId = await options.authenticate(authorization.slice(7));
-    if (!userId) throw new OnlineError('La sesión ha caducado. Vuelve a intentarlo.', 401);
+    const user = await options.authenticate(authorization.slice(7));
+    if (!user) throw new OnlineError('La sesión ha caducado. Vuelve a intentarlo.', 401);
+    return user;
+  }
+  app.post('/api/online', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const user = await identity(request);
     const body = request.body;
     if (
       !body ||
@@ -68,7 +80,16 @@ export async function createOnlineApp(options: {
     )
       throw new OnlineError('Solicitud no válida.');
     // Remaining discriminated fields are validated by the application service.
-    return options.service.request(userId, body as OnlineRequest);
+    return options.service.request(user.id, body as OnlineRequest, !user.isAnonymous);
+  });
+  app.post('/api/account', { bodyLimit: 3_100_000 }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const user = await identity(request);
+    if (user.isAnonymous)
+      throw new OnlineError('Inicia sesión con una cuenta para guardar en la nube.', 403);
+    if (!options.accounts)
+      throw new OnlineError('El guardado en la nube no está configurado.', 503);
+    return options.accounts.request(user.id, request.body as CloudRequest);
   });
   return app;
 }

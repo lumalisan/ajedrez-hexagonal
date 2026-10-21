@@ -4,6 +4,7 @@ import pg from 'pg';
 import { createOnlineApp } from './app.js';
 import { OnlineService } from './online-service.js';
 import { PostgresOnlineRepository } from './postgres-repository.js';
+import { AccountService } from './account-service.js';
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] || (fallback ? process.env[fallback] : undefined);
@@ -33,10 +34,12 @@ export async function createOnlineRuntime({ serverless = false } = {}) {
   pool.on('error', () => {
     process.stderr.write('Se ha interrumpido una conexión inactiva con PostgreSQL.\n');
   });
-  const service = new OnlineService(new PostgresOnlineRepository(pool));
+  const repository = new PostgresOnlineRepository(pool);
+  const service = new OnlineService(repository);
   try {
     const app = await createOnlineApp({
       service,
+      accounts: new AccountService(repository),
       origin,
       logger: true,
       trustProxy: serverless,
@@ -45,7 +48,7 @@ export async function createOnlineRuntime({ serverless = false } = {}) {
         return !error &&
           typeof data?.claims.sub === 'string' &&
           /^[0-9a-f-]{36}$/i.test(data.claims.sub)
-          ? data.claims.sub
+          ? { id: data.claims.sub, isAnonymous: data.claims.is_anonymous !== false }
           : null;
       },
     });

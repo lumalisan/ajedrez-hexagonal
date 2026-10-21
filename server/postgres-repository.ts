@@ -42,6 +42,22 @@ function transaction(client: PoolClient): OnlineTransaction {
     return (await client.query<T>(sql, values)).rows;
   }
   return {
+    async account(id) {
+      return (
+        (
+          await rows<{ revision: number; data: import('../src/cloud-contracts.js').PlayerData }>(
+            'select revision, data from hexfortia.accounts where user_id = $1 for update',
+            [id],
+          )
+        )[0] ?? null
+      );
+    },
+    async saveAccount(id, save) {
+      await client.query(
+        'insert into hexfortia.accounts (user_id, revision, data) values ($1,$2,$3) on conflict (user_id) do update set revision = $2, data = $3, updated_at = now()',
+        [id, save.revision, save.data],
+      );
+    },
     async player(id) {
       return (
         (

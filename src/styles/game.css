@@ -2516,6 +2516,26 @@ button:disabled {
   opacity: 1;
 }
 
+.online-account-requirement,
+.mode-card small.online-account-requirement,
+.home-nav-button small.online-account-requirement {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-height: none;
+  margin-top: 7px;
+  overflow: visible;
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 1;
+}
+
+.online-account-requirement > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 .home-nav-button.primary {
   border-color: rgba(255, 181, 71, 0.68);
   background: rgba(116, 76, 18, 0.42);
@@ -6406,6 +6426,10 @@ button.history-card:disabled {
 }
 
 /* One brief confirmation per successful clipboard write; no persistent effect loop. */
+.account-dialog::backdrop {
+  background: rgb(0 0 0 / 75%);
+}
+
 .online-code-symbol {
   flex: none;
   width: 32px;

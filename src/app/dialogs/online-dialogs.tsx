@@ -3,6 +3,7 @@ import { DialogClose } from '../components/dialog-close';
 import { MenuIcon } from '../components/menu-icon';
 import { Button } from '../components/ui/button';
 import { useGame } from '../game-context';
+import { useAccount } from '../account-context';
 
 export function OnlineAvailability({ retrySearch = false }: { retrySearch?: boolean }) {
   const { snapshot, commands } = useGame();
@@ -166,6 +167,7 @@ function PrivateRoomCode({ code }: { code: string }) {
 }
 
 export function OnlineMenuDialog() {
+  const { account } = useAccount();
   const { snapshot, commands } = useGame();
   return (
     <>
@@ -185,7 +187,9 @@ export function OnlineMenuDialog() {
           </span>
           <strong className="font-heading text-xl font-semibold text-ink">Buscar partida</strong>
           <small className="max-w-64 text-sm leading-relaxed text-muted">
-            Encuentra un rival y empieza a jugar.
+            {account.user
+              ? 'Encuentra un rival y empieza a jugar.'
+              : 'Inicia sesión para buscar rival y competir por Elo.'}
           </small>
         </button>
         <button

@@ -1,20 +1,22 @@
+import { browserSupabase } from './supabase-client.js';
 import type { OnlineClient, OnlineState } from './online-contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Lazy: local play never initializes Supabase or requires an internet connection. */
+/** Online transport shares Auth with accounts; local play does not require a connection. */
 export function createOnlineClient(): OnlineClient | null {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)
+    return null;
   let auth: Promise<SupabaseClient> | undefined;
   return {
     async request(request, signal) {
-      auth ??= import('@supabase/supabase-js').then(({ createClient }) => createClient(url, key));
+      auth ??= browserSupabase()!;
       const client = await auth;
       if (signal.aborted) throw new DOMException('Solicitud cancelada.', 'AbortError');
       const { data, error } = await client.auth.getSession();
       if (error) throw new Error('No se ha podido recuperar la sesión en línea.');
       let session = data.session;
+      if (request.kind === 'search' && (!session || session.user.is_anonymous))
+        throw new Error('Inicia sesión con una cuenta para buscar partida.');
       if (!session) {
         const result = await client.auth.signInAnonymously();
         if (result.error || !result.data.session)
@@ -53,7 +55,6 @@ export function createOnlineClient(): OnlineClient | null {
       return result as OnlineState;
     },
     dispose() {
-      void auth?.then((client) => client.auth.stopAutoRefresh()).catch(() => undefined);
       auth = undefined;
     },
   };

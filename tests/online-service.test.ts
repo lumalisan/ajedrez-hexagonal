@@ -245,7 +245,7 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     const app = await createOnlineApp({
       service,
       origin: 'http://localhost:5173',
-      authenticate: async (token) => (token === 'valid' ? a : null),
+      authenticate: async (token) => (token === 'valid' ? { id: a, isAnonymous: false } : null),
     });
     try {
       const call = (payload: Record<string, unknown>, headers = {}) =>

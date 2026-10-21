@@ -5,6 +5,8 @@ import { useGame } from '../game-context';
 import { ConfigDialog } from './game-config';
 import { RulesDialog } from './game-rules';
 import { OnlineMenuDialog, OnlineSearchDialog } from './online-dialogs';
+import { useAccount } from '../account-context';
+import { OnlineAccountNotice } from '../components/account-access';
 
 export function GameDialogs() {
   const { snapshot } = useGame();
@@ -25,6 +27,7 @@ export function GameDialogs() {
 }
 
 function ModeDialog({ initial }: { initial: boolean }) {
+  const { account } = useAccount();
   const { commands } = useGame();
   const [saved] = useState(loadActiveMatch);
 
@@ -62,7 +65,11 @@ function ModeDialog({ initial }: { initial: boolean }) {
           onClick={() => commands.openDialog({ kind: 'online' })}
         >
           <strong>Batalla en línea</strong>
-          <small>Busca un rival o crea una partida privada.</small>
+          {account.user ? (
+            <small>Busca un rival o crea una partida privada.</small>
+          ) : (
+            <OnlineAccountNotice />
+          )}
         </button>
         <button
           type="button"

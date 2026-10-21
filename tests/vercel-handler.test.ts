@@ -28,7 +28,8 @@ async function appFactory() {
     service: new OnlineService(new MemoryOnlineRepository()),
     origin,
     trustProxy: true,
-    authenticate: async (token) => (token === 'valid' ? playerId : null),
+    authenticate: async (token) =>
+      token === 'valid' ? { id: playerId, isAnonymous: false } : null,
   });
   apps.push(app);
   return app;

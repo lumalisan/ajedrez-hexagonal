@@ -11,7 +11,9 @@ const config = ts.readConfigFile(join(root, 'tsconfig.json'), ts.sys.readFile);
 assert(!config.error, 'Cannot read TypeScript configuration.');
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
 const program = ts.createProgram(
-  ['api/health.ts', 'api/online.ts', 'server/main.ts'].map((path) => join(root, path)),
+  ['api/health.ts', 'api/online.ts', 'api/account.ts', 'server/main.ts'].map((path) =>
+    join(root, path),
+  ),
   parsed.options,
 );
 const cacheRoot = join(root, 'node_modules', '.cache');
@@ -38,8 +40,9 @@ try {
     import { createServer } from 'node:http';
     const { default: health } = await import('./api/health.js');
     const { default: online } = await import('./api/online.js');
+    const { default: account } = await import('./api/account.js');
     const server = createServer((request, response) => {
-      void (request.url === '/api/health' ? health : online)(request, response);
+      void (request.url === '/api/health' ? health : request.url === '/api/account' ? account : online)(request, response);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
@@ -52,6 +55,8 @@ try {
         body: JSON.stringify({ kind: 'state' }),
       });
       assert.equal(unauthorized.status, 401);
+      const protectedSave = await fetch(base + '/api/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"kind":"load"}' });
+      assert.equal(protectedSave.status, 401);
     } finally {
       server.closeAllConnections();
       await new Promise(resolve => server.close(resolve));
@@ -71,7 +76,7 @@ try {
     },
   });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
-  console.log('Native Node ESM API startup passed: health 200, protected online 401.');
+  console.log('Native Node ESM API startup passed: health 200, protected online/account 401.');
 } finally {
   assert.equal(dirname(output), cacheRoot, 'Only remove the temporary verification directory.');
   rmSync(output, { recursive: true, force: true });

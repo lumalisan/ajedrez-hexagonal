@@ -1,3 +1,4 @@
+import { playerStorage } from './player-storage.js';
 export const PROFILE_EMBLEMS = [
   'fortress',
   'hex',
@@ -43,7 +44,7 @@ export function normalizeProfile(value: Partial<UserProfile>, fallback: UserProf
 
 export function saveUserProfile(profile: UserProfile): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    playerStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
     return true;
   } catch {
     return false;
@@ -57,7 +58,7 @@ export function loadUserProfile(): UserProfile {
     color: 'cyan',
   };
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    const raw: unknown = JSON.parse(playerStorage.getItem(STORAGE_KEY) || 'null');
     if (raw && typeof raw === 'object' && !Array.isArray(raw))
       return normalizeProfile(raw, fallback);
   } catch {

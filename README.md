@@ -72,6 +72,12 @@ El [sistema de diseño](docs/design-system.md) reúne botones, campos, validaci�
 
 ## Modos y datos
 
+Puedes jugar como **invitado**, guardando en este navegador, o crear una **cuenta** para sincronizar
+perfil, progreso, preferencias, historial y partidas pendientes en Supabase. «Batalla en línea»
+requiere una cuenta y abre el acceso o registro cuando juega un invitado. El registro ofrece importar el
+progreso local sin borrar su copia. La [guía de cuentas](docs/cuentas.md) explica la nueva migración,
+la configuración de correo y la resolución de conflictos entre dispositivos.
+
 - **Partida libre:** local o contra IA. Contra la IA puedes elegir la dificultad: Fácil, Medio, Difícil, Experto o Neuronal. Los niveles superiores dedican más tiempo a anticipar respuestas; mantienen el mismo presupuesto de búsqueda en escritorio y móvil. Neuronal ejecuta una red pequeña en el navegador; Experto conserva su evaluación clásica.
 - **Puntos de vida de la Fortaleza:** elige 1, 2 o 3 al crear cualquier partida libre; la opción predeterminada es 1.
 - **Tiempo:** configura por separado el tiempo por turno (Sin límite, 30 segundos, 60 segundos o 90 segundos) y el tiempo total por jugador (Sin límite, 5 minutos, 10 minutos o 20 minutos). Puedes combinar ambos límites. Al agotar el tiempo de turno, la IA realiza una jugada por ti; la tercera vez que un mismo jugador lo agota durante la partida, pierde. Agotar el tiempo total concede la victoria al rival. El tiempo por turno se reinicia al comenzar cada turno y el total solo se consume mientras juega ese bando. Los relojes y las veces que cada jugador ha agotado el tiempo de turno se conservan al guardar y continuar.
@@ -101,9 +107,9 @@ La IA valora la conservación del Embestidor y del Caza, el coste de transformar
 
 El menú **Logros**, disponible desde el inicio y durante la partida, reúne 23 desafíos con iconos cuadrados, descripción de sus condiciones, progreso acumulado y fecha de desbloqueo. Permite filtrar todos, pendientes o desbloqueados. Incluye victorias contra cada dificultad de IA, partidas entre humanos, relojes de 5, 10 y 20 minutos por bando, hazañas como remontar con la Fortaleza a un punto o dejar al rival sin piezas.
 
-Los logros pertenecen al perfil local de este navegador: en partidas entre humanos cuentan ambos bandos; contra la IA solo cuentan las acciones y victorias del humano. Las capturas, conversiones, intercepciones y transformaciones suman y desbloquean logros en cuanto se ejecuta la acción, aunque después se abandone la partida. Los objetivos de partidas y victorias requieren terminar y haber jugado al menos una orden; Repeticiones, partidas importadas y la demostración de portada no suman logros de partida. Deshacer no revoca un logro obtenido y rehacer no duplica el progreso. Los datos de la antigua Academia se conservan por compatibilidad, pero su catálogo y sus logros ya no aparecen en la interfaz.
+Los logros pertenecen al perfil del invitado o de la cuenta activa: en partidas entre humanos cuentan ambos bandos; contra la IA solo cuentan las acciones y victorias del humano. Las capturas, conversiones, intercepciones y transformaciones suman y desbloquean logros en cuanto se ejecuta la acción, aunque después se abandone la partida. Los objetivos de partidas y victorias requieren terminar y haber jugado al menos una orden; Repeticiones, partidas importadas y la demostración de portada no suman logros de partida. Deshacer no revoca un logro obtenido y rehacer no duplica el progreso. Los datos de la antigua Academia se conservan por compatibilidad, pero su catálogo y sus logros ya no aparecen en la interfaz.
 
-Cada desbloqueo muestra únicamente su icono y título, acompañado de una campanilla que respeta el silencio y los volúmenes maestro y de efectos. Si se consiguen varios, los avisos aparecen uno a uno; se posponen mientras la pestaña está oculta. Los logros se guardan por separado de las partidas y permanecen al iniciar otra, pero borrar los datos del navegador elimina la colección.
+Cada desbloqueo muestra únicamente su icono y título, acompañado de una campanilla que respeta el silencio y los volúmenes maestro y de efectos. Si se consiguen varios, los avisos aparecen uno a uno; se posponen mientras la pestaña está oculta. Los logros se guardan por separado de las partidas y permanecen al iniciar otra. Como invitado, borrar los datos del navegador elimina la colección; con cuenta, los cambios sincronizados se recuperan desde Supabase.
 
 ## Reglas canónicas (`classic-v2`)
 

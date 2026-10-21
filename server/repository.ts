@@ -1,6 +1,7 @@
 import type { PrivateMatchSettings } from '../src/online-contracts.js';
 import type { SearchTicket } from '../src/online-matchmaking.js';
 import type { MatchRecord } from '../src/types.js';
+import type { CloudSave } from '../src/cloud-contracts.js';
 
 export interface OnlinePlayer {
   id: string;
@@ -28,6 +29,8 @@ export interface OnlineMatch {
 }
 
 export interface OnlineTransaction {
+  account(id: string): Promise<Omit<CloudSave, 'elo'> | null>;
+  saveAccount(id: string, save: Omit<CloudSave, 'elo'>): Promise<void>;
   player(id: string): Promise<OnlinePlayer | null>;
   savePlayer(player: OnlinePlayer): Promise<void>;
   queue(): Promise<QueueEntry[]>;

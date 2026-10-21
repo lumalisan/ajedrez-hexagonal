@@ -1,3 +1,4 @@
+import { playerStorage } from './player-storage.js';
 import { applyAction } from './engine.js';
 import { equalHex, hexDistance } from './hex.js';
 import { replayRecord, resolutionRulesForConfig } from './match-record.js';
@@ -772,7 +773,7 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
 }
 export function loadPlayerProgression(legacy: AchievementProgress): PlayerProgression {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = playerStorage.getItem(STORAGE_KEY);
     return raw === null ? migrateProgression(legacy) : parsePlayerProgression(raw);
   } catch {
     return migrateProgression(legacy);
@@ -780,7 +781,7 @@ export function loadPlayerProgression(legacy: AchievementProgress): PlayerProgre
 }
 export function savePlayerProgression(progress: PlayerProgression): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    playerStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
     return true;
   } catch {
     return false;

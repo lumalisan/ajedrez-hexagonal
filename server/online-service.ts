@@ -46,7 +46,13 @@ export class OnlineService {
     private readonly now = Date.now,
   ) {}
 
-  async request(playerId: string, request: OnlineRequest): Promise<OnlineState> {
+  async request(
+    playerId: string,
+    request: OnlineRequest,
+    publicAllowed = true,
+  ): Promise<OnlineState> {
+    if (!publicAllowed && request.kind === 'search')
+      throw new OnlineError('Inicia sesión con una cuenta para buscar partida.', 403);
     if (request.kind === 'action' || request.kind === 'resign' || request.kind === 'finish') {
       if (typeof request.matchId !== 'string' || !/^[0-9a-f-]{36}$/i.test(request.matchId))
         throw new OnlineError('Partida no válida.');
@@ -171,6 +177,10 @@ export class OnlineService {
           await this.clearWaiting(tx, creator.id);
           await this.clearWaiting(tx, playerId);
           return { matchId: match.id };
+        }
+        if (!publicAllowed) {
+          await tx.removeTicket(playerId);
+          return { status: 'idle' };
         }
         let ticket = (await tx.queue()).find((entry) => entry.playerId === playerId);
         if (request.kind === 'search') {

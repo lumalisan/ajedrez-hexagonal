@@ -10,9 +10,9 @@ al servidor y utiliza un rol dedicado.
 
 - `src/online-matchmaking.ts`: reglas públicas fijas, sorteo de bandos y ventanas de Elo, sin red ni DOM.
 - `src/online-contracts.ts`: solicitudes y respuestas compartidas.
-- `src/online-client.ts`: autenticación y transporte HTTP del navegador, inicializados al entrar
-  en línea. El resto del juego funciona sin Supabase configurado.
-- `api/online.ts` y `api/health.ts`: entradas de Vercel, sin puertos ni intervalos persistentes.
+- `src/online-client.ts`: transporte HTTP del multijugador; comparte el SDK de Auth con las
+  cuentas. El resto del juego funciona como invitado sin Supabase configurado.
+- `api/online.ts`, `api/account.ts` y `api/health.ts`: entradas de Vercel, sin puertos ni intervalos persistentes.
 - `server/vercel-handler.ts`: adaptación de streams HTTP y arranque compartido por instancia.
 - `server/runtime.ts`: configuración, autenticación y pool PostgreSQL reutilizable; libera conexiones
   inactivas antes de que Vercel suspenda una instancia con `attachDatabasePool`.
@@ -42,9 +42,9 @@ local como si fuese la partida compartida. Las partidas locales anteriores se co
    público de Supabase guardado en el repositorio. Ejecutar los comandos desde la raíz del proyecto
    para resolver esa ruta. Si Supabase cambia su CA, descargar el certificado vigente desde
    Database Settings → SSL Configuration y actualizar el archivo; mantener `sslmode=verify-full`.
-3. Habilitar **Anonymous Sign-Ins** en Supabase Auth. La identidad queda guardada en ese navegador.
-   Esta primera versión permite jugar sin formulario de registro; recuperar el mismo Elo en otro
-   dispositivo requiere vincular una cuenta, flujo todavía pendiente. En un servicio público,
+3. Mantener **Anonymous Sign-Ins** para las privadas de clientes anteriores. La interfaz actual
+   requiere una cuenta para entrar en «Batalla en línea». Activar las cuentas siguiendo
+   [la guía de cuentas](cuentas.md), incluida la segunda migración y el correo. En un servicio público,
    configurar protección CAPTCHA y límites de Auth antes de habilitar registros anónimos masivos.
 4. Copiar `.env.example` a `.env.local` y `.env.server.example` a `.env.server`; sustituir los
    ejemplos. `APP_ORIGIN` debe coincidir exactamente con la URL del navegador, incluido el puerto.
@@ -79,11 +79,11 @@ transaccional en memoria y autenticación inyectada, exclusivamente desde los ar
 3. Usar la URL de conexión del pooler de Supabase para el rol dedicado. La conexión verificada
    que funciona en local también puede configurarse en Vercel. Mantener
    `sslmode=verify-full&sslrootcert=server/certificates/prod-ca-2021.crt`:
-   `vercel.json` incluye ese certificado público en ambas funciones. Cada instancia de Vercel
+   `vercel.json` incluye ese certificado público en las funciones. Cada instancia de Vercel
    mantiene como máximo tres conexiones; el estado de las partidas sigue en PostgreSQL.
 4. Hacer **Redeploy** después de guardar las variables. Los valores `VITE_*` se incorporan durante
    la compilación. No ejecutar `pnpm start:server` en Vercel ni configurar un proxy hacia localhost;
-   las funciones ya reciben `/api/online` y `/api/health` en el mismo dominio de la web.
+   las funciones ya reciben `/api/online`, `/api/account` y `/api/health` en el mismo dominio de la web.
 5. Abrir `https://TU-DOMINIO/api/health`: debe devolver `{"ok":true}`. Esta comprobación valida el
    arranque y la configuración, pero no abre una conexión a PostgreSQL ni comprueba JWT reales.
    Después crear una privada desde un navegador y entrar con otra identidad desde otro navegador
@@ -92,11 +92,13 @@ transaccional en memoria y autenticación inyectada, exclusivamente desde los ar
 Para probar un despliegue Preview contra otra base de datos, configurar sus variables Preview
 por separado y hacer coincidir `APP_ORIGIN` con su dominio. La API comprueba el origen exacto;
 no acepta todos los dominios `*.vercel.app`. La misma configuración se aplica a dominios propios.
-No se necesitan otro proveedor Node ni una nueva migración SQL para este despliegue.
+No se necesita otro proveedor Node. La función de cuentas requiere su migración SQL adicional.
 
 ## Comportamiento
 
-Buscar partida inicia la búsqueda directamente. Todas las partidas públicas nuevas usan Fortaleza
+Buscar partida requiere una cuenta permanente e inicia la búsqueda directamente. La API rechaza
+las búsquedas de identidades anónimas aunque un cliente modificado intente enviarlas.
+Todas las partidas públicas nuevas usan Fortaleza
 con 1 punto de vida, turnos de 30 segundos, tiempo total sin límite y Frente clásico. Los bandos
 opuestos se asignan al azar. El servidor aplica estas reglas incluso si un cliente antiguo envía
 preferencias o quedan filtros anteriores en la cola; las partidas ya iniciadas conservan sus reglas.
@@ -144,7 +146,7 @@ compartido; Vercel Firewall puede complementar la protección en el borde. La fu
 los encabezados de proxy de Vercel para identificar la IP; el servidor local no confía en proxies.
 
 Los replays y los resultados en línea se conservan, pero esta entrega no incorpora clasificación
-global, vinculación de cuentas, invitación a revancha, oferta de tablas entre dispositivos ni
+global, invitación a revancha, oferta de tablas entre dispositivos ni
 recompensas XP/logros en línea. Esos controles no deben resolver localmente una partida de red.
 
 ## Verificación y límites de esta entrega

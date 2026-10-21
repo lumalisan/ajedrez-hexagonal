@@ -1,3 +1,4 @@
+import { playerStorage } from './player-storage.js';
 import { replayRecord } from './match-record.js';
 import { BASIC_SCENARIOS, SCENARIOS } from './scenarios.js';
 import type { GameEvent, GameState, MatchRecord, Player } from './types.js';
@@ -523,7 +524,7 @@ export function parseAchievementProgress(raw: string): AchievementProgress {
 
 export function loadAchievementProgress(): AchievementProgress {
   try {
-    return parseAchievementProgress(localStorage.getItem(STORAGE_KEY) ?? 'null');
+    return parseAchievementProgress(playerStorage.getItem(STORAGE_KEY) ?? 'null');
   } catch {
     return createAchievementProgress();
   }
@@ -531,7 +532,7 @@ export function loadAchievementProgress(): AchievementProgress {
 
 export function saveAchievementProgress(progress: AchievementProgress): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    playerStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
     return true;
   } catch {
     return false;
