@@ -4,6 +4,18 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
 
+const NEW_PASSWORD_RULES = [
+  { label: 'Al menos 8 caracteres', pattern: /.{8,}/u },
+  { label: 'Una letra minúscula', pattern: /[a-z]/ },
+  { label: 'Una letra mayúscula', pattern: /[A-Z]/ },
+  { label: 'Un número', pattern: /[0-9]/ },
+  { label: 'Un símbolo', pattern: /[\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/ },
+];
+const NEW_PASSWORD_PATTERN =
+  NEW_PASSWORD_RULES.map(({ pattern }) => `(?=.*${pattern.source})`).join('') + '.*';
+const NEW_PASSWORD_HINT =
+  'Al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo.';
+
 export function OnlineAccountNotice() {
   return (
     <small className="online-account-requirement">
@@ -277,6 +289,7 @@ function AccountForm({
   const { account, controller } = useAccount();
   const mode = account.dialog;
   const [password, setPassword] = useState('');
+  const [passwordEdited, setPasswordEdited] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [importGuest, setImportGuest] = useState(true);
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -297,7 +310,10 @@ function AccountForm({
                 ? controller.password(password)
                 : controller.signIn(email, password);
         void operation.then(() => {
-          if (!controller.getSnapshot().error) setPassword('');
+          if (!controller.getSnapshot().error) {
+            setPassword('');
+            setPasswordEdited(false);
+          }
         });
       }}
     >
@@ -344,9 +360,19 @@ function AccountForm({
                 type={showPassword ? 'text' : 'password'}
                 autoComplete={creatingPassword ? 'new-password' : 'current-password'}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  event.target.setCustomValidity('');
+                  setPassword(event.target.value);
+                  setPasswordEdited(true);
+                }}
+                onInvalid={(event) => {
+                  if (creatingPassword && event.currentTarget.value)
+                    event.currentTarget.setCustomValidity(NEW_PASSWORD_HINT);
+                }}
                 required
                 minLength={creatingPassword ? 8 : 1}
+                pattern={creatingPassword ? NEW_PASSWORD_PATTERN : undefined}
+                title={creatingPassword ? NEW_PASSWORD_HINT : undefined}
                 maxLength={128}
                 aria-describedby={creatingPassword ? 'account-password-hint' : undefined}
                 className="h-12 pr-12"
@@ -377,9 +403,32 @@ function AccountForm({
               </Button>
             </div>
             {creatingPassword && (
-              <small id="account-password-hint" className="text-xs text-muted">
-                Al menos 8 caracteres.
-              </small>
+              <ul
+                id="account-password-hint"
+                aria-label="Requisitos de la contraseña"
+                aria-live="polite"
+                className="m-0 grid list-none gap-1.5 p-0 text-xs leading-relaxed"
+              >
+                {NEW_PASSWORD_RULES.map(({ label, pattern }) => {
+                  const met = pattern.test(password);
+                  return (
+                    <li
+                      key={label}
+                      className={`flex items-start gap-2 ${!passwordEdited ? 'text-muted' : met ? 'text-green-400' : 'text-red-400'}`}
+                    >
+                      <span aria-hidden="true" className="w-3 shrink-0 text-center font-bold">
+                        {!passwordEdited ? '•' : met ? '✓' : '✕'}
+                      </span>
+                      <span>
+                        {passwordEdited && (
+                          <span className="sr-only">{met ? 'Cumplido: ' : 'Pendiente: '}</span>
+                        )}
+                        {label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         )}
