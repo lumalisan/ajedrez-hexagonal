@@ -140,6 +140,7 @@ export interface GameCommands {
   closeReplay(): void;
   resign(): void;
   acceptBlockade(): Promise<void>;
+  offerDraw(): void;
   revealHint(scenario: ScenarioDefinition): void;
   readyForTurn(): void;
   zoomBy(factor: number, clientX?: number, clientY?: number): void;

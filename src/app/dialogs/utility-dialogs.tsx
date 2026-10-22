@@ -113,7 +113,7 @@ export function UtilityDialogs() {
           title="¿Proponer tablas al rival?"
           confirmLabel="Proponer tablas"
           confirmAttribute="data-confirm-draw-offer"
-          onConfirm={() => commands.openDialog({ kind: 'blockade' })}
+          onConfirm={commands.offerDraw}
         >
           <p>La partida terminará en tablas únicamente si el rival acepta la propuesta.</p>
         </ConfirmationDialog>
@@ -122,13 +122,13 @@ export function UtilityDialogs() {
       return (
         <ConfirmationDialog
           eyebrow="PROPUESTA DE TABLAS"
-          title={`${PLAYER_NAMES[snapshot.state.activePlayer]} propone tablas`}
+          title={`${PLAYER_NAMES[snapshot.online.state.status === 'playing' ? (snapshot.online.state.drawOffer ?? snapshot.state.activePlayer) : snapshot.state.activePlayer]} propone tablas`}
           icon="≋"
           cancelLabel="Rechazar"
-          confirmLabel={`Aceptar como ${PLAYER_NAMES[snapshot.state.activePlayer === 0 ? 1 : 0]}`}
+          confirmLabel={`Aceptar como ${PLAYER_NAMES[snapshot.online.state.status === 'playing' ? snapshot.online.state.player : snapshot.state.activePlayer === 0 ? 1 : 0]}`}
           confirmAttribute="data-accept-blockade"
           onConfirm={() => {
-            commands.closeDialog();
+            if (snapshot.gameMode !== 'online') commands.closeDialog();
             void commands.acceptBlockade();
           }}
         >
@@ -560,7 +560,7 @@ function OutcomeDialog() {
       >
         <span className="battle-record-stats">
           <span>
-            <strong>{Math.ceil((matchRecord?.currentAction ?? state.ply) / 2)}</strong> turnos
+            <strong>{Math.ceil((state.ply + (state.passedTurnCount ?? 0)) / 2)}</strong> turnos
           </span>
           <span>
             <strong>{formatDuration(duration)}</strong> duración

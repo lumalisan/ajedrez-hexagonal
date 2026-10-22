@@ -115,6 +115,25 @@ function paragraphText(paragraph: string | RuleParagraph): string {
 }
 
 function RuleArticle({ section }: { section: RuleSection }) {
+  if (section.id === 'fortaleza') {
+    const shieldIndex = section.paragraphs.findIndex(
+      (p) => typeof p !== 'string' && p.kind === 'heading',
+    );
+    return (
+      <div className="rules-section rules-fortress-section">
+        <div className="rules-copy">
+          <h3 tabIndex={-1}>{section.title}</h3>
+          <RuleParagraphs paragraphs={section.paragraphs.slice(0, shieldIndex)} />
+        </div>
+        <UnitReference type="fortress" />
+        <div className="rules-copy">
+          <RuleParagraphs paragraphs={section.paragraphs.slice(shieldIndex)} />
+        </div>
+        <UnitReference type="antiAir" />
+        <RuleDemo demoId="fortaleza" title="Fortaleza y escudo antiaéreo" />
+      </div>
+    );
+  }
   const introductoryParagraphs = section.layoutPreview
     ? section.paragraphs.slice(0, 1)
     : section.paragraphs;
@@ -122,7 +141,17 @@ function RuleArticle({ section }: { section: RuleSection }) {
     <div
       className={`rules-section${RULE_UNIT_APPEARANCES[section.id] ? ' rules-section-with-reference' : ''}`}
     >
-      <div className="rules-copy">
+      <div className={`rules-copy${section.id === 'descripcion' ? ' rules-description' : ''}`}>
+        {section.id === 'descripcion' && (
+          <img
+            className="story-illustration"
+            src={`${import.meta.env.BASE_URL}story/chapter-10.webp`}
+            alt="Dos ejércitos de máquinas cian y ámbar despliegan sus fortalezas en el año 2488."
+            width="1536"
+            height="1024"
+            decoding="async"
+          />
+        )}
         <h3 tabIndex={-1}>{section.title}</h3>
         <RuleParagraphs paragraphs={introductoryParagraphs} />
       </div>
@@ -156,6 +185,21 @@ function RuleArticle({ section }: { section: RuleSection }) {
         </>
       ) : null}
     </div>
+  );
+}
+
+function UnitReference({ type }: { type: 'fortress' | 'antiAir' }) {
+  return (
+    <figure className="rule-unit-reference">
+      <img
+        src={`${import.meta.env.BASE_URL}units/${type}.webp`}
+        alt={UNIT_APPEARANCE[type].description}
+        width="768"
+        height="512"
+        loading="lazy"
+        decoding="async"
+      />
+    </figure>
   );
 }
 
@@ -261,12 +305,12 @@ function RuleLayoutPreview() {
         />
         <RendererStatus canvasRef={canvasRef} overlay />
       </div>
-      <figcaption id="rules-layout-caption">
+      <figcaption id="rules-layout-caption" className="sr-only">
         Cian abajo · Ámbar arriba · {army.length} piezas por bando
       </figcaption>
       <p
         id="rules-layout-description"
-        className="mb-0 mt-3 text-sm leading-relaxed text-muted"
+        className="sr-only"
         role="status"
         aria-live="polite"
         aria-atomic="true"

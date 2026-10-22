@@ -103,6 +103,8 @@ export interface GameState {
   pieces: Piece[];
   activePlayer: Player;
   ply: number;
+  /** Automatic passes, separate from played actions. Optional for older v2 saves. */
+  passedTurnCount?: number;
   firstFortressDamageBy: Player | null;
   positionCounts: Record<string, number>;
   /**

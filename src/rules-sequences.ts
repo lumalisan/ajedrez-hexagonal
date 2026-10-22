@@ -70,33 +70,27 @@ export const RULE_SEQUENCES: Record<string, RuleSequence[]> = {
     {
       pieces: [
         soldier('actor', 0, 0, 2),
+        unit('drone', 'drone', 0, 3, 2),
         { id: 'fort-amber', type: 'fortress', owner: 1, position: at(0, 4), hp: 1 },
-      ],
-      steps: [
-        move('Animación 1 · El Asaltador avanza de [+0, +2] a [+0, +3].', 'actor', 0, 3),
-        move(
-          'Animación 1 · El Asaltador destruye la Fortaleza de 1 PV en [+0, +4] y se sacrifica.',
-          'actor',
-          0,
-          4,
-        ),
-      ],
-    },
-    {
-      pieces: [
-        unit('actor', 'drone', 0, 3, 2),
         { id: 'anti-air', type: 'antiAir', owner: 1, position: at(0, 5) },
       ],
       steps: [
         {
           ...move(
-            'Animación 2 · El Dron intenta llegar a [+0, +5]; el escudo antiaéreo lo intercepta y destruye en [+1, +4].',
-            'actor',
+            'El Dron intenta llegar a [+0, +5]; el escudo antiaéreo lo intercepta y destruye en [+1, +4].',
+            'drone',
             1,
             4,
           ),
           intendedDestination: at(0, 5),
         },
+        move('El Asaltador avanza de [+0, +2] a [+0, +3].', 'actor', 0, 3),
+        move(
+          'El Asaltador destruye la Fortaleza de 1 PV en [+0, +4] y se sacrifica.',
+          'actor',
+          0,
+          4,
+        ),
       ],
     },
   ],

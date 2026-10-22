@@ -214,7 +214,7 @@ export function HomeScreen() {
           onClick={() => commands.openDialog({ kind: 'story' })}
         >
           <MenuIcon kind="dilemma" />
-          <span>El dilema de Hexfortia</span>
+          <span>El origen de Hexfortia</span>
         </button>
         <button
           type="button"

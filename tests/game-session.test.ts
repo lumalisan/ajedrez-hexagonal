@@ -4,6 +4,7 @@ import type { AiStrategy } from '../src/ai-strategy';
 import type { SearchMetadata } from '../src/ai';
 import type { GameRenderer, GameSession, GameSnapshot } from '../src/app/contracts';
 import { createGameSession } from '../src/app/game-session';
+import { MatchController } from '../src/match-controller';
 import { loadAchievementProgress } from '../src/achievements';
 import { createPlayerProgression, savePlayerProgression, xpForLevel } from '../src/progression';
 import { getAllLegalActions } from '../src/engine';
@@ -256,6 +257,104 @@ describe('sesión que conecta React con el juego', () => {
     await session.commands.commitPending();
     expect(session.getSnapshot().matchRecord?.currentAction).toBe(0);
     expect(request).toHaveBeenCalledOnce();
+  });
+
+  it.each([0, 1] as const)(
+    'registra estadísticas, logros y XP de una privada para el jugador %s sin alterar Elo',
+    async (player) => {
+      const config = createClassicConfig({ mode: 'local' });
+      config.definitionId = 'online:private:test';
+      const record = createMatchRecord(config);
+      const response: OnlineState = {
+        status: 'playing',
+        matchId: 'match',
+        player,
+        revision: 0,
+        record,
+        elo: 1000,
+        serverNow: Date.now(),
+      };
+      const request = vi.fn<OnlineClient['request']>().mockResolvedValue(response);
+      const session = createGameSession({ onlineClient: { request } });
+      sessions.push(session);
+      session.commands.startOnlineSearch();
+      await vi.advanceTimersByTimeAsync(0);
+      const controller = new MatchController(record);
+      controller.resign(player === 0 ? 1 : 0);
+      request.mockResolvedValue({ ...response, record: controller.record, revision: 1 });
+      session.commands.resumeOnline();
+      await vi.advanceTimersByTimeAsync(0);
+      const result = session.getSnapshot();
+      expect(result.progression.matches[record.createdAt]).toMatchObject({
+        mode: 'online',
+        result: 1,
+        rated: false,
+      });
+      expect(result.progression.matches[record.createdAt].battle?.rewards).toContainEqual({
+        label: 'Victoria en línea',
+        xp: 100,
+      });
+      expect(result.progression.ratings.online).toBe(1000);
+      expect(result.achievements.counters).toMatchObject({ matches: 1, wins: 1, localMatches: 0 });
+      session.commands.resumeOnline();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.getSnapshot().progression.xp).toBe(result.progression.xp);
+      expect(session.getSnapshot().achievements.counters.matches).toBe(1);
+    },
+  );
+
+  it('envía propuestas al servidor y permite aceptar o rechazar la propuesta del rival', async () => {
+    const config = createClassicConfig({ mode: 'local' });
+    config.definitionId = 'online:private:test';
+    const record = createMatchRecord(config);
+    const response: OnlineState = {
+      status: 'playing',
+      matchId: 'match',
+      player: 1,
+      revision: 0,
+      record,
+      elo: 1000,
+      serverNow: Date.now(),
+      drawOffer: null,
+    };
+    const request = vi.fn<OnlineClient['request']>().mockResolvedValue(response);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.startOnlineSearch();
+    await vi.advanceTimersByTimeAsync(0);
+    session.commands.offerDraw();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.at(-1)?.[0]).toEqual({
+      kind: 'offer-draw',
+      matchId: 'match',
+      revision: 0,
+    });
+    request.mockResolvedValue({ ...response, revision: 1, drawOffer: 0 });
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().dialog?.kind).toBe('blockade');
+    session.commands.closeDialog();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.at(-1)?.[0]).toEqual({
+      kind: 'respond-draw',
+      matchId: 'match',
+      revision: 1,
+      accept: false,
+    });
+    request.mockResolvedValue({ ...response, revision: 2, drawOffer: null });
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    request.mockResolvedValue({ ...response, revision: 3, drawOffer: 0 });
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    await session.commands.acceptBlockade();
+    expect(request.mock.calls.at(-1)?.[0]).toEqual({
+      kind: 'respond-draw',
+      matchId: 'match',
+      revision: 3,
+      accept: true,
+    });
+    expect(session.getSnapshot().state.outcome).toBeNull();
   });
 
   it.each(['searching', 'private-waiting'] as const)(
@@ -1123,6 +1222,11 @@ describe('sesión que conecta React con el juego', () => {
 
     expect(session.getSnapshot().lastEvents).toContainEqual({ type: 'pass', owner: 1 });
     expect(session.getSnapshot().state).toMatchObject({ activePlayer: 0, ply: 1, outcome: null });
+    expect(session.getSnapshot().state.passedTurnCount).toBe(1);
+    expect(
+      replayRecord(parseRecord(serializeRecord(session.getSnapshot().matchRecord!)))
+        .passedTurnCount,
+    ).toBe(1);
     expect(session.getSnapshot().matchRecord?.clock).toMatchObject({
       activePlayer: 0,
       remainingMs: [271_000, 300_000],
@@ -1253,7 +1357,7 @@ describe('sesión que conecta React con el juego', () => {
     },
   );
 
-  it('vacía la orden preparada y bloquea la elección humana durante la autojugada pendiente', async () => {
+  it('vacía la orden preparada y permite inspección sin órdenes durante la autojugada pendiente', async () => {
     const search = deferred<GameAction | null>();
     collaborators.chooseAction.mockReturnValueOnce(search.promise);
     const session = createSession();
@@ -1283,7 +1387,7 @@ describe('sesión que conecta React con el juego', () => {
     session.commands.prepareAction(action);
     await session.commands.commitPending();
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(session.getSnapshot().selectedId).toBeNull();
+    expect(session.getSnapshot().selectedId).toBe(action.pieceId);
     expect(session.getSnapshot().pendingAction).toBeNull();
     expect(session.getSnapshot().mode).toEqual({ kind: 'default' });
     expect(session.getSnapshot().state).toEqual(before);
@@ -1845,6 +1949,45 @@ describe('sesión que conecta React con el juego', () => {
       ).toEqual(session.getSnapshot().state.outcome);
     },
   );
+
+  it('permite inspeccionar ambos bandos mientras la IA piensa sin preparar ni ejecutar órdenes', async () => {
+    const search = deferred<GameAction | null>();
+    collaborators.chooseAction.mockReturnValueOnce(search.promise);
+    const session = createSession();
+    session.commands.loadRecord(savedRecord(1, 'machine'));
+    const before = structuredClone(session.getSnapshot().state);
+    expect(session.getSnapshot().machineThinking).toBe(true);
+    for (const owner of [0, 1]) {
+      const piece = before.pieces.find(
+        (candidate) => candidate.owner === owner && candidate.type === 'soldier',
+      )!;
+      session.commands.selectPiece(piece.id);
+      expect(session.getSnapshot().selectedId).toBe(piece.id);
+      expect(session.getSnapshot().visibleActions.length).toBeGreaterThan(0);
+      const action = session.getSnapshot().visibleActions[0];
+      session.commands.prepareAction(action);
+      const move = session
+        .getSnapshot()
+        .visibleActions.find((candidate) => candidate.kind === 'move');
+      if (move?.kind === 'move') session.commands.selectHex(move.to);
+      await session.commands.commitPending();
+      expect(session.getSnapshot().pendingAction).toBeNull();
+      expect(session.getSnapshot().state).toEqual(before);
+      session.commands.clearSelection();
+      session.commands.selectHex(piece.position);
+      expect(session.getSnapshot().selectedId).toBe(piece.id);
+    }
+    session.commands.clearSelection();
+    session.commands.selectNextPiece(false);
+    expect(
+      before.pieces.find((piece) => piece.id === session.getSnapshot().selectedId)?.owner,
+    ).toBe(0);
+    const reply = rotation(before);
+    search.resolve(reply);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(session.getSnapshot().state.ply).toBe(before.ply + 1);
+    expect(session.getSnapshot().selectedId).toBeNull();
+  });
 
   it('conserva las animaciones de órdenes con el idle desactivado por defecto', async () => {
     const session = createSession();

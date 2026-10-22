@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { sameAction } from '../src/action-identity.js';
 import { chooseMachineAction } from '../src/ai.js';
-import { createGameState, getAllLegalActions } from '../src/engine.js';
+import { createGameState, getAllLegalActions, declareBlockade } from '../src/engine.js';
 import { createClassicConfig } from '../src/game-config.js';
 import { MatchController } from '../src/match-controller.js';
 import { createMatchRecord, replayRecord } from '../src/match-record.js';
@@ -53,7 +53,13 @@ export class OnlineService {
   ): Promise<OnlineState> {
     if (!publicAllowed && request.kind === 'search')
       throw new OnlineError('Inicia sesión con una cuenta para buscar partida.', 403);
-    if (request.kind === 'action' || request.kind === 'resign' || request.kind === 'finish') {
+    if (
+      request.kind === 'action' ||
+      request.kind === 'resign' ||
+      request.kind === 'finish' ||
+      request.kind === 'offer-draw' ||
+      request.kind === 'respond-draw'
+    ) {
       if (typeof request.matchId !== 'string' || !/^[0-9a-f-]{36}$/i.test(request.matchId))
         throw new OnlineError('Partida no válida.');
       return this.repository.transaction(`match:${request.matchId}`, async (tx) => {
@@ -70,12 +76,33 @@ export class OnlineService {
           await tx.saveMatch(match);
           return { status: 'idle' };
         }
-        if (!state.outcome && request.kind === 'resign') {
+        if (request.kind === 'offer-draw' || request.kind === 'respond-draw') {
+          if (state.outcome || request.revision !== match.revision)
+            throw new OnlineError('La partida ha cambiado. Actualiza la posición.', 409);
+          if (request.kind === 'offer-draw') {
+            if (match.drawOffer != null)
+              throw new OnlineError('Ya hay una propuesta pendiente.', 409);
+            match.drawOffer = player;
+          } else {
+            if (typeof request.accept !== 'boolean') throw new OnlineError('Respuesta no válida.');
+            if (match.drawOffer == null || match.drawOffer === player)
+              throw new OnlineError('No hay una propuesta del rival.', 409);
+            if (request.accept) {
+              const result = declareBlockade(state);
+              if (!result.ok || !result.state.outcome)
+                throw new OnlineError('No se pueden acordar tablas.');
+              controller.pauseClock(this.now());
+              controller.conclude(result.state.outcome);
+            }
+            match.drawOffer = null;
+          }
+        } else if (!state.outcome && request.kind === 'resign') {
           controller.resign(player);
         } else if (request.kind === 'action') {
           if (state.outcome || request.revision !== match.revision)
             throw new OnlineError('La partida ha cambiado. Actualiza la posición.', 409);
           if (player !== state.activePlayer) throw new OnlineError('Es el turno del rival.', 409);
+          match.drawOffer = null;
           const action = canonicalAction(getAllLegalActions(state), request.action);
           if (!action || !controller.commit(action).ok)
             throw new OnlineError('La orden no es legal.');
@@ -298,6 +325,7 @@ export class OnlineService {
           controller.switchClock(controller.store.getState().game.activePlayer, deadline, true);
           controller.resumeClock(deadline);
         }
+        match.drawOffer = null;
         match.revision++;
       } else break;
     }
@@ -312,6 +340,7 @@ export class OnlineService {
     const outcome = replayRecord(match.record).outcome;
     if (!outcome || match.settled) return;
     match.settled = true;
+    match.drawOffer = null;
     if (!match.ranked) return;
     // Stable row order prevents deadlocks when several matches finish together.
     const players = new Map<string, OnlinePlayer>();
@@ -342,6 +371,7 @@ export class OnlineService {
       record: match.record,
       elo: (await tx.player(id))?.elo ?? 1000,
       serverNow: this.now(),
+      drawOffer: match.drawOffer ?? null,
     };
   }
 

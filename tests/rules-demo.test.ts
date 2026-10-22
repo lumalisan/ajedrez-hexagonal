@@ -3,6 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, getLegalActionsForPiece } from '../src/engine';
 import { createRuleDemoScenes, RULE_DEMO_IDS, RULE_DEMO_SCENE_LABELS } from '../src/rules-demo';
 
+it('unifica la intercepción aérea y el asalto a la fortaleza con las cuatro piezas iniciales', () => {
+  const scenes = createRuleDemoScenes('fortaleza');
+  expect(scenes.map((scene) => scene.sequence)).toEqual([0, 0, 0]);
+  expect(scenes[0].state.pieces.filter((piece) => !piece.id.startsWith('demo-'))).toHaveLength(4);
+  expect(scenes[0].intendedDestination).toEqual({ q: 0, r: 5 });
+  expect(applyAction(scenes[0].state, scenes[0].action).events).toContainEqual(
+    expect.objectContaining({ type: 'intercept' }),
+  );
+  expect(scenes[1].state.pieces.some((piece) => piece.id === 'drone')).toBe(false);
+  expect(scenes[1].action).toMatchObject({ to: { q: 0, r: 3 } });
+  const final = applyAction(scenes[2].state, scenes[2].action).state;
+  expect(final.outcome).toMatchObject({ winner: 0 });
+  expect(final.pieces.some((piece) => piece.id === 'actor' || piece.id === 'fort-amber')).toBe(
+    false,
+  );
+});
+
 describe.each(RULE_DEMO_IDS)('demo de reglas: %s', (demoId) => {
   it('resuelve todas sus escenas mediante acciones legales del motor', () => {
     const scenes = createRuleDemoScenes(demoId);
@@ -27,6 +44,7 @@ describe.each(RULE_DEMO_IDS)('demo de reglas: %s', (demoId) => {
         demoId === 'fortaleza' &&
         scene.sequence === 0 &&
         scene.action.kind === 'move' &&
+        scene.action.to.q === 0 &&
         scene.action.to.r === 4
       ) {
         expect(result.state.outcome).toMatchObject({ winner: 0 });

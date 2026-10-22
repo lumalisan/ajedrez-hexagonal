@@ -17,6 +17,8 @@ const REQUEST_KINDS = [
   'join-private',
   'cancel',
   'action',
+  'offer-draw',
+  'respond-draw',
   'resign',
   'finish',
 ];

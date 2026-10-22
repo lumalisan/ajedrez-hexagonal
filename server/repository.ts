@@ -24,6 +24,7 @@ export interface OnlineMatch {
   record: MatchRecord;
   revision: number;
   ranked: boolean;
+  drawOffer?: 0 | 1 | null;
   settled: boolean;
   finishedBy: string[];
 }

@@ -26,6 +26,89 @@ function privateWaiting(state: OnlineState) {
 }
 
 describe('servicio multijugador con almacenamiento transaccional', () => {
+  it.each([true, false])('negocia tablas con el rival (aceptar: %s)', async (accept) => {
+    const repository = new MemoryOnlineRepository();
+    const service = new OnlineService(repository, () => 1000);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    const offer = playing(
+      await service.request(a, { kind: 'offer-draw', matchId: match.matchId, revision: 0 }),
+    );
+    expect(offer.drawOffer).toBe(offer.player);
+    expect(replayRecord(offer.record).outcome).toBeNull();
+    const polled = playing(await service.request(b, { kind: 'state' }));
+    expect(polled.drawOffer).not.toBe(polled.player);
+    await expect(
+      service.request(c, {
+        kind: 'respond-draw',
+        matchId: match.matchId,
+        revision: offer.revision,
+        accept,
+      }),
+    ).rejects.toThrow('No perteneces');
+    await expect(
+      service.request(a, {
+        kind: 'respond-draw',
+        matchId: match.matchId,
+        revision: offer.revision,
+        accept,
+      }),
+    ).rejects.toThrow('No hay una propuesta del rival');
+    await expect(
+      service.request(b, { kind: 'respond-draw', matchId: match.matchId, revision: 0, accept }),
+    ).rejects.toThrow('ha cambiado');
+    const ended = playing(
+      await service.request(b, {
+        kind: 'respond-draw',
+        matchId: match.matchId,
+        revision: offer.revision,
+        accept,
+      }),
+    );
+    expect(ended.drawOffer).toBeNull();
+    expect(ended.record.currentAction).toBe(0);
+    expect(replayRecord(ended.record).outcome).toEqual(
+      accept ? { type: 'draw', reason: 'blockade' } : null,
+    );
+    expect(repository.players.get(a)?.played).toBe(accept ? 1 : 0);
+    await expect(
+      service.request(b, {
+        kind: 'respond-draw',
+        matchId: match.matchId,
+        revision: ended.revision,
+        accept,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('retira la propuesta cuando se juega y rechaza aceptaciones antiguas', async () => {
+    const repository = new MemoryOnlineRepository();
+    const service = new OnlineService(repository, () => 1000);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    const offer = playing(
+      await service.request(a, { kind: 'offer-draw', matchId: match.matchId, revision: 0 }),
+    );
+    const state = replayRecord(offer.record);
+    const active = repository.matches.get(match.matchId)!.players[state.activePlayer];
+    const moved = playing(
+      await service.request(active, {
+        kind: 'action',
+        matchId: match.matchId,
+        revision: offer.revision,
+        action: getAllLegalActions(state)[0],
+      }),
+    );
+    expect(moved.drawOffer).toBeNull();
+    await expect(
+      service.request(b, {
+        kind: 'respond-draw',
+        matchId: match.matchId,
+        revision: moved.revision,
+        accept: true,
+      }),
+    ).rejects.toThrow('No hay una propuesta');
+  });
   it('conserva la espera al reintentar e ignora los filtros antiguos de la cola y del cliente', async () => {
     let now = 0;
     const repository = new MemoryOnlineRepository();
@@ -99,6 +182,9 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     ).rejects.toThrow('No existe una sala');
     await service.request(a, { kind: 'resign', matchId: joined.matchId });
     expect(repository.players.get(a)?.elo).toBe(1000);
+    expect(repository.players.get(b)?.elo).toBe(1000);
+    expect(repository.players.get(a)?.played).toBe(0);
+    expect(repository.players.get(b)?.played).toBe(0);
   });
   it('rechaza jugadas del rival, ilegales, repetidas y ajenas a la partida', async () => {
     const repository = new MemoryOnlineRepository();

@@ -56,6 +56,7 @@ export interface MatchEvidence {
   completedAt?: string;
   result?: 0 | 0.5 | 1;
   opponentRating?: number;
+  rated?: boolean;
   battle?: BattleProgression;
 }
 export interface PlayerProgression {
@@ -297,14 +298,15 @@ function unchanged(progress: PlayerProgression): ProgressionUpdate {
 export function evaluateProgressionMatch(
   progress: PlayerProgression,
   record: MatchRecord,
-  options: { source: 'live' | 'import' | 'replay'; at: string },
+  options: { source: 'live' | 'import' | 'replay'; at: string; onlinePlayer?: Player },
 ): ProgressionUpdate {
   if (
     options.source !== 'live' ||
     !progress.registeredMatchIds.includes(record.createdAt) ||
     progress.matches[record.createdAt]?.completedAt ||
     record.academySession ||
-    !['classic', 'skirmish', 'tactical', 'siege'].includes(record.config.definitionId) ||
+    (!['classic', 'skirmish', 'tactical', 'siege'].includes(record.config.definitionId) &&
+      !(record.config.definitionId.startsWith('online:') && options.onlinePlayer !== undefined)) ||
     record.currentAction !== record.actions.length
   )
     return unchanged(progress);
@@ -315,9 +317,10 @@ export function evaluateProgressionMatch(
     return unchanged(progress);
   }
   const machineIndex = record.config.participants.findIndex((p) => p.kind === 'machine');
-  const owner: Player = machineIndex === 0 ? 1 : 0;
+  const owner: Player = options.onlinePlayer ?? (machineIndex === 0 ? 1 : 0);
   if (record.config.participants[owner].kind !== 'human') return unchanged(progress);
-  const mode = machineIndex === -1 ? 'local' : 'machine';
+  const mode: ProgressionMode =
+    options.onlinePlayer !== undefined ? 'online' : machineIndex === -1 ? 'local' : 'machine';
   const difficulty =
     machineIndex === -1
       ? 0
@@ -331,6 +334,7 @@ export function evaluateProgressionMatch(
   const prior = next.matches[record.createdAt];
   const rewards: XpReward[] = [...(prior?.battle?.rewards ?? [])];
   const evidence: MatchEvidence = { mode, difficulty, metrics: { ...prior?.metrics } };
+  if (mode === 'online') evidence.rated = !record.config.definitionId.startsWith('online:private:');
   for (const [key, value] of Object.entries(metrics))
     evidence.metrics[key] = Math.max(evidence.metrics[key] ?? 0, value);
   next.matches[record.createdAt] = evidence;
@@ -343,15 +347,29 @@ export function evaluateProgressionMatch(
     next.registeredMatchIds = next.registeredMatchIds.filter((id) => id !== record.createdAt);
     addCompletionMetrics(evidence.metrics, record, final, owner, win, day);
     const duration = Math.min(50, Math.floor((final.ply - record.initialState.ply) / 4));
-    const base = mode === 'local' ? 0 : (win ? [25, 50, 75, 100] : [15, 25, 35, 50])[difficulty];
+    const base =
+      mode === 'online'
+        ? win
+          ? 100
+          : 50
+        : mode === 'local'
+          ? 0
+          : (win ? [25, 50, 75, 100] : [15, 25, 35, 50])[difficulty];
     next.xp += base + Math.max(0, duration);
     if (base)
       rewards.push({
-        label: win
-          ? 'Victoria contra Hexfortia'
-          : result === 0.5
-            ? 'Tablas contra Hexfortia'
-            : 'Partida contra Hexfortia',
+        label:
+          mode === 'online'
+            ? win
+              ? 'Victoria en línea'
+              : result === 0.5
+                ? 'Tablas en línea'
+                : 'Partida en línea'
+            : win
+              ? 'Victoria contra Hexfortia'
+              : result === 0.5
+                ? 'Tablas contra Hexfortia'
+                : 'Partida contra Hexfortia',
         xp: base,
       });
     if (duration > 0) rewards.push({ label: 'Turnos jugados', xp: duration });
@@ -608,14 +626,16 @@ export function rankingSummary(
     )
     .sort((a, b) => a.completedAt!.localeCompare(b.completedAt!));
   let monthlyRating = 1000;
-  matches.forEach((match, index) => {
-    monthlyRating = calculateElo(
-      monthlyRating,
-      match.opponentRating ?? 1000,
-      match.result ?? 0.5,
-      index,
-    );
-  });
+  matches
+    .filter((match) => match.rated !== false)
+    .forEach((match, index) => {
+      monthlyRating = calculateElo(
+        monthlyRating,
+        match.opponentRating ?? 1000,
+        match.result ?? 0.5,
+        index,
+      );
+    });
   return {
     played: matches.length,
     wins: matches.filter((m) => m.result === 1).length,
@@ -685,6 +705,7 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
         mode: match.mode as ProgressionMode,
         difficulty: Math.min(3, count(match.difficulty)),
         metrics,
+        ...(typeof match.rated === 'boolean' ? { rated: match.rated } : {}),
         ...(timestamp(match.completedAt) ? { completedAt: match.completedAt } : {}),
         ...(match.result === 0 || match.result === 0.5 || match.result === 1
           ? { result: match.result }

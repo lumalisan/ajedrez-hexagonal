@@ -102,14 +102,15 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
         { q: 0, r: 4 },
       ]),
     );
-    expect(fortressFrame?.every(({ q, r }) => q === 0 && r < 5)).toBe(true);
+    expect(fortressFrame).toContainEqual({ q: 3, r: 2 });
+    expect(fortressFrame).toContainEqual({ q: 0, r: 5 });
 
     demo.advanceStep();
     demo.advanceStep();
     demo.advanceStep();
     expect(renderer.setFrame).toHaveBeenCalledTimes(1);
     demo.advanceStep();
-    expect(renderer.setFrame).toHaveBeenCalledTimes(2);
+    expect(renderer.setFrame).toHaveBeenCalledTimes(1);
     expect(renderer.setFrame.mock.lastCall?.[0]).toEqual(
       expect.arrayContaining([
         { q: 3, r: 2 },
@@ -128,8 +129,6 @@ describe('ciclo de vida de las demostraciones controladas por React', () => {
       reducedMotion: false,
       highContrast: false,
     });
-    for (let step = 0; step < 4; step += 1) demo.advanceStep();
-    demo.togglePlayback();
     await vi.advanceTimersByTimeAsync(1_700);
     expect(renderer.setModel.mock.lastCall?.[0]).toMatchObject({
       pending: { kind: 'move', to: { q: 1, r: 4 } },

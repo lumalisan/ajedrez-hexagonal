@@ -14,7 +14,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p1-02',
     title: 'Licenciado en Hexfortia',
-    description: 'Lee «El dilema de Hexfortia».',
+    description: 'Lee «El origen de Hexfortia».',
     tier: 0,
     hidden: false,
     modes: [],

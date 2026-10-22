@@ -330,12 +330,15 @@ export function evaluateActionAchievements(
   record: MatchRecord,
   before: GameState,
   events: readonly GameEvent[],
-  options: { source: 'live' | 'import' | 'replay'; at: string },
+  options: { source: 'live' | 'import' | 'replay'; at: string; onlinePlayer?: Player },
 ): AchievementUpdate {
   const unchanged = { progress, unlocked: [] };
-  if (!canEarnMatchAchievements(progress, record, options.source) || before.outcome)
+  if (
+    !canEarnMatchAchievements(progress, record, options.source, options.onlinePlayer) ||
+    before.outcome
+  )
     return unchanged;
-  const humans = humanPlayers(record);
+  const humans = options.onlinePlayer === undefined ? humanPlayers(record) : [options.onlinePlayer];
   if (!humans.length) return unchanged;
   const credited = new Set(progress.processedTacticalEvents[record.createdAt] ?? []);
   const previousSize = credited.size;
@@ -353,10 +356,11 @@ export function evaluateActionAchievements(
 export function evaluateMatchAchievements(
   progress: AchievementProgress,
   record: MatchRecord,
-  options: { source: 'live' | 'import' | 'replay'; at: string },
+  options: { source: 'live' | 'import' | 'replay'; at: string; onlinePlayer?: Player },
 ): AchievementUpdate {
   const unchanged = { progress, unlocked: [] };
-  if (!canEarnMatchAchievements(progress, record, options.source)) return unchanged;
+  if (!canEarnMatchAchievements(progress, record, options.source, options.onlinePlayer))
+    return unchanged;
 
   let finalState: GameState;
   try {
@@ -365,7 +369,7 @@ export function evaluateMatchAchievements(
     return unchanged;
   }
   if (!finalState.outcome) return unchanged;
-  const humans = humanPlayers(record);
+  const humans = options.onlinePlayer === undefined ? humanPlayers(record) : [options.onlinePlayer];
   if (!humans.length) return unchanged;
   assertTimestamp(options.at);
   const next = structuredClone(progress);
@@ -382,7 +386,7 @@ export function evaluateMatchAchievements(
     const winner = outcome.winner;
     const loser = winner === 0 ? 1 : 0;
     if (local) earned.add('local-win');
-    else {
+    else if (options.onlinePlayer === undefined) {
       const difficulty = record.config.participants[loser].difficulty ?? 'recruit';
       const difficultyAchievement: Record<string, AchievementId | undefined> = {
         recruit: 'ai-recruit',
@@ -590,14 +594,16 @@ function canEarnMatchAchievements(
   progress: AchievementProgress,
   record: MatchRecord,
   source: 'live' | 'import' | 'replay',
+  onlinePlayer?: Player,
 ): boolean {
   return (
     source === 'live' &&
     progress.registeredMatchIds.includes(record.createdAt) &&
     !progress.processedMatchIds.includes(record.createdAt) &&
-    ['classic', 'skirmish', 'tactical', 'siege'].includes(record.config.definitionId) &&
+    (['classic', 'skirmish', 'tactical', 'siege'].includes(record.config.definitionId) ||
+      (record.config.definitionId.startsWith('online:') && onlinePlayer !== undefined)) &&
     !record.academySession &&
-    record.currentAction > 0 &&
+    (record.currentAction > 0 || onlinePlayer !== undefined) &&
     record.currentAction === record.actions.length
   );
 }

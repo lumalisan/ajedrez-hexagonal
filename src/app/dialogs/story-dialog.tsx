@@ -63,11 +63,11 @@ export function StoryDialog() {
       <aside className="rules-sidebar">
         <div className="rules-heading story-heading">
           <div>
-            <h2>El dilema de Hexfortia</h2>
+            <h2>El origen de Hexfortia</h2>
           </div>
         </div>
         <p>Selecciona un capítulo para descubrir la historia del juego.</p>
-        <TabsList className="rules-navigation" aria-label="Capítulos de El dilema de Hexfortia">
+        <TabsList className="rules-navigation" aria-label="Capítulos de El origen de Hexfortia">
           {STORY_CHAPTERS.map((chapter) => (
             <TabsTrigger
               key={chapter.id}

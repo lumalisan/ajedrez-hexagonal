@@ -371,6 +371,21 @@ export function createGameSession(
 
   function closeDialog(): void {
     if (
+      currentDialog?.kind === 'blockade' &&
+      gameMode === 'online' &&
+      onlineState.status === 'playing' &&
+      onlineState.drawOffer != null &&
+      onlineState.drawOffer !== onlineState.player
+    ) {
+      void requestOnline({
+        kind: 'respond-draw',
+        matchId: onlineState.matchId,
+        revision: onlineState.revision,
+        accept: false,
+      });
+    }
+
+    if (
       onlineState.status === 'searching' ||
       onlineState.status === 'private-waiting' ||
       currentDialog?.kind === 'online-search'
@@ -928,9 +943,8 @@ export function createGameSession(
   }
 
   function handleCell(hex: Hex): void {
-    if (isRemoteTurn() || (gameMode === 'online' && onlineBusy)) return;
     if (currentDialog?.kind === 'first-turn') return;
-    if (animating || isMachineTurn() || replayCursor !== null) return;
+    if (animating || replayCursor !== null) return;
     const step = tutorialStep();
     if (tutorial?.completed || (step?.interaction === 'next' && step.id !== '10.2')) return;
     if (step?.id === '10.2') {
@@ -984,7 +998,13 @@ export function createGameSession(
         return;
       }
     }
-    if (!state.outcome && selected?.owner === state.activePlayer) {
+    if (
+      !state.outcome &&
+      !isMachineTurn() &&
+      !isRemoteTurn() &&
+      !(gameMode === 'online' && onlineBusy) &&
+      selected?.owner === state.activePlayer
+    ) {
       const candidates = actionsAtHex(state, visibleActions, hex);
       // Preserve the normal maneuver choice; prepareAction still rejects overflight.
       const matching =
@@ -1025,7 +1045,7 @@ export function createGameSession(
 
   function selectPiece(pieceId: string): void {
     if (currentDialog?.kind === 'first-turn') return;
-    if (replayCursor !== null || animating || isMachineTurn()) return;
+    if (replayCursor !== null || animating) return;
     if (!tutorialAllowsPiece(pieceId)) return;
     const piece = getPiece(state, pieceId);
     if (!piece) return;
@@ -1452,12 +1472,35 @@ export function createGameSession(
     }
     persistCurrentMatch();
     const completedAt = new Date().toISOString();
-    if (!activeScenario && replayCursor === null && gameMode !== 'online') {
+    if (!activeScenario && replayCursor === null) {
       acceptProgression(
-        evaluateProgressionMatch(progression, matchRecord, { source: 'live', at: completedAt }),
+        evaluateProgressionMatch(progression, matchRecord, {
+          source: 'live',
+          at: completedAt,
+          onlinePlayer: onlineState.status === 'playing' ? onlineState.player : undefined,
+        }),
       );
+      if (onlineState.status === 'playing') {
+        let before = matchRecord.initialState;
+        for (const action of matchRecord.actions) {
+          const result = applyAction(before, action, resolutionRulesForConfig(matchRecord.config));
+          if (!result.ok) break;
+          acceptAchievements(
+            evaluateActionAchievements(achievements, matchRecord, before, result.events, {
+              source: 'live',
+              at: completedAt,
+              onlinePlayer: onlineState.player,
+            }),
+          );
+          before = result.state;
+        }
+      }
       acceptAchievements(
-        evaluateMatchAchievements(achievements, matchRecord, { source: 'live', at: completedAt }),
+        evaluateMatchAchievements(achievements, matchRecord, {
+          source: 'live',
+          at: completedAt,
+          onlinePlayer: onlineState.status === 'playing' ? onlineState.player : undefined,
+        }),
       );
     }
     appendMatchHistory({
@@ -1672,7 +1715,18 @@ export function createGameSession(
   }
 
   async function acceptBlockade(): Promise<void> {
-    if (gameMode === 'online') return;
+    if (gameMode === 'online') {
+      if (onlineState.status === 'playing') {
+        currentDialog = null;
+        await requestOnline({
+          kind: 'respond-draw',
+          matchId: onlineState.matchId,
+          revision: onlineState.revision,
+          accept: true,
+        });
+      }
+      return;
+    }
     if (
       disposed ||
       !matchController ||
@@ -2294,10 +2348,15 @@ export function createGameSession(
     }
     matchRecord = next.record;
     matchConfig = next.record.config;
+    if (entering) registerCurrentAchievementMatch();
     matchController = new MatchController(next.record);
     state = matchController.store.getState().game;
     progression = { ...progression, ratings: { ...progression.ratings, online: next.elo } };
     savePlayerProgression(progression);
+    if (next.drawOffer != null && next.drawOffer !== next.player && !state.outcome) {
+      if (previous.status !== 'playing' || previous.drawOffer !== next.drawOffer)
+        currentDialog = { kind: 'blockade' };
+    } else if (currentDialog?.kind === 'blockade') currentDialog = null;
     if (changed) {
       selectedId = null;
       pendingAction = null;
@@ -2489,8 +2548,9 @@ export function createGameSession(
     },
     selectPiece,
     selectNextPiece(backward) {
+      const player = isMachineTurn() || isRemoteTurn() ? viewPlayer() : state.activePlayer;
       const units = state.pieces
-        .filter((piece) => piece.owner === state.activePlayer && tutorialAllowsPiece(piece.id))
+        .filter((piece) => piece.owner === player && tutorialAllowsPiece(piece.id))
         .sort((a, b) => a.id.localeCompare(b.id));
       if (!units.length) return;
       const index = units.findIndex((piece) => piece.id === selectedId);
@@ -2590,6 +2650,18 @@ export function createGameSession(
       presentOutcome();
     },
     acceptBlockade,
+    offerDraw() {
+      if (gameMode === 'online' && onlineState.status === 'playing') {
+        currentDialog = null;
+        void requestOnline({
+          kind: 'offer-draw',
+          matchId: onlineState.matchId,
+          revision: onlineState.revision,
+        }).then(() => {
+          if (!disposed && !onlineError) showToast('Propuesta de tablas enviada al rival.');
+        });
+      } else openDialog({ kind: 'blockade' });
+    },
     revealHint,
     readyForTurn() {
       if (currentDialog?.kind === 'first-turn') return;

@@ -30,7 +30,6 @@ function Header() {
       <div className="brand" role="img" aria-label="Hexfortia: estrategia hexagonal">
         <img src="/atlas-mark.svg" alt="" width="38" height="38" />
         <div>
-          <span className="eyebrow">ESTRATEGIA HEXAGONAL</span>
           <strong>Hexfortia</strong>
         </div>
       </div>
@@ -73,13 +72,8 @@ function Header() {
           type="button"
           aria-label="Proponer tablas"
           title="Proponer tablas"
-          disabled={disabled || gameMode === 'machine' || gameMode === 'online'}
-          hidden={
-            gameMode === 'machine' ||
-            gameMode === 'online' ||
-            Boolean(activeScenario) ||
-            Boolean(snapshot.tutorial)
-          }
+          disabled={disabled || gameMode === 'machine' || snapshot.online.busy}
+          hidden={gameMode === 'machine' || Boolean(activeScenario) || Boolean(snapshot.tutorial)}
           onClick={() => commands.openDialog({ kind: 'draw-offer' })}
         >
           <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">

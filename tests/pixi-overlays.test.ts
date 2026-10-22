@@ -90,7 +90,7 @@ describe('overlays tácticos nativos de Pixi', () => {
 
   it('selecciona el destino previsto del Dron antes de su intercepción en la demo', () => {
     const overlays = new PixiOverlays();
-    const scene = createRuleDemoScenes('fortaleza')[2];
+    const scene = createRuleDemoScenes('fortaleza')[0];
     const model: RenderModel = {
       ...modelFor(position()),
       state: scene.state,

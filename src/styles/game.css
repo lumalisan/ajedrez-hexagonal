@@ -5931,6 +5931,13 @@ button.history-card:disabled {
   width: 100%;
   margin-inline: auto;
 }
+.story-pagination > button:last-child {
+  margin-left: auto;
+}
+.story-pagination > button:only-child {
+  flex: 0 1 auto;
+}
+
 .story-pagination {
   clear: both;
   display: flex;
@@ -6551,5 +6558,23 @@ button.history-card:disabled {
 @media (prefers-reduced-motion: reduce) {
   .online-search-indicator {
     animation: none;
+  }
+}
+
+.rules-description {
+  display: flow-root;
+}
+.rules-fortress-section {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 28%);
+}
+.rules-fortress-section .rules-peer-heading {
+  margin-top: 8px;
+}
+.rules-fortress-section > .rule-demo {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .rules-fortress-section {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

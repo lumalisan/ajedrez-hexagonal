@@ -77,20 +77,20 @@ it.each([
 
 it('la Fortaleza cae tras dos avances y el Dron es interceptado en el borde del escudo', () => {
   const scenes = createRuleDemoScenes('fortaleza');
-  expect(scenes.map((scene) => scene.sequence)).toEqual([0, 0, 1]);
+  expect(scenes.map((scene) => scene.sequence)).toEqual([0, 0, 0]);
   expect(scenes[0].state.pieces.find((piece) => piece.id === 'actor')).toMatchObject({
     position: { q: 0, r: 2 },
     facing: 3,
   });
-  const impact = applyAction(scenes[1].state, scenes[1].action);
+  const impact = applyAction(scenes[2].state, scenes[2].action);
   expect(impact.state.pieces.some((piece) => ['actor', 'fort-amber'].includes(piece.id))).toBe(
     false,
   );
-  const intercept = applyAction(scenes[2].state, scenes[2].action);
-  expect(scenes[2].intendedDestination).toEqual({ q: 0, r: 5 });
-  expect(scenes[2].action).toMatchObject({ kind: 'move', to: { q: 1, r: 4 } });
+  const intercept = applyAction(scenes[0].state, scenes[0].action);
+  expect(scenes[0].intendedDestination).toEqual({ q: 0, r: 5 });
+  expect(scenes[0].action).toMatchObject({ kind: 'move', to: { q: 1, r: 4 } });
   expect(intercept.ok).toBe(true);
-  expect(scenes[2].state.pieces.find((piece) => piece.id === 'actor')?.position).toEqual({
+  expect(scenes[0].state.pieces.find((piece) => piece.id === 'drone')?.position).toEqual({
     q: 3,
     r: 2,
   });
@@ -100,6 +100,6 @@ it('la Fortaleza cae tras dos avances y el Dron es interceptado en el borde del 
   expect(intercept.events).toContainEqual(
     expect.objectContaining({ type: 'intercept', at: { q: 1, r: 4 } }),
   );
-  expect(intercept.state.pieces.some((piece) => piece.id === 'actor')).toBe(false);
+  expect(intercept.state.pieces.some((piece) => piece.id === 'drone')).toBe(false);
   expect(intercept.state.pieces.some((piece) => piece.id === 'anti-air')).toBe(true);
 });

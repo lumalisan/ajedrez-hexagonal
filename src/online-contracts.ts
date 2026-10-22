@@ -21,6 +21,7 @@ export type OnlineState =
       record: MatchRecord;
       elo: number;
       serverNow: number;
+      drawOffer?: Player | null;
     };
 
 export type OnlineRequest =
@@ -30,6 +31,8 @@ export type OnlineRequest =
   | { kind: 'join-private'; code: string; name: string }
   | { kind: 'cancel' }
   | { kind: 'action'; matchId: string; revision: number; action: GameAction }
+  | { kind: 'offer-draw'; matchId: string; revision: number }
+  | { kind: 'respond-draw'; matchId: string; revision: number; accept: boolean }
   | { kind: 'resign'; matchId: string }
   | { kind: 'finish'; matchId: string };
 

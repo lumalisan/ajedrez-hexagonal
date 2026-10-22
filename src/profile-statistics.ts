@@ -23,11 +23,13 @@ export function playerRecords(progress: PlayerProgression, mode: 'machine' | 'on
   let bestRating = Math.max(1000, progress.ratings[mode]);
   let streak = 0;
   let bestStreak = 0;
-  matches.forEach((match, index) => {
-    if (match.result !== undefined) {
+  let ratedMatches = 0;
+  matches.forEach((match) => {
+    if (match.result !== undefined && match.rated !== false) {
       rating =
         match.battle?.ratingAfter ??
-        calculateElo(rating, match.opponentRating ?? 1000, match.result, index);
+        calculateElo(rating, match.opponentRating ?? 1000, match.result, ratedMatches);
+      ratedMatches++;
       bestRating = Math.max(bestRating, rating);
     }
     streak = match.result === 1 ? streak + 1 : 0;

@@ -87,6 +87,7 @@ export function createGameState(pieces: Piece[], activePlayer: Player = 0): Game
     pieces: pieces.map(clonePiece),
     activePlayer,
     ply: 0,
+    passedTurnCount: 0,
     firstFortressDamageBy: null,
     positionCounts: {},
     noProgressPlyCount: 0,
@@ -187,6 +188,11 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
     errors.push('Los contadores de turnos de orientación no son válidos.');
   if (!Number.isInteger(state.ply) || state.ply < 0)
     errors.push('El contador de turnos no es válido.');
+  if (
+    state.passedTurnCount !== undefined &&
+    (!Number.isSafeInteger(state.passedTurnCount) || state.passedTurnCount < 0)
+  )
+    errors.push('El contador de turnos pasados no es válido.');
   if (
     state.noProgressPlyCount !== undefined &&
     (!Number.isInteger(state.noProgressPlyCount) || state.noProgressPlyCount < 0)
@@ -833,6 +839,7 @@ function passTurnIfBlocked(state: GameState, events: GameEvent[]): void {
   )
     return;
   const blockedPlayer = state.activePlayer;
+  state.passedTurnCount = (state.passedTurnCount ?? 0) + 1;
   if (state.orientationOnlyTurns) state.orientationOnlyTurns[blockedPlayer] = 0;
   state.activePlayer = otherPlayer(blockedPlayer);
   events.push({ type: 'pass', owner: blockedPlayer });

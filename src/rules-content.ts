@@ -21,7 +21,7 @@ export interface RuleSection {
 export const RULE_SECTIONS: RuleSection[] = [
   {
     id: 'descripcion',
-    label: 'DESCRIPCIÓN DEL JUEGO',
+    label: 'Descripción del juego',
     title: 'Descripción del juego',
     paragraphs: [
       {
@@ -42,7 +42,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'fortaleza',
-    label: 'FORTALEZA Y ESCUDO ANTIAÉREO',
+    label: 'Fortaleza y escudo antiaéreo',
     title: 'Fortaleza',
     paragraphs: [
       {
@@ -71,7 +71,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'soldado',
-    label: 'ASALTADOR',
+    label: 'Asaltador',
     title: 'Asaltador',
     paragraphs: [
       {
@@ -91,7 +91,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'capturador',
-    label: 'CAPTURADOR',
+    label: 'Capturador',
     title: 'Capturador',
     paragraphs: [
       {
@@ -109,7 +109,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'tanque',
-    label: 'TANQUE',
+    label: 'Tanque',
     title: 'Tanque',
     paragraphs: [
       {
@@ -130,7 +130,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'lanzamisiles',
-    label: 'LANZAMISILES',
+    label: 'Lanzamisiles',
     title: 'Lanzamisiles',
     paragraphs: [
       {
@@ -151,7 +151,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'embestidor',
-    label: 'EMBESTIDOR',
+    label: 'Embestidor',
     title: 'Embestidor',
     paragraphs: [
       {
@@ -171,7 +171,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'dron',
-    label: 'DRON',
+    label: 'Dron',
     title: 'Dron',
     paragraphs: [
       {
@@ -188,7 +188,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'avion',
-    label: 'CAZA',
+    label: 'Caza',
     title: 'Caza',
     paragraphs: [
       {
@@ -209,7 +209,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'casillas-compartidas',
-    label: 'ATAQUES SOBRE CASILLAS COMPARTIDAS',
+    label: 'Ataques sobre casillas compartidas',
     title: 'Ataques sobre casillas compartidas',
     paragraphs: [
       {
@@ -242,11 +242,11 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'desarrollo',
-    label: 'DESARROLLO DE LA PARTIDA',
+    label: 'Desarrollo de la partida',
     title: 'Desarrollo de la partida',
     paragraphs: [
       {
-        text: 'En el despliegue clásico, cada jugador comienza la partida con un ejército compuesto por 5 asaltadores, 4 tanques, 2 embestidores, 2 drones, 1 capturador, 1 lanzamisiles y 1 caza, además de una fortaleza y un escudo antiaéreo. En el despliegue extendido, el número de asaltadores aumenta a 11 y el de tanques se reduce a 2. Puedes explorar la disposición inicial de ambas formaciones mediante el selector de la derecha.',
+        text: 'En el despliegue clásico, cada jugador comienza la partida con un ejército compuesto por 5 asaltadores, 4 tanques, 2 embestidores, 2 drones, 1 capturador, 1 lanzamisiles y 1 caza, además de una fortaleza y un escudo antiaéreo. En el despliegue extendido, el número de asaltadores aumenta a 11 y el de tanques se reduce a 2. Puedes explorar la disposición inicial de ambas formaciones mediante el siguiente selector:',
         strong: [
           '5 asaltadores, 4 tanques, 2 embestidores, 2 drones, 1 capturador, 1 lanzamisiles y 1 caza',
         ],
@@ -269,7 +269,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'indicadores',
-    label: 'INDICADORES Y ACCIONES',
+    label: 'Indicadores y acciones',
     title: 'Indicadores y acciones',
     paragraphs: [
       'Al seleccionar una unidad, el tablero muestra mediante distintos colores y símbolos las acciones que puede realizar:',
@@ -302,16 +302,12 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'experiencia',
-    label: 'PUNTOS DE EXPERIENCIA',
+    label: 'Puntos de experiencia',
     title: 'Puntos de experiencia',
     paragraphs: [
       {
         text: 'Los puntos de experiencia (XP) representan tu progreso en Hexfortia. Consíguelos jugando partidas para subir de nivel y desbloquear nuevos logros. La cantidad de experiencia que obtienes depende del modo de juego, del resultado de la partida y de su duración.',
         strong: ['puntos de experiencia (XP)'],
-      },
-      {
-        text: '¿Cómo se consiguen?',
-        kind: 'heading',
       },
       {
         text: 'Partidas en línea',
@@ -376,7 +372,7 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'clasificacion',
-    label: 'PUNTOS DE CLASIFICACIÓN',
+    label: 'Puntos de clasificación',
     title: 'Puntos de clasificación',
     paragraphs: [
       'Los puntos de clasificación representan tu nivel competitivo en Hexfortia. A diferencia de los puntos de experiencia, que reflejan tu progreso en el juego, los puntos de clasificación dependen de tus resultados y del nivel de tus rivales.',
@@ -384,6 +380,7 @@ export const RULE_SECTIONS: RuleSection[] = [
         text: '¿Cómo se consiguen?',
         kind: 'heading',
       },
+      'Las partidas privadas no modifican el Elo. Sí cuentan para las estadísticas, los logros y los puntos de experiencia.',
       'Al comenzar, dispones de 1000 puntos de clasificación. Después de cada partida, tu puntuación puede aumentar o disminuir en función del resultado y de la clasificación de tu rival.',
       {
         text: 'Si ganas, obtendrás puntos de clasificación.',

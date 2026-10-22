@@ -62,6 +62,34 @@ function fixture(pieces: Piece[], owner: Player = 0, mode: 'machine' | 'local' =
 }
 
 describe('experiencia, niveles y categorías', () => {
+  it.each([0, 1] as const)(
+    'registra privadas como partidas en línea para el jugador %s sin cambiar Elo',
+    (onlinePlayer) => {
+      const record = match('local', 'recruit', 0, onlinePlayer);
+      record.config.definitionId = 'online:private:test';
+      const progress = registerProgressionMatch(noAwards(), record);
+      progress.lastDailyMatch = '2026-10-07';
+      const options = { source: 'live' as const, at: AT, onlinePlayer };
+      const result = evaluateProgressionMatch(progress, record, options);
+      expect(result.xpEarned).toBe(100);
+      expect(result.progress.ratings).toEqual(progress.ratings);
+      expect(result.progress.matches[record.createdAt]).toMatchObject({
+        mode: 'online',
+        result: 1,
+      });
+      expect(rankingSummary(result.progress, 'online', 'month', AT)).toMatchObject({
+        played: 1,
+        wins: 1,
+        rating: 1000,
+      });
+      const restored = parsePlayerProgression(JSON.stringify(result.progress));
+      expect(rankingSummary(restored, 'online', 'month', AT).rating).toBe(1000);
+      expect(evaluateProgressionMatch(result.progress, record, options).xpEarned).toBe(0);
+      expect(
+        evaluateProgressionMatch(progress, record, { ...options, source: 'import' }).xpEarned,
+      ).toBe(0);
+    },
+  );
   it.each([0, 1, 2, 3, 4, 59, 60, 61, 79, 80, 99, 100])(
     'cuenta turnos de dos órdenes para XP y logros con %i órdenes',
     (plies) => {

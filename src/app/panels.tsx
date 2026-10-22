@@ -211,7 +211,11 @@ export function MatchStatus() {
           </>
         ) : (
           <>
-            <span>{snapshot.tutorial ? 'TUTORIAL' : `TURNO ${Math.floor(state.ply / 2) + 1}`}</span>
+            <span>
+              {snapshot.tutorial
+                ? 'TUTORIAL'
+                : `TURNO ${Math.floor((state.ply + (state.passedTurnCount ?? 0)) / 2) + 1}`}
+            </span>
             <strong>
               {snapshot.tutorial ? `Práctica con ${snapshot.profile.name}` : commander}
             </strong>
@@ -258,12 +262,12 @@ export function SelectionSummary() {
               ? 'Casilla apilada. Elige una unidad en el panel de mando.'
               : mode.kind === 'actionChoice'
                 ? 'Elige una acción en el panel de mando.'
-                : piece
-                  ? piece.owner === state.activePlayer
-                    ? selectedUnitInstruction(piece)
-                    : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
-                  : isMachineTurn
-                    ? 'La máquina está calculando su siguiente orden.'
+                : isMachineTurn
+                  ? 'La máquina está calculando su siguiente orden. Puedes inspeccionar las unidades.'
+                  : piece
+                    ? piece.owner === state.activePlayer
+                      ? selectedUnitInstruction(piece)
+                      : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
                     : `Turno de ${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])}. Selecciona una unidad propia.`;
   return (
     <div id="selection-summary" className="selection-summary">
@@ -626,13 +630,19 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
       </DirectionPanel>
     );
   }
-  if (piece.owner !== state.activePlayer || state.outcome)
+  if (
+    piece.owner !== state.activePlayer ||
+    state.outcome ||
+    snapshot.isMachineTurn ||
+    (snapshot.online.state.status === 'playing' &&
+      (snapshot.online.state.player !== state.activePlayer || snapshot.online.busy))
+  )
     return (
       <div className="control-section muted-section">
-        <strong>Vista rival</strong>
+        <strong>{snapshot.isMachineTurn ? 'Vista de inspección' : 'Vista rival'}</strong>
         <p>
-          Los marcadores atenuados muestran sus desplazamientos y ataques potenciales. No puedes
-          ejecutar esas órdenes.
+          Los marcadores muestran sus desplazamientos y ataques potenciales. No puedes ejecutar esas
+          órdenes.
         </p>
       </div>
     );

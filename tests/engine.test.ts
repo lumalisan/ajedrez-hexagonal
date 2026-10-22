@@ -1390,7 +1390,27 @@ describe('Fortaleza, transformación y finales', () => {
     expect(result.state.outcome).toBeNull();
     expect(result.events).toContainEqual({ type: 'pass', owner: 1 });
     expect(result.state.history.at(-1)?.text).toContain('Ámbar no tiene acciones legales');
+    expect(result.state.passedTurnCount).toBe(1);
+    expect(state.passedTurnCount ?? 0).toBe(0);
   });
+
+  it.each([0, 1] as const)(
+    'cuenta cada acción como un turno si el rival pasa (jugador %s)',
+    (player) => {
+      let state = base([soldier('solo', player, hex(0, 0), 0)]);
+      state.activePlayer = player;
+      // Older saves have no automatic-pass counter.
+      delete state.passedTurnCount;
+      for (let actionCount = 1; actionCount <= 3; actionCount++) {
+        const result = applyAction(state, findAction(state, 'solo', 'rotate'));
+        expect(result.ok).toBe(true);
+        state = result.state;
+        expect(state.ply).toBe(actionCount);
+        expect(state.passedTurnCount).toBe(actionCount);
+        expect(Math.floor((state.ply + state.passedTurnCount!) / 2) + 1).toBe(actionCount + 1);
+      }
+    },
+  );
 
   it('declara tablas si, tras pasar un jugador, ninguno puede destruir la Fortaleza rival', () => {
     const state = base([
