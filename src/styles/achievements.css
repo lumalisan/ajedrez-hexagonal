@@ -880,9 +880,6 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.achievement-mode-difficulty {
-  font: 700 11px / 1 var(--font-display);
-}
 .achievement-mode-tooltip {
   z-index: 5;
   width: 260px;

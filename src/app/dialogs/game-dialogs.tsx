@@ -1,3 +1,4 @@
+import { ModeIcon } from '../components/mode-icon';
 import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import { loadActiveMatch } from '../../match-storage';
@@ -64,10 +65,12 @@ function ModeDialog({ initial }: { initial: boolean }) {
           data-game-mode="machine"
           onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
         >
-          <span className="mode-icon" aria-hidden="true">
-            ♙ ⬡
-          </span>
-          <strong>Individual Vs. Hexfortia</strong>
+          <strong className="game-mode-label">
+            <span className="game-mode-icon">
+              <ModeIcon mode="machine" />
+            </span>
+            Individual Vs. Hexfortia
+          </strong>
           <small>Elige entre Fácil, Medio, Difícil, Experto y Neuronal.</small>
         </button>
         <button
@@ -76,10 +79,12 @@ function ModeDialog({ initial }: { initial: boolean }) {
           data-game-mode="local"
           onClick={() => commands.openDialog({ kind: 'config', mode: 'local' })}
         >
-          <span className="mode-icon" aria-hidden="true">
-            ♙ ♟
-          </span>
-          <strong>Batalla local</strong>
+          <strong className="game-mode-label">
+            <span className="game-mode-icon">
+              <ModeIcon mode="local" />
+            </span>
+            Batalla local
+          </strong>
           <small>Dos jugadores comparten este dispositivo y alternan turnos.</small>
         </button>
         <button
@@ -88,7 +93,12 @@ function ModeDialog({ initial }: { initial: boolean }) {
           data-game-mode="online"
           onClick={() => commands.openDialog({ kind: 'online' })}
         >
-          <strong>Batalla en línea</strong>
+          <strong className="game-mode-label">
+            <span className="game-mode-icon">
+              <ModeIcon mode="online" />
+            </span>
+            Batalla en línea
+          </strong>
           {account.user ? (
             <small>Busca un rival o crea una partida privada.</small>
           ) : (

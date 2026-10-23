@@ -6,6 +6,9 @@ import type { Direction, GameState, Piece, Player } from './types.js';
 /** Change this identifier whenever the meaning or order of an input changes. */
 export const NEURAL_FEATURE_SCHEMA = 'hex-sparse-v1';
 export const NEURAL_INPUT_SIZE = 5_183;
+export const NEURAL_FEATURE_SCHEMA_V2 = 'hex-sparse-v2';
+export const NEURAL_INPUT_SIZE_V2 = 5_203;
+export type NeuralFeatureSchema = typeof NEURAL_FEATURE_SCHEMA | typeof NEURAL_FEATURE_SCHEMA_V2;
 
 const BOARD_CELLS = 91;
 const PIECE_VARIANTS = 28;
@@ -18,10 +21,8 @@ for (const [index, cell] of allBoardHexes().entries()) {
   cellIndices[(cell.q + 5) * 11 + cell.r + 5] = index;
 }
 
-export interface NeuralModelMetadata {
+interface NeuralModelMetadataBase {
   readonly format: 'hex-value-v1';
-  readonly featureSchema: typeof NEURAL_FEATURE_SCHEMA;
-  readonly inputSize: typeof NEURAL_INPUT_SIZE;
   readonly hiddenSizes: readonly [64, 32];
   readonly outputScale: 10_000;
   readonly training?: Readonly<Record<string, unknown>>;
@@ -30,6 +31,18 @@ export interface NeuralModelMetadata {
   readonly residualSymmetry?: 'antisymmetric';
   readonly searchProfile?: 'pvs-history' | 'pvs-threats';
 }
+
+export type NeuralModelMetadata = NeuralModelMetadataBase &
+  (
+    | {
+        readonly featureSchema: typeof NEURAL_FEATURE_SCHEMA;
+        readonly inputSize: typeof NEURAL_INPUT_SIZE;
+      }
+    | {
+        readonly featureSchema: typeof NEURAL_FEATURE_SCHEMA_V2;
+        readonly inputSize: typeof NEURAL_INPUT_SIZE_V2;
+      }
+  );
 
 export interface NeuralModel {
   readonly metadata: NeuralModelMetadata;
@@ -86,12 +99,19 @@ function pieceVariant(piece: Piece, perspective: Player): number {
  * repetition limit [9], no-progress limit / 8 [18], ply / 16 [17].
  * Counter buckets saturate; null rule limits have their own bucket. Repetition
  * is a summary, never a replacement for the engine's exact terminal checks.
+ * V2 preserves every V1 index and appends orientation-only rule enabled [2],
+ * own remaining orders [9], opponent remaining orders [9]. Remaining orders
+ * use buckets 0..7 and >=8; a missing/null limit disables the rule and both counts.
  */
 export function encodeNeuralFeatures(
   state: GameState,
   perspective: Player,
   rules: Readonly<ActionResolutionRules> = DEFAULT_ACTION_RESOLUTION_RULES,
+  schema: NeuralFeatureSchema = NEURAL_FEATURE_SCHEMA,
 ): number[] {
+  if (schema !== NEURAL_FEATURE_SCHEMA && schema !== NEURAL_FEATURE_SCHEMA_V2) {
+    throw new Error('Esquema de características neuronales incompatible.');
+  }
   const features: number[] = [];
   for (const piece of state.pieces) {
     const q = perspective === 0 ? piece.position.q : -piece.position.q;
@@ -129,6 +149,17 @@ export function encodeNeuralFeatures(
         : Math.min(17, 1 + Math.floor(rules.noProgressPlyLimit / 8))),
     GLOBAL_OFFSET + 70 + Math.min(16, Math.floor(state.ply / 16)),
   );
+  if (schema === NEURAL_FEATURE_SCHEMA_V2) {
+    const limit = rules.orientationOnlyTurnLimit;
+    const enabled = limit != null;
+    const remaining = (player: Player): number =>
+      enabled ? Math.min(8, Math.max(0, limit - (state.orientationOnlyTurns?.[player] ?? 0))) : 0;
+    features.push(
+      NEURAL_INPUT_SIZE + (enabled ? 1 : 0),
+      NEURAL_INPUT_SIZE + 2 + remaining(perspective),
+      NEURAL_INPUT_SIZE + 11 + remaining(perspective === 0 ? 1 : 0),
+    );
+  }
   return features;
 }
 
@@ -140,8 +171,10 @@ function validateMetadata(value: unknown): asserts value is NeuralModelMetadata 
   if (
     !isObject(value) ||
     value.format !== 'hex-value-v1' ||
-    value.featureSchema !== NEURAL_FEATURE_SCHEMA ||
-    value.inputSize !== NEURAL_INPUT_SIZE ||
+    !(
+      (value.featureSchema === NEURAL_FEATURE_SCHEMA && value.inputSize === NEURAL_INPUT_SIZE) ||
+      (value.featureSchema === NEURAL_FEATURE_SCHEMA_V2 && value.inputSize === NEURAL_INPUT_SIZE_V2)
+    ) ||
     !Array.isArray(value.hiddenSizes) ||
     value.hiddenSizes.length !== 2 ||
     value.hiddenSizes[0] !== HIDDEN_1 ||
@@ -188,7 +221,7 @@ export function parseNeuralModel(bytes: ArrayBuffer): NeuralModel {
   validateMetadata(metadata);
   let offset = Math.ceil((8 + metadataLength) / 4) * 4;
   const parameterCount =
-    NEURAL_INPUT_SIZE * HIDDEN_1 + HIDDEN_1 + HIDDEN_1 * HIDDEN_2 + HIDDEN_2 + HIDDEN_2 + 1;
+    metadata.inputSize * HIDDEN_1 + HIDDEN_1 + HIDDEN_1 * HIDDEN_2 + HIDDEN_2 + HIDDEN_2 + 1;
   if (bytes.byteLength !== offset + parameterCount * 4) {
     throw new Error('Tamaño de pesos del modelo neuronal inválido.');
   }
@@ -207,7 +240,7 @@ export function parseNeuralModel(bytes: ArrayBuffer): NeuralModel {
   }
   return {
     metadata,
-    weights1: readWeights(NEURAL_INPUT_SIZE * HIDDEN_1),
+    weights1: readWeights(metadata.inputSize * HIDDEN_1),
     bias1: readWeights(HIDDEN_1),
     weights2: readWeights(HIDDEN_1 * HIDDEN_2),
     bias2: readWeights(HIDDEN_2),
@@ -231,7 +264,7 @@ function sparseEvaluatorForModel(model: NeuralModel): (features: readonly number
   return (features) => {
     hidden1.set(model.bias1);
     for (const input of features) {
-      if (!Number.isInteger(input) || input < 0 || input >= NEURAL_INPUT_SIZE) {
+      if (!Number.isInteger(input) || input < 0 || input >= model.metadata.inputSize) {
         throw new Error('Índice de entrada del modelo neuronal inválido.');
       }
       const rowOffset = input * HIDDEN_1;
@@ -262,9 +295,13 @@ export function createNeuralEvaluator(modelBytes: ArrayBuffer): NeuralEvaluator 
   const evaluateFeatures = sparseEvaluatorForModel(model);
   const evaluate: NeuralEvaluator = (state, player, rules) => {
     if (state.outcome) return evaluateClassicState(state, player);
-    let estimate = evaluateFeatures(encodeNeuralFeatures(state, player, rules));
+    let estimate = evaluateFeatures(
+      encodeNeuralFeatures(state, player, rules, metadata.featureSchema),
+    );
     if (metadata.residualSymmetry === 'antisymmetric') {
-      const opposite = evaluateFeatures(encodeNeuralFeatures(state, player === 0 ? 1 : 0, rules));
+      const opposite = evaluateFeatures(
+        encodeNeuralFeatures(state, player === 0 ? 1 : 0, rules, metadata.featureSchema),
+      );
       estimate = (estimate - opposite) / 2;
     }
     return metadata.evaluation === 'classic-residual-v1'

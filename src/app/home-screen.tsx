@@ -1,3 +1,4 @@
+import { ModeIcon } from './components/mode-icon';
 import { useEffect, useRef, useState } from 'react';
 import { loadPendingMatches, loadMatchHistory } from '../match-storage';
 import { levelProgress, PROGRESSION_ACHIEVEMENTS } from '../progression';
@@ -94,7 +95,12 @@ export function HomeScreen() {
                   data-home-mode="machine"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
                 >
-                  <span>Individual Vs. Hexfortia</span>
+                  <span className="game-mode-label">
+                    <span className="game-mode-icon">
+                      <ModeIcon mode="machine" />
+                    </span>
+                    Individual Vs. Hexfortia
+                  </span>
                   <small>Juega contra la inteligencia artificial</small>
                 </button>
                 <button
@@ -103,7 +109,12 @@ export function HomeScreen() {
                   data-home-mode="local"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'local' })}
                 >
-                  <span>Batalla local</span>
+                  <span className="game-mode-label">
+                    <span className="game-mode-icon">
+                      <ModeIcon mode="local" />
+                    </span>
+                    Batalla local
+                  </span>
                   <small>Dos personas comparten este dispositivo y alternan turnos</small>
                 </button>
                 <button
@@ -112,7 +123,12 @@ export function HomeScreen() {
                   data-home-mode="online"
                   onClick={() => commands.openDialog({ kind: 'online' })}
                 >
-                  <span>Batalla en línea</span>
+                  <span className="game-mode-label">
+                    <span className="game-mode-icon">
+                      <ModeIcon mode="online" />
+                    </span>
+                    Batalla en línea
+                  </span>
                   {account.user ? (
                     <small>Busca un rival o comparte una partida privada</small>
                   ) : (

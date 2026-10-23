@@ -2814,8 +2814,7 @@ async function assertAchievementsCatalog(page, surface) {
   const combinedModes = page.locator('[data-achievement-id="p1-03"] .achievement-mode button');
   assert(
     (await combinedModes.locator('svg').count()) === 3 &&
-      (await combinedModes.getAttribute('aria-label')) ===
-        'En partidas contra Hexfortia, en línea o locales. En las partidas locales, solo cuentan las acciones del jugador local.',
+      (await combinedModes.getAttribute('aria-label')) === 'Cualquier modo de juego es válido.',
     'The combined control must retain each mode icon and explain all valid modes together.',
   );
   await combinedModes.scrollIntoViewIfNeeded();
@@ -2823,7 +2822,7 @@ async function assertAchievementsCatalog(page, surface) {
   await combinedModes.focus();
   await page
     .getByRole('tooltip')
-    .filter({ hasText: 'En partidas contra Hexfortia, en línea o locales.' })
+    .filter({ hasText: 'Cualquier modo de juego es válido.' })
     .waitFor();
   await page.keyboard.press('Escape');
   assert(

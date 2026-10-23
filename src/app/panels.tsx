@@ -46,6 +46,13 @@ function useTutorialControls() {
     ),
     actionAllowed: (action: GameAction) =>
       !restricted || actions.some((candidate) => sameAction(candidate, action)),
+    transformDirectionAllowed: (direction: Direction) =>
+      actions.some(
+        (action) =>
+          action.kind === 'transform' &&
+          action.pieceId === snapshot.selectedId &&
+          action.facing === direction,
+      ),
     modeAllowed: (kind: 'rotate' | 'orient' | 'transform') =>
       !restricted || step?.mode === kind || (step?.id === '11.2' && kind === 'transform'),
   };
@@ -362,7 +369,7 @@ function DirectionCompass({
   onDirection,
 }: CompassProps) {
   const { snapshot } = useGame();
-  const { step, restricted, guided } = useTutorialControls();
+  const { step, restricted, guided, transformDirectionAllowed } = useTutorialControls();
   const highlighted = selected ?? current;
   const centerLabel =
     selected !== null ? 'SELECCIONADA' : current !== null ? 'ACTUAL' : 'ELIGE RUMBO';
@@ -391,7 +398,12 @@ function DirectionCompass({
             {...{ [`data-${dataName}`]: direction }}
             className={`compass-direction ${isCurrent ? 'current' : ''} ${active ? 'active' : ''}`}
             style={{ '--direction': viewDirection } as CSSProperties}
-            disabled={isCurrent || (restricted && step?.direction !== direction)}
+            disabled={
+              isCurrent ||
+              (restricted &&
+                step?.direction !== direction &&
+                !(dataName === 'transform-facing' && transformDirectionAllowed(direction)))
+            }
             data-tutorial-highlight={
               guided && step?.direction === direction && selected !== direction ? true : undefined
             }

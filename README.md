@@ -49,6 +49,13 @@ evaluador pequeño en CPU, comprobarlo en el navegador y enfrentarlo a Experto c
 emparejadas. «Neuronal» carga el candidato experimental; los cuatro niveles clásicos conservan
 su evaluación anterior.
 
+El [circuito de investigación](docs/ia-investigacion.md) añade inventario de trayectorias,
+profesor clásico independiente, campañas con fuentes congeladas y particiones por familia,
+compatibilidad de características V1/V2 y evaluación emparejada con inconclusas conservadas.
+`pnpm ai:research` mantiene el piloto acotado; `campaign.mjs` coordina experimentos largos.
+Las herramientas no publican pesos: menor error o un banco táctico correcto no demuestra una
+mejora de fuerza, que sigue necesitando aperturas nuevas y un presupuesto de evaluación declarado.
+
 `pnpm ai:selfplay --publish` automatiza autojuego, entrenamiento y evaluación contra el campeón
 y Experto. Solo instala candidatos que superen los filtros y la comprobación del navegador.
 Permite reanudar y conserva modelos anteriores; una ronda completa puede durar más de un día.

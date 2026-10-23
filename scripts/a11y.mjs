@@ -18,7 +18,8 @@ if (!executablePath) throw new Error('No browser found. Set PLAYWRIGHT_BROWSER_P
 
 const server = await createServer({
   logLevel: 'silent',
-  server: { host: '127.0.0.1', port: 4175, strictPort: true },
+  cacheDir: 'node_modules/.vite-a11y',
+  server: { host: '127.0.0.1', port: 4175, strictPort: true, hmr: false },
 });
 await server.listen();
 const browser = await chromium.launch({ executablePath, headless: true });

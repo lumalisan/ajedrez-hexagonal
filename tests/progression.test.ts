@@ -418,7 +418,7 @@ describe('catálogo y evidencia retrospectiva', () => {
     const progress = createPlayerProgression();
     progress.matches[AT] = { mode: 'local', difficulty: 0, metrics: { kills: 10000 } };
     expect(progressionValue(progress, definition('p5-17'))).toBe(10000);
-    expect(progressionValue(progress, definition('p5-12'))).toBe(0);
+    expect(progressionValue(progress, definition('p5-12'))).toBe(10000);
   });
   it('filtra dificultad mínima y modalidad sin atribuir partidas locales a logros de IA', () => {
     const progress = createPlayerProgression();
@@ -719,3 +719,15 @@ describe('resumen de recompensas de batalla', () => {
     expect(parsePlayerProgression(JSON.stringify(raw)).matches[id].battle).toBeUndefined();
   });
 });
+
+it.each(['p2-10', 'p3-11', 'p4-13', 'p5-12'])(
+  '%s cuenta eliminaciones en cualquier modo y desde Fácil',
+  (id) => {
+    const achievement = definition(id);
+    for (const mode of ['machine', 'online', 'local'] as const) {
+      const progress = createPlayerProgression();
+      progress.matches[AT] = { mode, difficulty: 0, metrics: { kills: achievement.target } };
+      expect(progressionValue(progress, achievement)).toBe(achievement.target);
+    }
+  },
+);

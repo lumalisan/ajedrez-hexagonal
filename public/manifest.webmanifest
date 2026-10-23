@@ -1,7 +1,7 @@
 {
   "name": "Hexfortia",
   "short_name": "Hexfortia",
-  "description": "Juego táctico hexagonal para dos personas o contra la máquina.",
+  "description": "Juego táctico hexagonal para dos personas o contra la IA.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#07131a",

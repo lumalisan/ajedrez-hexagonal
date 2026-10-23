@@ -275,6 +275,7 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     await service.request(a, { kind: 'cancel' });
     expect(repository.privateRooms.size).toBe(0);
   });
+  // These integration tests execute several real AI turns; coverage instruments the search too.
   it('el servidor juega al caducar el turno aunque ambos clientes estén desconectados', async () => {
     let now = 0;
     const repository = new MemoryOnlineRepository();
@@ -301,7 +302,7 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     expect(ended.record.currentAction).toBeGreaterThanOrEqual(1);
     expect(replayRecord(ended.record).outcome?.reason).toBe('timeout');
     expect(ended.record.clock?.turnTimeouts).toContain(3);
-  });
+  }, 15_000);
   it('recupera los vencimientos tras un arranque en frío sin intervalos ni tiempo extra', async () => {
     let now = 0;
     const repository = new MemoryOnlineRepository();
@@ -325,7 +326,7 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     await new OnlineService(repository, () => now).request(a, { kind: 'state' });
     expect(repository.players.get(a)?.elo).toBe(elo);
     expect(repository.players.get(a)?.played).toBe(1);
-  });
+  }, 15_000);
   it('protege HTTP por token y origen, y valida cuerpos', async () => {
     const service = new OnlineService(new MemoryOnlineRepository());
     const app = await createOnlineApp({

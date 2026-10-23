@@ -201,7 +201,7 @@ try {
       await inspect(first, `${name}-account-signin`);
       await first.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
       await first.getByLabel('Correo electrónico', { exact: true }).fill('nuevo@example.test');
-      await first.getByLabel('Contraseña', { exact: true }).fill('test-password');
+      await first.getByLabel('Contraseña', { exact: true }).fill('Test-password-42!');
       await first.getByRole('button', { name: 'Mostrar contraseña', exact: true }).click();
       assert.equal(
         await first.getByLabel('Contraseña', { exact: true }).getAttribute('type'),
@@ -403,7 +403,10 @@ try {
         [first, second].map((page) => page.locator('#home-screen').waitFor({ state: 'hidden' })),
       );
       assert.equal(repository.matches.size, identity / 2);
-      for (const page of [first, second]) assert(await page.locator('#blockade-button').isHidden());
+      for (const page of [first, second])
+        await page
+          .getByRole('button', { name: 'Proponer tablas', exact: true })
+          .waitFor({ state: 'visible' });
       const match = [...repository.matches.values()].at(-1)!;
       const active = replayRecord(match.record).activePlayer;
       const actor = active === 0 ? first : second;
@@ -436,9 +439,15 @@ try {
       await first.locator('.home-profile').click();
       await first.getByRole('button', { name: 'Configuración', exact: true }).click();
       await first.getByLabel('Nombre de usuario', { exact: true }).fill('Perfil en la nube');
+      const cloudSaved = first.waitForResponse(async (response) => {
+        if (!response.url().endsWith('/api/account') || response.status() !== 200) return false;
+        const save = await response.json();
+        const profile = save.data?.['hexagonal:user-profile:v1'];
+        return Boolean(profile && JSON.parse(profile).name === 'Perfil en la nube');
+      });
       await first.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+      await cloudSaved;
       await first.locator('.home-profile').click();
-      await first.getByText('Progreso guardado en la nube', { exact: true }).waitFor();
       await inspect(first, `${name}-account-cloud-profile`);
       await first.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
       await first.getByRole('button', { name: /Iniciar sesión · Invitado/ }).waitFor();

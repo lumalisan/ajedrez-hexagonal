@@ -105,11 +105,11 @@ export function AccountStatus({
         </>
       ) : (
         <>
-          <p className="m-0 text-muted">
+          <p className={`m-0 text-muted${sidebar ? ' text-xs leading-relaxed' : ''}`}>
             Tu perfil y tu progreso se guardan en este navegador. Crea una cuenta para conservarlos
             y acceder a ellos desde otros dispositivos, o inicia sesión si ya tienes una.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2">
             <Button size="compact" onClick={() => controller.open('signin')}>
               Iniciar sesión
             </Button>

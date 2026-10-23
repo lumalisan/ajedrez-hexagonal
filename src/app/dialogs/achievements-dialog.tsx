@@ -284,7 +284,11 @@ function AchievementRow({
           )}
         </span>
       </div>
-      <AchievementModes modes={definition.modes} minDifficulty={definition.minDifficulty} />
+      <AchievementModes
+        modes={definition.modes}
+        minDifficulty={definition.minDifficulty}
+        metric={definition.metric}
+      />
     </li>
   );
 }

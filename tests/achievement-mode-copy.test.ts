@@ -3,10 +3,10 @@ import { achievementModeDescription } from '../src/achievement-mode-copy';
 
 describe('explicación conjunta de las modalidades de un logro', () => {
   it.each([
-    [0, 'Solo en partidas contra Hexfortia.'],
-    [1, 'Solo en partidas contra Hexfortia en nivel medio o superior.'],
-    [2, 'Solo en partidas contra Hexfortia en nivel difícil o experto.'],
-    [3, 'Solo en partidas contra Hexfortia en nivel experto.'],
+    [0, 'Solo partidas contra Hexfortia.'],
+    [1, 'Solo partidas contra Hexfortia en nivel medio o superior.'],
+    [2, 'Solo partidas contra Hexfortia en nivel difícil o experto.'],
+    [3, 'Solo partidas contra Hexfortia en nivel experto.'],
   ])('explica Hexfortia con dificultad mínima %i', (difficulty, expected) => {
     expect(achievementModeDescription(['machine'], difficulty)).toBe(expected);
   });
@@ -23,7 +23,7 @@ describe('explicación conjunta de las modalidades de un logro', () => {
   it.each([
     [
       0,
-      'En partidas contra Hexfortia, en línea o locales. En las partidas locales, solo cuentan las acciones del jugador local.',
+      'Cualquier modo de juego es válido. En las partidas locales, solo cuentan las acciones del jugador local.',
     ],
     [
       1,
@@ -42,21 +42,23 @@ describe('explicación conjunta de las modalidades de un logro', () => {
   });
 
   it('explica las restricciones de las partidas en línea y locales', () => {
-    expect(achievementModeDescription(['online'], 0)).toBe(
-      'Solo en partidas en línea contra otros jugadores.',
-    );
-    expect(achievementModeDescription(['local'], 0)).toBe(
-      'Solo en partidas locales. Únicamente cuentan las acciones del jugador local, no las del invitado.',
-    );
+    expect(achievementModeDescription(['online'], 0)).toBe('Solo en partidas en línea.');
+    expect(achievementModeDescription(['local'], 0)).toBe('Solo en partidas locales.');
   });
 
   it('mantiene el orden de lectura aunque cambie el orden de los modos', () => {
     expect(achievementModeDescription(['local', 'online', 'machine'], 0)).toBe(
-      'En partidas contra Hexfortia, en línea o locales. En las partidas locales, solo cuentan las acciones del jugador local.',
+      'Cualquier modo de juego es válido. En las partidas locales, solo cuentan las acciones del jugador local.',
     );
   });
 
   it('omite la explicación para logros sin restricción de modalidad', () => {
     expect(achievementModeDescription([], 0)).toBe('');
   });
+});
+
+it.each(['matches', 'year2488'])('omite la aclaración de acciones para %s', (metric) => {
+  expect(achievementModeDescription(['machine', 'online', 'local'], 0, metric)).toBe(
+    'Cualquier modo de juego es válido.',
+  );
 });

@@ -15,6 +15,7 @@ const executablePath =
 assert(executablePath, 'Set PLAYWRIGHT_BROWSER_PATH to an installed Chromium browser.');
 const server = await createServer({
   logLevel: 'error',
+  cacheDir: 'node_modules/.vite-tutorial-smoke',
   server: { host: '127.0.0.1', port: 0, hmr: false },
 });
 await server.listen();
@@ -232,6 +233,7 @@ try {
         const abandon = page.locator('[data-command="transform"]');
         assert.equal(await abandon.getAttribute('data-tutorial-highlight'), 'true');
         await abandon.click();
+        await page.locator('[data-transform-facing]:not(:disabled)').first().click();
         const attack = page.locator('[data-transform-attack]');
         assert.equal(await attack.getAttribute('data-tutorial-highlight'), 'true');
         await attack.click();

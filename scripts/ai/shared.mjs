@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -164,6 +165,7 @@ export async function loadGameModules(options = {}) {
     : fileURLToPath(new URL('../../', import.meta.url));
   const server = await createServer({
     root,
+    cacheDir: resolve(root, '.ai-lab', 'vite-cache', String(process.pid)),
     configFile: false,
     logLevel: 'error',
     server: { middlewareMode: true, hmr: false, ws: false, watch: null },
@@ -190,7 +192,16 @@ export async function writeJsonCheckpoint(path, value) {
   await mkdir(dirname(absolute), { recursive: true });
   const temporary = `${absolute}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  await rename(temporary, absolute);
+  // Windows scanners can briefly lock an existing checkpoint during atomic replacement.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rename(temporary, absolute);
+      return;
+    } catch (error) {
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt === 4) throw error;
+      await delay(20 * 2 ** attempt);
+    }
+  }
 }
 
 export async function readModelBytes(path) {

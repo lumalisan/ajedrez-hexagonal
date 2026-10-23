@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promotionPossible } from './selfplay-policy.mjs';
+import {
+  loadOpeningBook,
+  openingBookResumeMatches,
+  restoreBookCheckpoint,
+} from './arena-openings.mjs';
 
 import {
   EXPERT_BUDGET_MS,
@@ -26,6 +31,7 @@ async function main() {
     model: { type: 'string', required: true },
     'reference-model': { type: 'string' },
     'reference-root': { type: 'string' },
+    openings: { type: 'string' },
     pairs: { type: 'number', default: 4, integer: true, min: 1, max: 10_000 },
     output: { type: 'string', default: '.ai-lab/arena.json' },
     'candidate-profile': { type: 'string', default: 'model' },
@@ -45,6 +51,9 @@ Un presupuesto reducido es un ensayo diferente. Las truncadas se cuentan como in
 --ablation conserva el perfil y sus heurísticas tácticas, pero omite la corrección neuronal.
 --reference-model ruta sustituye Experto por otro modelo congelado, con los mismos límites.
 --reference-root carpeta usa un buscador congelado, exigiendo idénticas reglas del motor.
+--openings libro.json usa posiciones medias/finales con prefijos y reglas explícitas.
+  Admite hex-arena-openings-v1 y hex-engine-endgames-v1; --pairs no puede superar sus familias.
+  No añade órdenes aleatorias: --opening-plies solo afecta a las partidas iniciales predeterminadas.
 --resume continúa el informe existente desde su último checkpoint de cuatro órdenes.
 --stop-on-rejection termina si ya es imposible alcanzar el filtro de promoción.
 El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir el navegador.`);
@@ -93,6 +102,9 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
       ? (referenceModules ?? modules).neural.createNeuralEvaluator(referenceBytes)
       : undefined;
     const metadata = modules.neural.parseNeuralModel(bytes).metadata;
+    const referenceMetadata = referenceBytes
+      ? (referenceModules ?? modules).neural.parseNeuralModel(referenceBytes).metadata
+      : null;
     const profile =
       options['candidate-profile'] === 'model'
         ? (evaluate.searchProfile ?? 'classic')
@@ -101,6 +113,16 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
       throw new Error('--candidate-profile debe ser model, classic, pvs-history o pvs-threats.');
     }
     const rules = { ...modules.engine.DEFAULT_ACTION_RESOLUTION_RULES };
+    if (options.openings && options['fortress-hp'] !== undefined)
+      throw new Error(
+        '--fortress-hp no puede sustituir la vida declarada en un libro de aperturas.',
+      );
+    const openingBook = options.openings
+      ? await loadOpeningBook(modules.engine, options.openings, {
+          pairs: options.pairs,
+          seed: options.seed,
+        })
+      : null;
     const standardExpertCaps =
       options['budget-ms'] === EXPERT_BUDGET_MS && options.depth === EXPERT_DEPTH;
     const metrics = { classical: newSearchMetrics(), neural: newSearchMetrics() };
@@ -113,8 +135,8 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
       model: {
         path: resolve(options.model),
         sha256: createHash('sha256').update(new Uint8Array(bytes)).digest('hex'),
-        schema: modules.neural.NEURAL_FEATURE_SCHEMA,
-        inputSize: modules.neural.NEURAL_INPUT_SIZE,
+        schema: metadata.featureSchema,
+        inputSize: metadata.inputSize,
         bytes: bytes.byteLength,
         evaluation: metadata.evaluation ?? 'standalone-v1',
         residualScale: metadata.residualScale ?? null,
@@ -136,6 +158,8 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
         ? {
             path: resolve(options['reference-model']),
             sha256: createHash('sha256').update(new Uint8Array(referenceBytes)).digest('hex'),
+            schema: referenceMetadata.featureSchema,
+            inputSize: referenceMetadata.inputSize,
           }
         : null,
       referenceRoot: options['reference-root'] ? resolve(options['reference-root']) : null,
@@ -149,7 +173,9 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
         platform: process.platform,
         architecture: process.arch,
       },
-      rules,
+      rules: openingBook ? null : rules,
+      scope: openingBook ? openingBook.identity.scope : 'fullgame',
+      ...(openingBook ? { openingBook: openingBook.identity } : {}),
       pairing: 'Identical seeded opening and search seeds per pair; neural plays each side once.',
       games: [],
       summary: summarizeArena([]),
@@ -165,7 +191,8 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
         JSON.stringify(settings(saved.settings)) !== JSON.stringify(settings(options)) ||
         saved.model.sha256 !== report.model.sha256 ||
         saved.referenceModel?.sha256 !== report.referenceModel?.sha256 ||
-        JSON.stringify(saved.referenceSources ?? {}) !== JSON.stringify(report.referenceSources)
+        JSON.stringify(saved.referenceSources ?? {}) !== JSON.stringify(report.referenceSources) ||
+        !openingBookResumeMatches(saved, report)
       ) {
         throw new Error('El torneo guardado no coincide con los parámetros o modelos actuales.');
       }
@@ -200,17 +227,22 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
       };
       if (await rejectIfImpossible()) return;
       for (let pair = 0; pair < options.pairs; pair += 1) {
-        const opening = createOpening(modules, {
-          seed: options.seed,
-          index: pair,
-          openingPlies: options['opening-plies'],
-          fortressHp: options['fortress-hp'],
-        });
+        const opening = openingBook
+          ? openingBook.openings[pair]
+          : createOpening(modules, {
+              seed: options.seed,
+              index: pair,
+              openingPlies: options['opening-plies'],
+              fortressHp: options['fortress-hp'],
+            });
+        const gameRules = opening.rules ?? rules;
         for (const neuralPlayer of [0, 1]) {
           const gameId = `pair-${pair + 1}-neural-${neuralPlayer}`;
           if (report.games.some((game) => game.gameId === gameId)) continue;
           const partial = report.inProgress?.gameId === gameId ? report.inProgress : undefined;
-          let state = modules.engine.cloneState(partial?.finalState ?? opening.state);
+          let state = openingBook
+            ? restoreBookCheckpoint(modules.engine, opening, partial)
+            : modules.engine.cloneState(partial?.finalState ?? opening.state);
           const firstPly = opening.state.ply;
           const actions = [...(partial?.actions ?? opening.actions)];
           const searches = [...(partial?.searches ?? [])];
@@ -218,7 +250,9 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
           for (const search of searches) addSearchMetrics(gameMetrics[search.evaluator], search);
           const startedAt = performance.now() - (partial?.elapsedMs ?? 0);
           console.log(
-            `${gameId}: inicio; disposición ${opening.initialLayout}, HP ${opening.fortressHp}.`,
+            openingBook
+              ? `${gameId}: inicio; libro ${opening.id}, familia ${opening.familyId}, ámbito ${opening.scope}.`
+              : `${gameId}: inicio; disposición ${opening.initialLayout}, HP ${opening.fortressHp}.`,
           );
           while (!state.outcome && state.ply - firstPly < options['max-plies']) {
             const player = state.activePlayer;
@@ -230,7 +264,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
               difficulty: 'expert',
               personality: 'balanced',
               seed: deriveSeed(opening.seed, state.ply),
-              resolutionRules: rules,
+              resolutionRules: gameRules,
               ...(kind === 'neural'
                 ? {
                     evaluate: options.ablation
@@ -245,7 +279,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
             addSearchMetrics(metrics[kind], search.metadata);
             addSearchMetrics(gameMetrics[kind], search.metadata);
             searches.push({ ply: state.ply, player, evaluator: kind, ...search.metadata });
-            state = applySearchAction(modules, state, search.action, rules);
+            state = applySearchAction(modules, state, search.action, gameRules);
             if (search.action) actions.push(search.action);
             if ((state.ply - firstPly) % 4 === 0) {
               console.log(
@@ -260,6 +294,14 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
                 fortressHp: opening.fortressHp,
                 initialState: opening.initialState,
                 openingPlies: opening.actions.length,
+                ...(openingBook
+                  ? {
+                      openingId: opening.id,
+                      familyId: opening.familyId,
+                      scope: opening.scope,
+                      rules: gameRules,
+                    }
+                  : {}),
                 actions,
                 finalState: state,
                 searches,
@@ -281,6 +323,14 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
             fortressHp: opening.fortressHp,
             initialState: opening.initialState,
             openingPlies: opening.actions.length,
+            ...(openingBook
+              ? {
+                  openingId: opening.id,
+                  familyId: opening.familyId,
+                  scope: opening.scope,
+                  rules: gameRules,
+                }
+              : {}),
             actions,
             outcome: state.outcome,
             termination: state.outcome ? 'engine-outcome' : 'max-plies',
