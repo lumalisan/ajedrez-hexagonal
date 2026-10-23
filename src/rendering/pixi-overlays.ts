@@ -204,7 +204,12 @@ export class PixiOverlays {
       view.board.visible = false;
       view.target.visible = false;
     }
-    const inspectionAlpha = selected && selected.owner !== model.state.activePlayer ? 0.46 : 1;
+    const inspectionAlpha =
+      selected &&
+      (selected.owner !== model.state.activePlayer ||
+        selected.owner !== (model.inspectingPlayer ?? model.state.activePlayer))
+        ? 0.46
+        : 1;
     for (const [key, marker] of this.markers) {
       let view = this.markerViews.get(key);
       if (!view) {

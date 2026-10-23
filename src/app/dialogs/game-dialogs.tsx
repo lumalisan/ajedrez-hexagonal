@@ -60,16 +60,15 @@ function ModeDialog({ initial }: { initial: boolean }) {
       <div className="mode-choice" role="group" aria-label="Modo de juego">
         <button
           type="button"
-          className="mode-card"
-          data-game-mode="online"
-          onClick={() => commands.openDialog({ kind: 'online' })}
+          className="mode-card featured"
+          data-game-mode="machine"
+          onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
         >
-          <strong>Batalla en línea</strong>
-          {account.user ? (
-            <small>Busca un rival o crea una partida privada.</small>
-          ) : (
-            <OnlineAccountNotice />
-          )}
+          <span className="mode-icon" aria-hidden="true">
+            ♙ ⬡
+          </span>
+          <strong>Individual Vs. Hexfortia</strong>
+          <small>Elige entre Fácil, Medio, Difícil, Experto y Neuronal.</small>
         </button>
         <button
           type="button"
@@ -85,15 +84,16 @@ function ModeDialog({ initial }: { initial: boolean }) {
         </button>
         <button
           type="button"
-          className="mode-card featured"
-          data-game-mode="machine"
-          onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
+          className="mode-card"
+          data-game-mode="online"
+          onClick={() => commands.openDialog({ kind: 'online' })}
         >
-          <span className="mode-icon" aria-hidden="true">
-            ♙ ⬡
-          </span>
-          <strong>Individual Vs. Hexfortia</strong>
-          <small>Elige entre Fácil, Medio, Difícil, Experto y Neuronal.</small>
+          <strong>Batalla en línea</strong>
+          {account.user ? (
+            <small>Busca un rival o crea una partida privada.</small>
+          ) : (
+            <OnlineAccountNotice />
+          )}
         </button>
       </div>
       {!initial && (

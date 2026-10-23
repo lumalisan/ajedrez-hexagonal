@@ -166,6 +166,17 @@ const MAX_METRICS = new Set([
   'ramAttackDistance',
   'ratingGap',
 ]);
+
+/** Single-action and single-match feats do not represent cumulative progress. */
+export function achievementShowsProgress(definition: ProgressionAchievement): boolean {
+  return (
+    definition.target > 1 &&
+    !MAX_METRICS.has(definition.metric) &&
+    definition.metric !== 'historicalRank' &&
+    definition.metric !== 'monthlyRank'
+  );
+}
+
 export function progressionValue(
   progress: PlayerProgression,
   definition: ProgressionAchievement,

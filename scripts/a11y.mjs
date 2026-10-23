@@ -56,6 +56,10 @@ try {
 
       await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
       await audit('home');
+      await page.locator('[data-home-action="history"]').click();
+      await audit('history / empty state and new match');
+      await page.keyboard.press('Escape');
+      await page.locator('#game-dialog').waitFor({ state: 'hidden' });
       await page.locator('.home-profile').click();
       await audit('profile / overview');
       await page.getByRole('tab', { name: 'Estadísticas', exact: true }).click();
@@ -97,6 +101,12 @@ try {
       await page.locator('[data-home-action="rules"]').click();
       await page.locator('#rules-article').waitFor({ state: 'visible' });
       await audit('rules manual');
+      await page
+        .getByRole('navigation', { name: 'Continuar leyendo las reglas' })
+        .getByRole('button')
+        .last()
+        .click();
+      await audit('rules / sequential navigation');
       await page.locator('[data-rule-section="soldado"]').click();
       await page
         .locator('#rules-article .rule-unit-reference img')
@@ -149,6 +159,7 @@ try {
       await audit('match configuration / open total time menu');
       await clockControl.press('Escape');
       await chooseSelectOption(page, 'Disposición inicial', 'Frente clásico');
+      await chooseSelectOption(page, 'Tiempo total', '20 minutos');
       await page.locator('[data-start-free]').click();
       await audit('opening turn draw');
       await page.getByRole('button', { name: 'Comenzar partida', exact: true }).click();
@@ -156,6 +167,10 @@ try {
 
       await page.locator('#command-panel').waitFor({ state: 'hidden' });
       await audit('match / no selection');
+      await page.locator('#help-button').click();
+      await page.locator('.match-clock-notice').waitFor({ state: 'visible' });
+      await audit('rules / running clock notice');
+      await page.locator('.rules-close').click();
       await page.locator('#game-canvas').focus();
       await page.keyboard.press('s');
       await page.keyboard.press('s');
@@ -204,6 +219,8 @@ try {
       await page.locator('#settings-button').click();
       await page.locator('.accessibility-settings').waitFor({ state: 'visible' });
       await audit('settings');
+      await page.getByText('Cómo controlar el tablero', { exact: true }).click();
+      await audit('settings / pointer and keyboard help');
       const confirmationControl = await openSelect(page, 'Confirmación de órdenes');
       await audit('settings / open order confirmation menu');
       await confirmationControl.press('Escape');

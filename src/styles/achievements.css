@@ -102,38 +102,6 @@
   accent-color: var(--amber);
 }
 
-.achievement-modes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: start;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.achievement-modes summary {
-  display: inline-flex;
-  align-items: center;
-  min-width: 44px;
-  min-height: 44px;
-  cursor: pointer;
-}
-
-.achievement-modes summary:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-}
-
-.achievement-modes details[open] {
-  flex-basis: 100%;
-}
-
-.achievement-modes details > span {
-  display: inline-block;
-  padding-inline: 8px;
-}
-
 .legacy-achievements {
   padding-block: 20px;
   color: var(--muted);
@@ -861,51 +829,74 @@
 }
 .achievements-browser .achievement-modes {
   position: relative;
-  margin: 0;
-  gap: 2px;
-  flex-direction: row;
-  justify-content: center;
+  display: flex;
+  align-self: flex-end;
+  margin-top: auto;
+  padding-top: 4px;
 }
 .achievement-mode button {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 24px;
-  padding: 2px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: 600 10px / 1 var(--font-body);
-  cursor: pointer;
-}
-.achievement-mode button > span {
-  display: grid;
-  place-items: center;
-  min-width: 20px;
-  height: 18px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-}
-.achievement-mode > [role='tooltip'] {
-  visibility: hidden;
-  position: absolute;
-  z-index: 3;
-  top: 0;
-  right: 28px;
-  width: 140px;
-  max-width: calc(100vw - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 8px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast),
+    border-color var(--duration-fast);
+}
+.achievement-mode button:hover,
+.achievement-mode button[data-state='open'] {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+.achievement-mode-symbol {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.achievement-mode-symbol + .achievement-mode-symbol {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+.achievement-mode-symbol[data-mode='machine'] {
+  color: var(--amber);
+}
+.achievement-mode-symbol[data-mode='online'] {
+  color: var(--blue);
+}
+.achievement-mode-symbol svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.achievement-mode-difficulty {
+  font: 700 11px / 1 var(--font-display);
+}
+.achievement-mode-tooltip {
+  z-index: 5;
+  width: 260px;
+  max-width: calc(100vw - 40px);
+  padding: 12px;
   border-radius: var(--control-radius);
   background: var(--surface-3);
+  box-shadow: var(--elevation-menu);
   color: var(--text);
-  font-size: 11px;
-  line-height: 1.4;
+  font: 12px / 1.5 var(--font-body);
+  overflow-wrap: break-word;
 }
-.achievement-mode:hover > [role='tooltip'],
-.achievement-mode:focus-within > [role='tooltip'],
-.achievement-mode[data-open='true'] > [role='tooltip'] {
-  visibility: visible;
+.achievement-mode-tooltip-arrow {
+  fill: var(--surface-3);
 }
 .achievements-browser .achievements-footer {
   padding: 12px 24px;
@@ -990,15 +981,8 @@
   .achievements-browser .achievements-footer {
     padding-inline: 16px;
   }
-  .achievement-mode > [role='tooltip'] {
-    width: 100px;
-  }
 }
 @media (pointer: coarse) {
-  .achievement-mode button {
-    width: 28px;
-    height: 32px;
-  }
   .achievement-art {
     min-height: 148px;
   }
@@ -1013,21 +997,6 @@
   .achievements-browser .achievement-icon {
     width: min(100%, 104px);
   }
-}
-.achievements-browser .achievement-modes {
-  width: 100%;
-  align-items: center;
-  pointer-events: none;
-}
-.achievement-mode button,
-.achievement-mode > [role='tooltip'] {
-  pointer-events: auto;
-}
-.achievement-mode > [role='tooltip'] {
-  top: auto;
-  bottom: calc(100% + 4px);
-  right: 0;
-  max-width: 100%;
 }
 .achievements-profile .progression-summary progress {
   display: block;

@@ -2793,8 +2793,49 @@ async function assertAchievementsCatalog(page, surface) {
     .filter({ hasText: 'Logro oculto' })
     .locator('.achievement-mode button')
     .first();
+  assert(
+    await cards.evaluateAll((items) =>
+      items.every((item) => {
+        const indicators = item.querySelectorAll('.achievement-mode button');
+        if (!indicators.length) return true;
+        const button = indicators[0].getBoundingClientRect();
+        const card = item.getBoundingClientRect();
+        return (
+          indicators.length === 1 &&
+          button.width >= 44 &&
+          button.height >= 44 &&
+          card.right - button.right <= 14 &&
+          card.bottom - button.bottom <= 14
+        );
+      }),
+    ),
+    'Each achievement must group its modes in one accessible control at the bottom right.',
+  );
+  const combinedModes = page.locator('[data-achievement-id="p1-03"] .achievement-mode button');
+  assert(
+    (await combinedModes.locator('svg').count()) === 3 &&
+      (await combinedModes.getAttribute('aria-label')) ===
+        'En partidas contra Hexfortia, en línea o locales. En las partidas locales, solo cuentan las acciones del jugador local.',
+    'The combined control must retain each mode icon and explain all valid modes together.',
+  );
+  await combinedModes.scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await combinedModes.focus();
+  await page
+    .getByRole('tooltip')
+    .filter({ hasText: 'En partidas contra Hexfortia, en línea o locales.' })
+    .waitFor();
+  await page.keyboard.press('Escape');
+  assert(
+    await page.getByRole('heading', { name: 'Logros', exact: true }).isVisible(),
+    'Escape must dismiss the mode explanation while keeping the achievements dialog open.',
+  );
+  // Tooltips dismiss on ancestor scroll; finish revealing this row before opening its explanation.
+  await secretMode.scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise(requestAnimationFrame));
   await secretMode.click();
   const modeLabel = await secretMode.getAttribute('aria-label');
+  await page.getByRole('tooltip', { name: modeLabel, exact: true }).first().waitFor();
   assert(
     await page.getByRole('tooltip', { name: modeLabel, exact: true }).first().isVisible(),
     'Secret achievements must explain their mode on click.',
@@ -2849,7 +2890,7 @@ async function assertAchievementsCatalog(page, surface) {
     (await pending.getAttribute('aria-pressed')) === 'true' && (await cards.count()) === total,
     'The pending filter must show the full catalog for a new profile.',
   );
-  await page.getByRole('button', { name: /^Todos/ }).click();
+  await page.getByRole('button', { name: 'Todos', exact: true }).click();
   assert((await cards.count()) === total, 'The all filter must restore the complete catalog.');
   if (process.env.UI_SCREENSHOT)
     await page.screenshot({

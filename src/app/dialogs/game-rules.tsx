@@ -1,4 +1,6 @@
 import { DialogClose } from '../components/dialog-close';
+import { Button } from '../components/ui/button';
+import { MatchClockNotice } from '../components/match-clock-notice';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { RULE_SECTIONS, type RuleParagraph, type RuleSection } from '../../rules-content';
 import { mountRuleDemo, type RuleDemoId } from '../../rules-demo';
@@ -29,6 +31,9 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
   const articleRef = useRef<HTMLDivElement>(null);
   const focusArticleRef = useRef(false);
   const section = RULE_SECTIONS.find((candidate) => candidate.id === selectedId)!;
+  const sectionIndex = RULE_SECTIONS.indexOf(section);
+  const previous = RULE_SECTIONS[sectionIndex - 1];
+  const next = RULE_SECTIONS[sectionIndex + 1];
 
   useEffect(() => {
     const media = window.matchMedia(HORIZONTAL_RULE_TABS);
@@ -72,6 +77,7 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
           </div>
         </div>
         <p>Selecciona una sección para consultar las reglas de Hexfortia.</p>
+        <MatchClockNotice />
         <TabsList className="rules-navigation" aria-label="Secciones del reglamento">
           {RULE_SECTIONS.map((candidate) => {
             return (
@@ -101,7 +107,23 @@ export function RulesDialog({ sectionId }: { sectionId?: string }) {
             asChild
           >
             <div ref={active ? articleRef : undefined} className="rules-article">
-              {active && <RuleArticle section={candidate} />}
+              {active && (
+                <>
+                  <RuleArticle section={candidate} />
+                  <nav className="rules-pagination" aria-label="Continuar leyendo las reglas">
+                    {previous && (
+                      <Button size="compact" onClick={() => activate(previous.id)}>
+                        ← {previous.label}
+                      </Button>
+                    )}
+                    {next && (
+                      <Button size="compact" onClick={() => activate(next.id)}>
+                        {next.label} →
+                      </Button>
+                    )}
+                  </nav>
+                </>
+              )}
             </div>
           </TabsContent>
         );

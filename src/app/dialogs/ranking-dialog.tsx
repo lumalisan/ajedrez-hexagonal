@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { DialogClose } from '../components/dialog-close';
 import { ProfileAvatar } from '../components/profile-avatar';
 import { ProgressionSummary } from '../components/progression-summary';
+import { AccountStatus } from '../components/account-access';
+import { MatchClockNotice } from '../components/match-clock-notice';
 
 export function RankingDialog() {
   const { snapshot, commands } = useGame();
@@ -41,7 +43,8 @@ export function RankingDialog() {
             </div>
           ))}
         </nav>
-        <p className="achievements-sidebar-note">Tu progreso se guarda en este navegador.</p>
+        <MatchClockNotice />
+        <AccountStatus sidebar showSignOut={false} />
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">

@@ -326,6 +326,8 @@ export function createGameSession(
       ],
       selectedId,
       actions: visibleActions,
+      inspectingPlayer:
+        gameMode === 'local' || gameMode === null ? state.activePlayer : viewPlayer(),
       pending: pendingAction,
       hovered: tutorialStep()?.section === 0 ? null : hoveredHex,
       focused: tutorialStep()?.section === 0 ? null : focusedHex,

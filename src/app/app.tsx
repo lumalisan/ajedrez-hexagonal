@@ -230,6 +230,8 @@ function DialogBody({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const heading = bodyRef.current?.querySelector('h2');
     if (!heading) return;
+    const modal = heading.closest('dialog');
+    if (modal) modal.scrollTop = 0;
     heading.id = 'active-dialog-title';
     heading.tabIndex = -1;
     let active = true;

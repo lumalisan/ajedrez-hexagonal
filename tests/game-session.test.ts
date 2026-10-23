@@ -1954,6 +1954,8 @@ describe('sesión que conecta React con el juego', () => {
     const search = deferred<GameAction | null>();
     collaborators.chooseAction.mockReturnValueOnce(search.promise);
     const session = createSession();
+    const renderer = rendererDouble();
+    session.attachRenderer(renderer);
     session.commands.loadRecord(savedRecord(1, 'machine'));
     const before = structuredClone(session.getSnapshot().state);
     expect(session.getSnapshot().machineThinking).toBe(true);
@@ -1964,6 +1966,13 @@ describe('sesión que conecta React con el juego', () => {
       session.commands.selectPiece(piece.id);
       expect(session.getSnapshot().selectedId).toBe(piece.id);
       expect(session.getSnapshot().visibleActions.length).toBeGreaterThan(0);
+      expect(renderer.setModel).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          selectedId: piece.id,
+          inspectingPlayer: 0,
+          state: expect.objectContaining({ activePlayer: 1 }),
+        }),
+      );
       const action = session.getSnapshot().visibleActions[0];
       session.commands.prepareAction(action);
       const move = session

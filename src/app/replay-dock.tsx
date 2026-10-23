@@ -63,6 +63,7 @@ export function ReplayDock() {
             value={cursor}
             data-replay-slider
             aria-label="Posición de la repetición"
+            aria-valuetext={`Posición ${cursor} de ${record.actions.length}. ${description}`}
             onChange={(event) => commands.setReplayCursor(Number(event.currentTarget.value))}
           />
           <button

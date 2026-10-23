@@ -48,6 +48,8 @@ export interface RenderModel {
   playerColors?: [string, string];
   fortressMaxHp: [1 | 2 | 3, 1 | 2 | 3];
   selectedId: string | null;
+  /** Player inspecting the board; defaults to the active player in standalone scenes. */
+  inspectingPlayer?: Player;
   actions: GameAction[];
   pending: GameAction | null;
   /** Visual intent in instructional scenes; does not change the action sent to the engine. */

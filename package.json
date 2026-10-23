@@ -18,6 +18,7 @@
     "test:types": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project tsconfig.server.json",
     "test:coverage": "vitest run --coverage",
     "test:ui": "node scripts/ui-smoke.mjs",
+    "test:ux": "node scripts/ux-smoke.mjs",
     "test:a11y": "node scripts/a11y.mjs",
     "test:online": "tsx scripts/online-smoke.ts",
     "test:tutorial": "node scripts/tutorial-smoke.mjs",

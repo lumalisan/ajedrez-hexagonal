@@ -44,6 +44,36 @@ function graphicsIn(container: Container): Graphics[] {
 }
 
 describe('overlays tácticos nativos de Pixi', () => {
+  it.each([0, 1] as const)(
+    'atenúa los destinos rivales durante el turno del jugador %s y conserva la inspección propia',
+    (activePlayer) => {
+      const overlays = new PixiOverlays();
+      const base = modelFor(position());
+      const model: RenderModel = {
+        ...base,
+        state: { ...base.state, activePlayer },
+        inspectingPlayer: 1,
+      };
+      try {
+        overlays.update(model, 0, 0, 0);
+        const marker = overlays.board.getChildByLabel('action-marker-0,-1', true)!;
+        const target = overlays.targets.getChildByLabel('target-marker-0,-1')!;
+        expect(marker.alpha).toBe(0.46);
+        expect(target.alpha).toBe(0.46);
+
+        overlays.update({ ...model, inspectingPlayer: 0 }, 0, 0, 0);
+        expect(marker.alpha).toBe(activePlayer === 0 ? 1 : 0.46);
+        expect(target.alpha).toBe(activePlayer === 0 ? 1 : 0.46);
+
+        overlays.update({ ...base, inspectingPlayer: 0 }, 0, 0, 0);
+        expect(marker.alpha).toBe(1);
+        expect(target.alpha).toBe(1);
+      } finally {
+        overlays.destroy();
+      }
+    },
+  );
+
   it('señala todos los destinos interceptados, ocupados o más allá de la zona protegida', () => {
     const state = position([
       { id: 'drone', type: 'drone', owner: 0, position: { q: 0, r: 0 } },

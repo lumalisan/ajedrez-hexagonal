@@ -15,6 +15,7 @@ import {
   recordLearning,
   PROGRESSION_ACHIEVEMENTS,
   progressionValue,
+  achievementShowsProgress,
   parsePlayerProgression,
   rankingSummary,
   migrateProgression,
@@ -24,6 +25,31 @@ import type { AiDifficulty, Piece, Player } from '../src/types';
 
 const AT = '2026-10-07T12:00:00.000Z';
 const definition = (id: string) => PROGRESSION_ACHIEVEMENTS.find((entry) => entry.id === id)!;
+
+describe('barras de progreso de logros', () => {
+  it.each([
+    'p1-09',
+    'p1-18',
+    'p2-04',
+    'p2-05',
+    'p2-11',
+    'p2-17',
+    'p3-07',
+    'p3-09',
+    'p3-18',
+    'p4-18',
+    'p4-02',
+    'p5-04',
+  ])('%s es una hazaña puntual o una posición de clasificación', (id) =>
+    expect(achievementShowsProgress(definition(id))).toBe(false),
+  );
+
+  it.each(['p1-14', 'p1-15', 'p2-01', 'p2-06', 'p2-10', 'p3-04', 'p3-11'])(
+    '%s permite seguir un contador, una racha o una puntuación',
+    (id) => expect(achievementShowsProgress(definition(id))).toBe(true),
+  );
+});
+
 function noAwards(): PlayerProgression {
   const progress = createPlayerProgression();
   for (const entry of PROGRESSION_ACHIEVEMENTS) progress.unlockedAt[entry.id] = AT;

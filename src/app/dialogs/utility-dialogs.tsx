@@ -21,6 +21,7 @@ import { OpeningDrawDialog } from './opening-draw-dialog';
 import { ProfileDialog } from './profile-dialog';
 import { StoryDialog } from './story-dialog';
 import { RankingDialog } from './ranking-dialog';
+import { MatchClockNotice } from '../components/match-clock-notice';
 
 const CONFIRMATION_OPTIONS: readonly {
   value: GamePreferences['confirmation'];
@@ -30,6 +31,14 @@ const CONFIRMATION_OPTIONS: readonly {
   { value: 'critical', label: 'Solo críticas' },
   { value: 'quick', label: 'Rápida' },
 ];
+
+const CONFIRMATION_HELP: Record<GamePreferences['confirmation'], string> = {
+  always: 'Revisa y confirma cada orden antes de ejecutarla. Recomendado para aprender.',
+  critical:
+    'Los movimientos normales se ejecutan al elegir destino. Se pide confirmación al eliminar unidades, dañar fortalezas, sufrir una intercepción o transformar vehículos.',
+  quick:
+    'Mover y atacar se ejecutan al elegir destino, sin confirmación. Las transformaciones siguen pidiendo confirmación.',
+};
 
 export function UtilityDialogs() {
   const { snapshot, commands } = useGame();
@@ -60,14 +69,23 @@ export function UtilityDialogs() {
               ? '¿Rendirse en esta partida en línea?'
               : '¿Volver al inicio?'
           }
-          confirmLabel={snapshot.gameMode === 'online' ? 'Rendirse' : 'Guardar y salir'}
+          confirmLabel={
+            snapshot.activeScenario
+              ? 'Salir del ejercicio'
+              : snapshot.gameMode === 'online'
+                ? 'Rendirse'
+                : 'Guardar y salir'
+          }
           confirmAttribute="data-confirm-abandon"
           onConfirm={commands.abandon}
+          danger={snapshot.gameMode === 'online'}
         >
           <p>
-            {snapshot.gameMode === 'online'
-              ? 'Rendirse concede la victoria al rival y finaliza la partida compartida. El reloj de una partida en línea continúa aunque cierres la pestaña.'
-              : 'Volverás al menú de inicio. La partida se guardará durante 30 días para que puedas retomarla más adelante. Transcurrido ese plazo, se registrará como perdida.'}
+            {snapshot.activeScenario
+              ? 'Volverás al menú de inicio. Puedes empezar de nuevo el ejercicio cuando quieras; su posición actual no se guarda como partida pendiente.'
+              : snapshot.gameMode === 'online'
+                ? 'Rendirse concede la victoria al rival y finaliza la partida compartida. El reloj de una partida en línea continúa aunque cierres la pestaña.'
+                : 'Volverás al menú de inicio. La partida se guardará durante 30 días para que puedas retomarla más adelante. Transcurrido ese plazo, se registrará como perdida.'}
           </p>
         </ConfirmationDialog>
       );
@@ -238,6 +256,7 @@ function SettingsDialog() {
       <span className="eyebrow">OPCIONES</span>
       <h2>Audio, vista y accesibilidad</h2>
       <p>Personaliza la partida y guarda los cambios cuando termines.</p>
+      <MatchClockNotice />
       <div className="volume-settings" aria-label="Controles de volumen">
         <VolumeControl
           preferences={preferences}
@@ -273,14 +292,19 @@ function SettingsDialog() {
           checked={preferences.fixedBoard}
           onChange={(fixedBoard) => updateDraft({ fixedBoard })}
         />
-        <div className="field-row">
+        <div className="grid gap-2 px-3 py-2 text-sm">
           <label htmlFor="confirmation">Confirmación de órdenes</label>
           <GameSelect
             inputId="confirmation"
             options={CONFIRMATION_OPTIONS}
             value={preferences.confirmation}
             onChange={(confirmation) => updateDraft({ confirmation })}
+            describedBy="confirmation-help"
           />
+          <p id="confirmation-help" className="m-0 leading-relaxed" aria-live="polite">
+            {CONFIRMATION_HELP[preferences.confirmation]} El movimiento del tanque y las órdenes que
+            provocan una derrota por orientación siempre requieren confirmación.
+          </p>
         </div>
         <TogglePreference
           label="Pantalla de entrega"
@@ -355,7 +379,44 @@ function SettingsDialog() {
           }}
         />
       </div>
+      <details className="board-controls-help">
+        <summary>Cómo controlar el tablero</summary>
+        <p>
+          Selecciona una unidad y después una casilla resaltada. Arrastra para desplazar la vista;
+          usa la rueda del ratón o un gesto de pinza con dos dedos para acercar y alejar.
+        </p>
+        <p>Con el foco en el tablero, también puedes usar el teclado:</p>
+        <dl className="board-shortcuts">
+          <div>
+            <dt>Q W E / A S D</dt>
+            <dd>Recorrer las seis direcciones</dd>
+          </div>
+          <div>
+            <dt>Intro o espacio</dt>
+            <dd>Seleccionar casilla</dd>
+          </div>
+          <div>
+            <dt>U / Mayús + U</dt>
+            <dd>Siguiente / anterior unidad propia</dd>
+          </div>
+          <div>
+            <dt>Esc</dt>
+            <dd>Cancelar la orden preparada</dd>
+          </div>
+          <div>
+            <dt>C</dt>
+            <dd>Centrar el tablero</dd>
+          </div>
+          <div>
+            <dt>H / L</dt>
+            <dd>Abrir reglas / alternar registro</dd>
+          </div>
+        </dl>
+      </details>
       <div className="dialog-actions">
+        <Button data-cancel-preferences onClick={commands.closeDialog}>
+          Cancelar
+        </Button>
         <Button
           type="button"
           variant="primary"
@@ -400,6 +461,7 @@ function VolumeControl({
         value={percentage}
         data-volume={preference}
         aria-label={label}
+        aria-valuetext={`${percentage}%`}
         onChange={(event) => onChange({ [preference]: Number(event.currentTarget.value) / 100 })}
       />
       <output>{percentage}%</output>
@@ -464,7 +526,12 @@ function ContinueDialog() {
               data-continue-match={record.createdAt}
               onClick={() => commands.continueMatch(record.createdAt)}
             >
-              <span>{new Date(resumedAt).toLocaleDateString('es-ES')}</span>
+              <time dateTime={resumedAt}>
+                {new Date(resumedAt).toLocaleString('es-ES', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </time>
               <strong>{record.config.participants.map((p) => p.name).join(' vs. ')}</strong>
               <small>
                 {record.currentAction} órdenes ·{' '}
@@ -479,6 +546,15 @@ function ContinueDialog() {
           <div className="empty-state">
             <strong>No hay partidas pendientes</strong>
             <p>Las partidas que abandones se guardarán aquí.</p>
+            <Button
+              variant="primary"
+              onClick={() => {
+                commands.closeDialog();
+                commands.setHomeView('new');
+              }}
+            >
+              Nueva partida
+            </Button>
           </div>
         )}
       </div>
@@ -511,7 +587,12 @@ function HistoryDialog() {
                 if (entry.record) commands.openHistoryReplay(entry.record);
               }}
             >
-              <span>{new Date(entry.completedAt).toLocaleDateString('es-ES')}</span>
+              <time dateTime={entry.completedAt}>
+                {new Date(entry.completedAt).toLocaleString('es-ES', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </time>
               <strong>{outcomeText(entry.outcome)}</strong>
               <small>
                 {entry.participants.join(' vs. ')} · {entry.plies} órdenes ·{' '}
@@ -524,6 +605,15 @@ function HistoryDialog() {
           <div className="empty-state">
             <strong>Aún no hay resultados</strong>
             <p>Termina una partida libre para inaugurar el archivo.</p>
+            <Button
+              variant="primary"
+              onClick={() => {
+                commands.closeDialog();
+                commands.setHomeView('new');
+              }}
+            >
+              Nueva partida
+            </Button>
           </div>
         )}
       </div>

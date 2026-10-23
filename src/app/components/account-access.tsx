@@ -36,49 +36,63 @@ export function OnlineAccountNotice() {
   );
 }
 
-export function AccountStatus() {
+export function AccountStatus({
+  sidebar = false,
+  showSignOut = true,
+}: {
+  sidebar?: boolean;
+  showSignOut?: boolean;
+}) {
   const { account, controller } = useAccount();
+  if (sidebar && account.user && !showSignOut) return null;
   return (
-    <div className="grid gap-2 text-sm leading-relaxed" data-account-status>
+    <div
+      className={`grid gap-2 text-sm leading-relaxed${sidebar ? ' mt-auto pt-8' : ''}`}
+      data-account-status
+    >
       {account.user ? (
         <>
-          <span className="break-all text-muted">{account.user.email}</span>
-          <span role="status">
-            {account.sync === 'saved'
-              ? 'Progreso guardado en la nube'
-              : account.sync === 'saving'
-                ? 'Guardando en la nube…'
-                : account.sync === 'pending'
-                  ? 'Cambios pendientes de guardar'
-                  : account.sync === 'conflict'
-                    ? 'Hay dos versiones de tu progreso'
-                    : 'Guardado en la nube sin conexión'}
-          </span>
-          {account.syncError && (
-            <p className="m-0 text-danger" role="alert">
-              {account.syncError}
-            </p>
-          )}
-          {account.error && (
-            <p className="m-0 text-danger" role="alert">
-              {account.error}
-            </p>
-          )}
-          {account.sync === 'conflict' ? (
-            <div className="flex flex-wrap gap-2">
-              <Button size="compact" onClick={() => void controller.resolveConflict('cloud')}>
-                Conservar la nube
-              </Button>
-              <Button size="compact" onClick={() => void controller.resolveConflict('device')}>
-                Conservar este dispositivo
-              </Button>
-            </div>
-          ) : (
-            account.sync === 'offline' && (
-              <Button size="compact" onClick={controller.retry}>
-                Reintentar guardado
-              </Button>
-            )
+          {!sidebar && (
+            <>
+              <span className="break-all text-muted">{account.user.email}</span>
+              <span role="status">
+                {account.sync === 'saved'
+                  ? 'Progreso guardado en la nube'
+                  : account.sync === 'saving'
+                    ? 'Guardando en la nube…'
+                    : account.sync === 'pending'
+                      ? 'Cambios pendientes de guardar'
+                      : account.sync === 'conflict'
+                        ? 'Hay dos versiones de tu progreso'
+                        : 'Guardado en la nube sin conexión'}
+              </span>
+              {account.syncError && (
+                <p className="m-0 text-danger" role="alert">
+                  {account.syncError}
+                </p>
+              )}
+              {account.error && (
+                <p className="m-0 text-danger" role="alert">
+                  {account.error}
+                </p>
+              )}
+              {account.sync === 'conflict' ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button size="compact" onClick={() => void controller.resolveConflict('cloud')}>
+                    Conservar la nube
+                  </Button>
+                  <Button size="compact" onClick={() => void controller.resolveConflict('device')}>
+                    Conservar este dispositivo
+                  </Button>
+                </div>
+              ) : (
+                account.sync === 'offline' && (
+                  <Button size="compact" onClick={controller.retry}>
+                    Reintentar guardado
+                  </Button>
+                )
+              )}
+            </>
           )}
           <Button
             size="compact"
@@ -91,7 +105,10 @@ export function AccountStatus() {
         </>
       ) : (
         <>
-          <span className="text-muted">Invitado · Progreso guardado en este navegador</span>
+          <p className="m-0 text-muted">
+            Tu perfil y tu progreso se guardan en este navegador. Crea una cuenta para conservarlos
+            y acceder a ellos desde otros dispositivos, o inicia sesión si ya tienes una.
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button size="compact" onClick={() => controller.open('signin')}>
               Iniciar sesión

@@ -8,11 +8,14 @@ import {
   TIERS,
   levelProgress,
   progressionValue,
+  achievementShowsProgress,
   type ProgressionAchievement,
 } from '../../progression';
 import { AchievementIcon } from '../components/achievement-icon';
+import { AchievementModes } from '../components/achievement-modes';
 import { ProgressionSummary } from '../components/progression-summary';
 import { useGame } from '../game-context';
+import { AccountStatus } from '../components/account-access';
 
 const FILTERS = [
   { id: 'all', label: 'Todos' },
@@ -30,20 +33,20 @@ export function AchievementsDialog() {
   const { snapshot, commands } = useGame();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
   const { tier } = levelProgress(snapshot.progression.xp);
-  const [selectedTier, setSelectedTier] = useState(0);
+  const [selectedTier, setSelectedTier] = useState<number | 'all'>(0);
   const [lockedHint, setLockedHint] = useState<number | null>(null);
-  const category = TIERS[selectedTier];
-  const entries = PROGRESSION_ACHIEVEMENTS.filter((entry) => entry.tier === selectedTier).map(
-    (definition) => ({
-      definition,
-      progress: {
-        current: Math.min(definition.target, progressionValue(snapshot.progression, definition)),
-        target: definition.target,
-        unlocked: Boolean(snapshot.progression.unlockedAt[definition.id]),
-        unlockedAt: snapshot.progression.unlockedAt[definition.id] ?? null,
-      },
-    }),
-  );
+  const category = selectedTier === 'all' ? null : TIERS[selectedTier];
+  const entries = PROGRESSION_ACHIEVEMENTS.filter(
+    (entry) => selectedTier === 'all' || entry.tier === selectedTier,
+  ).map((definition) => ({
+    definition,
+    progress: {
+      current: Math.min(definition.target, progressionValue(snapshot.progression, definition)),
+      target: definition.target,
+      unlocked: Boolean(snapshot.progression.unlockedAt[definition.id]),
+      unlockedAt: snapshot.progression.unlockedAt[definition.id] ?? null,
+    },
+  }));
   const unlocked = entries.filter((entry) => entry.progress.unlocked).length;
   const percentage = Math.round((unlocked / entries.length) * 100);
   const clockRunning =
@@ -103,11 +106,21 @@ export function AchievementsDialog() {
               </div>
             );
           })}
+          <div className="achievement-level">
+            <button
+              type="button"
+              aria-current={selectedTier === 'all' ? 'page' : undefined}
+              data-achievement-tier="all"
+              onClick={() => {
+                setSelectedTier('all');
+                setLockedHint(null);
+              }}
+            >
+              Todos los niveles
+            </button>
+          </div>
         </nav>
-        <p className="achievements-sidebar-note">
-          En local las acciones de tu bando suman al perfil; las acciones del invitado no suman a tu
-          perfil.
-        </p>
+        <AccountStatus sidebar showSignOut={false} />
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
@@ -160,18 +173,25 @@ export function AchievementsDialog() {
             ))}
           </div>
           <span className="achievements-result-count" role="status">
-            +{category.xp} XP por logro
+            {category
+              ? `+${category.xp} XP por logro`
+              : 'Todos los niveles · Incluye logros ocultos'}
           </span>
         </div>
         <div className="achievements-list" tabIndex={0} aria-label="Lista de logros">
           {visible.length ? (
             <section className="achievements-category" aria-labelledby="achievement-category-title">
               <h3 id="achievement-category-title" className="sr-only">
-                {category.name}
+                {category?.name ?? 'Todos los niveles'}
               </h3>
               <ul>
                 {visible.map(({ definition, progress }) => (
-                  <AchievementRow key={definition.id} definition={definition} progress={progress} />
+                  <AchievementRow
+                    key={definition.id}
+                    definition={definition}
+                    progress={progress}
+                    revealHidden={selectedTier === 'all'}
+                  />
                 ))}
               </ul>
             </section>
@@ -201,13 +221,14 @@ export function AchievementsDialog() {
 function AchievementRow({
   definition,
   progress,
+  revealHidden,
 }: {
   definition: ProgressionAchievement;
   progress: { current: number; target: number; unlocked: boolean; unlockedAt: string | null };
+  revealHidden: boolean;
 }) {
-  const cumulative = progress.target > 1;
-  const secret = definition.hidden && !progress.unlocked;
-  const modes: readonly string[] = definition.modes;
+  const cumulative = achievementShowsProgress(definition);
+  const secret = definition.hidden && !progress.unlocked && !revealHidden;
   return (
     <li
       className={`achievement-row${progress.unlocked ? ' is-unlocked' : ''}`}
@@ -215,30 +236,14 @@ function AchievementRow({
     >
       <div className="achievement-art">
         <AchievementIcon icon={definition.id} unlocked={progress.unlocked} />
-        {modes.length > 0 && (
-          <div className="achievement-modes" aria-label="Modalidades válidas">
-            {modes.map((mode) => {
-              const label =
-                mode === 'machine'
-                  ? `Hexfortia · ${['Fácil', 'Medio', 'Difícil', 'Experto'][definition.minDifficulty]} o superior`
-                  : mode === 'online'
-                    ? 'En línea · pendiente de esta modalidad'
-                    : 'Local · solo Cian';
-              return (
-                <ModeIndicator key={mode} label={label} id={`${definition.id}-${mode}`}>
-                  {mode === 'machine'
-                    ? `⬡ ${['F', 'M', 'D', 'E'][definition.minDifficulty]}`
-                    : mode === 'online'
-                      ? '◎'
-                      : '♙'}
-                </ModeIndicator>
-              );
-            })}
-          </div>
-        )}
       </div>
       <div className="achievement-description">
         <h4>{definition.title}</h4>
+        {revealHidden && (
+          <small>
+            Nivel {TIERS[definition.tier].name} · +{TIERS[definition.tier].xp} XP
+          </small>
+        )}
         {!secret && <p>{definition.description}</p>}
         {cumulative && !progress.unlocked && !secret && (
           <div className="achievement-progress">
@@ -279,34 +284,7 @@ function AchievementRow({
           )}
         </span>
       </div>
+      <AchievementModes modes={definition.modes} minDifficulty={definition.minDifficulty} />
     </li>
-  );
-}
-
-function ModeIndicator({
-  label,
-  id,
-  children,
-}: {
-  label: string;
-  id: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="achievement-mode" data-open={open}>
-      <button
-        type="button"
-        aria-label={label}
-        aria-describedby={id}
-        onClick={() => setOpen(!open)}
-        onBlur={() => setOpen(false)}
-      >
-        <span aria-hidden="true">{children}</span>
-      </button>
-      <span id={id} role="tooltip">
-        {label}
-      </span>
-    </span>
   );
 }

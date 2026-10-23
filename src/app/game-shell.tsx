@@ -103,7 +103,7 @@ function Header() {
             onClick={() =>
               snapshot.tutorial
                 ? commands.exitTutorial()
-                : replayCursor !== null
+                : replayCursor !== null || state.outcome
                   ? commands.abandon()
                   : commands.openDialog({ kind: 'abandon' })
             }
@@ -112,7 +112,13 @@ function Header() {
               ? 'Abandonar tutorial'
               : replayCursor !== null
                 ? 'Abandonar repetición'
-                : 'Abandonar partida'}
+                : state.outcome
+                  ? 'Volver al inicio'
+                  : gameMode === 'online'
+                    ? 'Rendirse y salir'
+                    : activeScenario
+                      ? 'Salir del ejercicio'
+                      : 'Guardar y salir'}
           </button>
         </div>
       </div>

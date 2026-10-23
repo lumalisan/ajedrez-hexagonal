@@ -32,6 +32,14 @@ const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'neural', label: 'Neuronal' },
 ];
 
+const DIFFICULTY_HELP: Record<AiDifficulty, string> = {
+  recruit: 'Recomendado para tu primera partida. Responde rápido y permite practicar las reglas.',
+  tactical: 'Dedica hasta 2 segundos por turno a buscar su jugada.',
+  commander: 'Dedica hasta 5 segundos por turno a buscar su jugada.',
+  expert: 'Búsqueda más profunda, con hasta 15 segundos de cálculo por turno.',
+  neural: 'Combina la búsqueda con un modelo neuronal, con hasta 15 segundos de cálculo por turno.',
+};
+
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }) {
   const { snapshot, commands } = useGame();
   const { preferences } = snapshot;
@@ -151,7 +159,11 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
                 options={DIFFICULTY_OPTIONS}
                 value={difficulty}
                 onChange={setDifficulty}
+                describedBy="ai-difficulty-help"
               />
+              <p id="ai-difficulty-help" className="m-0 text-xs leading-relaxed text-muted">
+                {DIFFICULTY_HELP[difficulty]}
+              </p>
             </div>
           )}
           <div className="grid min-w-0 content-start gap-2">
@@ -161,7 +173,13 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
               options={FORTRESS_HP_OPTIONS}
               value={fortressHp}
               onChange={setFortressHp}
+              describedBy="fortress-hp-help"
             />
+            <p id="fortress-hp-help" className="m-0 text-xs leading-relaxed text-muted">
+              Cada impacto resta 1 punto.{' '}
+              {fortressHp === 1 ? 'Un impacto' : `${fortressHp} impactos`}{' '}
+              {fortressHp === 1 ? 'destruye' : 'destruyen'} la Fortaleza.
+            </p>
           </div>
         </div>
         {mode !== 'machine' && (

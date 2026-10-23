@@ -1231,7 +1231,8 @@ button:disabled {
     max-height: calc(100dvh - 40px);
   }
 
-  .game-dialog:has(.match-configuration) .dialog-actions {
+  .game-dialog:has(.match-configuration) .dialog-actions,
+  .game-dialog:has([data-save-preferences]) .dialog-actions {
     position: sticky;
     z-index: 7;
     bottom: 0;
@@ -1461,7 +1462,7 @@ button:disabled {
 
 .volume-control strong,
 .toggle-row strong {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -1470,12 +1471,13 @@ button:disabled {
 .accessibility-settings p,
 .board-settings p {
   color: var(--muted);
-  font-size: 9px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .volume-control input[type='range'] {
   width: 100%;
+  min-height: var(--control-height);
   accent-color: var(--move);
   cursor: pointer;
 }
@@ -1483,9 +1485,57 @@ button:disabled {
 .volume-control output {
   color: var(--move);
   font-family: 'Bahnschrift', sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+.dialog-body .match-clock-notice {
+  display: block;
+  max-width: none;
+  margin-block: 12px;
+  color: var(--threat);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.game-dialog .board-controls-help {
+  margin-top: 20px;
+}
+
+.game-dialog .board-controls-help summary {
+  display: list-item;
+  min-height: var(--control-height);
+  align-content: center;
+  font-size: 14px;
+}
+
+.game-dialog .board-controls-help p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.board-shortcuts {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.board-shortcuts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+
+.board-shortcuts dt {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.board-shortcuts dd {
+  margin: 0;
+  color: var(--muted);
 }
 
 .accessibility-settings,
@@ -2734,7 +2784,7 @@ button:disabled {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(320px, max-content) minmax(0, 1fr);
   background: var(--surface);
 }
 
@@ -2778,6 +2828,7 @@ button:disabled {
   gap: 6px;
   padding-right: 5px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   scrollbar-color: var(--line-strong) transparent;
 }
 
@@ -3621,6 +3672,15 @@ button.moment-card {
   line-height: 1.35;
 }
 
+.history-card strong {
+  font-size: 14px;
+}
+
+.history-card time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .moment-card p,
 .history-card p,
 .moment-card small,
@@ -3629,6 +3689,12 @@ button.moment-card {
   color: var(--muted);
   font-size: 9px;
   line-height: 1.45;
+}
+
+.history-card p,
+.history-card small {
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .moment-jump {
@@ -5947,6 +6013,20 @@ button.history-card:disabled {
   margin-top: 32px;
   padding-top: 20px;
   border-top: 1px solid var(--line-strong);
+}
+
+.rules-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.rules-pagination > button {
+  flex: 1 1 180px;
 }
 @media (max-width: 760px) and (orientation: portrait) {
   .story-heading {

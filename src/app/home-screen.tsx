@@ -34,7 +34,7 @@ export function HomeScreen() {
     previousView.current = snapshot.homeView;
   }, [snapshot.homeView]);
   const continueDetail = saved.length
-    ? `${saved.length} partidas pendientes · Elige cuál retomar`
+    ? `${saved.length} ${saved.length === 1 ? 'partida pendiente' : 'partidas pendientes'} · Elige cuál retomar`
     : 'No hay partidas pendientes';
   return (
     <main
@@ -43,6 +43,12 @@ export function HomeScreen() {
       aria-label="Portada de Hexfortia"
       hidden={snapshot.homeView === null}
       inert={snapshot.homeView === null}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && snapshot.homeView === 'new' && !snapshot.dialog) {
+          event.preventDefault();
+          commands.setHomeView('main');
+        }
+      }}
     >
       <aside className="home-menu-panel">
         <div className="home-brand">
@@ -84,19 +90,6 @@ export function HomeScreen() {
               <nav className="home-navigation mode-navigation" aria-label="Tipo de partida">
                 <button
                   type="button"
-                  className="home-nav-button"
-                  data-home-mode="online"
-                  onClick={() => commands.openDialog({ kind: 'online' })}
-                >
-                  <span>Batalla en línea</span>
-                  {account.user ? (
-                    <small>Busca un rival o comparte una partida privada</small>
-                  ) : (
-                    <OnlineAccountNotice />
-                  )}
-                </button>
-                <button
-                  type="button"
                   className="home-nav-button primary"
                   data-home-mode="machine"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
@@ -111,7 +104,20 @@ export function HomeScreen() {
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'local' })}
                 >
                   <span>Batalla local</span>
-                  <small>Juega contra otra persona en el mismo ordenador</small>
+                  <small>Dos personas comparten este dispositivo y alternan turnos</small>
+                </button>
+                <button
+                  type="button"
+                  className="home-nav-button"
+                  data-home-mode="online"
+                  onClick={() => commands.openDialog({ kind: 'online' })}
+                >
+                  <span>Batalla en línea</span>
+                  {account.user ? (
+                    <small>Busca un rival o comparte una partida privada</small>
+                  ) : (
+                    <OnlineAccountNotice />
+                  )}
                 </button>
               </nav>
             </>

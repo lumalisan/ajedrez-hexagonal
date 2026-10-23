@@ -11,6 +11,7 @@ import { playerRecords, playerStatistics } from '../../profile-statistics';
 import { ProgressionSummary } from '../components/progression-summary';
 import { AccountStatus } from '../components/account-access';
 import { useAccount } from '../account-context';
+import { MatchClockNotice } from '../components/match-clock-notice';
 
 const emblemLabels = {
   fortress: 'Fortaleza',
@@ -157,7 +158,6 @@ const MODES = [
 ] as const;
 
 export function ProfileDialog() {
-  const { account } = useAccount();
   const { snapshot } = useGame();
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
   const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
@@ -188,14 +188,8 @@ export function ProfileDialog() {
             </div>
           ))}
         </nav>
-        <p className="achievements-sidebar-note">
-          {account.user
-            ? 'Tu perfil y progreso se guardan en la nube.'
-            : 'Tu perfil y progreso se guardan en este navegador.'}
-        </p>
-        <div className="mt-4">
-          <AccountStatus />
-        </div>
+        <MatchClockNotice />
+        <AccountStatus sidebar />
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
