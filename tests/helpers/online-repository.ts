@@ -16,6 +16,19 @@ export class MemoryOnlineRepository implements OnlineRepository {
   matches = new Map<string, OnlineMatch>();
   private pending: Promise<unknown> = Promise.resolve();
 
+  async rankingData() {
+    await this.pending;
+    return structuredClone({
+      accounts: [...this.accounts].map(([id, { data }]) => ({
+        id,
+        profile: data['hexagonal:user-profile:v1'] ?? null,
+        progression: data['hexagonal:progression:v1'] ?? null,
+      })),
+      players: [...this.players.values()].filter((player) => player.played > 0),
+      matches: [...this.matches.values()].filter((match) => match.settled && match.ranked),
+    });
+  }
+
   transaction<T>(_lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T> {
     const result = this.pending.then(async () => {
       const before = structuredClone([

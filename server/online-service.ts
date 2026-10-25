@@ -352,6 +352,11 @@ export class OnlineService {
     const second = players.get(match.players[1]);
     if (!first || !second) throw new Error('Faltan participantes de una partida.');
     const score = outcome.type === 'draw' ? 0.5 : outcome.winner === 0 ? 1 : 0;
+    match.rankingResult = {
+      completedAt: new Date(this.now()).toISOString(),
+      score,
+      ratingsBefore: [first.elo, second.elo],
+    };
     const a = calculateElo(first.elo, second.elo, score, first.played);
     const b = calculateElo(second.elo, first.elo, 1 - score, second.played);
     await tx.savePlayer({ ...first, elo: a, played: first.played + 1 });

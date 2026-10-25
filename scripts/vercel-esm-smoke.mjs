@@ -11,8 +11,8 @@ const config = ts.readConfigFile(join(root, 'tsconfig.json'), ts.sys.readFile);
 assert(!config.error, 'Cannot read TypeScript configuration.');
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
 const program = ts.createProgram(
-  ['api/health.ts', 'api/online.ts', 'api/account.ts', 'server/main.ts'].map((path) =>
-    join(root, path),
+  ['api/health.ts', 'api/online.ts', 'api/account.ts', 'api/ranking.ts', 'server/main.ts'].map(
+    (path) => join(root, path),
   ),
   parsed.options,
 );
@@ -41,6 +41,8 @@ try {
     const { default: health } = await import('./api/health.js');
     const { default: online } = await import('./api/online.js');
     const { default: account } = await import('./api/account.js');
+    const { default: ranking } = await import('./api/ranking.js');
+    assert.equal(typeof ranking, 'function');
     const server = createServer((request, response) => {
       void (request.url === '/api/health' ? health : request.url === '/api/account' ? account : online)(request, response);
     });

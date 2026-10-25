@@ -12,6 +12,31 @@ import type {
 export class PostgresOnlineRepository implements OnlineRepository {
   constructor(private readonly pool: Pool) {}
 
+  async rankingData(mode: import('../src/ranking-contracts.js').RankingMode) {
+    const [accounts, players, matches] = await Promise.all([
+      this.pool.query<{ id: string; profile: string | null; progression: string | null }>(
+        `select user_id as id, data->>'hexagonal:user-profile:v1' as profile,
+         case when $1 = 'machine' then data->>'hexagonal:progression:v1' else null end as progression from hexfortia.accounts`,
+        [mode],
+      ),
+      mode === 'online'
+        ? this.pool.query<OnlinePlayer>(
+            'select id, name, elo, played from hexfortia.players where played > 0',
+          )
+        : Promise.resolve({ rows: [] }),
+      mode === 'online'
+        ? this.pool.query<{ data: OnlineMatch }>(
+            `select data from hexfortia.matches where settled = true and data->>'ranked' = 'true'`,
+          )
+        : Promise.resolve({ rows: [] }),
+    ]);
+    return {
+      accounts: accounts.rows,
+      players: players.rows,
+      matches: matches.rows.map(({ data }) => data),
+    };
+  }
+
   async transaction<T>(lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {

@@ -6,6 +6,7 @@ import type { UiMode } from '../match-store';
 import type { BoardRenderer } from '../renderer';
 import type { ScenarioProgress } from '../scenarios';
 import type { OnlineState, PrivateMatchSettings } from '../online-contracts';
+import type { RankingPage, RankingQuery } from '../ranking-contracts';
 import type {
   GameAction,
   GameEvent,
@@ -44,6 +45,7 @@ export type DialogState =
   | { kind: 'first-turn'; player: 0 | 1 };
 
 export interface GameSnapshot {
+  ranking: { query: RankingQuery; data: RankingPage | null; busy: boolean; error: string | null };
   online: {
     available: boolean;
     busy: boolean;
@@ -93,6 +95,7 @@ export interface GameSnapshot {
 }
 
 export interface GameCommands {
+  loadRanking(query?: RankingQuery): void;
   startOnlineSearch(): void;
   createPrivateMatch(settings: PrivateMatchSettings): void;
   joinPrivateMatch(code: string): void;

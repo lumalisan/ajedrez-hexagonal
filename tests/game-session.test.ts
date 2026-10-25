@@ -1587,6 +1587,43 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().matchRecord).toEqual(record);
   });
 
+  it('descarta clasificaciones anteriores al cambiar filtros, cerrar o destruir la sesión', async () => {
+    const requests: Array<{
+      resolve: (page: import('../src/ranking-contracts').RankingPage) => void;
+      signal: AbortSignal;
+      query: import('../src/ranking-contracts').RankingQuery;
+    }> = [];
+    const session = createGameSession({
+      rankingClient: (query, signal) =>
+        new Promise((resolve) => requests.push({ query, signal, resolve })),
+    });
+    sessions.push(session);
+    const finish = (index: number) =>
+      requests[index]!.resolve({ ...requests[index]!.query, total: 0, pageSize: 50, entries: [] });
+    session.commands.openDialog({ kind: 'ranking' });
+    expect(session.getSnapshot().ranking.busy).toBe(true);
+    session.commands.loadRanking({ mode: 'machine', period: 'all', page: 0 });
+    expect(requests[0]!.signal.aborted).toBe(true);
+    finish(0);
+    await Promise.resolve();
+    expect(session.getSnapshot().ranking.data).toBeNull();
+    finish(1);
+    await Promise.resolve();
+    expect(session.getSnapshot().ranking.data?.mode).toBe('machine');
+    session.commands.loadRanking();
+    session.commands.closeDialog();
+    expect(requests[2]!.signal.aborted).toBe(true);
+    finish(2);
+    await Promise.resolve();
+    expect(session.getSnapshot().ranking.data).toBeNull();
+    session.commands.openDialog({ kind: 'ranking' });
+    session.dispose();
+    expect(requests[3]!.signal.aborted).toBe(true);
+    finish(3);
+    await Promise.resolve();
+    expect(session.getSnapshot().ranking.data).toBeNull();
+  });
+
   it('vuelve al resultado al cerrar clasificación o repetición y al abandonarla', () => {
     const session = createSession();
     session.commands.startMatch(createClassicConfig({ mode: 'local' }));

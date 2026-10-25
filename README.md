@@ -206,10 +206,12 @@ La racha de actividad cuenta visitas en días naturales consecutivos, sin exigir
 La clasificación contra Hexfortia usa Elo con rivales equivalentes a 600/1000/1400/1800
 puntos. El factor K es 40/32/24/20/16 para 0–9/10–24/25–49/50–99/100 o más partidas.
 La puntuación se redondea a enteros y nunca baja de cero. La vista mensual recalcula
-desde 1000 con los últimos 30 días naturales, incluido hoy. Solo aparece el perfil de
-este navegador: las partidas en línea y las posiciones TOP mundiales necesitan una
-modalidad conectada y una clasificación compartida que este proyecto todavía no tiene.
-Sus logros permanecen pendientes; no se asignan posiciones ficticias. Las partidas
+desde 1000 con los últimos 30 días naturales, incluido hoy. La clasificación compartida
+se consulta en `/api/ranking`, con paginación y filtros de modalidad y periodo. Incluye
+los perfiles con partidas completadas: contra Hexfortia usa el progreso sincronizado
+de las cuentas; en línea usa los resultados públicos y el Elo del servidor, excluyendo
+las privadas. Puede consultarse sin iniciar sesión. Los logros TOP permanecen pendientes
+hasta integrar sus posiciones verificadas en la progresión. Las partidas
 locales no tienen Elo. Importaciones, reproducciones y deshacer/rehacer no duplican premios.
 
 Los datos se guardan en `hexagonal:progression:v1`. Los logros anteriores se conservan

@@ -5,6 +5,7 @@ import { createOnlineApp } from './app.js';
 import { OnlineService } from './online-service.js';
 import { PostgresOnlineRepository } from './postgres-repository.js';
 import { AccountService } from './account-service.js';
+import { RankingService } from './ranking-service.js';
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] || (fallback ? process.env[fallback] : undefined);
@@ -40,6 +41,7 @@ export async function createOnlineRuntime({ serverless = false } = {}) {
     const app = await createOnlineApp({
       service,
       accounts: new AccountService(repository),
+      rankings: new RankingService(repository),
       origin,
       logger: true,
       trustProxy: serverless,

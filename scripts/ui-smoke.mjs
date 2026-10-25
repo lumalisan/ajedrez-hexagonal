@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 
 import { chromium } from 'playwright-core';
 import { createServer } from 'vite';
+import { installRankingFixture } from './ranking-fixture.mjs';
 import {
   INITIAL_LAYOUT_LABELS,
   chooseSelectOption,
@@ -40,6 +41,7 @@ const runtimeErrors = [];
 const createSmokePage = browser.newPage.bind(browser);
 browser.newPage = async (options) => {
   const page = await createSmokePage(options);
+  await installRankingFixture(page);
   await page.addInitScript(() => {
     const original = crypto.getRandomValues.bind(crypto);
     crypto.getRandomValues = (buffer) => {
@@ -199,8 +201,18 @@ try {
         await page.screenshot({
           path: process.env.UI_SCREENSHOT + '-ranking-online-' + mode + '.png',
         });
+      await page.locator('.ranking-table tbody tr').first().waitFor();
+      assert(
+        (await page.locator('.ranking-table tbody tr').count()) === 50,
+        'Ranking must show other players.',
+      );
+      await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
+      await page.getByRole('rowheader', { name: 'Participante 51', exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Anterior', exact: true }).click();
+      await page.getByRole('rowheader', { name: 'Participante 1', exact: true }).waitFor();
       await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
       await page.getByRole('button', { name: 'Vs. Hexfortia', exact: true }).click();
+      await page.locator('.ranking-table tbody tr').first().waitFor();
       assert(
         (await page
           .getByRole('tab', { name: 'Mensual', exact: true })
@@ -212,6 +224,7 @@ try {
         'Machine ranking must display its table.',
       );
       await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
+      await page.locator('.ranking-table tbody tr').first().waitFor();
       await page.getByRole('tab', { name: 'Histórica', exact: true }).evaluate(async (tab) => {
         await Promise.all(
           tab.getAnimations().map((animation) => animation.finished.catch(() => {})),
@@ -221,6 +234,37 @@ try {
         await page.screenshot({
           path: process.env.UI_SCREENSHOT + '-ranking-machine-' + mode + '.png',
         });
+      await page.route(
+        '**/api/ranking?**',
+        (route) => route.fulfill({ json: { error: 'Invalid response fixture' } }),
+        { times: 1 },
+      );
+      await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).click();
+      await page
+        .getByRole('alert')
+        .filter({ hasText: 'No se pudo cargar la clasificación' })
+        .waitFor();
+      await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).click();
+      await page.locator('.ranking-table tbody tr').first().waitFor();
+      await page.route(
+        '**/api/ranking?**',
+        (route) => {
+          const params = new URL(route.request().url()).searchParams;
+          return route.fulfill({
+            json: {
+              mode: params.get('mode'),
+              period: params.get('period'),
+              page: 0,
+              entries: [],
+              total: 0,
+              pageSize: 50,
+            },
+          });
+        },
+        { times: 1 },
+      );
+      await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).click();
+      await page.getByRole('status').filter({ hasText: 'Todavía no hay jugadores' }).waitFor();
       await page.getByRole('button', { name: 'Cerrar clasificación', exact: true }).click();
     }
     await page.locator('[data-home-action="new"]').click();

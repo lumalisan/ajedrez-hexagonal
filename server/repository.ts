@@ -27,6 +27,7 @@ export interface OnlineMatch {
   drawOffer?: 0 | 1 | null;
   settled: boolean;
   finishedBy: string[];
+  rankingResult?: { completedAt: string; score: 0 | 0.5 | 1; ratingsBefore: [number, number] };
 }
 
 export interface OnlineTransaction {
@@ -46,6 +47,11 @@ export interface OnlineTransaction {
 }
 
 export interface OnlineRepository {
+  rankingData(mode: import('../src/ranking-contracts.js').RankingMode): Promise<{
+    accounts: Array<{ id: string; profile: string | null; progression: string | null }>;
+    players: OnlinePlayer[];
+    matches: OnlineMatch[];
+  }>;
   transaction<T>(lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T>;
   activeMatches(): Promise<string[]>;
 }

@@ -184,7 +184,7 @@ export function BattleProgressionPanel({
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm text-muted">
-              Posición histórica: pendiente de clasificación compartida.
+              Consulta tu posición en la clasificación compartida.
             </span>
             <Button
               variant="ghost"

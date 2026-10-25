@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
 import { createServer } from 'vite';
+import { installRankingFixture } from './ranking-fixture.mjs';
 import { chooseSelectOption, openSelect } from './select-helpers.mjs';
 
 const candidates =
@@ -48,6 +49,7 @@ try {
         };
       });
       const page = await context.newPage();
+      await installRankingFixture(page);
       const audit = async (surface) => {
         const label = `${profile.name} / ${surface}`;
         const results = await new AxeBuilder({ page }).analyze();

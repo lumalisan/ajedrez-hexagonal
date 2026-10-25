@@ -32,6 +32,8 @@ import {
 import { participantLabel, participantColor } from '../factions';
 import { createClassicConfig } from '../game-config';
 import { createOnlineClient } from '../online-client';
+import { fetchRanking } from '../ranking-client';
+import type { RankingClient, RankingQuery } from '../ranking-contracts';
 import type { OnlineClient, OnlineRequest, OnlineState } from '../online-contracts';
 import { createInitialPieces } from '../setup';
 import { sameAction } from '../action-identity';
@@ -124,6 +126,7 @@ function createHomeDemoState() {
 export function createGameSession(
   options: {
     onlineClient?: OnlineClient | null;
+    rankingClient?: RankingClient;
     publicOnlineAllowed?: () => boolean;
     onAccountRequired?: () => void;
   } = {},
@@ -131,6 +134,13 @@ export function createGameSession(
   const onlineClient =
     options.onlineClient === undefined ? createOnlineClient() : options.onlineClient;
   let onlineState: OnlineState = { status: 'idle' };
+  let ranking: GameSnapshot['ranking'] = {
+    query: { mode: 'online', period: 'month', page: 0 },
+    data: null,
+    busy: false,
+    error: null,
+  };
+  let rankingAbort: AbortController | null = null;
   let onlineBusy = false;
   let onlineError: string | null = null;
   let onlineTimer: ReturnType<typeof setTimeout> | null = null;
@@ -268,6 +278,7 @@ export function createGameSession(
       : [];
     visibleActions = filterVisibleActions(displayActions, selected);
     snapshot = {
+      ranking,
       online: {
         available: Boolean(onlineClient),
         busy: onlineBusy,
@@ -368,10 +379,41 @@ export function createGameSession(
     returnToOutcome = fromOutcome;
     currentDialog = dialog;
     dialogError = null;
+    if (dialog.kind === 'ranking') loadRanking();
+    else rankingAbort?.abort();
     render();
   }
 
+  function loadRanking(query: RankingQuery = ranking.query): void {
+    if (disposed) return;
+    rankingAbort?.abort();
+    const abort = new AbortController();
+    rankingAbort = abort;
+    ranking = { query, data: null, busy: true, error: null };
+    render();
+    void (options.rankingClient ?? fetchRanking)(query, abort.signal)
+      .then((data) => {
+        if (disposed || abort.signal.aborted) return;
+        ranking = { query, data, busy: false, error: null };
+        render();
+      })
+      .catch((error: unknown) => {
+        if (disposed || abort.signal.aborted) return;
+        ranking = {
+          query,
+          data: null,
+          busy: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'No se pudo cargar la clasificación. Reinténtalo.',
+        };
+        render();
+      });
+  }
+
   function closeDialog(): void {
+    rankingAbort?.abort();
     if (
       currentDialog?.kind === 'blockade' &&
       gameMode === 'online' &&
@@ -2390,6 +2432,7 @@ export function createGameSession(
   }
 
   const commands: GameCommands = {
+    loadRanking,
     startOnlineSearch() {
       if (options.publicOnlineAllowed && !options.publicOnlineAllowed()) {
         options.onAccountRequired?.();
@@ -2681,6 +2724,7 @@ export function createGameSession(
 
   function dispose(): void {
     if (disposed) return;
+    rankingAbort?.abort();
     stopOnline();
     onlineClient?.dispose?.();
     if (matchRecord && replayCursor === null && !state.outcome) persistCurrentMatch();

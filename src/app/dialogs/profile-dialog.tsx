@@ -158,7 +158,7 @@ const MODES = [
 ] as const;
 
 export function ProfileDialog() {
-  const { snapshot } = useGame();
+  const { snapshot, commands } = useGame();
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
   const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
   const { progression, profile } = snapshot;
@@ -270,15 +270,18 @@ export function ProfileDialog() {
                       <dt>{mode.label}</dt>
                       <dd>
                         <strong>{progression.ratings[mode.id]} Elo</strong>
-                        <span>Posición actual: Sin clasificación</span>
+                        <span>Posición disponible en Clasificación</span>
                       </dd>
                     </div>
                   ))}
                 </dl>
                 <p className="profile-note">
-                  Las posiciones requieren una clasificación compartida. El Elo en línea se
-                  actualiza al terminar partidas públicas con el servidor conectado.
+                  Consulta las posiciones de todos los jugadores en Clasificación. El Elo en línea
+                  se actualiza al terminar partidas públicas con el servidor conectado.
                 </p>
+                <Button size="compact" onClick={() => commands.openDialog({ kind: 'ranking' })}>
+                  Ver clasificación compartida
+                </Button>
               </div>
               <div
                 role="tabpanel"

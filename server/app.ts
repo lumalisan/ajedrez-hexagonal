@@ -4,6 +4,8 @@ import type { OnlineRequest } from '../src/online-contracts.js';
 import { OnlineError, type OnlineService } from './online-service.js';
 import type { AccountService } from './account-service.js';
 import type { CloudRequest } from '../src/cloud-contracts.js';
+import type { RankingService } from './ranking-service.js';
+import type { RankingMode, RankingPeriod } from '../src/ranking-contracts.js';
 
 export interface AuthIdentity {
   id: string;
@@ -27,6 +29,7 @@ export async function createOnlineApp(options: {
   service: OnlineService;
   authenticate: (token: string) => Promise<AuthIdentity | null>;
   accounts?: AccountService;
+  rankings?: RankingService;
   origin: string;
   logger?: boolean;
   trustProxy?: boolean;
@@ -59,6 +62,21 @@ export async function createOnlineApp(options: {
     reply.header('Cache-Control', 'no-store');
     return { ok: true };
   });
+  app.get<{ Querystring: { mode?: string; period?: string; page?: string } }>(
+    '/api/ranking',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (!options.rankings)
+        throw new OnlineError('La clasificación compartida no está configurada.', 503);
+      const { mode = 'online', period = 'month', page = '0' } = request.query;
+      if (!/^\d+$/.test(page)) throw new OnlineError('Página no válida.');
+      return options.rankings.list({
+        mode: mode as RankingMode,
+        period: period as RankingPeriod,
+        page: Number(page),
+      });
+    },
+  );
   async function identity(request: FastifyRequest): Promise<AuthIdentity> {
     if (request.headers.origin && request.headers.origin !== options.origin)
       throw new OnlineError('Origen no permitido.', 403);
