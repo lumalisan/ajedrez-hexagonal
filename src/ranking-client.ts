@@ -1,10 +1,16 @@
 import type { RankingClient, RankingPage } from './ranking-contracts';
+import { browserSupabase } from './supabase-client';
 
 export const fetchRanking: RankingClient = async (query, signal) => {
   const failure =
     'No se pudo cargar la clasificación compartida. Comprueba la conexión y reinténtalo.';
   const params = new URLSearchParams({ ...query, page: String(query.page) });
+  const sdk = browserSupabase();
+  const session = sdk ? (await (await sdk).auth.getSession()).data.session : null;
+  if (!session || session.user.is_anonymous)
+    throw new Error('Inicia sesión con una cuenta para consultar la clasificación completa.');
   const response = await fetch(`/api/ranking?${params}`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
     cache: 'no-store',
   }).catch(() => {
@@ -47,3 +53,20 @@ export const fetchRanking: RankingClient = async (query, signal) => {
     throw new Error(failure);
   return value as RankingPage;
 };
+
+export async function fetchPublicProfile(
+  id: string,
+  signal: AbortSignal,
+): Promise<import('./ranking-contracts').PublicPlayerProfile> {
+  const sdk = browserSupabase();
+  const session = sdk ? (await (await sdk).auth.getSession()).data.session : null;
+  if (!session || session.user.is_anonymous)
+    throw new Error('Inicia sesión para consultar perfiles.');
+  const response = await fetch('/api/ranking?playerId=' + encodeURIComponent(id), {
+    headers: { Authorization: 'Bearer ' + session.access_token },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('No se pudo cargar el perfil. Vuelve a intentarlo.');
+  return response.json();
+}

@@ -61,6 +61,12 @@ export function shardCampaignGames(text, workers, seed = 1) {
   if (!Number.isSafeInteger(workers) || workers < 1 || workers > 32)
     throw new Error('Número de workers inválido.');
   const games = parseResearchInput(text);
+  let inputHeader;
+  try {
+    inputHeader = JSON.parse(text);
+  } catch {
+    inputHeader = JSON.parse(text.trim().split(/\r?\n/)[0]);
+  }
   const families = new Map();
   for (const game of games) {
     const family = game.familyId ?? `trajectory-${game.identity}`;
@@ -83,6 +89,7 @@ export function shardCampaignGames(text, workers, seed = 1) {
       kind: 'metadata',
       format: 'hexagonal-neural-dataset',
       version: 1,
+      ...(inputHeader.sourceRole === undefined ? {} : { sourceRole: inputHeader.sourceRole }),
       rules: 'Explicit per game; canonical families are kept together.',
     },
     ...shard.map((game) => ({
@@ -114,6 +121,8 @@ export function mergeCampaignLabels(datasets, provenance = []) {
       'inputSize',
       'target',
       'residualScale',
+      'residualBaseline',
+      'includesRangedValue',
       'labelVersion',
       'evaluationVersion',
     ]) {
@@ -121,6 +130,8 @@ export function mergeCampaignLabels(datasets, provenance = []) {
     }
     if (canonicalJson(header.sourceHashes) !== canonicalJson(metadata.sourceHashes))
       throw new Error('Los datasets proceden de profesores distintos.');
+    if (canonicalJson(header.teacher) !== canonicalJson(metadata.teacher))
+      throw new Error('Los datasets usan distintos modelos o contratos del profesor.');
     const pairs = new Map();
     for (const row of rows.slice(1)) {
       if (row.kind === 'game') {

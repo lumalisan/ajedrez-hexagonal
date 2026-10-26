@@ -61,6 +61,37 @@ describe('arena opening books', () => {
     );
   });
 
+  it('retains naturally repeated families in a declared IID draw protocol and fixes their order', () => {
+    const document = {
+      ...book([entry('a'), entry('b'), entry('c', 'family-two')]),
+      role: 'confirmation',
+      samplingUnit: 'iid-draw',
+      samplingProtocol: {
+        method: 'iid-with-replacement',
+        conditionedOn: 'nonterminal-and-fixed-exclusions',
+        modelFree: true,
+        duplicateFamilies: 'retained',
+      },
+    };
+    document.entries.forEach((value, index) => {
+      value.drawId = `draw-${index}`;
+    });
+    const prepared = prepareOpeningBook(engine, document, { pairs: 3, seed: 8 });
+    expect(prepared.openings.map((value) => value.id)).toEqual(['a', 'b', 'c']);
+    expect(prepared.openings.map((value) => value.drawId)).toEqual(['draw-0', 'draw-1', 'draw-2']);
+    expect(prepared.identity.totalFamilies).toBe(2);
+    expect(prepared.identity.selectedPairs).toBe(3);
+    expect(prepared.identity.samplingUnit).toBe('iid-draw');
+    expect(() => prepareOpeningBook(engine, document, { pairs: 4, seed: 8 })).toThrow(
+      'sorteos IID',
+    );
+    document.entries[1].drawId = 'draw-0';
+    expect(() => prepareOpeningBook(engine, document, { pairs: 3, seed: 8 })).toThrow('drawId');
+    document.entries[1].drawId = 'draw-1';
+    document.samplingProtocol.duplicateFamilies = 'removed';
+    expect(() => prepareOpeningBook(engine, document, { pairs: 3, seed: 8 })).toThrow('protocolo');
+  });
+
   it('converts the constructed endgame book without treating six variants as six families', () => {
     const document = { format: 'hex-engine-endgames-v1', cases: createEndgameCases(engine) };
     const prepared = prepareOpeningBook(engine, document, { pairs: 4, seed: 8 });

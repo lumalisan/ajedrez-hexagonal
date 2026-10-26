@@ -1,3 +1,4 @@
+import type { PublicPlayerProfile } from '../../ranking-contracts';
 import { DialogClose } from '../components/dialog-close';
 import { useState } from 'react';
 import { PROFILE_COLORS, PROFILE_EMBLEMS } from '../../user-profile';
@@ -157,11 +158,17 @@ const MODES = [
   { id: 'local', label: 'Local' },
 ] as const;
 
-export function ProfileDialog() {
+export function ProfileDialog({
+  publicProfile,
+  onBack,
+}: {
+  publicProfile?: PublicPlayerProfile;
+  onBack?: () => void;
+}) {
   const { snapshot, commands } = useGame();
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
   const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
-  const { progression, profile } = snapshot;
+  const { progression, profile } = publicProfile ?? snapshot;
   const unlocked = PROGRESSION_ACHIEVEMENTS.filter(
     (entry) => progression.unlockedAt[entry.id],
   ).length;
@@ -175,7 +182,7 @@ export function ProfileDialog() {
           <h2>Perfil</h2>
         </header>
         <nav className="achievement-levels" aria-label="Secciones del perfil">
-          {SECTIONS.map((item) => (
+          {SECTIONS.filter((item) => !publicProfile || item.id === 'profile').map((item) => (
             <div className="achievement-level" key={item.id}>
               <button
                 type="button"
@@ -183,13 +190,18 @@ export function ProfileDialog() {
                 aria-controls="profile-content"
                 onClick={() => setSection(item.id)}
               >
-                {item.label}
+                {publicProfile ? 'Perfil del jugador' : item.label}
               </button>
             </div>
           ))}
         </nav>
         <MatchClockNotice />
-        <AccountStatus sidebar />
+        {!publicProfile && <AccountStatus sidebar />}
+        {onBack && (
+          <Button variant="ghost" onClick={onBack}>
+            Volver a clasificación
+          </Button>
+        )}
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
@@ -198,10 +210,10 @@ export function ProfileDialog() {
             className="achievements-player profile-link"
             onClick={() => setSection('profile')}
           >
-            <ProfileAvatar profile={profile} />
+            <ProfileAvatar profile={profile} xp={progression.xp} />
             <strong>{profile.name}</strong>
           </button>
-          <ProgressionSummary showActivity={false} />
+          <ProgressionSummary showActivity={false} progression={progression} />
           <DialogClose label="Cerrar perfil" />
         </header>
         <div id="profile-content" className="profile-content">
@@ -227,7 +239,7 @@ export function ProfileDialog() {
               <div
                 className="flex flex-wrap gap-1 mb-4"
                 role="tablist"
-                aria-label="Datos de tu perfil"
+                aria-label="Datos del perfil"
               >
                 {PROFILE_TABS.map((item, index) => (
                   <button
@@ -316,7 +328,9 @@ export function ProfileDialog() {
                     </thead>
                     <tbody>
                       {[...MODES, { id: undefined, label: 'Total' }].map((mode) => {
-                        const stats = playerStatistics(progression, mode.id);
+                        const stats = publicProfile
+                          ? publicProfile.statistics[mode.id ?? 'total']
+                          : playerStatistics(snapshot.progression, mode.id);
                         return (
                           <tr key={mode.label}>
                             <th scope="row">{mode.label}</th>
@@ -369,7 +383,9 @@ export function ProfileDialog() {
                     </thead>
                     <tbody>
                       {MODES.filter((mode) => mode.id !== 'local').map((mode) => {
-                        const records = playerRecords(progression, mode.id);
+                        const records = publicProfile
+                          ? publicProfile.records[mode.id]
+                          : playerRecords(snapshot.progression, mode.id);
                         return (
                           <tr key={mode.id}>
                             <th scope="row">{mode.label}</th>
@@ -389,7 +405,7 @@ export function ProfileDialog() {
               )}
             </>
           )}
-          {section === 'settings' && <ProfileSettings />}
+          {!publicProfile && section === 'settings' && <ProfileSettings />}
         </div>
       </div>
     </section>

@@ -603,7 +603,7 @@ function addCompletionMetrics(
   metrics.blitzWins = Number(win && record.config.options.clockSeconds === 300);
   metrics.cleanWins = Number(win && !final.pieces.some((p) => p.owner !== owner));
   metrics.lastSurvivorWins = Number(
-    win && final.pieces.filter((p) => p.owner === owner && p.type !== 'fortress').length === 1,
+    win && final.pieces.filter((p) => p.owner === owner && p.type !== 'fortress').length <= 1,
   );
   metrics.damagedOneWins = Number(win && damage >= 1);
   metrics.damagedTwoWins = Number(win && damage >= 2);

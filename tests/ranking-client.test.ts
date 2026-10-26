@@ -1,5 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchRanking } from '../src/ranking-client';
+const auth = vi.hoisted(() => ({ getSession: vi.fn() }));
+vi.mock('../src/supabase-client', () => ({ browserSupabase: () => Promise.resolve({ auth }) }));
+beforeEach(() =>
+  auth.getSession.mockResolvedValue({
+    data: { session: { user: { is_anonymous: false }, access_token: 'test-token' } },
+  }),
+);
 
 const query = { mode: 'online', period: 'month', page: 0 } as const;
 const page = {
@@ -12,6 +19,18 @@ const page = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe('transporte de clasificación', () => {
+  it.each([null, { user: { is_anonymous: true } }])(
+    'impide consultar sin cuenta (%#)',
+    async (session) => {
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      auth.getSession.mockResolvedValue({ data: { session } });
+      await expect(fetchRanking(query, new AbortController().signal)).rejects.toThrow(
+        'Inicia sesión con una cuenta',
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
   it('consulta el servidor sin caché y conserva los filtros y la cancelación', async () => {
     const fetch = vi.fn().mockResolvedValue(Response.json(page));
     vi.stubGlobal('fetch', fetch);
@@ -19,7 +38,10 @@ describe('transporte de clasificación', () => {
     expect(await fetchRanking(query, abort.signal)).toEqual(page);
     expect(fetch).toHaveBeenCalledWith(
       '/api/ranking?mode=online&period=month&page=0',
-      expect.objectContaining({ cache: 'no-store' }),
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: { Authorization: 'Bearer test-token' },
+      }),
     );
     const signal = fetch.mock.calls[0]![1].signal as AbortSignal;
     abort.abort();

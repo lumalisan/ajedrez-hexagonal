@@ -1,6 +1,7 @@
 import { DEFAULT_ACTION_RESOLUTION_RULES, type ActionResolutionRules } from './engine.js';
 import { allBoardHexes } from './hex.js';
 import { evaluateClassicState } from './ai.js';
+import { evaluateNeuralMaterialBaseline, NEURAL_MATERIAL_BASELINE } from './ai-neural-baseline.js';
 import type { Direction, GameState, Piece, Player } from './types.js';
 
 /** Change this identifier whenever the meaning or order of an input changes. */
@@ -8,6 +9,7 @@ export const NEURAL_FEATURE_SCHEMA = 'hex-sparse-v1';
 export const NEURAL_INPUT_SIZE = 5_183;
 export const NEURAL_FEATURE_SCHEMA_V2 = 'hex-sparse-v2';
 export const NEURAL_INPUT_SIZE_V2 = 5_203;
+export { evaluateNeuralMaterialBaseline, NEURAL_MATERIAL_BASELINE };
 export type NeuralFeatureSchema = typeof NEURAL_FEATURE_SCHEMA | typeof NEURAL_FEATURE_SCHEMA_V2;
 
 const BOARD_CELLS = 91;
@@ -26,9 +28,11 @@ interface NeuralModelMetadataBase {
   readonly hiddenSizes: readonly [64, 32];
   readonly outputScale: 10_000;
   readonly training?: Readonly<Record<string, unknown>>;
-  readonly evaluation?: 'classic-residual-v1';
+  readonly evaluation?: 'classic-residual-v1' | 'direct-value-v1' | 'material-residual-v1';
   readonly residualScale?: number;
+  readonly residualBaseline?: string;
   readonly residualSymmetry?: 'antisymmetric';
+  readonly includesRangedValue?: true;
   readonly searchProfile?: 'pvs-history' | 'pvs-threats';
 }
 
@@ -59,7 +63,11 @@ export type NeuralEvaluator = ((
   state: GameState,
   player: Player,
   rules?: Readonly<ActionResolutionRules>,
-) => number) & { searchProfile?: 'pvs-history' | 'pvs-threats' };
+) => number) & {
+  searchProfile?: 'pvs-history' | 'pvs-threats';
+  /** The estimate already includes the ranged value; tactical move selection stays enabled. */
+  includesRangedValue?: boolean;
+};
 
 function relativeDirection(direction: Direction, perspective: Player): number {
   return perspective === 0 ? direction : (direction + 3) % 6;
@@ -180,17 +188,35 @@ function validateMetadata(value: unknown): asserts value is NeuralModelMetadata 
     value.hiddenSizes[0] !== HIDDEN_1 ||
     value.hiddenSizes[1] !== HIDDEN_2 ||
     value.outputScale !== OUTPUT_SCALE ||
+    (value.residualBaseline !== undefined && typeof value.residualBaseline !== 'string') ||
     (value.residualSymmetry !== undefined &&
-      (value.residualSymmetry !== 'antisymmetric' || value.evaluation !== 'classic-residual-v1')) ||
+      (value.residualSymmetry !== 'antisymmetric' ||
+        (value.evaluation !== 'classic-residual-v1' &&
+          value.evaluation !== 'direct-value-v1' &&
+          value.evaluation !== 'material-residual-v1'))) ||
     (value.searchProfile !== undefined &&
       value.searchProfile !== 'pvs-history' &&
       value.searchProfile !== 'pvs-threats') ||
-    (value.evaluation !== undefined &&
-      (value.evaluation !== 'classic-residual-v1' ||
-        typeof value.residualScale !== 'number' ||
+    ((value.evaluation === 'classic-residual-v1' || value.evaluation === 'material-residual-v1') &&
+      (typeof value.residualScale !== 'number' ||
         !Number.isFinite(value.residualScale) ||
         value.residualScale <= 0 ||
         value.residualScale > 5000)) ||
+    (value.evaluation === 'material-residual-v1' &&
+      (value.residualBaseline !== NEURAL_MATERIAL_BASELINE ||
+        value.residualSymmetry !== 'antisymmetric' ||
+        value.includesRangedValue !== true)) ||
+    (value.evaluation === 'direct-value-v1' &&
+      (value.residualScale !== undefined ||
+        value.residualSymmetry !== 'antisymmetric' ||
+        value.includesRangedValue !== true)) ||
+    (value.evaluation !== undefined &&
+      value.evaluation !== 'classic-residual-v1' &&
+      value.evaluation !== 'direct-value-v1' &&
+      value.evaluation !== 'material-residual-v1') ||
+    (value.includesRangedValue !== undefined &&
+      ((value.evaluation !== 'direct-value-v1' && value.evaluation !== 'material-residual-v1') ||
+        value.includesRangedValue !== true)) ||
     (value.training !== undefined && !isObject(value.training))
   ) {
     throw new Error('Metadatos del modelo neuronal incompatibles.');
@@ -306,8 +332,12 @@ export function createNeuralEvaluator(modelBytes: ArrayBuffer): NeuralEvaluator 
     }
     return metadata.evaluation === 'classic-residual-v1'
       ? evaluateClassicState(state, player) + (estimate * metadata.residualScale!) / OUTPUT_SCALE
-      : estimate;
+      : metadata.evaluation === 'material-residual-v1'
+        ? evaluateNeuralMaterialBaseline(state, player) +
+          (estimate * metadata.residualScale!) / OUTPUT_SCALE
+        : estimate;
   };
   evaluate.searchProfile = metadata.searchProfile;
+  evaluate.includesRangedValue = metadata.includesRangedValue === true;
   return evaluate;
 }

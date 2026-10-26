@@ -23,6 +23,8 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const definitions = {
   input: { type: 'string', required: true },
   output: { type: 'string', required: true },
+  target: { type: 'string', default: 'classic-residual-v1' },
+  'teacher-model': { type: 'string' },
   positions: { type: 'number', default: 1000, integer: true, min: 1, max: 1000000 },
   'positions-per-game': { type: 'number', default: 8, integer: true, min: 1, max: 10000 },
   'min-gap': { type: 'number', default: 4, integer: true, min: 1, max: 10000 },
@@ -39,6 +41,10 @@ const definitions = {
 export function reanalysisOptions(argv) {
   const options = parseArguments(argv, definitions);
   if (options.help) return options;
+  if (!['classic-residual-v1', 'material-residual-v1'].includes(options.target))
+    throw new Error('--target incompatible.');
+  if (options['teacher-model'] && options.target !== 'material-residual-v1')
+    throw new Error('--teacher-model requiere --target material-residual-v1.');
   if (options['minimum-depth'] > options.depth) {
     throw new Error('--minimum-depth no puede superar --depth.');
   }
@@ -70,6 +76,7 @@ async function sourceHashes() {
     'src/ai-position.ts',
     'src/ai-ranged.ts',
     'src/ai-neural.ts',
+    'src/ai-neural-baseline.ts',
     'src/engine.ts',
     'src/action-identity.ts',
     'src/hex.ts',
@@ -140,8 +147,16 @@ function actionIdentity(action) {
   return action === null ? null : canonicalJson(action);
 }
 
-/** Injection is for deterministic tests; the CLI always loads the current classical engine. */
+/** A model teacher is an explicit frozen input, separate from the candidate being trained. */
 export async function runReanalysis(options, dependencies = {}) {
+  if (
+    !['classic-residual-v1', 'material-residual-v1'].includes(
+      options.target ?? 'classic-residual-v1',
+    )
+  )
+    throw new Error('--target incompatible.');
+  if (options['teacher-model'] && options.target !== 'material-residual-v1')
+    throw new Error('--teacher-model requiere --target material-residual-v1.');
   const input = resolve(options.input);
   const output = resolve(options.output);
   const reportPath = `${output}.report.json`;
@@ -149,6 +164,23 @@ export async function runReanalysis(options, dependencies = {}) {
   if ([output, reportPath, lockPath].includes(input))
     throw new Error('Entrada y salidas deben diferir.');
   const inputBytes = await readFile(input, 'utf8');
+  const materialResidual = options.target === 'material-residual-v1';
+  if (materialResidual) {
+    let source;
+    try {
+      source = JSON.parse(inputBytes);
+    } catch {
+      source = JSON.parse(inputBytes.trim().split(/\r?\n/)[0]);
+    }
+    if (source.sourceRole !== 'development')
+      throw new Error('El residuo material requiere sourceRole: development.');
+  }
+  const teacherBytes = options['teacher-model']
+    ? await readFile(resolve(options['teacher-model']))
+    : null;
+  const teacherModel = teacherBytes
+    ? { path: resolve(options['teacher-model']), sha256: digest(teacherBytes) }
+    : null;
   const hashes = dependencies.sourceHashes ?? (await sourceHashes());
   const { resume: _resume, help: _help, 'max-search-ms': _limit, ...settings } = options;
   void _resume;
@@ -157,7 +189,12 @@ export async function runReanalysis(options, dependencies = {}) {
   settings.input = input;
   settings.output = output;
   const identity = digest(
-    canonicalJson({ inputHash: digest(inputBytes), settings, sourceHashes: hashes }),
+    canonicalJson({
+      inputHash: digest(inputBytes),
+      settings,
+      sourceHashes: hashes,
+      ...(teacherModel ? { teacherModel } : {}),
+    }),
   );
   await mkdir(dirname(output), { recursive: true });
   const release = await acquireResearchLock(lockPath, Boolean(options.resume));
@@ -195,6 +232,17 @@ export async function runReanalysis(options, dependencies = {}) {
       throw new Error('La salida ha cambiado fuera del proceso; se conserva sin sobrescribir.');
     }
     modules = dependencies.modules ?? (await loadGameModules());
+    const teacherEvaluate = teacherBytes
+      ? modules.neural.createNeuralEvaluator(
+          teacherBytes.buffer.slice(
+            teacherBytes.byteOffset,
+            teacherBytes.byteOffset + teacherBytes.byteLength,
+          ),
+        )
+      : undefined;
+    const schema = materialResidual
+      ? modules.neural.NEURAL_FEATURE_SCHEMA_V2
+      : modules.neural.NEURAL_FEATURE_SCHEMA;
     const games = parseResearchInput(inputBytes).map((game) => {
       const seed = experimentSeed(options.seed, 0, game.identity);
       const indices = selectPositionIndices(
@@ -222,7 +270,7 @@ export async function runReanalysis(options, dependencies = {}) {
         const index = game.selectedIndices[slot];
         if (index === undefined) continue;
         const position = game.positions[index];
-        const encoded = encodeResearchPosition(position, game.rules, modules);
+        const encoded = encodeResearchPosition(position, game.rules, modules, schema);
         if (fingerprints.has(encoded.fingerprint)) continue;
         fingerprints.add(encoded.fingerprint);
         tasks.push({ game, position, ...encoded });
@@ -232,23 +280,33 @@ export async function runReanalysis(options, dependencies = {}) {
       kind: 'metadata',
       format: 'hexagonal-neural-dataset',
       version: 1,
-      schema: modules.neural.NEURAL_FEATURE_SCHEMA,
-      inputSize: modules.neural.NEURAL_INPUT_SIZE,
+      schema,
+      inputSize: materialResidual
+        ? modules.neural.NEURAL_INPUT_SIZE_V2
+        : modules.neural.NEURAL_INPUT_SIZE,
       featureEncoding: 'sparse-binary-indices',
       teacherScale: 10000,
-      target: 'classic-residual-v1',
+      target: materialResidual ? 'material-residual-v1' : 'classic-residual-v1',
       residualScale: 2000,
-      residualBaseline: 'classic+ranged-v1',
-      labelVersion: 'bounded-outcome-v2',
-      evaluationVersion: 'strategic-v2',
+      residualBaseline: materialResidual
+        ? modules.neural.NEURAL_MATERIAL_BASELINE
+        : 'classic+ranged-v1',
+      ...(materialResidual ? { includesRangedValue: true, sourceRole: 'development' } : {}),
+      labelVersion: materialResidual ? 'raw-search-material-residual-v1' : 'bounded-outcome-v2',
+      evaluationVersion: materialResidual
+        ? modules.neural.NEURAL_MATERIAL_BASELINE
+        : 'strategic-v2',
       sourceHashes: hashes,
       settings,
       rules: 'Per-game and per-sample; preserved from explicit input.',
       teacher: {
-        evaluator: 'classic',
+        evaluator: teacherModel ? 'frozen-neural-model' : 'classic',
         searchProfile: 'pvs-threats',
-        rangedEvaluation: 'ranged-v1',
-        neural: false,
+        rangedEvaluation: teacherEvaluate?.includesRangedValue
+          ? 'included-in-neural-estimate-v1'
+          : 'ranged-v1',
+        neural: Boolean(teacherModel),
+        ...(teacherModel ? { model: teacherModel } : {}),
       },
       input: { path: input, sha256: digest(inputBytes) },
       reanalysisIdentity: identity,
@@ -276,6 +334,7 @@ export async function runReanalysis(options, dependencies = {}) {
         resolutionRules: game.rules,
         searchProfile: 'pvs-threats',
         rangedPlay: true,
+        ...(teacherEvaluate ? { evaluate: teacherEvaluate } : {}),
         seed: experimentSeed(options.seed, 0, game.identity, position.ply),
       };
       const teacher = await search(position, searchOptions);
@@ -317,9 +376,10 @@ export async function runReanalysis(options, dependencies = {}) {
         for (const perspective of [0, 1]) {
           const teacherScore =
             teacher.metadata.score * (position.activePlayer === perspective ? 1 : -1);
-          const baseline =
-            modules.ai.evaluateClassicState(position, perspective) +
-            modules.ranged.evaluateRangedState(position, perspective);
+          const baseline = materialResidual
+            ? modules.neural.evaluateNeuralMaterialBaseline(position, perspective)
+            : modules.ai.evaluateClassicState(position, perspective) +
+              modules.ranged.evaluateRangedState(position, perspective);
           const outcome = outcomeForPerspective(game.knownOutcome, perspective);
           state.samples.push({
             kind: 'sample',
@@ -330,15 +390,17 @@ export async function runReanalysis(options, dependencies = {}) {
             features: features[perspective],
             rules: game.rules,
             fingerprint,
-            teacher: trainingTarget({
-              teacher: Math.tanh(teacherScore / 10000),
-              teacherScore,
-              baseline,
-              residual: true,
-              outcome,
-              outcomeWeight: 0.25,
-              remainingPlies: game.finalPly - position.ply,
-            }),
+            teacher: materialResidual
+              ? Math.max(-1, Math.min(1, (teacherScore - baseline) / 2000))
+              : trainingTarget({
+                  teacher: Math.tanh(teacherScore / 10000),
+                  teacherScore,
+                  baseline,
+                  residual: true,
+                  outcome,
+                  outcomeWeight: 0.25,
+                  remainingPlies: game.finalPly - position.ply,
+                }),
             outcome,
             teacherScore,
             baseline,
@@ -351,6 +413,10 @@ export async function runReanalysis(options, dependencies = {}) {
       state.cursor += 1;
       await save(output, reportPath, state, header, games);
     }
+    if (digest(await readFile(input, 'utf8')) !== digest(inputBytes))
+      throw new Error('La entrada cambió durante el reanálisis.');
+    if (teacherModel && digest(await readFile(teacherModel.path)) !== teacherModel.sha256)
+      throw new Error('El modelo profesor cambió durante el reanálisis.');
     if (state.cursor === tasks.length) state.status = 'complete';
     state.acceptedPositions = state.samples.length / 2;
     state.rejectedPositions = state.attempts.length - state.acceptedPositions;
@@ -368,14 +434,16 @@ export async function runReanalysis(options, dependencies = {}) {
 async function main() {
   const options = reanalysisOptions(process.argv.slice(2));
   if (options.help) {
-    console.log(`Reanaliza únicamente partidas del archivo indicado con un profesor clásico independiente.
+    console.log(`Reanaliza únicamente partidas del archivo indicado con un profesor clásico o un modelo congelado explícito.
 pnpm exec node scripts/ai/reanalyze.mjs --input partidas.jsonl --output profesor.jsonl
   --positions 100 --positions-per-game 8 --min-gap 4 --budget-ms 5000 --depth 9
   --minimum-depth 3 --seed 20261023 [--probe-budget-ms 1000] [--max-search-ms 60000] [--resume]
+  [--target material-residual-v1 --teacher-model campeon-congelado.bin]
 --positions limita el total; --positions-per-game limita cada trayectoria.
 El presupuesto total es nominal, por invocación; una búsqueda puede exceder su límite ligeramente.
 La reanudación exige entrada, código y opciones idénticos, salvo el presupuesto total de esa invocación.
 No lee otras carpetas, no publica modelos y no convierte reloj o rendición en etiquetas.
+El objetivo material usa V2, requiere entradas de desarrollo, resta su base versionada del valor de búsqueda sin recortar previamente el total y no mezcla desenlaces posteriores.
 --resume recupera bloqueos huérfanos tras verificar que su PID ya no existe.`);
     return;
   }

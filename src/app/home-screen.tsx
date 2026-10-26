@@ -91,7 +91,7 @@ export function HomeScreen() {
               <nav className="home-navigation mode-navigation" aria-label="Tipo de partida">
                 <button
                   type="button"
-                  className="home-nav-button primary"
+                  className="home-nav-button"
                   data-home-mode="machine"
                   onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
                 >

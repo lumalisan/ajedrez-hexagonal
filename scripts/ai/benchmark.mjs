@@ -21,6 +21,7 @@ const digest = (value) => createHash('sha256').update(value).digest('hex');
 const sourceFiles = [
   'src/ai.ts',
   'src/ai-neural.ts',
+  'src/ai-neural-baseline.ts',
   'src/ai-ranged.ts',
   'src/ai-material.ts',
   'src/ai-airplane.ts',

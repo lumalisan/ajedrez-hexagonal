@@ -1587,6 +1587,27 @@ describe('sesión que conecta React con el juego', () => {
     expect(session.getSnapshot().matchRecord).toEqual(record);
   });
 
+  it('muestra solo el perfil local del invitado sin consultar al servidor', () => {
+    const rankingClient = vi.fn();
+    const session = createGameSession({ publicOnlineAllowed: () => false, rankingClient });
+    sessions.push(session);
+    session.commands.openDialog({ kind: 'ranking' });
+    for (const mode of ['machine', 'online'] as const) {
+      session.commands.loadRanking({ mode, period: 'all', page: 2 });
+      const { ranking, profile } = session.getSnapshot();
+      expect(ranking).toMatchObject({
+        shared: false,
+        busy: false,
+        error: null,
+        query: { mode, period: 'all', page: 0 },
+      });
+      expect(ranking.data?.entries).toEqual([
+        expect.objectContaining({ name: profile.name, position: 0, played: 0 }),
+      ]);
+    }
+    expect(rankingClient).not.toHaveBeenCalled();
+  });
+
   it('descarta clasificaciones anteriores al cambiar filtros, cerrar o destruir la sesión', async () => {
     const requests: Array<{
       resolve: (page: import('../src/ranking-contracts').RankingPage) => void;
@@ -1594,6 +1615,7 @@ describe('sesión que conecta React con el juego', () => {
       query: import('../src/ranking-contracts').RankingQuery;
     }> = [];
     const session = createGameSession({
+      publicOnlineAllowed: () => true,
       rankingClient: (query, signal) =>
         new Promise((resolve) => requests.push({ query, signal, resolve })),
     });

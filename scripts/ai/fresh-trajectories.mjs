@@ -36,12 +36,19 @@ export function freshTrajectoryOptions(argv) {
     directory: { type: 'string', required: true },
     'reference-root': { type: 'string', default: root },
     'exclude-manifest': { type: 'string' },
+    sampling: { type: 'string', default: 'without-replacement' },
     resume: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   });
   if (!options.help && !['development', 'confirmation'].includes(options.role)) {
     throw new Error('--role debe ser development o confirmation.');
   }
+  if (
+    !options.help &&
+    (!['without-replacement', 'iid'].includes(options.sampling) ||
+      (options.sampling === 'iid' && options.role !== 'confirmation'))
+  )
+    throw new Error('--sampling admite without-replacement, o iid solo para confirmation.');
   return options;
 }
 
@@ -156,6 +163,7 @@ export function freshOpening(options, index, modules, excluded = new Set()) {
       familyId,
       rejectedDraws: attempt,
       id: `fresh-${options.role}-${digest(`${options.seed}:${index}:${familyId}`).slice(0, 20)}`,
+      ...(options.sampling === 'iid' ? { drawId: `iid-${options.seed}-${index + 1}` } : {}),
       choices: {
         choiceSeed,
         prefixSeed,
@@ -194,6 +202,17 @@ function outputBytes(state) {
         role: 'confirmation',
         sourceRole: 'confirmation',
         confirmatory: true,
+        ...(state.settings.sampling === 'iid'
+          ? {
+              samplingUnit: 'iid-draw',
+              samplingProtocol: {
+                method: 'iid-with-replacement',
+                conditionedOn: 'nonterminal-and-fixed-exclusions',
+                modelFree: true,
+                duplicateFamilies: 'retained',
+              },
+            }
+          : {}),
         provenance:
           'Fresh model-free random legal prefixes. No candidate or comparator is loaded. Must be generated and protocol-registered before confirmation outcomes are observed.',
         createdAt: state.createdAt,
@@ -206,9 +225,13 @@ function outputBytes(state) {
           openingPlies: state.settings['opening-plies'],
           actions: 'Uniform among legal engine actions at each prefix state.',
           conditioning:
-            'Reject terminal prefixes, excluded families and duplicate opening families. No rotations or player-swap augmentations.',
+            state.settings.sampling === 'iid'
+              ? 'Reject terminal prefixes and fixed excluded families only; retain naturally repeated families. No rotations or player-swap augmentations.'
+              : 'Reject terminal prefixes, excluded families and duplicate opening families. No rotations or player-swap augmentations.',
           statisticalScope:
-            'Pseudorandom mixture with predeclared exclusions; distinct accepted families sampled without replacement, not a claim of exact IID.',
+            state.settings.sampling === 'iid'
+              ? 'Pseudorandom independent draws with replacement from the mixture conditional on nonterminal prefixes and fixed predeclared exclusions.'
+              : 'Pseudorandom mixture with predeclared exclusions; distinct accepted families sampled without replacement, not a claim of exact IID.',
         },
         exclusions: { sha256: state.exclusionsHash, families: state.excludedFamilyCount },
         entries: state.games,
@@ -265,6 +288,9 @@ async function save(directory, state) {
 
 /** All development searches use the private source snapshot; confirmation never searches. */
 export async function runFreshTrajectories(options, dependencies = {}) {
+  const iid = options.sampling === 'iid';
+  if (iid && options.role !== 'confirmation')
+    throw new Error('--sampling iid requiere confirmation.');
   const directory = resolve(options.directory);
   await mkdir(directory, { recursive: true });
   const release = await acquireResearchLock(
@@ -277,6 +303,7 @@ export async function runFreshTrajectories(options, dependencies = {}) {
     const { resume: _resume, help: _help, ...settings } = options;
     void _resume;
     void _help;
+    if (settings.sampling === 'without-replacement') delete settings.sampling;
     settings.directory = directory;
     settings['reference-root'] = resolve(options['reference-root'] ?? root);
     if (settings['exclude-manifest'])
@@ -345,8 +372,8 @@ export async function runFreshTrajectories(options, dependencies = {}) {
     const search = dependencies.search ?? modules.ai.searchMachineActionWithMetadata;
     const knownFamilies = new Set([
       ...exclusions.ids,
-      ...state.games.map((game) => game.familyId),
-      ...(state.inProgress ? [state.inProgress.familyId] : []),
+      ...(iid ? [] : state.games.map((game) => game.familyId)),
+      ...(!iid && state.inProgress ? [state.inProgress.familyId] : []),
     ]);
     state.status = 'running';
     delete state.error;
@@ -355,11 +382,12 @@ export async function runFreshTrajectories(options, dependencies = {}) {
       const index = state.games.length;
       if (!state.inProgress) {
         const opening = freshOpening(options, index, modules, knownFamilies);
-        knownFamilies.add(opening.familyId);
+        if (!iid) knownFamilies.add(opening.familyId);
         const base = {
           id: opening.id,
           gameId: opening.id,
           familyId: opening.familyId,
+          ...(iid ? { drawId: opening.drawId } : {}),
           seed: opening.seed,
           initialState: opening.initialState,
           actions: opening.actions,
@@ -450,7 +478,7 @@ async function main() {
   const options = freshTrajectoryOptions(process.argv.slice(2));
   if (options.help) {
     console.log(
-      'pnpm exec node scripts/ai/fresh-trajectories.mjs --role development|confirmation --games 100 --max-plies 240 --budget-ms 1500 --depth 5 --seed 123 --directory .ai-lab/fresh [--opening-plies 4] [--exclude-manifest familias.json] [--resume]\nConfirmation genera solo prefijos legales de 4–12 acciones, sin modelo ni búsqueda. Development juega con profesor clásico congelado y guarda cada cuatro plies; no genera etiquetas ni publica pesos.',
+      'pnpm exec node scripts/ai/fresh-trajectories.mjs --role development|confirmation --games 100 --max-plies 240 --budget-ms 1500 --depth 5 --seed 123 --directory .ai-lab/fresh [--opening-plies 4] [--exclude-manifest familias.json] [--sampling without-replacement|iid] [--resume]\nConfirmation genera solo prefijos legales de 4–12 acciones, sin modelo ni búsqueda. IID conserva repeticiones naturales y solo aplica exclusiones fijas. Development juega con profesor clásico congelado y guarda cada cuatro plies; no genera etiquetas ni publica pesos.',
     );
     return;
   }

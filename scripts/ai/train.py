@@ -96,10 +96,14 @@ def read_dataset(path: Path, max_samples: int | None, sample_weighting: str = "n
                     validate_feature_contract(row.get("schema"), row.get("inputSize"))
                     if row.get("teacherScale") != OUTPUT_SCALE:
                         raise ValueError(f"teacherScale debe ser {OUTPUT_SCALE}")
-                    if row.get("target") == "classic-residual-v1":
+                    if row.get("target") in ("classic-residual-v1", "material-residual-v1"):
                         scale = row.get("residualScale")
                         if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) or not 0 < scale <= 5000:
                             raise ValueError("residualScale incompatible")
+                    if row.get("target") == "material-residual-v1" and (row.get("residualBaseline") != "material-fortress-v1" or row.get("includesRangedValue") is not True):
+                        raise ValueError("material-residual-v1 requiere material-fortress-v1 e includesRangedValue true")
+                    if row.get("target") == "direct-value-v1" and (row.get("includesRangedValue") is not True or row.get("residualScale") is not None):
+                        raise ValueError("direct-value-v1 requiere includesRangedValue true y ninguna escala residual")
                     header = row
                     continue
                 if header is None:
@@ -509,6 +513,8 @@ def read_initial_model(path: Path, header: dict, antisymmetric: bool, transfer: 
             or metadata.get("outputScale") != OUTPUT_SCALE
             or metadata.get("evaluation", "standalone-v1") != header.get("target", "standalone-v1")
             or metadata.get("residualScale") != header.get("residualScale")
+            or (header.get("target") == "direct-value-v1" and (metadata.get("includesRangedValue") is not True or header.get("includesRangedValue") is not True))
+            or (header.get("target") == "material-residual-v1" and (metadata.get("residualBaseline") != "material-fortress-v1" or metadata.get("residualBaseline") != header.get("residualBaseline") or metadata.get("includesRangedValue") is not True or header.get("includesRangedValue") is not True))
             or (metadata.get("residualSymmetry") == "antisymmetric") != antisymmetric):
         raise ValueError("contrato del modelo inicial incompatible con el dataset")
     offset = (8 + length + 3) // 4 * 4
@@ -583,7 +589,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--initialize-model", type=Path, help="Continúa los pesos; reinicia AdamW")
     parser.add_argument("--split-seed", type=int, help="Semilla de partición independiente de los pesos")
     parser.add_argument("--split-policy", choices=("ranked", "hash-threshold"), default="ranked")
-    parser.add_argument("--antisymmetric", action="store_true", help="Proyecta la corrección residual sobre perspectivas opuestas emparejadas")
+    parser.add_argument("--antisymmetric", action="store_true", help="Proyecta el valor neuronal sobre perspectivas opuestas emparejadas")
     args = parser.parse_args()
     if args.antisymmetric and args.batch_size % 2:
         parser.error("--antisymmetric requiere --batch-size par")
@@ -641,10 +647,12 @@ def project_predictions(predictions: np.ndarray, indices: list[int], partners: l
 def main() -> int:
     args = parse_args()
     header, samples = read_dataset(args.input, args.max_samples, args.sample_weighting, args.confidence_scale, args.split_group_field)
-    if header.get("target") == "classic-residual-v1" and args.teacher_weight != 1 and any(sample.outcome is not None for sample in samples):
-        raise ValueError("las etiquetas residuales con resultados requieren --teacher-weight 1; el resultado ya se combina antes de calcular el residuo")
-    if args.antisymmetric and header.get("target") != "classic-residual-v1":
-        raise ValueError("--antisymmetric requiere un dataset residual")
+    if header.get("target") in ("classic-residual-v1", "direct-value-v1", "material-residual-v1") and args.teacher_weight != 1 and any(sample.outcome is not None for sample in samples):
+        raise ValueError("las etiquetas preparadas con resultados requieren --teacher-weight 1; no se vuelve a combinar el resultado")
+    if args.antisymmetric and header.get("target") not in ("classic-residual-v1", "direct-value-v1", "material-residual-v1"):
+        raise ValueError("--antisymmetric requiere un dataset residual o direct-value-v1")
+    if header.get("target") in ("direct-value-v1", "material-residual-v1") and not args.antisymmetric:
+        raise ValueError(f"{header['target']} requiere --antisymmetric")
     partners = perspective_partners(args.input, len(samples)) if args.antisymmetric else None
     split_seed = args.seed if args.split_seed is None else args.split_seed
     training, validation, split = split_games(samples, split_seed, args.validation_fraction, args.split_policy, args.split_group_field)
@@ -787,6 +795,8 @@ def main() -> int:
         "target": header.get("target", "standalone-v1"),
         "evaluationVersion": header.get("evaluationVersion"),
         "residualScale": header.get("residualScale"),
+        "residualBaseline": header.get("residualBaseline"),
+        "includesRangedValue": header.get("includesRangedValue"),
         "history": history,
     }
     metadata = {
@@ -812,6 +822,18 @@ def main() -> int:
         if args.antisymmetric:
             metadata["residualSymmetry"] = "antisymmetric"
             metadata["searchProfile"] = "pvs-threats"
+    elif header.get("target") == "direct-value-v1":
+        metadata["evaluation"] = "direct-value-v1"
+        metadata["residualSymmetry"] = "antisymmetric"
+        metadata["includesRangedValue"] = True
+        metadata["searchProfile"] = "pvs-threats"
+    elif header.get("target") == "material-residual-v1":
+        metadata["evaluation"] = "material-residual-v1"
+        metadata["residualScale"] = header["residualScale"]
+        metadata["residualBaseline"] = header["residualBaseline"]
+        metadata["residualSymmetry"] = "antisymmetric"
+        metadata["includesRangedValue"] = True
+        metadata["searchProfile"] = "pvs-threats"
     binary_size = export_model(args.output, best_parameters, metadata)
     report["binaryBytes"] = binary_size
     report_path = Path(str(args.output) + ".training.json")

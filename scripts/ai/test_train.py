@@ -15,6 +15,91 @@ import train
 
 
 class TrainingTests(unittest.TestCase):
+    def test_material_residual_contract_export_and_warm_start(self):
+        rows = [{"kind": "sample", "gameId": f"g{index // 2}", "ply": 10,
+                 "perspective": index % 2, "features": [index % 2, 5202],
+                 "teacher": 0.2 if index % 2 == 0 else -0.2, "outcome": None} for index in range(20)]
+        contract = {"schema": "hex-sparse-v2", "inputSize": 5203,
+                    "target": "material-residual-v1", "residualScale": 2000,
+                    "residualBaseline": "material-fortress-v1", "includesRangedValue": True}
+        path = self.dataset(rows, contract)
+        output = self.folder / "material.bin"
+        with patch("sys.argv", ["train.py", "--input", str(path), "--output", str(output),
+                                "--epochs", "2", "--antisymmetric", "--teacher-weight", "1"]), redirect_stdout(StringIO()):
+            self.assertEqual(train.main(), 0)
+        raw = output.read_bytes()
+        length = int.from_bytes(raw[4:8], "little")
+        metadata = json.loads(raw[8:8 + length])
+        self.assertEqual(metadata["evaluation"], contract["target"])
+        self.assertEqual(metadata["residualBaseline"], contract["residualBaseline"])
+        self.assertEqual(metadata["residualScale"], 2000)
+        self.assertTrue(metadata["includesRangedValue"])
+        self.assertEqual(metadata["residualSymmetry"], "antisymmetric")
+        self.assertEqual(metadata["searchProfile"], "pvs-threats")
+        train.read_initial_model(output, contract, True)
+        for overrides in ({"residualBaseline": "material-fortress-v2"}, {"includesRangedValue": False},
+                          {"target": "classic-residual-v1"}, {"target": "direct-value-v1", "residualScale": None}):
+            with self.assertRaisesRegex(ValueError, "incompatible"):
+                train.read_initial_model(output, {**contract, **overrides}, True)
+        for overrides in ({"residualBaseline": None}, {"includesRangedValue": False}, {"residualScale": 0}):
+            path = self.dataset(rows, {**contract, **overrides})
+            with self.assertRaises(ValueError):
+                train.read_dataset(path, None)
+        path = self.dataset(rows, contract)
+        with patch("sys.argv", ["train.py", "--input", str(path), "--teacher-weight", "1"]):
+            with self.assertRaisesRegex(ValueError, "antisymmetric"):
+                train.main()
+
+    def test_direct_value_cli_contract_and_exact_warm_start(self):
+        rows = [{"kind": "sample", "gameId": f"g{index // 2}", "ply": 10,
+                 "perspective": index % 2, "features": [index % 2, 5202],
+                 "teacher": 0.2 if index % 2 == 0 else -0.2, "outcome": None}
+                for index in range(20)]
+        contract = {"schema": "hex-sparse-v2", "inputSize": 5203,
+                    "target": "direct-value-v1", "includesRangedValue": True}
+        path = self.dataset(rows, contract)
+        output = self.folder / "direct.bin"
+        with patch("sys.argv", ["train.py", "--input", str(path), "--output", str(output),
+                                "--epochs", "2", "--antisymmetric", "--teacher-weight", "1"]), redirect_stdout(StringIO()):
+            self.assertEqual(train.main(), 0)
+        raw = output.read_bytes()
+        length = int.from_bytes(raw[4:8], "little")
+        metadata = json.loads(raw[8:8 + length])
+        self.assertEqual(metadata["evaluation"], "direct-value-v1")
+        self.assertTrue(metadata["includesRangedValue"])
+        self.assertNotIn("residualScale", metadata)
+        self.assertEqual(metadata["residualSymmetry"], "antisymmetric")
+        self.assertEqual(metadata["searchProfile"], "pvs-threats")
+        restored = train.read_initial_model(output, contract, True)
+        parity = json.loads(Path(str(output) + ".parity.json").read_text())
+        predictions = train.predict(restored, [tuple(vector["features"]) for vector in parity["vectors"]])
+        for prediction, vector in zip(predictions, parity["vectors"]):
+            self.assertAlmostEqual(float(prediction) * train.OUTPUT_SCALE, vector["expectedScore"], delta=0.01)
+        for incompatible in ({**contract, "includesRangedValue": False},
+                             {**contract, "target": "classic-residual-v1", "residualScale": 2000}):
+            with self.assertRaisesRegex(ValueError, "incompatible"):
+                train.read_initial_model(output, incompatible, True)
+        with self.assertRaisesRegex(ValueError, "incompatible"):
+            train.read_initial_model(output, contract, False)
+
+    def test_direct_value_rejects_ambiguous_dataset_or_training_objective(self):
+        rows = [{"kind": "sample", "gameId": f"g{index // 2}", "ply": 10,
+                 "perspective": index % 2, "features": [index % 2],
+                 "teacher": 0.2 if index % 2 == 0 else -0.2,
+                 "outcome": 1 if index % 2 == 0 else -1} for index in range(8)]
+        contract = {"target": "direct-value-v1", "includesRangedValue": True}
+        for overrides in ({"includesRangedValue": False}, {"includesRangedValue": None},
+                          {"residualScale": 2000}):
+            path = self.dataset(rows, {**contract, **overrides})
+            with self.assertRaisesRegex(ValueError, "direct-value-v1"):
+                train.read_dataset(path, None)
+        path = self.dataset(rows, contract)
+        for flags, error in [(["--teacher-weight", "1"], "antisymmetric"),
+                             (["--antisymmetric"], "teacher-weight 1")]:
+            with patch("sys.argv", ["train.py", "--input", str(path), "--epochs", "1", *flags]):
+                with self.assertRaisesRegex(ValueError, error):
+                    train.main()
+
     def test_feature_schema_and_dimensions_are_exact_supported_pairs(self):
         self.assertEqual(train.FEATURE_SCHEMA, "hex-sparse-v1")
         self.assertEqual(train.INPUT_SIZE, 5183)

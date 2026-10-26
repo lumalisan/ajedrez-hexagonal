@@ -1,3 +1,22 @@
+import { createHash } from 'node:crypto';
+import { normalizeProfile, type UserProfile } from '../src/user-profile.js';
+import { playerStatistics, playerRecords } from '../src/profile-statistics.js';
+import type { PublicPlayerProfile } from '../src/ranking-contracts.js';
+const publicId = (id: string) =>
+  createHash('sha256')
+    .update('hexfortia:public-profile:' + id)
+    .digest('hex');
+function readProfile(raw: string | null, name = 'Jugador'): UserProfile {
+  try {
+    return normalizeProfile(JSON.parse(raw ?? '{}') ?? {}, {
+      name,
+      emblem: 'fortress',
+      color: 'cyan',
+    });
+  } catch {
+    return { name, emblem: 'fortress', color: 'cyan' };
+  }
+}
 import {
   createPlayerProgression,
   parsePlayerProgression,
@@ -16,6 +35,61 @@ export class RankingService {
     private readonly now = Date.now,
   ) {}
 
+  async profile(id: string): Promise<PublicPlayerProfile> {
+    if (!/^[a-f0-9]{64}$/.test(id)) throw new OnlineError('Perfil no encontrado.', 404);
+    const data = await this.repository.rankingData('online');
+    const account = data.accounts.find((account) => publicId(account.id) === id);
+    if (!account) throw new OnlineError('Perfil no encontrado.', 404);
+    const progress = parsePlayerProgression(account.progression ?? '{}');
+    // Online statistics use server results rather than uploaded account evidence.
+    for (const [key, match] of Object.entries(progress.matches)) {
+      if (match.mode === 'online') delete progress.matches[key];
+    }
+    progress.ratings.online = data.players.find((player) => player.id === account.id)?.elo ?? 1000;
+    for (const match of data.matches) {
+      const owner = match.players.indexOf(account.id);
+      if (owner < 0) continue;
+      const outcome = match.rankingResult ? null : replayRecord(match.record).outcome;
+      const score =
+        match.rankingResult?.score ??
+        (outcome?.type === 'draw'
+          ? 0.5
+          : outcome?.type === 'win'
+            ? Number(outcome.winner === 0)
+            : null);
+      if (score === null) continue;
+      progress.matches['online:' + match.id] = {
+        mode: 'online',
+        difficulty: 0,
+        metrics: {},
+        completedAt: match.rankingResult?.completedAt ?? match.record.updatedAt,
+        result: (owner === 0 ? score : 1 - score) as 0 | 0.5 | 1,
+        opponentRating: match.rankingResult?.ratingsBefore[owner === 0 ? 1 : 0] ?? 1000,
+      };
+    }
+    return {
+      profile: readProfile(
+        account.profile,
+        data.players.find((player) => player.id === account.id)?.name,
+      ),
+      progression: {
+        xp: progress.xp,
+        unlockedAt: progress.unlockedAt,
+        activity: { ...progress.activity, lastDay: null },
+        ratings: progress.ratings,
+      },
+      statistics: {
+        local: playerStatistics(progress, 'local'),
+        machine: playerStatistics(progress, 'machine'),
+        online: playerStatistics(progress, 'online'),
+        total: playerStatistics(progress),
+      },
+      records: {
+        machine: playerRecords(progress, 'machine'),
+        online: playerRecords(progress, 'online'),
+      },
+    };
+  }
   async list(query: RankingQuery): Promise<RankingPage> {
     if (
       !query ||
@@ -26,8 +100,12 @@ export class RankingService {
     )
       throw new OnlineError('Consulta de clasificación no válida.');
     const data = await this.repository.rankingData(query.mode);
+    const registered = new Set(data.accounts.map((account) => account.id));
     const at = new Date(this.now()).toISOString();
     const names = new Map<string, string>();
+    const profiles = new Map(
+      data.accounts.map((account) => [account.id, readProfile(account.profile)]),
+    );
     const entries: Array<RankingEntry & { id: string }> = [];
     for (const account of data.accounts) {
       let name = 'Jugador';
@@ -104,6 +182,7 @@ export class RankingService {
         }
       }
       for (const player of data.players) {
+        if (!registered.has(player.id)) continue;
         const progress = histories.get(player.id) ?? createPlayerProgression();
         progress.ratings.online = player.elo;
         const summary = rankingSummary(progress, 'online', query.period, at);
@@ -125,6 +204,11 @@ export class RankingService {
       entries: entries
         .slice(query.page * pageSize, (query.page + 1) * pageSize)
         .map((entry, index) => ({
+          playerId: publicId(entry.id),
+          xp: parsePlayerProgression(
+            data.accounts.find((account) => account.id === entry.id)?.progression ?? '{}',
+          ).xp,
+          profile: { ...profiles.get(entry.id)!, name: entry.name },
           name: entry.name,
           played: entry.played,
           wins: entry.wins,

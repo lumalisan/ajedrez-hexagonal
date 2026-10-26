@@ -205,7 +205,8 @@ function DialogHost() {
               dialog.kind === 'mode' ||
               dialog.kind === 'rules' ||
               dialog.kind === 'online' ||
-              dialog.kind === 'online-search' ? (
+              dialog.kind === 'online-search' ||
+              dialog.kind === 'private-join' ? (
                 <GameDialogs />
               ) : (
                 <UtilityDialogs />

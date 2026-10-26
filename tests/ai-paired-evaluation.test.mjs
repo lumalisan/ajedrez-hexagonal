@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { assessPairedArena, pairedBettingEvidence } from '../scripts/ai/paired-evaluation.mjs';
+import {
+  assessPairedArena,
+  confirmationAlpha,
+  pairedBettingEvidence,
+} from '../scripts/ai/paired-evaluation.mjs';
 
 function arena(pairs, result) {
   return {
@@ -15,6 +19,45 @@ function arena(pairs, result) {
 }
 
 describe('opening-pair evidence', () => {
+  it('allocates a summable error budget across successive unique model confirmations', () => {
+    expect(confirmationAlpha(1)).toBe(0.025);
+    expect(confirmationAlpha(2)).toBeCloseTo(0.05 / 6, 15);
+    let spent = 0;
+    for (let trial = 1; trial <= 1000; trial += 1) spent += confirmationAlpha(trial);
+    expect(spent).toBeCloseTo(0.05 * (1 - 1 / 1001), 14);
+    for (const invalid of [0, -1, 1.5, NaN]) expect(() => confirmationAlpha(invalid)).toThrow();
+    const result = assessPairedArena(arena(100, true), { method: 'betting', trial: 1 });
+    expect(result.alpha).toBe(0.025);
+    expect(result.betting.alphaPerDirection).toBe(0.0125);
+    expect(result.errorSpending.trial).toBe(1);
+    expect(result.decision).toBe('evidence-of-improvement');
+  });
+
+  it('uses final capital and requires all planned pairs for a fixed final look', () => {
+    const report = arena(100, true);
+    for (const game of report.games) {
+      game.outcome =
+        game.pair <= 20
+          ? { type: 'win', winner: game.neuralPlayer }
+          : game.pair > 80
+            ? { type: 'win', winner: 1 - game.neuralPlayer }
+            : { type: 'draw' };
+    }
+    expect(assessPairedArena(report, { method: 'betting' }).decision).toBe(
+      'evidence-of-improvement',
+    );
+    const fixed = assessPairedArena(report, { method: 'betting', fixedHorizon: true });
+    expect(fixed.observedScore).toBe(0.5);
+    expect(fixed.decision).toBe('inconclusive');
+    expect(fixed.stoppingRule).toBe('fixed-final-look-at-all-planned-pairs');
+    const partial = arena(100, true);
+    partial.games = partial.games.slice(0, 20);
+    expect(
+      assessPairedArena(partial, { method: 'betting', fixedHorizon: true, minimumPairs: 10 })
+        .decision,
+    ).toBe('insufficient-evidence');
+    expect(() => assessPairedArena(report, { fixedHorizon: true })).toThrow('betting');
+  });
   it('requires substantial paired evidence even when a tiny sample wins every game', () => {
     expect(assessPairedArena(arena(8, true)).decision).toBe('insufficient-evidence');
     const result = assessPairedArena(arena(100, true));

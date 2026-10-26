@@ -1,7 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
+import { URL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as engine from '../src/engine';
 import * as neural from '../src/ai-neural';
@@ -91,6 +93,76 @@ function teacher(position, options) {
 }
 
 describe('independent research data', () => {
+  it('records a frozen neural search teacher and material/V2 targets, including model identity on resume', async () => {
+    const { input, output, options } = await fixture([
+      { ...trajectory(), familyId: 'fixed-family' },
+    ]);
+    const lines = (await readFile(input, 'utf8')).split('\n').map(JSON.parse);
+    lines[0].sourceRole = 'development';
+    await writeFile(input, lines.map(JSON.stringify).join('\n'));
+    const modelPath = join(input, '..', 'teacher.bin');
+    const modelBytes = await readFile(new URL('../src/ai-models/hex-value.bin', import.meta.url));
+    await writeFile(modelPath, modelBytes);
+    const originalValue = neural.createNeuralEvaluator(
+      modelBytes.buffer.slice(modelBytes.byteOffset, modelBytes.byteOffset + modelBytes.byteLength),
+    );
+    const search = vi.fn((position, config) => {
+      expect(typeof config.evaluate).toBe('function');
+      expect(config.evaluate(position, 0, rules)).toBe(originalValue(position, 0, rules));
+      return teacher(position, config);
+    });
+    const config = { ...options, target: 'material-residual-v1', 'teacher-model': modelPath };
+    const dependencies = { modules, search, sourceHashes: { fixed: 'source' } };
+    const partial = await runReanalysis({ ...config, 'max-search-ms': 20 }, dependencies);
+    expect(partial.cursor).toBe(1);
+    const rows = (await readFile(output, 'utf8')).trim().split('\n').map(JSON.parse);
+    expect(rows[0]).toMatchObject({
+      target: 'material-residual-v1',
+      schema: 'hex-sparse-v2',
+      inputSize: 5203,
+      residualBaseline: 'material-fortress-v1',
+      residualScale: 2000,
+      includesRangedValue: true,
+      teacher: { evaluator: 'frozen-neural-model', neural: true, model: { path: modelPath } },
+    });
+    expect(rows[0].teacher.model.sha256).toMatch(/^[a-f0-9]{64}$/);
+    for (const sample of partial.samples) {
+      expect(sample.familyId).toBe('fixed-family');
+      expect(sample.baseline).toBe(
+        neural.evaluateNeuralMaterialBaseline(
+          reconstructResearchGame(
+            parseResearchInput(await readFile(input, 'utf8'))[0],
+            modules,
+          ).positions.find((p) => p.ply === sample.ply),
+          sample.perspective,
+        ),
+      );
+      expect(sample.teacher).toBeCloseTo(
+        Math.max(-1, Math.min(1, (sample.teacherScore - sample.baseline) / 2000)),
+        12,
+      );
+      expect(sample.outcome).toBeNull();
+      expect(sample.features.some((index) => index >= 5183)).toBe(true);
+    }
+    const changed = Buffer.from(modelBytes);
+    changed[changed.length - 1] ^= 1;
+    await writeFile(modelPath, changed);
+    await expect(runReanalysis({ ...config, resume: true }, dependencies)).rejects.toThrow(
+      'no coincide',
+    );
+    expect(search).toHaveBeenCalledTimes(1);
+    await writeFile(modelPath, modelBytes);
+    const complete = await runReanalysis({ ...config, resume: true }, dependencies);
+    expect(complete.status).toBe('complete');
+    expect(search).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects material relabelling of data without an explicit development role', async () => {
+    const { options } = await fixture();
+    await expect(
+      runReanalysis({ ...options, target: 'material-residual-v1' }, { modules, sourceHashes: {} }),
+    ).rejects.toThrow('sourceRole');
+  });
   it('samples reproducibly with a strict per-game gap and limit', () => {
     const selected = selectPositionIndices(100, 8, 7, 22);
     expect(selected).toHaveLength(8);

@@ -1,3 +1,12 @@
+import type { UserProfile } from './user-profile.js';
+import type { PlayerProgression, ProgressionMode } from './progression.js';
+import type { playerStatistics, playerRecords } from './profile-statistics.js';
+export interface PublicPlayerProfile {
+  profile: UserProfile;
+  progression: Pick<PlayerProgression, 'xp' | 'unlockedAt' | 'activity' | 'ratings'>;
+  statistics: Record<ProgressionMode | 'total', ReturnType<typeof playerStatistics>>;
+  records: Record<RankingMode, ReturnType<typeof playerRecords>>;
+}
 export type RankingMode = 'machine' | 'online';
 export type RankingPeriod = 'all' | 'month';
 export interface RankingQuery {
@@ -6,6 +15,9 @@ export interface RankingQuery {
   page: number;
 }
 export interface RankingEntry {
+  playerId?: string;
+  xp?: number;
+  profile?: UserProfile;
   position: number;
   name: string;
   played: number;

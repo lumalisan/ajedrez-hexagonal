@@ -1,9 +1,16 @@
-import { levelProgress } from '../../progression';
+import { levelProgress, type PlayerProgression } from '../../progression';
 import { useGame } from '../game-context';
 
-export function ProgressionSummary({ showActivity = true }: { showActivity?: boolean }) {
+export function ProgressionSummary({
+  showActivity = true,
+  progression,
+}: {
+  showActivity?: boolean;
+  progression?: Pick<PlayerProgression, 'xp' | 'activity'>;
+}) {
   const { snapshot } = useGame();
-  const progress = levelProgress(snapshot.progression.xp);
+  const data = progression ?? snapshot.progression;
+  const progress = levelProgress(data.xp);
   return (
     <div className="progression-summary">
       <div>
@@ -11,7 +18,7 @@ export function ProgressionSummary({ showActivity = true }: { showActivity?: boo
           Nivel {progress.level} – {progress.category}
         </strong>
       </div>
-      <span>{snapshot.progression.xp.toLocaleString('es-ES')} XP acumulados</span>
+      <span>{data.xp.toLocaleString('es-ES')} XP acumulados</span>
       {progress.required ? (
         <>
           <progress
@@ -28,8 +35,7 @@ export function ProgressionSummary({ showActivity = true }: { showActivity?: boo
       )}
       {showActivity && (
         <small>
-          Racha de actividad: {snapshot.progression.activity.streak} días · Mejor:{' '}
-          {snapshot.progression.activity.best}
+          Racha de actividad: {data.activity.streak} días · Mejor: {data.activity.best}
         </small>
       )}
     </div>

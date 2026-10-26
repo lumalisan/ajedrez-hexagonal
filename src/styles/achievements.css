@@ -1193,3 +1193,7 @@
 .ranking-browser .ranking-content {
   flex: 1;
 }
+
+.ranking-table .profile-avatar {
+  width: 36px;
+}

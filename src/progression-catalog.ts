@@ -516,7 +516,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
     hidden: false,
     modes: ['machine', 'online'],
     minDifficulty: 2,
-    metric: 'conversionsMatch',
+    metric: 'conversions',
     target: 2,
   },
   {
@@ -733,7 +733,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p4-07',
     title: 'Último superviviente',
-    description: 'Gana 10 partidas conservando únicamente una unidad, además de la fortaleza.',
+    description: 'Gana 10 partidas conservando como máximo una unidad, además de la fortaleza.',
     tier: 3,
     hidden: false,
     modes: ['machine', 'online'],
@@ -992,7 +992,7 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p5-10',
     title: 'Tú sí que vales',
-    description: 'Gana 25 partidas conservando únicamente una unidad, además de la fortaleza.',
+    description: 'Gana 25 partidas conservando como máximo una unidad, además de la fortaleza.',
     tier: 4,
     hidden: false,
     modes: ['machine', 'online'],

@@ -150,6 +150,66 @@ describe('fresh classical trajectories and confirmation isolation', () => {
     );
   });
 
+  it('declares independent draws with only fixed exclusions and preserves the protocol on resume', async () => {
+    const config = { ...(await options('confirmation', 4)), sampling: 'iid' };
+    const state = await runFreshTrajectories(config, dependencies);
+    expect(state.searches).toBe(0);
+    expect(state.games.map((game) => game.drawId)).toEqual([
+      'iid-23651-1',
+      'iid-23651-2',
+      'iid-23651-3',
+      'iid-23651-4',
+    ]);
+    const book = JSON.parse(await readFile(join(config.directory, 'openings.json'), 'utf8'));
+    expect(book.samplingUnit).toBe('iid-draw');
+    expect(book.samplingProtocol).toMatchObject({
+      method: 'iid-with-replacement',
+      modelFree: true,
+      duplicateFamilies: 'retained',
+    });
+    expect(book.distribution.conditioning).toContain('fixed excluded families only');
+    const resumed = await runFreshTrajectories({ ...config, resume: true }, dependencies);
+    expect(resumed.games).toEqual(state.games);
+    await expect(
+      runFreshTrajectories(
+        { ...config, sampling: 'without-replacement', resume: true },
+        dependencies,
+      ),
+    ).rejects.toThrow('configuración');
+    expect(() =>
+      freshTrajectoryOptions([
+        '--role',
+        'development',
+        '--seed',
+        '1',
+        '--directory',
+        config.directory,
+        '--sampling',
+        'iid',
+      ]),
+    ).toThrow('solo para confirmation');
+  });
+
+  it('keeps natural repetitions when the legal opening distribution has only one possible family', async () => {
+    const config = { ...(await options('confirmation', 3)), sampling: 'iid' };
+    const singleFamilyModules = {
+      ...modules,
+      setup: { ...setup, createInitialPieces: () => setup.createInitialPieces(2, 3) },
+      engine: {
+        ...engine,
+        getAllLegalActions: (state) => engine.getAllLegalActions(state).slice(0, 1),
+      },
+    };
+    const result = await runFreshTrajectories(config, {
+      ...dependencies,
+      modules: singleFamilyModules,
+    });
+    expect(result.games).toHaveLength(3);
+    expect(new Set(result.games.map((game) => game.familyId)).size).toBe(1);
+    expect(new Set(result.games.map((game) => game.drawId)).size).toBe(3);
+    expect(result.games.every((game) => game.rejectedDraws === 0)).toBe(true);
+  });
+
   it('resumes a checkpoint without replaying completed games and saves each four played plies', async () => {
     const config = { ...(await options('development')), 'max-plies': 8 };
     let calls = 0;

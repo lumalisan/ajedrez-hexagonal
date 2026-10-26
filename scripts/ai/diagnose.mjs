@@ -199,6 +199,7 @@ export async function diagnose(options = {}) {
           calls += 1;
           return value;
         };
+        evaluate.includesRangedValue = variant.evaluate.includesRangedValue;
         const before = JSON.stringify(entry.state);
         const result = modules.ai.searchMachineActionWithMetadata(entry.state, {
           ...searchOptions,

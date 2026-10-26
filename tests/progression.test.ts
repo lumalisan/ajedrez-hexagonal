@@ -34,7 +34,6 @@ describe('barras de progreso de logros', () => {
     'p2-05',
     'p2-11',
     'p2-17',
-    'p3-07',
     'p3-09',
     'p3-18',
     'p4-18',
@@ -44,7 +43,7 @@ describe('barras de progreso de logros', () => {
     expect(achievementShowsProgress(definition(id))).toBe(false),
   );
 
-  it.each(['p1-14', 'p1-15', 'p2-01', 'p2-06', 'p2-10', 'p3-04', 'p3-11'])(
+  it.each(['p3-07', 'p1-14', 'p1-15', 'p2-01', 'p2-06', 'p2-10', 'p3-04', 'p3-11'])(
     '%s permite seguir un contador, una racha o una puntuación',
     (id) => expect(achievementShowsProgress(definition(id))).toBe(true),
   );
@@ -731,3 +730,54 @@ it.each(['p2-10', 'p3-11', 'p4-13', 'p5-12'])(
     }
   },
 );
+
+describe('capturas acumuladas y supervivencia', () => {
+  it('acumula una captura de cada partida, incluso tras guardar y cargar', () => {
+    let progress = createPlayerProgression();
+    for (let index = 0; index < 2; index++) {
+      let record = fixture(
+        [
+          { id: 'capturer', type: 'capturer', owner: 0, position: { q: 0, r: 0 } },
+          { id: 'enemy', type: 'antiAir', owner: 1, position: { q: 0, r: -1 } },
+        ],
+        0,
+        'machine',
+      );
+      record.createdAt = '2026-10-07T12:0' + index + ':00.000Z';
+      record = appendAction(record, { kind: 'convert', pieceId: 'capturer', targetId: 'enemy' });
+      progress = evaluate(record, progress).progress;
+      expect(progressionValue(progress, definition('p3-07'))).toBe(index + 1);
+      progress = parsePlayerProgression(JSON.stringify(progress));
+    }
+    expect(achievementShowsProgress(definition('p3-07'))).toBe(true);
+  });
+  it.each([0, 1, 2])(
+    'cuenta la victoria con %i unidades tras sacrificar al atacante',
+    (remaining) => {
+      const reserves: Piece[] = Array.from({ length: remaining }, (_, i) => ({
+        id: 'reserve' + i,
+        type: 'antiAir',
+        owner: 0,
+        position: { q: i, r: -3 },
+      }));
+      let record = fixture(
+        [
+          { id: 'attacker', type: 'soldier', facing: 2, owner: 0, position: { q: 4, r: 0 } },
+          ...reserves,
+        ],
+        0,
+        'machine',
+      );
+      const fort = record.initialState.pieces.find((piece) => piece.id === 'amber-fort');
+      if (fort?.type === 'fortress') fort.hp = 1;
+      record = appendAction(record, { kind: 'move', pieceId: 'attacker', to: { q: 5, r: 0 } });
+      expect(replayRecord(record).outcome).toMatchObject({ type: 'win', winner: 0 });
+      const result = evaluate(record).progress;
+      expect(result.matches[record.createdAt].metrics.lastSurvivorWins).toBe(
+        remaining <= 1 ? 1 : 0,
+      );
+      expect(progressionValue(result, definition('p4-07'))).toBe(remaining <= 1 ? 1 : 0);
+      expect(progressionValue(result, definition('p5-10'))).toBe(remaining <= 1 ? 1 : 0);
+    },
+  );
+});

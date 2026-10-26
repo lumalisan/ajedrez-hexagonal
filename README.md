@@ -36,6 +36,7 @@ pnpm test:online
 pnpm test:vercel
 pnpm test:tutorial
 pnpm exec node scripts/progression-smoke.mjs
+pnpm exec node scripts/ranking-access-smoke.mjs
 ```
 
 `pnpm test:types` comprueba todos los archivos TypeScript y TSX del proyecto, incluidos el código, las pruebas y la configuración, sin generar archivos. También se ejecuta al hacer el build.
@@ -93,7 +94,7 @@ la configuración de correo y la resolución de conflictos entre dispositivos.
 - En **Reglas → Desarrollo de la partida**, el tablero real muestra ambos ejércitos y permite comparar las dos disposiciones, con **Frente clásico** seleccionado por defecto. El selector solo cambia la vista del manual.
 - **Tutorial:** una bienvenida, 14 apartados y 42 pasos sobre el tablero, con objetivos señalados, órdenes restringidas y respuestas enemigas programadas. Anterior y Siguiente cambian de apartado; los ejercicios avanzan al realizarlos. Termina con una práctica libre en la que solo juega Cian hasta destruir la Fortaleza enemiga. Las flechas blancas indican casillas o botones del panel de mando y priorizan trayectorias diagonales libres de unidades y marcadores. Entrar o salir del tutorial conserva la partida guardada.
 - Autoguardado después de cada orden y al abandonar una partida. «Continuar partida» permite elegir entre las partidas pendientes; iniciar otra no borra las anteriores. Tras más de 30 días sin retomarse, una partida se registra como perdida en el historial y deja de aparecer entre las pendientes. En partidas locales, pierde el jugador que tenía el turno; contra la IA, pierde el jugador humano. La caducidad se comprueba al consultar o retomar las partidas.
-- El perfil abre Tu perfil, Estadísticas y récords y Configuración. Incluye XP, logros, racha, Elo, resultados y récords. Las posiciones compartidas están pendientes; el Elo en línea se sincroniza con el servidor al jugar partidas públicas.
+- El perfil abre Tu perfil, Estadísticas y récords y Configuración. Incluye XP, logros, racha, Elo, resultados y récords. Las cuentas registradas pueden consultar la clasificación compartida; los invitados solo ven sus resultados locales. El Elo en línea se sincroniza con el servidor al jugar partidas públicas.
 - En partidas nuevas se elige Expansionista (cian) o Conservacionista (violeta). El marcador identifica al usuario y a Hexfortia o al Invitado. El primer turno se sortea visiblemente antes de activar el reloj y la IA. Hexfortia se juega siempre sin límite de tiempo.
 - El progreso empieza en nivel 0; mantiene los incrementos de XP de 125, 150, 175… Los logros Principiante, Avanzado y Experto otorgan 25, 75 y 200 XP. Contra Hexfortia, victoria / derrota o tablas: Fácil 25 / 15, Medio 50 / 25, Difícil 75 / 35, Experto 100 / 50. Las bonificaciones de duración y primera partida diaria se mantienen.
 - Ajustes y Configuración del perfil aplican los cambios con «Guardar cambios»; la X los descarta. Ajustes ofrece Exportar partida, Importar partida e Historial de resultados; la repetición se abre desde el tablero.
@@ -210,7 +211,8 @@ desde 1000 con los últimos 30 días naturales, incluido hoy. La clasificación 
 se consulta en `/api/ranking`, con paginación y filtros de modalidad y periodo. Incluye
 los perfiles con partidas completadas: contra Hexfortia usa el progreso sincronizado
 de las cuentas; en línea usa los resultados públicos y el Elo del servidor, excluyendo
-las privadas. Puede consultarse sin iniciar sesión. Los logros TOP permanecen pendientes
+las privadas. La consulta completa requiere una cuenta registrada. Los invitados solo
+ven sus propios resultados locales y un acceso para crear una cuenta o iniciar sesión. Los logros TOP permanecen pendientes
 hasta integrar sus posiciones verificadas en la progresión. Las partidas
 locales no tienen Elo. Importaciones, reproducciones y deshacer/rehacer no duplican premios.
 

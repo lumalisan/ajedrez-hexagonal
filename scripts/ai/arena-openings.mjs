@@ -78,6 +78,7 @@ export function reconstructBookOpening(engine, entry) {
   return {
     id: entry.id,
     familyId: entry.familyId,
+    ...(entry.drawId !== undefined ? { drawId: entry.drawId } : {}),
     seed: entry.seed,
     initialState,
     state,
@@ -104,14 +105,33 @@ export function prepareOpeningBook(engine, document, { pairs, seed, sha256, path
   )
     throw new Error('Número de pares o semilla inválidos.');
   const parsed = openingBookEntries(document);
+  const iid = document.samplingUnit === 'iid-draw';
+  if (document.samplingUnit !== undefined && !iid)
+    throw new Error('Unidad de muestreo desconocida.');
+  if (
+    iid &&
+    (document.format !== 'hex-arena-openings-v1' ||
+      document.role !== 'confirmation' ||
+      document.samplingProtocol?.method !== 'iid-with-replacement' ||
+      document.samplingProtocol?.conditionedOn !== 'nonterminal-and-fixed-exclusions' ||
+      document.samplingProtocol?.modelFree !== true ||
+      document.samplingProtocol?.duplicateFamilies !== 'retained')
+  )
+    throw new Error('El libro IID necesita un protocolo explícito de confirmación sin modelo.');
   if (!['midgame', 'endgame', 'midgame/endgame'].includes(parsed.scope))
     throw new Error('El ámbito del libro debe ser midgame o endgame.');
   if (!parsed.entries.length) throw new Error('El libro está vacío.');
   const ids = new Set();
+  const draws = new Set();
   const families = new Map();
   const all = parsed.entries.map((entry) => {
     if (ids.has(entry.id)) throw new Error(`ID de apertura duplicado: ${entry.id}.`);
     ids.add(entry.id);
+    if (iid) {
+      if (typeof entry.drawId !== 'string' || !entry.drawId.trim() || draws.has(entry.drawId))
+        throw new Error('drawId vacío o duplicado en el libro IID.');
+      draws.add(entry.drawId);
+    }
     const opening = reconstructBookOpening(engine, {
       ...entry,
       scope: entry.scope ?? parsed.scope,
@@ -121,18 +141,22 @@ export function prepareOpeningBook(engine, document, { pairs, seed, sha256, path
     families.set(opening.familyId, group);
     return opening;
   });
-  if (pairs > families.size)
+  if (pairs > (iid ? all.length : families.size))
     throw new Error(
-      `Se solicitaron ${pairs} pares, pero el libro solo tiene ${families.size} familias distintas; no se repiten variantes.`,
+      iid
+        ? `Se solicitaron ${pairs} pares, pero el libro solo contiene ${all.length} sorteos IID.`
+        : `Se solicitaron ${pairs} pares, pero el libro solo tiene ${families.size} familias distintas; no se repiten variantes.`,
     );
-  const selected = [...families.entries()].slice(0, pairs).map(([familyId, variants]) => {
-    const variantIndex =
-      createHash('sha256')
-        .update(JSON.stringify([seed, familyId]))
-        .digest()
-        .readUInt32LE(0) % variants.length;
-    return variants[variantIndex];
-  });
+  const selected = iid
+    ? all.slice(0, pairs)
+    : [...families.entries()].slice(0, pairs).map(([familyId, variants]) => {
+        const variantIndex =
+          createHash('sha256')
+            .update(JSON.stringify([seed, familyId]))
+            .digest()
+            .readUInt32LE(0) % variants.length;
+        return variants[variantIndex];
+      });
   return {
     openings: selected,
     identity: {
@@ -144,11 +168,14 @@ export function prepareOpeningBook(engine, document, { pairs, seed, sha256, path
       totalFamilies: families.size,
       selectedPairs: pairs,
       selectionSeed: seed,
-      selection:
-        'Book family order, one member selected by SHA-256(seed,familyId), fixed before playing. No family cycling and no inference of statistical independence.',
+      ...(iid ? { samplingUnit: 'iid-draw', samplingProtocol: document.samplingProtocol } : {}),
+      selection: iid
+        ? 'Original draw order, fixed before playing. Keep all natural family repetitions; no family grouping, rotations or cycling.'
+        : 'Book family order, one member selected by SHA-256(seed,familyId), fixed before playing. No family cycling and no inference of statistical independence.',
       selected: selected.map((entry) => ({
         id: entry.id,
         familyId: entry.familyId,
+        ...(iid ? { drawId: entry.drawId } : {}),
         seed: entry.seed,
         rules: entry.rules,
         scope: entry.scope,

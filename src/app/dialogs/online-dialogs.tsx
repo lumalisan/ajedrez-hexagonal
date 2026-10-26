@@ -201,9 +201,27 @@ export function OnlineMenuDialog() {
           <span className="online-mode-symbol mb-1 flex shrink-0 items-center justify-center">
             <MenuIcon kind="private-room" />
           </span>
-          <strong className="font-heading text-xl font-semibold text-ink">Partida privada</strong>
+          <strong className="font-heading text-xl font-semibold text-ink">
+            Crear partida privada
+          </strong>
           <small className="max-w-64 text-sm leading-relaxed text-muted">
-            Crea una sala o únete con un código de seis cifras.
+            Elige las reglas y comparte el código con tu rival.
+          </small>
+        </button>
+        <button
+          type="button"
+          className="online-mode-card flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-solid p-5 text-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent sm:p-7"
+          data-online-mode="private-join"
+          onClick={() => commands.openDialog({ kind: 'private-join' })}
+        >
+          <span className="online-mode-symbol mb-1 flex shrink-0 items-center justify-center">
+            <MenuIcon kind="private-room" />
+          </span>
+          <strong className="font-heading text-xl font-semibold text-ink">
+            Unirse a partida privada
+          </strong>
+          <small className="max-w-64 text-sm leading-relaxed text-muted">
+            Introduce el código de seis cifras de tu rival.
           </small>
         </button>
       </div>

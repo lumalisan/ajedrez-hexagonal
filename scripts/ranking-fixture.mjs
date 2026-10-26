@@ -12,6 +12,9 @@ export async function installRankingFixture(page) {
       const position = query.page * 50 + index + 1;
       return {
         position,
+        playerId: String(position).padStart(64, '0'),
+        profile: { name: `Participante ${position}`, emblem: 'shield', color: 'amber' },
+        xp: 1200,
         name: `Participante ${position}`,
         played: 10,
         wins: 6,

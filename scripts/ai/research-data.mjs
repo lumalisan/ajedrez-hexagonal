@@ -152,10 +152,20 @@ export function reconstructResearchGame(game, modules, selectedIndices) {
   };
 }
 
-export function encodeResearchPosition(position, rules, modules) {
+export function encodeResearchPosition(
+  position,
+  rules,
+  modules,
+  schema = modules.neural.NEURAL_FEATURE_SCHEMA,
+) {
   const features = [0, 1].map((perspective) => {
-    const encoded = modules.neural.encodeNeuralFeatures(position, perspective, rules);
-    validateSparseFeatures(encoded, modules.neural.NEURAL_INPUT_SIZE);
+    const encoded = modules.neural.encodeNeuralFeatures(position, perspective, rules, schema);
+    validateSparseFeatures(
+      encoded,
+      schema === modules.neural.NEURAL_FEATURE_SCHEMA_V2
+        ? modules.neural.NEURAL_INPUT_SIZE_V2
+        : modules.neural.NEURAL_INPUT_SIZE,
+    );
     return encoded;
   });
   return { features, fingerprint: positionFingerprint(features, rules) };

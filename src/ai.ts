@@ -631,7 +631,8 @@ function evaluateSearchState(state: GameState, context: SearchContext): number {
   let score = context.evaluate
     ? context.evaluate(state, context.rootPlayer, context.resolutionRules)
     : evaluateClassicState(state, context.rootPlayer, context.personality);
-  if (context.rangedPlay) score += evaluateRangedState(state, context.rootPlayer);
+  if (context.rangedPlay && !context.evaluate?.includesRangedValue)
+    score += evaluateRangedState(state, context.rootPlayer);
   if (!Number.isFinite(score) || Math.abs(score) >= MATE_SCORE / 2) {
     throw new Error('La evaluación de posición debe ser finita y menor que una victoria.');
   }

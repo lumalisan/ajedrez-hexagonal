@@ -18,6 +18,7 @@ import {
   registerProgressionMatch,
   evaluateProgressionMatch,
   type ProgressionUpdate,
+  rankingSummary,
 } from '../progression';
 import {
   evaluateAcademyAchievements,
@@ -135,6 +136,7 @@ export function createGameSession(
     options.onlineClient === undefined ? createOnlineClient() : options.onlineClient;
   let onlineState: OnlineState = { status: 'idle' };
   let ranking: GameSnapshot['ranking'] = {
+    shared: false,
     query: { mode: 'online', period: 'month', page: 0 },
     data: null,
     busy: false,
@@ -387,19 +389,43 @@ export function createGameSession(
   function loadRanking(query: RankingQuery = ranking.query): void {
     if (disposed) return;
     rankingAbort?.abort();
+    if (!options.publicOnlineAllowed?.()) {
+      const localQuery = { ...query, page: 0 };
+      const summary = rankingSummary(
+        progression,
+        query.mode,
+        query.period,
+        new Date().toISOString(),
+      );
+      ranking = {
+        query: localQuery,
+        shared: false,
+        busy: false,
+        error: null,
+        data: {
+          ...localQuery,
+          pageSize: 50,
+          total: 1,
+          entries: [{ ...summary, name: profile.name, position: 0 }],
+        },
+      };
+      render();
+      return;
+    }
     const abort = new AbortController();
     rankingAbort = abort;
-    ranking = { query, data: null, busy: true, error: null };
+    ranking = { query, data: null, busy: true, error: null, shared: true };
     render();
     void (options.rankingClient ?? fetchRanking)(query, abort.signal)
       .then((data) => {
         if (disposed || abort.signal.aborted) return;
-        ranking = { query, data, busy: false, error: null };
+        ranking = { query, data, busy: false, error: null, shared: true };
         render();
       })
       .catch((error: unknown) => {
         if (disposed || abort.signal.aborted) return;
         ranking = {
+          shared: true,
           query,
           data: null,
           busy: false,

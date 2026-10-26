@@ -3,7 +3,7 @@ import { Button } from '../components/ui/button';
 import { useState } from 'react';
 import { loadActiveMatch } from '../../match-storage';
 import { useGame } from '../game-context';
-import { ConfigDialog } from './game-config';
+import { ConfigDialog, PrivateJoinDialog } from './game-config';
 import { RulesDialog } from './game-rules';
 import { OnlineMenuDialog, OnlineSearchDialog } from './online-dialogs';
 import { useAccount } from '../account-context';
@@ -14,6 +14,8 @@ export function GameDialogs() {
   switch (snapshot.dialog?.kind) {
     case 'online':
       return <OnlineMenuDialog />;
+    case 'private-join':
+      return <PrivateJoinDialog />;
     case 'online-search':
       return <OnlineSearchDialog />;
     case 'config':
@@ -61,7 +63,7 @@ function ModeDialog({ initial }: { initial: boolean }) {
       <div className="mode-choice" role="group" aria-label="Modo de juego">
         <button
           type="button"
-          className="mode-card featured"
+          className="mode-card"
           data-game-mode="machine"
           onClick={() => commands.openDialog({ kind: 'config', mode: 'machine' })}
         >

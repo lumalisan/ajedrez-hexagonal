@@ -1,4 +1,4 @@
-import { calculateElo, type PlayerProgression, type ProgressionMode } from './progression';
+import { calculateElo, type PlayerProgression, type ProgressionMode } from './progression.js';
 
 /** Only completed matches contribute; legacy matches without results remain unclassified. */
 export function playerStatistics(progress: PlayerProgression, mode?: ProgressionMode) {

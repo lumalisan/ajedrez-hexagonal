@@ -6433,7 +6433,7 @@ button.history-card:disabled {
 }
 .online-mode-choice {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-top: 28px;
 }
@@ -6451,7 +6451,7 @@ button.history-card:disabled {
     border-color var(--duration-fast) ease;
 }
 
-.online-mode-card[data-online-mode='private'] {
+.online-mode-card[data-online-mode^='private'] {
   --online-mode-accent: var(--move);
 }
 
@@ -6484,7 +6484,7 @@ button.history-card:disabled {
 
 @media (min-width: 761px) {
   .game-dialog:has(.online-mode-choice) {
-    width: min(720px, calc(100vw - 40px));
+    width: min(960px, calc(100vw - 40px));
     max-height: calc(100dvh - 40px);
   }
 }

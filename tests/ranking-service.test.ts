@@ -56,7 +56,18 @@ describe('clasificación compartida', () => {
       rating: 1200,
     });
     expect(Object.keys(first.entries[0]!).sort()).toEqual(
-      ['position', 'name', 'played', 'wins', 'draws', 'losses', 'rating'].sort(),
+      [
+        'position',
+        'name',
+        'played',
+        'wins',
+        'draws',
+        'losses',
+        'rating',
+        'playerId',
+        'profile',
+        'xp',
+      ].sort(),
     );
     const month = await service.list({ mode: 'machine', period: 'month', page: 0 });
     expect(month.entries[0]).toMatchObject({ played: 1, wins: 1, losses: 0, rating: 1020 });
@@ -66,11 +77,18 @@ describe('clasificación compartida', () => {
   it('usa resultados y Elo del servidor para ambos jugadores, también con registros anteriores', async () => {
     const repository = new MemoryOnlineRepository();
     let clock = now;
+    for (const id of [a, b]) repository.accounts.set(id, { revision: 1, data: {} });
     const online = new OnlineService(repository, () => clock);
     await online.request(a, { kind: 'search', name: 'Cian' });
     const state = await online.request(b, { kind: 'search', name: 'Ámbar' });
     if (state.status !== 'playing') throw new Error('Debe haber partida');
     await online.request(a, { kind: 'resign', matchId: state.matchId });
+    repository.players.set('unregistered', {
+      id: 'unregistered',
+      name: 'Invitado',
+      elo: 3000,
+      played: 1,
+    });
     const service = new RankingService(repository, () => clock);
     const publicMatch = repository.matches.get(state.matchId)!;
     repository.matches.set('private-copy', { ...publicMatch, id: 'private-copy', ranked: false });
@@ -93,10 +111,15 @@ describe('clasificación compartida', () => {
     };
     await new AccountService(repository).request(a, {
       kind: 'save',
-      revision: 0,
+      revision: 1,
       data: { 'hexagonal:progression:v1': JSON.stringify(forged) },
     });
-    expect((await service.list(query)).entries.map(({ rating }) => rating)).toEqual([1020, 980]);
+    const entries = (await service.list(query)).entries;
+    expect(entries.map(({ rating }) => rating)).toEqual([1020, 980]);
+    const publicProfile = await service.profile(entries[1].playerId!);
+    expect(publicProfile.statistics.online).toMatchObject({ played: 1, wins: 0, losses: 1 });
+    expect(publicProfile.progression.ratings.online).toBe(980);
+    expect(JSON.stringify(publicProfile)).not.toContain('fake');
     const match = repository.matches.get(state.matchId)!;
     delete match.rankingResult;
     expect((await service.list(query)).entries.map(({ wins, losses }) => [wins, losses])).toEqual([
@@ -110,7 +133,7 @@ describe('clasificación compartida', () => {
     expect((await service.list(query)).entries).toEqual([]);
   });
 
-  it('permite la consulta pública desde distintos clientes y rechaza filtros inválidos', async () => {
+  it('limita la consulta a cuentas registradas desde distintos clientes y rechaza filtros inválidos', async () => {
     const repository = new MemoryOnlineRepository();
     const progress = createPlayerProgression();
     progress.matches['2026-10-25T10:00:00Z'] = {
@@ -132,17 +155,83 @@ describe('clasificación compartida', () => {
       service: new OnlineService(repository),
       rankings: new RankingService(repository, () => now),
       origin: 'https://example.com',
-      authenticate: async () => null,
+      authenticate: async (token) =>
+        token === 'account'
+          ? { id: a, isAnonymous: false }
+          : token === 'guest'
+            ? { id: b, isAnonymous: true }
+            : null,
     });
     try {
       const first = await app.inject({
         method: 'GET',
         url: '/api/ranking?mode=machine&period=month&page=0',
+        headers: { authorization: 'Bearer account' },
       });
       const second = await app.inject({
         method: 'GET',
         url: '/api/ranking?mode=machine&period=month&page=0',
+        headers: { authorization: 'Bearer account' },
       });
+      expect((await app.inject({ method: 'GET', url: '/api/ranking' })).statusCode).toBe(401);
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: '/api/ranking',
+            headers: { authorization: 'Bearer guest' },
+          })
+        ).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: '/api/ranking',
+            headers: { authorization: 'Bearer expired' },
+          })
+        ).statusCode,
+      ).toBe(401);
+      const playerId = first.json().entries[0].playerId;
+      expect(playerId).toMatch(/^[a-f0-9]{64}$/);
+      for (const [token, status] of [
+        ['account', 200],
+        ['guest', 403],
+        ['expired', 401],
+      ] as const) {
+        const profile = await app.inject({
+          method: 'GET',
+          url: '/api/ranking?playerId=' + playerId,
+          headers: { authorization: 'Bearer ' + token },
+        });
+        expect(profile.statusCode).toBe(status);
+        if (status === 200) {
+          expect(profile.headers['cache-control']).toBe('no-store');
+          expect(profile.json()).toMatchObject({
+            profile: { name: 'Perfil compartido', emblem: 'fortress', color: 'cyan' },
+            statistics: { machine: { played: 1, wins: 1 } },
+          });
+          expect(Object.keys(profile.json()).sort()).toEqual([
+            'profile',
+            'progression',
+            'records',
+            'statistics',
+          ]);
+          expect(profile.json().progression.matches).toBeUndefined();
+          expect(profile.body).not.toContain(a);
+        }
+      }
+      for (const id of ['invalid', 'f'.repeat(64)]) {
+        expect(
+          (
+            await app.inject({
+              method: 'GET',
+              url: '/api/ranking?playerId=' + id,
+              headers: { authorization: 'Bearer account' },
+            })
+          ).statusCode,
+        ).toBe(404);
+      }
       expect(first.statusCode).toBe(200);
       expect(first.headers['cache-control']).toBe('no-store');
       expect(first.json()).toEqual(second.json());
@@ -156,9 +245,15 @@ describe('clasificación compartida', () => {
         'page=1.5',
         'page=9007199254740992',
       ])
-        expect((await app.inject({ method: 'GET', url: `/api/ranking?${query}` })).statusCode).toBe(
-          400,
-        );
+        expect(
+          (
+            await app.inject({
+              method: 'GET',
+              url: `/api/ranking?${query}`,
+              headers: { authorization: 'Bearer account' },
+            })
+          ).statusCode,
+        ).toBe(400);
     } finally {
       await app.close();
     }

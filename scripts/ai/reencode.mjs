@@ -12,6 +12,7 @@ const sourceFiles = [
   'scripts/ai/research-data.mjs',
   'scripts/ai/shared.mjs',
   'src/ai-neural.ts',
+  'src/ai-neural-baseline.ts',
   'src/engine.ts',
   'src/classic-rules.ts',
   'src/hex.ts',

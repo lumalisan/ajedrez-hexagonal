@@ -32,14 +32,6 @@ const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'neural', label: 'Neuronal' },
 ];
 
-const DIFFICULTY_HELP: Record<AiDifficulty, string> = {
-  recruit: 'Recomendado para tu primera partida. Responde rápido y permite practicar las reglas.',
-  tactical: 'Dedica hasta 2 segundos por turno a buscar su jugada.',
-  commander: 'Dedica hasta 5 segundos por turno a buscar su jugada.',
-  expert: 'Búsqueda más profunda, con hasta 15 segundos de cálculo por turno.',
-  neural: 'Combina la búsqueda con un modelo neuronal, con hasta 15 segundos de cálculo por turno.',
-};
-
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }) {
   const { snapshot, commands } = useGame();
   const { preferences } = snapshot;
@@ -126,20 +118,11 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
       <span className="eyebrow">{mode === 'private' ? 'BATALLA EN LÍNEA' : 'NUEVA PARTIDA'}</span>
       <h2>
         {mode === 'private'
-          ? 'Partida privada'
+          ? 'Crear partida privada'
           : mode === 'machine'
             ? 'Individual Vs. Hexfortia'
             : 'Batalla local'}
       </h2>
-      {mode === 'private' && <PrivateJoin />}
-      {mode === 'private' && (
-        <div className="mt-6 border-0 border-t border-solid border-line pt-5">
-          <h3 className="m-0">Crear una partida</h3>
-          <p className="mb-0 text-sm text-muted">
-            Elige las reglas. Tu rival jugará con el bando opuesto y la misma configuración.
-          </p>
-        </div>
-      )}
       <div className="match-configuration mt-6 grid gap-6 text-sm">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid min-w-0 content-start gap-2">
@@ -159,11 +142,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
                 options={DIFFICULTY_OPTIONS}
                 value={difficulty}
                 onChange={setDifficulty}
-                describedBy="ai-difficulty-help"
               />
-              <p id="ai-difficulty-help" className="m-0 text-xs leading-relaxed text-muted">
-                {DIFFICULTY_HELP[difficulty]}
-              </p>
             </div>
           )}
           <div className="grid min-w-0 content-start gap-2">
@@ -173,13 +152,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
               options={FORTRESS_HP_OPTIONS}
               value={fortressHp}
               onChange={setFortressHp}
-              describedBy="fortress-hp-help"
             />
-            <p id="fortress-hp-help" className="m-0 text-xs leading-relaxed text-muted">
-              Cada impacto resta 1 punto.{' '}
-              {fortressHp === 1 ? 'Un impacto' : `${fortressHp} impactos`}{' '}
-              {fortressHp === 1 ? 'destruye' : 'destruyen'} la Fortaleza.
-            </p>
           </div>
         </div>
         {mode !== 'machine' && (
@@ -253,6 +226,7 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
           </div>
         </div>
       </div>
+      {mode === 'private' && <OnlineAvailability />}
       <div className="dialog-actions">
         <Button data-back-menu onClick={goBack}>
           Volver
@@ -270,16 +244,16 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
   );
 }
 
-function PrivateJoin() {
+export function PrivateJoinDialog() {
   const { snapshot, commands } = useGame();
   const [code, setCode] = useState('');
   const [attempted, setAttempted] = useState(false);
   const valid = /^[0-9]{6}$/.test(code);
   return (
     <section className="mt-6" aria-labelledby="private-join-title">
-      <h3 id="private-join-title" className="m-0">
-        Unirse con código
-      </h3>
+      <DialogClose label="Cerrar partida privada" className="dialog-corner-close" />
+      <span className="eyebrow">BATALLA EN LÍNEA</span>
+      <h2 id="private-join-title">Unirse a partida privada</h2>
       <p className="text-sm text-muted">Pide al creador el código numérico de seis cifras.</p>
       <form
         noValidate
@@ -315,6 +289,9 @@ function PrivateJoin() {
         )}
       </form>
       <OnlineAvailability />
+      <div className="dialog-actions">
+        <Button onClick={() => commands.openDialog({ kind: 'online' })}>Volver</Button>
+      </div>
     </section>
   );
 }

@@ -41,6 +41,27 @@ function labels(id = 'one', familyId = 'family-one', teacher = 0.2) {
 }
 
 describe('campaign integrity', () => {
+  it('preserves an explicit input role without inventing a development role', () => {
+    const game = { kind: 'game', initialState: { unique: 1 }, actions: [], rules };
+    for (const sourceRole of ['development', 'confirmation', undefined]) {
+      const text = [{ ...header, sourceRole }, game].map(JSON.stringify).join('\n');
+      const shards = shardCampaignGames(text, 2, 19);
+      expect(shards.every((rows) => rows[0].sourceRole === sourceRole)).toBe(true);
+    }
+  });
+  it('rejects a mixture of distinct teacher models or residual baselines', () => {
+    const first = labels('one');
+    const second = labels('two', 'family-two');
+    first[0] = {
+      ...header,
+      teacher: { model: { sha256: 'model-one' } },
+      residualBaseline: 'material-fortress-v1',
+    };
+    second[0] = { ...first[0], teacher: { model: { sha256: 'model-two' } } };
+    expect(() => mergeCampaignLabels([first, second])).toThrow('modelos');
+    second[0] = { ...first[0], residualBaseline: 'material-fortress-v2' };
+    expect(() => mergeCampaignLabels([first, second])).toThrow('residualBaseline');
+  });
   it('keeps entire families on one worker across source order changes', () => {
     const games = Array.from({ length: 8 }, (_, index) => ({
       kind: 'game',

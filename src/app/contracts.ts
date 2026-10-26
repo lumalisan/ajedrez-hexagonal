@@ -23,6 +23,7 @@ export type DialogState =
   | { kind: 'config'; mode: 'local' | 'machine' | 'private' }
   | { kind: 'online' }
   | { kind: 'online-search' }
+  | { kind: 'private-join' }
   | { kind: 'rules'; sectionId?: string }
   | { kind: 'settings' }
   | { kind: 'profile' }
@@ -45,7 +46,13 @@ export type DialogState =
   | { kind: 'first-turn'; player: 0 | 1 };
 
 export interface GameSnapshot {
-  ranking: { query: RankingQuery; data: RankingPage | null; busy: boolean; error: string | null };
+  ranking: {
+    query: RankingQuery;
+    data: RankingPage | null;
+    busy: boolean;
+    error: string | null;
+    shared: boolean;
+  };
   online: {
     available: boolean;
     busy: boolean;

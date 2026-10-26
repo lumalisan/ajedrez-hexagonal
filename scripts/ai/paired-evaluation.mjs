@@ -4,6 +4,13 @@ import { pathToFileURL } from 'node:url';
 import { parseArguments, writeJsonCheckpoint } from './shared.mjs';
 
 const BETS = [0.05, 0.1, 0.2, 0.4, 0.8, 1.2, 1.6, 1.9, 2];
+
+/** Sum over all future trials is overallAlpha; indices must be unique in the caller's ledger. */
+export function confirmationAlpha(trial, overallAlpha = 0.05) {
+  if (!Number.isSafeInteger(trial) || trial < 1 || !(overallAlpha > 0 && overallAlpha < 1))
+    throw new Error('Índice de confirmación o alfa global inválido.');
+  return overallAlpha / trial / (trial + 1);
+}
 const logMeanExp = (values) => {
   const maximum = Math.max(...values);
   return maximum === -Infinity
@@ -56,12 +63,17 @@ export function pairedBettingEvidence(observations, alpha = 0.05) {
  * Assumes independently sampled pairs for one predeclared candidate/protocol.
  */
 export function assessPairedArena(report, settings = {}) {
-  const alpha = settings.alpha ?? 0.05;
+  const overallAlpha = settings.alpha ?? 0.05;
+  const alpha =
+    settings.trial === undefined ? overallAlpha : confirmationAlpha(settings.trial, overallAlpha);
   const minimumPairs = settings.minimumPairs ?? 100;
   const minimumCompletion = settings.minimumCompletion ?? 0.8;
   const method = settings.method ?? 'hoeffding';
+  const fixedHorizon = settings.fixedHorizon ?? false;
   if (!['hoeffding', 'betting'].includes(method))
     throw new Error('Método estadístico desconocido.');
+  if (typeof fixedHorizon !== 'boolean' || (fixedHorizon && method !== 'betting'))
+    throw new Error('El horizonte final fijo requiere el método betting.');
   if (!(alpha > 0 && alpha < 1) || !Number.isSafeInteger(minimumPairs) || minimumPairs < 1)
     throw new Error('Confianza o mínimo de pares inválidos.');
   if (!(minimumCompletion > 0 && minimumCompletion <= 1))
@@ -119,10 +131,23 @@ export function assessPairedArena(report, settings = {}) {
     ? [Math.max(0, mean('lower') - radius), Math.min(1, mean('upper') + radius)]
     : [0, 1];
   const completion = pairedGames ? completed / pairedGames : 0;
-  const sufficient = pairs >= minimumPairs && completion >= minimumCompletion;
+  const sufficient =
+    pairs >= minimumPairs &&
+    completion >= minimumCompletion &&
+    (!fixedHorizon || pairs === plannedPairs);
   const betting = pairedBettingEvidence(observations, alpha);
-  const improvement = method === 'betting' ? betting.improvement : interval[0] > 0.5;
-  const regression = method === 'betting' ? betting.regression : interval[1] < 0.5;
+  const improvement =
+    method === 'betting'
+      ? fixedHorizon
+        ? betting.logEvidenceImprovement >= betting.logThreshold
+        : betting.improvement
+      : interval[0] > 0.5;
+  const regression =
+    method === 'betting'
+      ? fixedHorizon
+        ? betting.logEvidenceRegression >= betting.logThreshold
+        : betting.regression
+      : interval[1] < 0.5;
   const decision = !sufficient
     ? 'insufficient-evidence'
     : improvement && regression
@@ -147,16 +172,31 @@ export function assessPairedArena(report, settings = {}) {
     scoreBounds: pairs ? [mean('lower'), mean('upper')] : [0, 1],
     confidenceSequence: interval,
     alpha,
+    ...(settings.trial === undefined
+      ? {}
+      : {
+          errorSpending: {
+            trial: settings.trial,
+            overallAlpha,
+            allocatedAlpha: alpha,
+            method: 'overallAlpha/(trial*(trial+1)); union bound across unique predeclared trials.',
+            ledgerRequired:
+              'Use a new unique trial index and fresh confirmation draws for every new candidate; this tool does not manage the ledger.',
+          },
+        }),
     minimumPairs,
     minimumCompletion,
     decisionMethod: method,
+    stoppingRule: fixedHorizon
+      ? 'fixed-final-look-at-all-planned-pairs'
+      : 'anytime-completed-prefix',
     betting,
     method:
       method === 'betting'
         ? betting.method
         : 'Opening-pair Hoeffding confidence sequence; alpha spending alpha/(n*(n+1)).',
     assumptions:
-      'Independent opening pairs; one candidate and protocol fixed before testing. Multiple candidate selection needs separate error control and a fresh confirmation set.',
+      'Independent opening pairs; one candidate and protocol fixed before testing. Fresh draws prevent test reuse; repeated candidate trials also require error control across tests.',
     decision,
     promotionAllowed: false,
     note: 'Diagnóstico estadístico conservador. No publica pesos ni sustituye la evaluación a 15 s, las regresiones y la comprobación de navegador.',
@@ -171,11 +211,13 @@ async function main() {
     'minimum-pairs': { type: 'number', default: 100, integer: true, min: 1 },
     'minimum-completion': { type: 'number', default: 0.8, min: 0.01, max: 1 },
     method: { type: 'string', default: 'hoeffding' },
+    trial: { type: 'number', integer: true, min: 1 },
+    'fixed-horizon': { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   });
   if (options.help) {
     console.log(
-      'Evalúa pares sin adjudicar inconclusas: --input arena.json --output assessment.json',
+      'Evalúa pares sin adjudicar inconclusas: --input arena.json --output assessment.json [--method betting --fixed-horizon] [--trial k --alpha 0.05]. Cada intento requiere un índice único en un registro externo y sorteos nuevos.',
     );
     return;
   }
@@ -185,6 +227,8 @@ async function main() {
     minimumPairs: options['minimum-pairs'],
     minimumCompletion: options['minimum-completion'],
     method: options.method,
+    ...(options.trial === undefined ? {} : { trial: options.trial }),
+    fixedHorizon: options['fixed-horizon'],
   });
   await writeJsonCheckpoint(options.output, result);
   console.log(`${result.decision}: ${result.observedPairs} pares; ${options.output}`);

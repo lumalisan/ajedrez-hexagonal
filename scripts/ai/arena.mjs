@@ -140,13 +140,20 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
         bytes: bytes.byteLength,
         evaluation: metadata.evaluation ?? 'standalone-v1',
         residualScale: metadata.residualScale ?? null,
+        residualBaseline: metadata.residualBaseline ?? null,
         residualSymmetry: metadata.residualSymmetry ?? null,
+        includesRangedValue: metadata.includesRangedValue === true,
       },
       candidate: {
         searchProfile: profile,
         evaluator: options.ablation ? 'classical-ablation' : 'neural',
         variety: profile === 'classic' ? 'expert-default' : 'best-score',
-        rangedEvaluation: profile === 'pvs-threats' ? 'ranged-v1' : null,
+        rangedEvaluation:
+          profile === 'pvs-threats'
+            ? metadata.includesRangedValue === true && !options.ablation
+              ? 'included-in-neural-estimate-v1'
+              : 'ranged-v1'
+            : null,
       },
       referenceExpert: {
         difficulty: 'expert',
@@ -298,6 +305,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
                   ? {
                       openingId: opening.id,
                       familyId: opening.familyId,
+                      ...(opening.drawId ? { drawId: opening.drawId } : {}),
                       scope: opening.scope,
                       rules: gameRules,
                     }
@@ -327,6 +335,7 @@ El informe se guarda tras cada partida; los tiempos en Node no sustituyen medir 
               ? {
                   openingId: opening.id,
                   familyId: opening.familyId,
+                  ...(opening.drawId ? { drawId: opening.drawId } : {}),
                   scope: opening.scope,
                   rules: gameRules,
                 }

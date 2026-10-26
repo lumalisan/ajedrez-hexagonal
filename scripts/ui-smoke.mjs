@@ -203,13 +203,19 @@ try {
         });
       await page.locator('.ranking-table tbody tr').first().waitFor();
       assert(
-        (await page.locator('.ranking-table tbody tr').count()) === 50,
-        'Ranking must show other players.',
+        (await page.locator('.ranking-table tbody tr').count()) === 1,
+        'Guests must see only themselves.',
       );
-      await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
-      await page.getByRole('rowheader', { name: 'Participante 51', exact: true }).waitFor();
-      await page.getByRole('button', { name: 'Anterior', exact: true }).click();
-      await page.getByRole('rowheader', { name: 'Participante 1', exact: true }).waitFor();
+      await page
+        .getByText('Crea una cuenta o inicia sesión para consultar la clasificación completa.', {
+          exact: true,
+        })
+        .waitFor();
+      assert(
+        (await page.getByRole('navigation', { name: 'Páginas de clasificación' }).isVisible()) ===
+          false,
+        'Guest ranking has no shared pagination.',
+      );
       await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
       await page.getByRole('button', { name: 'Vs. Hexfortia', exact: true }).click();
       await page.locator('.ranking-table tbody tr').first().waitFor();
@@ -234,37 +240,6 @@ try {
         await page.screenshot({
           path: process.env.UI_SCREENSHOT + '-ranking-machine-' + mode + '.png',
         });
-      await page.route(
-        '**/api/ranking?**',
-        (route) => route.fulfill({ json: { error: 'Invalid response fixture' } }),
-        { times: 1 },
-      );
-      await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).click();
-      await page
-        .getByRole('alert')
-        .filter({ hasText: 'No se pudo cargar la clasificación' })
-        .waitFor();
-      await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).click();
-      await page.locator('.ranking-table tbody tr').first().waitFor();
-      await page.route(
-        '**/api/ranking?**',
-        (route) => {
-          const params = new URL(route.request().url()).searchParams;
-          return route.fulfill({
-            json: {
-              mode: params.get('mode'),
-              period: params.get('period'),
-              page: 0,
-              entries: [],
-              total: 0,
-              pageSize: 50,
-            },
-          });
-        },
-        { times: 1 },
-      );
-      await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).click();
-      await page.getByRole('status').filter({ hasText: 'Todavía no hay jugadores' }).waitFor();
       await page.getByRole('button', { name: 'Cerrar clasificación', exact: true }).click();
     }
     await page.locator('[data-home-action="new"]').click();

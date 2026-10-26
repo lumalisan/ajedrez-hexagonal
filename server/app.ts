@@ -62,12 +62,20 @@ export async function createOnlineApp(options: {
     reply.header('Cache-Control', 'no-store');
     return { ok: true };
   });
-  app.get<{ Querystring: { mode?: string; period?: string; page?: string } }>(
+  app.get<{ Querystring: { mode?: string; period?: string; page?: string; playerId?: string } }>(
     '/api/ranking',
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
+      const user = await identity(request);
+      if (user.isAnonymous)
+        throw new OnlineError(
+          'Inicia sesión con una cuenta para consultar la clasificación completa.',
+          403,
+        );
       if (!options.rankings)
         throw new OnlineError('La clasificación compartida no está configurada.', 503);
+      if (request.query.playerId !== undefined)
+        return options.rankings.profile(request.query.playerId);
       const { mode = 'online', period = 'month', page = '0' } = request.query;
       if (!/^\d+$/.test(page)) throw new OnlineError('Página no válida.');
       return options.rankings.list({
