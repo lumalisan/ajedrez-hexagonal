@@ -33,20 +33,20 @@ export function AchievementsDialog() {
   const { snapshot, commands } = useGame();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['id']>('all');
   const { tier } = levelProgress(snapshot.progression.xp);
-  const [selectedTier, setSelectedTier] = useState<number | 'all'>(0);
+  const [selectedTier, setSelectedTier] = useState(0);
   const [lockedHint, setLockedHint] = useState<number | null>(null);
-  const category = selectedTier === 'all' ? null : TIERS[selectedTier];
-  const entries = PROGRESSION_ACHIEVEMENTS.filter(
-    (entry) => selectedTier === 'all' || entry.tier === selectedTier,
-  ).map((definition) => ({
-    definition,
-    progress: {
-      current: Math.min(definition.target, progressionValue(snapshot.progression, definition)),
-      target: definition.target,
-      unlocked: Boolean(snapshot.progression.unlockedAt[definition.id]),
-      unlockedAt: snapshot.progression.unlockedAt[definition.id] ?? null,
-    },
-  }));
+  const category = TIERS[selectedTier];
+  const entries = PROGRESSION_ACHIEVEMENTS.filter((entry) => entry.tier === selectedTier).map(
+    (definition) => ({
+      definition,
+      progress: {
+        current: Math.min(definition.target, progressionValue(snapshot.progression, definition)),
+        target: definition.target,
+        unlocked: Boolean(snapshot.progression.unlockedAt[definition.id]),
+        unlockedAt: snapshot.progression.unlockedAt[definition.id] ?? null,
+      },
+    }),
+  );
   const unlocked = entries.filter((entry) => entry.progress.unlocked).length;
   const percentage = Math.round((unlocked / entries.length) * 100);
   const clockRunning =
@@ -106,19 +106,6 @@ export function AchievementsDialog() {
               </div>
             );
           })}
-          <div className="achievement-level">
-            <button
-              type="button"
-              aria-current={selectedTier === 'all' ? 'page' : undefined}
-              data-achievement-tier="all"
-              onClick={() => {
-                setSelectedTier('all');
-                setLockedHint(null);
-              }}
-            >
-              Todos los niveles
-            </button>
-          </div>
         </nav>
         <AccountStatus sidebar showSignOut={false} />
       </aside>
@@ -173,16 +160,14 @@ export function AchievementsDialog() {
             ))}
           </div>
           <span className="achievements-result-count" role="status">
-            {category
-              ? `+${category.xp} XP por logro`
-              : 'Todos los niveles · Incluye logros ocultos'}
+            {`+${category.xp} XP por logro`}
           </span>
         </div>
         <div className="achievements-list" tabIndex={0} aria-label="Lista de logros">
           {visible.length ? (
             <section className="achievements-category" aria-labelledby="achievement-category-title">
               <h3 id="achievement-category-title" className="sr-only">
-                {category?.name ?? 'Todos los niveles'}
+                {category.name}
               </h3>
               <ul>
                 {visible.map(({ definition, progress }) => (
@@ -190,7 +175,7 @@ export function AchievementsDialog() {
                     key={definition.id}
                     definition={definition}
                     progress={progress}
-                    revealHidden={selectedTier === 'all'}
+                    revealHidden={false}
                   />
                 ))}
               </ul>

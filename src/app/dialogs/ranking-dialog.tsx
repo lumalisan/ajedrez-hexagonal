@@ -122,20 +122,6 @@ export function RankingDialog() {
             </TabsTrigger>
           </TabsList>
           <TabsContent key={period} value={period} className="achievements-list ranking-content">
-            {!shared && (
-              <p>
-                Tus resultados en este navegador. Tu perfil de invitado no aparece en la
-                clasificación compartida.
-              </p>
-            )}
-            <Button
-              className="mb-4"
-              size="compact"
-              onClick={() => commands.loadRanking()}
-              disabled={busy}
-            >
-              Actualizar clasificación
-            </Button>
             {busy && <p role="status">Cargando clasificación…</p>}
             {error && <p role="alert">{error}</p>}
             {data && data.total === 0 && (
@@ -228,7 +214,8 @@ export function RankingDialog() {
             {!shared && (
               <div className="mt-4 grid gap-3">
                 <p className="m-0 text-muted">
-                  Crea una cuenta o inicia sesión para consultar la clasificación completa.
+                  La clasificación solo muestra tus resultados en este navegador. Crea una cuenta o
+                  inicia sesión para consultar la clasificación completa.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button

@@ -83,3 +83,13 @@ Referencias: [registro](https://supabase.com/docs/reference/javascript/auth-sign
 [URL de retorno](https://supabase.com/docs/guides/auth/redirect-urls),
 [SMTP de Supabase](https://supabase.com/docs/guides/auth/auth-smtp),
 [identidades anónimas](https://supabase.com/docs/guides/auth/auth-anonymous).
+
+## Eliminar una cuenta
+
+Aplicar también `supabase/migrations/202610260001_delete_account.sql` con el rol administrativo. El perfil ofrece «Eliminar cuenta» junto a «Cerrar sesión» y exige confirmación. La API verifica la sesión con Auth para rechazar tokens de cuentas eliminadas. La función SQL solo admite al rol del servidor, borra la identidad y el progreso por cascada y sustituye el nombre en las partidas históricas por «Cuenta eliminada». Los resultados de los rivales se conservan. Una partida en línea en curso debe terminarse o abandonarse antes de eliminar la cuenta. La copia de invitado de este navegador se conserva.
+
+## Nombres de usuario
+
+Aplicar también `supabase/migrations/202610260002_usernames.sql` como administrador antes de desplegar esta versión. El registro solicita un nombre de hasta 24 caracteres; la base de datos lo reserva al crear la identidad, incluso antes de confirmar el correo. Los nombres se normalizan con NFKC y son únicos sin distinguir mayúsculas y minúsculas. La restricción única resuelve registros y cambios simultáneos. La migración conserva los nombres existentes cuando puede; si ya estaban repetidos, añade un sufijo al de las cuentas posteriores.
+
+El lápiz de la portada permite editar el nombre sin abrir el perfil, con Guardar, Cancelar y Escape. El nombre y el emblema abren el perfil; «Personalizar» permite cambiar también los elementos desbloqueados. Las cuentas requieren conexión para reservar un nuevo nombre; los invitados editan una identidad local, sin reserva global, y comprueban disponibilidad cuando Supabase está configurado. Los guardados antiguos y la importación de invitado no sustituyen el nombre reservado. Eliminar una cuenta libera su nombre por cascada.

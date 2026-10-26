@@ -80,7 +80,7 @@ try {
         await page.locator('.profile-header .profile-stars').textContent(),
         '★'.repeat(index + 1),
       );
-      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await page.getByRole('button', { name: 'Personalizar', exact: true }).click();
       for (const kind of ['emblem', 'color']) {
         assert.equal(await page.locator(`input[name="profile-${kind}"]`).count(), 10);
         assert.equal(

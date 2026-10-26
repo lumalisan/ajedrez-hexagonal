@@ -29,6 +29,7 @@ export async function createOnlineApp(options: {
   service: OnlineService;
   authenticate: (token: string) => Promise<AuthIdentity | null>;
   accounts?: AccountService;
+  deleteAccount?: (id: string) => Promise<void>;
   rankings?: RankingService;
   origin: string;
   logger?: boolean;
@@ -75,7 +76,9 @@ export async function createOnlineApp(options: {
       if (!options.rankings)
         throw new OnlineError('La clasificación compartida no está configurada.', 503);
       if (request.query.playerId !== undefined)
-        return options.rankings.profile(request.query.playerId);
+        return request.query.playerId === 'me'
+          ? options.rankings.ownProfile(user.id)
+          : options.rankings.profile(request.query.playerId);
       const { mode = 'online', period = 'month', page = '0' } = request.query;
       if (!/^\d+$/.test(page)) throw new OnlineError('Página no válida.');
       return options.rankings.list({
@@ -118,6 +121,15 @@ export async function createOnlineApp(options: {
     if (!options.accounts)
       throw new OnlineError('El guardado en la nube no está configurado.', 503);
     return options.accounts.request(user.id, request.body as CloudRequest);
+  });
+  app.delete('/api/account', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const user = await identity(request);
+    if (user.isAnonymous) throw new OnlineError('Inicia sesión para eliminar tu cuenta.', 403);
+    if (!options.deleteAccount)
+      throw new OnlineError('La eliminación de cuentas no está configurada.', 503);
+    await options.deleteAccount(user.id);
+    return reply.code(204).send();
   });
   return app;
 }

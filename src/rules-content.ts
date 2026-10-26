@@ -298,6 +298,8 @@ export const RULE_SECTIONS: RuleSection[] = [
         text: 'Para deseleccionar una unidad, basta con hacer clic de nuevo sobre ella o cerrar el panel de mando.',
         strong: ['deseleccionar una unidad'],
       },
+      'Arrastra el tablero para desplazar la vista. Usa la rueda del ratón o un gesto de pinza con dos dedos para acercar y alejar.',
+      'Si prefieres el teclado, con el foco en el tablero usa Q, W, E, A, S y D para recorrer las seis direcciones; Intro o espacio para seleccionar; U o Mayús + U para cambiar de unidad propia; Esc para cancelar la orden preparada, y C para centrar la vista.',
     ],
   },
   {

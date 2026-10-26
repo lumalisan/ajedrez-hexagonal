@@ -199,7 +199,7 @@ export function OnlineMenuDialog() {
           onClick={() => commands.openDialog({ kind: 'config', mode: 'private' })}
         >
           <span className="online-mode-symbol mb-1 flex shrink-0 items-center justify-center">
-            <MenuIcon kind="private-room" />
+            <MenuIcon kind="private-create" />
           </span>
           <strong className="font-heading text-xl font-semibold text-ink">
             Crear partida privada
@@ -215,7 +215,7 @@ export function OnlineMenuDialog() {
           onClick={() => commands.openDialog({ kind: 'private-join' })}
         >
           <span className="online-mode-symbol mb-1 flex shrink-0 items-center justify-center">
-            <MenuIcon kind="private-room" />
+            <MenuIcon kind="private-join" />
           </span>
           <strong className="font-heading text-xl font-semibold text-ink">
             Unirse a partida privada

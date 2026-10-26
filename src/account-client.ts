@@ -16,8 +16,10 @@ export class CloudError extends Error {
 export interface AccountClient {
   watch(listener: (user: AccountUser | null, recovery?: boolean) => void): Promise<() => void>;
   signIn(email: string, password: string): Promise<void>;
-  signUp(email: string, password: string): Promise<boolean>;
+  signUp(email: string, password: string, username: string): Promise<boolean>;
+  username(name: string, reserve: boolean): Promise<void>;
   signOut(): Promise<void>;
+  deleteAccount(): Promise<void>;
   recover(email: string): Promise<void>;
   password(password: string): Promise<void>;
   cloud(userId: string, request: CloudRequest, signal: AbortSignal): Promise<CloudSave>;
@@ -52,17 +54,56 @@ export function createAccountClient(): AccountClient | null {
           'No se pudo iniciar sesión. Revisa el correo, la contraseña y la confirmación del correo.',
         );
     },
-    async signUp(email, password) {
+    async username(name, reserve) {
       const { data, error } = await (
         await sdk
-      ).auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
-      if (error)
+      ).rpc(reserve ? 'claim_username' : 'username_available', { requested_name: name });
+      if (error) throw new Error('No se pudo comprobar el nombre de usuario. Inténtalo de nuevo.');
+      if (data !== true) throw new Error('Este nombre de usuario ya está en uso. Elige otro.');
+    },
+    async signUp(email, password, username) {
+      const { data, error } = await (
+        await sdk
+      ).auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { username },
+        },
+      });
+      if (error) {
+        const availability = await (
+          await sdk
+        ).rpc('username_available', { requested_name: username });
+        if (!availability.error && availability.data === false)
+          throw new Error('Este nombre de usuario ya está en uso. Elige otro.');
         throw new Error('No se pudo crear la cuenta. Revisa los datos o inténtalo más tarde.');
+      }
       return !data.session;
     },
     async signOut() {
       const { error } = await (await sdk).auth.signOut({ scope: 'local' });
       if (error) throw new Error('No se pudo cerrar sesión. Inténtalo de nuevo.');
+    },
+    async deleteAccount() {
+      const { data, error } = await (await sdk).auth.getSession();
+      if (error || !data.session || data.session.user.is_anonymous)
+        throw new CloudError('Vuelve a iniciar sesión para eliminar tu cuenta.', 401);
+      const response = await fetch('/api/account', {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + data.session.access_token },
+        signal: AbortSignal.timeout(20_000),
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        const value = await response.json().catch(() => null);
+        throw new CloudError(
+          value?.error ?? 'No se pudo eliminar la cuenta. Inténtalo de nuevo.',
+          response.status,
+        );
+      }
+      await (await sdk).auth.signOut({ scope: 'local' });
     },
     async recover(email) {
       const { error } = await (

@@ -57,6 +57,7 @@ try {
       await page.route('**/api/ranking?playerId=*', (route) =>
         route.fulfill({
           json: {
+            positions: { online: 7, machine: 12 },
             profile: { name: 'Participante 1', emblem: 'shield', color: 'amber' },
             progression: {
               xp: 1200,
@@ -76,8 +77,8 @@ try {
                 {
                   bestRating: 1500,
                   bestStreak: 4,
-                  monthlyPosition: null,
-                  historicalPosition: null,
+                  monthlyPosition: 2,
+                  historicalPosition: 3,
                 },
               ]),
             ),
@@ -106,20 +107,74 @@ try {
       await page.goto(`http://127.0.0.1:4177/${registered ? '?registered' : ''}`, {
         waitUntil: 'networkidle',
       });
+      await page.locator('.home-profile').click();
+      await page.locator('.profile-browser').waitFor();
+      if (registered) {
+        await page.locator('.profile-ratings').getByText('Posición 7', { exact: true }).waitFor();
+        await page.locator('.profile-ratings').getByText('Posición 12', { exact: true }).waitFor();
+      } else {
+        assert.equal(
+          await page
+            .locator('.profile-ratings')
+            .getByText('Sin clasificación', { exact: true })
+            .count(),
+          2,
+        );
+      }
+      assert.equal(
+        await page
+          .getByRole('button', { name: 'Ver clasificación compartida', exact: true })
+          .count(),
+        0,
+      );
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({
+          path: process.env.UI_SCREENSHOT + '-own-profile-' + label + '-' + registered + '.png',
+        });
+      await page.getByRole('tab', { name: 'Récords', exact: true }).click();
+      if (registered) {
+        assert.equal(
+          await page
+            .locator('#profile-panel-records')
+            .getByText('Posición 2', { exact: true })
+            .count(),
+          2,
+        );
+        assert.equal(
+          await page
+            .locator('#profile-panel-records')
+            .getByText('Posición 3', { exact: true })
+            .count(),
+          2,
+        );
+      }
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({
+          path: process.env.UI_SCREENSHOT + '-own-records-' + label + '-' + registered + '.png',
+        });
+      await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
+      const rankingRequests = requests.length;
       await page.locator('[data-home-action="ranking"]').click();
       await page.locator('.ranking-table tbody tr').first().waitFor();
+      assert.equal(
+        await page.getByRole('button', { name: 'Actualizar clasificación', exact: true }).count(),
+        0,
+      );
       const notice = page.getByText(
-        'Crea una cuenta o inicia sesión para consultar la clasificación completa.',
+        'La clasificación solo muestra tus resultados en este navegador. Crea una cuenta o inicia sesión para consultar la clasificación completa.',
         { exact: true },
       );
       if (registered) {
         assert.equal(await page.locator('.ranking-table tbody tr').count(), 50);
         assert.equal(await notice.count(), 0);
-        assert.equal(requests[0].headers().authorization, 'Bearer ranking-access-test');
+        assert.equal(
+          requests[rankingRequests].headers().authorization,
+          'Bearer ranking-access-test',
+        );
         await page.getByRole('button', { name: 'Participante 1', exact: true }).click();
         await page.locator('.profile-browser').waitFor();
         assert.equal(
-          await page.getByRole('button', { name: 'Configuración', exact: true }).count(),
+          await page.getByRole('button', { name: 'Personalizar', exact: true }).count(),
           0,
         );
         assert.match(await page.locator('.achievements-profile').textContent(), /Participante 1/);

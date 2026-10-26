@@ -36,5 +36,10 @@ export function playerRecords(progress: PlayerProgression, mode: 'machine' | 'on
     bestStreak = Math.max(bestStreak, streak);
   });
   // A browser-local profile cannot establish a position in a shared leaderboard.
-  return { bestRating, bestStreak, monthlyPosition: null, historicalPosition: null };
+  return {
+    bestRating,
+    bestStreak,
+    monthlyPosition: null as number | null,
+    historicalPosition: null as number | null,
+  };
 }

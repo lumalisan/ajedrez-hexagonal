@@ -34,7 +34,11 @@ function setup() {
       listener(a);
     }),
     signUp: vi.fn(async () => true),
+    username: vi.fn(async () => {}),
     signOut: vi.fn(async () => {
+      listener(null);
+    }),
+    deleteAccount: vi.fn(async () => {
       listener(null);
     }),
     recover: vi.fn(async () => {}),
@@ -84,7 +88,7 @@ describe('cuentas, caché por identidad y sincronización', () => {
   it('importa el progreso local elegido al registrarse sin borrar el guardado invitado', async () => {
     localStorage.setItem(key, '{"name":"Invitado"}');
     const { controller, identify, saves } = setup();
-    await controller.signUp(a.email, 'password', true);
+    await controller.signUp(a.email, 'password', true, 'Mi nombre');
     expect(controller.getSnapshot().message).toContain('confirmar');
     identify(a);
     await tick();
@@ -97,7 +101,7 @@ describe('cuentas, caché por identidad y sincronización', () => {
     localStorage.setItem(key, '{"name":"Invitado"}');
     const { controller, identify, saves } = setup();
     saves.set(a.id, { revision: 4, data: { [key]: '{"name":"Nube"}' }, elo: 1000 });
-    await controller.signUp(a.email, 'password', true);
+    await controller.signUp(a.email, 'password', true, 'Mi nombre');
     identify(a);
     await tick();
     expect(playerStorage.getItem(key)).toBe('{"name":"Nube"}');
@@ -186,5 +190,78 @@ describe('cuentas, caché por identidad y sincronización', () => {
     expect(saves.get(a.id)?.data[key]).toBe('{"name":"Último estado"}');
     expect(controller.getSnapshot().user).toBeNull();
     expect(playerStorage.getItem(key)).toBeNull();
+  });
+});
+
+describe('eliminar cuenta desde el perfil', () => {
+  it('borra la caché de la cuenta y conserva el progreso de invitado', async () => {
+    localStorage.setItem(key, '{"name":"Invitado"}');
+    const { controller, client } = setup();
+    await signIn(controller);
+    playerStorage.setItem(key, '{"name":"Cuenta"}');
+    await controller.deleteAccount();
+    await tick();
+    expect(client.deleteAccount).toHaveBeenCalledOnce();
+    expect(controller.getSnapshot().user).toBeNull();
+    expect(localStorage.getItem('hexfortia:account:' + a.id + ':' + key)).toBeNull();
+    expect(playerStorage.getItem(key)).toBe('{"name":"Invitado"}');
+  });
+  it('conserva los datos y muestra el error si el servidor rechaza la eliminación', async () => {
+    const { controller, client } = setup();
+    await signIn(controller);
+    playerStorage.setItem(key, '{"name":"Cuenta"}');
+    vi.mocked(client.deleteAccount).mockRejectedValue(new Error('Hay una partida activa'));
+    await controller.deleteAccount();
+    expect(controller.getSnapshot().user).toEqual(a);
+    expect(controller.getSnapshot().error).toBe('Hay una partida activa');
+    expect(playerStorage.getItem(key)).toBe('{"name":"Cuenta"}');
+  });
+});
+
+describe('reserva de nombres de usuario', () => {
+  it('comprueba el nombre normalizado antes de registrar la cuenta', async () => {
+    const { controller, client } = setup();
+    await controller.signUp(a.email, 'password', true, '  Ｃｉａｎ  ');
+    expect(client.username).toHaveBeenCalledWith('Cian', false);
+    expect(client.signUp).toHaveBeenCalledWith(a.email, 'password', 'Cian');
+  });
+  it('impide registrar un nombre ocupado y conserva los datos del invitado', async () => {
+    const { controller, client } = setup();
+    playerStorage.setItem(key, '{"name":"Invitado"}');
+    vi.mocked(client.username).mockRejectedValue(new Error('Nombre en uso'));
+    await controller.signUp(a.email, 'password', true, 'Ocupado');
+    expect(client.signUp).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().error).toBe('Nombre en uso');
+    expect(playerStorage.getItem(key)).toBe('{"name":"Invitado"}');
+  });
+  it('reserva el cambio autenticado y rechaza una respuesta de otra sesión', async () => {
+    const { controller, client, identify } = setup();
+    await signIn(controller);
+    let release!: () => void;
+    vi.mocked(client.username).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const change = controller.username('Nuevo');
+    expect(client.username).toHaveBeenCalledWith('Nuevo', true);
+    identify(b);
+    release();
+    await expect(change).rejects.toThrow('sesión ha cambiado');
+  });
+  it('importa el progreso conservando el nombre reservado al crear la cuenta', async () => {
+    const { controller, identify, saves } = setup();
+    localStorage.setItem(key, '{"name":"Invitado"}');
+    saves.set(a.id, {
+      revision: 1,
+      data: { [key]: '{"name":"Reservado","emblem":"fortress","color":"cyan"}' },
+      elo: 1000,
+    });
+    await controller.signUp(a.email, 'password', true, 'Reservado');
+    identify(a);
+    await tick();
+    expect(JSON.parse(playerStorage.getItem(key)!).name).toBe('Reservado');
+    expect(localStorage.getItem(key)).toBe('{"name":"Invitado"}');
   });
 });

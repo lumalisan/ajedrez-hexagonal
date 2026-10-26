@@ -6,6 +6,7 @@ export interface PublicPlayerProfile {
   progression: Pick<PlayerProgression, 'xp' | 'unlockedAt' | 'activity' | 'ratings'>;
   statistics: Record<ProgressionMode | 'total', ReturnType<typeof playerStatistics>>;
   records: Record<RankingMode, ReturnType<typeof playerRecords>>;
+  positions?: Record<RankingMode, number | null>;
 }
 export type RankingMode = 'machine' | 'online';
 export type RankingPeriod = 'all' | 'month';

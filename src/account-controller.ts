@@ -6,6 +6,8 @@ import {
 } from './account-client.js';
 import type { CloudSave, PlayerData } from './cloud-contracts.js';
 import { parsePlayerProgression } from './progression.js';
+import { validateUsername } from './username.js';
+import { normalizeProfile } from './user-profile.js';
 import {
   onPlayerStorageChange,
   readPlayerData,
@@ -50,6 +52,28 @@ function withElo(data: PlayerData, elo: number): PlayerData {
   const progress = parsePlayerProgression(raw);
   progress.ratings.online = elo;
   return { ...data, 'hexagonal:progression:v1': JSON.stringify(progress) };
+}
+
+function importGuestData(remote: CloudSave): PlayerData {
+  const guest = withElo(readPlayerData(null), remote.elo);
+  const data = { ...guest, ...remote.data };
+  const key = 'hexagonal:user-profile:v1';
+  if (guest[key] && remote.data[key]) {
+    try {
+      const reserved = normalizeProfile(JSON.parse(remote.data[key]), {
+        name: 'Invitado',
+        emblem: 'fortress',
+        color: 'cyan',
+      });
+      data[key] = JSON.stringify({
+        ...normalizeProfile(JSON.parse(guest[key]), reserved),
+        name: reserved.name,
+      });
+    } catch {
+      // An invalid guest profile cannot replace the registered identity.
+    }
+  }
+  return data;
 }
 
 /** Coordinates identity and storage before a new GameSession is created. */
@@ -209,13 +233,19 @@ export function createAccountController(client: AccountClient | null = createAcc
       } catch {
         /* Optional import. */
       }
+      const importing =
+        importGuest &&
+        (result.revision === 0 ||
+          (result.revision === 1 &&
+            Object.keys(result.data).length === 1 &&
+            Boolean(result.data['hexagonal:user-profile:v1'])));
       const data = cached?.dirty
         ? withElo(readPlayerData(user.id), result.elo)
-        : importGuest && result.revision === 0
-          ? withElo(readPlayerData(null), result.elo)
+        : importing
+          ? importGuestData(result)
           : result.data;
       replacePlayerData(user.id, data);
-      dirty = Boolean(cached?.dirty || (importGuest && result.revision === 0));
+      dirty = Boolean(cached?.dirty || importing);
       writeMeta(user.id, { revision, dirty });
       try {
         localStorage.removeItem('hexfortia:import-guest');
@@ -309,12 +339,21 @@ export function createAccountController(client: AccountClient | null = createAcc
         if (client) await client.signIn(email.trim(), password);
       });
     },
-    signUp(email: string, password: string, importGuest: boolean) {
+    async username(value: string) {
+      const name = validateUsername(value);
+      const token = epoch;
+      if (client) await client.username(name, Boolean(snapshot.user));
+      if (token !== epoch || !active) throw new Error('La sesión ha cambiado. Inténtalo de nuevo.');
+      return name;
+    },
+    signUp(email: string, password: string, importGuest: boolean, username: string) {
       return authTask(async () => {
         if (!client) return;
+        const name = validateUsername(username);
+        await client.username(name, false);
         if (importGuest) localStorage.setItem('hexfortia:import-guest', email.trim().toLowerCase());
         else localStorage.removeItem('hexfortia:import-guest');
-        if (await client.signUp(email.trim(), password))
+        if (await client.signUp(email.trim(), password, name))
           update({
             message: 'Revisa tu correo para confirmar la cuenta. Después podrás iniciar sesión.',
           });
@@ -332,6 +371,27 @@ export function createAccountController(client: AccountClient | null = createAcc
           update({ generation: snapshot.generation + 1 });
           throw error;
         }
+      });
+    },
+    deleteAccount() {
+      return authTask(async () => {
+        if (!client || !snapshot.user) return;
+        const userId = snapshot.user.id;
+        beforeSwitch?.();
+        const pendingSave = saving;
+        epoch++;
+        cancelWork();
+        if (pendingSave) await pendingSave;
+        try {
+          await client.deleteAccount();
+        } catch (error) {
+          update({ generation: snapshot.generation + 1 });
+          if (dirty) schedule();
+          throw error;
+        }
+        replacePlayerData(userId, {});
+        localStorage.removeItem(metaKey(userId));
+        await activate(null);
       });
     },
     recover(email: string) {

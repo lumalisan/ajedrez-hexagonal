@@ -379,40 +379,6 @@ function SettingsDialog() {
           }}
         />
       </div>
-      <details className="board-controls-help">
-        <summary>Cómo controlar el tablero</summary>
-        <p>
-          Selecciona una unidad y después una casilla resaltada. Arrastra para desplazar la vista;
-          usa la rueda del ratón o un gesto de pinza con dos dedos para acercar y alejar.
-        </p>
-        <p>Con el foco en el tablero, también puedes usar el teclado:</p>
-        <dl className="board-shortcuts">
-          <div>
-            <dt>Q W E / A S D</dt>
-            <dd>Recorrer las seis direcciones</dd>
-          </div>
-          <div>
-            <dt>Intro o espacio</dt>
-            <dd>Seleccionar casilla</dd>
-          </div>
-          <div>
-            <dt>U / Mayús + U</dt>
-            <dd>Siguiente / anterior unidad propia</dd>
-          </div>
-          <div>
-            <dt>Esc</dt>
-            <dd>Cancelar la orden preparada</dd>
-          </div>
-          <div>
-            <dt>C</dt>
-            <dd>Centrar el tablero</dd>
-          </div>
-          <div>
-            <dt>H / L</dt>
-            <dd>Abrir reglas / alternar registro</dd>
-          </div>
-        </dl>
-      </details>
       <div className="dialog-actions">
         <Button data-cancel-preferences onClick={commands.closeDialog}>
           Cancelar
@@ -639,7 +605,12 @@ function OutcomeDialog() {
         <i />
       </div>
       <span className="eyebrow">BATALLA CONCLUIDA</span>
-      <h2>{outcomeText(state.outcome)}</h2>
+      <h2>
+        {state.outcome.type === 'win'
+          ? (snapshot.matchConfig?.participants[state.outcome.winner].name || 'Invitado') + ' vence'
+          : outcomeText(state.outcome)}
+      </h2>
+      {state.outcome.type === 'win' && <p>{outcomeText(state.outcome).split(' · ')[1]}</p>}
       <button
         type="button"
         className="history-card battle-record"

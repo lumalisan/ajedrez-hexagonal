@@ -104,6 +104,22 @@ try {
         const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
         const token = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({ sub: id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })}.test`;
         tokens.set(token, { id, isAnonymous: true });
+        await context.route('http://127.0.0.1:3002/rest/v1/rpc/**', async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': '*',
+              'Access-Control-Allow-Methods': 'POST,OPTIONS',
+            },
+            body:
+              route.request().method() === 'POST' &&
+              route.request().postDataJSON()?.requested_name === 'Ocupado'
+                ? 'false'
+                : 'true',
+          });
+        });
         await context.route('http://127.0.0.1:3002/auth/v1/**', async (route) => {
           const registered = route.request().url().includes('grant_type=password');
           if (registered) tokens.set(token, { id, isAnonymous: false });
@@ -200,6 +216,7 @@ try {
       assert.equal(repository.tickets.size, 0, 'Guests must not enter the public queue.');
       await inspect(first, `${name}-account-signin`);
       await first.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
+      await first.getByLabel('Nombre de usuario', { exact: true }).fill('Nuevo jugador');
       await first.getByLabel('Correo electrónico', { exact: true }).fill('nuevo@example.test');
       await first.getByLabel('Contraseña', { exact: true }).fill('Test-password-42!');
       await first.getByRole('button', { name: 'Mostrar contraseña', exact: true }).click();
@@ -213,7 +230,23 @@ try {
         'password',
       );
       await inspect(first, `${name}-account-signup`);
+      await first.getByLabel('Nombre de usuario', { exact: true }).fill('Ocupado');
       await first.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
+      await first
+        .getByRole('alert')
+        .filter({ hasText: 'Este nombre de usuario ya está en uso.' })
+        .waitFor();
+      assert.equal(
+        await first.getByLabel('Contraseña', { exact: true }).inputValue(),
+        'Test-password-42!',
+      );
+      await first.getByLabel('Nombre de usuario', { exact: true }).fill('Nuevo jugador');
+      const registration = first.waitForRequest(
+        (request) =>
+          new URL(request.url()).pathname.endsWith('/signup') && request.method() === 'POST',
+      );
+      await first.getByRole('button', { name: 'Crear cuenta', exact: true }).click();
+      assert.equal((await registration).postDataJSON().data.username, 'Nuevo jugador');
       await first
         .getByText('Revisa tu correo para confirmar la cuenta.', { exact: false })
         .waitFor();
@@ -253,6 +286,24 @@ try {
       );
       await inspect(first, `${name}-account-signin-error`);
       await signIn(first);
+      await first.getByRole('button', { name: 'Editar nombre de usuario', exact: true }).click();
+      const oldName = await first.locator('.home-profile strong').innerText();
+      await first.getByLabel('Nombre de usuario', { exact: true }).fill('Ocupado');
+      await first.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
+      await first
+        .getByRole('alert')
+        .filter({ hasText: 'Este nombre de usuario ya está en uso.' })
+        .waitFor();
+      assert.equal(await first.locator('.home-profile strong').innerText(), oldName);
+      await first.getByLabel('Nombre de usuario', { exact: true }).fill('Nombre reservado');
+      await inspect(first, name + '-inline-username');
+      await first.getByRole('button', { name: 'Guardar nombre', exact: true }).click();
+      await first.locator('#home-username-form').waitFor({ state: 'hidden' });
+      assert.equal(await first.locator('.home-profile strong').innerText(), 'Nombre reservado');
+      if (process.env.ACCOUNT_ONLY) {
+        console.log(name + ': registration, occupied names, inline editing and Axe passed.');
+        continue;
+      }
       await menu(first);
       assert.equal(await first.locator('.online-account-requirement').count(), 0);
       const modeCards = first.locator('[data-online-mode]');
@@ -437,7 +488,7 @@ try {
       await first.locator('[data-new-game]').click();
       await first.locator('[data-home-action="new"]').waitFor();
       await first.locator('.home-profile').click();
-      await first.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await first.getByRole('button', { name: 'Personalizar', exact: true }).click();
       await first.getByLabel('Nombre de usuario', { exact: true }).fill('Perfil en la nube');
       const cloudSaved = first.waitForResponse(async (response) => {
         if (!response.url().endsWith('/api/account') || response.status() !== 200) return false;

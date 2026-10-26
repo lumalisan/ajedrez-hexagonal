@@ -201,7 +201,45 @@ export function validateState(state: GameState, config?: MatchConfig): string[] 
   return errors;
 }
 
+interface BoardQueries {
+  pieces: readonly Piece[];
+  byId: Map<string, Piece>;
+  byCell: Map<string, CellOccupancy>;
+  antiAir: [Piece[], Piece[]];
+}
+
+let activeBoardQueries: BoardQueries | undefined;
+
+/** Share indexes only within a synchronous, read-only rules query. Never retain a
+ * state cache after returning: editors and older callers may mutate their state. */
+function withBoardQueries<T>(state: GameState, read: () => T): T {
+  if (activeBoardQueries?.pieces === state.pieces) return read();
+  const previous = activeBoardQueries;
+  const queries: BoardQueries = {
+    pieces: state.pieces,
+    byId: new Map(),
+    byCell: new Map(),
+    antiAir: [[], []],
+  };
+  for (const piece of state.pieces) {
+    if (!queries.byId.has(piece.id)) queries.byId.set(piece.id, piece);
+    const key = hexKey(piece.position);
+    const occupancy = queries.byCell.get(key) ?? {};
+    if (isAirPiece(piece)) occupancy.air = piece;
+    else occupancy.ground = piece;
+    queries.byCell.set(key, occupancy);
+    if (piece.type === 'antiAir') queries.antiAir[piece.owner].push(piece);
+  }
+  activeBoardQueries = queries;
+  try {
+    return read();
+  } finally {
+    activeBoardQueries = previous;
+  }
+}
+
 export function getPiece(state: GameState, id: string): Piece | undefined {
+  if (activeBoardQueries?.pieces === state.pieces) return activeBoardQueries.byId.get(id);
   return state.pieces.find((piece) => piece.id === id);
 }
 
@@ -214,6 +252,8 @@ export function isAirPiece(piece: Piece): boolean {
 }
 
 export function occupancyAt(state: GameState, position: Hex): CellOccupancy {
+  if (activeBoardQueries?.pieces === state.pieces)
+    return { ...activeBoardQueries.byCell.get(hexKey(position)) };
   const occupancy: CellOccupancy = {};
   for (const piece of state.pieces) {
     if (!equalHex(piece.position, position)) continue;
@@ -237,7 +277,9 @@ export function protectedCells(state: GameState, owner: Player): Set<string> {
 }
 
 export function isProtectedByPlayer(state: GameState, position: Hex, owner: Player): boolean {
-  return state.pieces.some(
+  const pieces =
+    activeBoardQueries?.pieces === state.pieces ? activeBoardQueries.antiAir[owner] : state.pieces;
+  return pieces.some(
     (piece) =>
       piece.type === 'antiAir' &&
       piece.owner === owner &&
@@ -291,9 +333,11 @@ export function getPreviewActionsForPiece(state: GameState, pieceId: string): Ga
 
 export function getAllLegalActions(state: GameState): GameAction[] {
   if (state.outcome) return [];
-  return state.pieces
-    .filter((piece) => piece.owner === state.activePlayer)
-    .flatMap((piece) => getLegalActionsForPiece(state, piece.id));
+  return withBoardQueries(state, () =>
+    state.pieces
+      .filter((piece) => piece.owner === state.activePlayer)
+      .flatMap((piece) => getLegalActionsForPiece(state, piece.id)),
+  );
 }
 
 export function getFiringRangeCells(

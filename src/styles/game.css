@@ -5836,17 +5836,23 @@ button.history-card:disabled {
   padding-left: 62px;
   margin-top: -14px;
 }
+.home-identity {
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-strong);
+}
 .home-profile {
   position: relative;
   display: flex;
-  width: 100%;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 12px;
-  margin-top: 32px;
-  padding: 20px 0 0;
+  margin-top: 0;
+  padding: 0;
   border: 0;
-  border-top: 1px solid var(--line-strong);
   border-radius: 0;
   background: transparent;
   color: var(--text);
@@ -5981,7 +5987,7 @@ button.history-card:disabled {
     margin-top: 20px;
     gap: 8px;
   }
-  .home-profile {
+  .home-identity {
     margin-top: 24px;
     padding-top: 16px;
   }

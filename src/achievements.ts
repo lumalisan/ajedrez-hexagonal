@@ -89,7 +89,7 @@ export const ACHIEVEMENTS = [
   achievement(
     'ai-expert',
     'Captcha superado',
-    'Gana una partida contra la IA en dificultad Experto o Neuronal.',
+    'Gana una partida contra la IA en dificultad Experto.',
     'matches',
   ),
   achievement(

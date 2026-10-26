@@ -59,6 +59,9 @@ try {
 
       await page.goto('http://127.0.0.1:4175', { waitUntil: 'networkidle' });
       await audit('home');
+      await page.getByRole('button', { name: 'Editar nombre de usuario', exact: true }).click();
+      await audit('home / inline username');
+      await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
       await page.locator('[data-home-action="history"]').click();
       await audit('history / empty state and new match');
       await page.keyboard.press('Escape');
@@ -69,7 +72,7 @@ try {
       await audit('profile / statistics');
       await page.getByRole('tab', { name: 'Récords', exact: true }).click();
       await audit('profile / records');
-      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await page.getByRole('button', { name: 'Personalizar', exact: true }).click();
       await audit('profile / settings');
       await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
 
@@ -135,8 +138,6 @@ try {
       await audit('AI configuration / open difficulty menu');
       await chooseSelectOption(page, 'Nivel', 'Experto');
       await audit('AI configuration / expert');
-      await chooseSelectOption(page, 'Nivel', 'Neuronal');
-      await audit('AI configuration / neural');
       await page.locator('[data-back-menu]').click();
       await page.locator('[data-home-mode="local"]').click();
       await page.locator('[data-start-free]').waitFor({ state: 'visible' });
@@ -222,8 +223,6 @@ try {
       await page.locator('#settings-button').click();
       await page.locator('.accessibility-settings').waitFor({ state: 'visible' });
       await audit('settings');
-      await page.getByText('Cómo controlar el tablero', { exact: true }).click();
-      await audit('settings / pointer and keyboard help');
       const confirmationControl = await openSelect(page, 'Confirmación de órdenes');
       await audit('settings / open order confirmation menu');
       await confirmationControl.press('Escape');

@@ -44,6 +44,7 @@ export function AccountStatus({
   showSignOut?: boolean;
 }) {
   const { account, controller } = useAccount();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   if (sidebar && account.user && !showSignOut) return null;
   return (
     <div
@@ -94,18 +95,56 @@ export function AccountStatus({
               )}
             </>
           )}
-          <Button
-            size="compact"
-            variant="ghost"
-            loading={account.busy}
-            onClick={() => void controller.signOut()}
-          >
-            Cerrar sesión
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="compact"
+              variant="ghost"
+              loading={account.busy}
+              onClick={() => void controller.signOut()}
+            >
+              Cerrar sesión
+            </Button>
+            <Button
+              size="compact"
+              variant="ghost"
+              className="text-danger"
+              disabled={account.busy}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Eliminar cuenta
+            </Button>
+          </div>
+          {confirmDelete && (
+            <div className="grid gap-2" role="group" aria-label="Confirmar eliminación de cuenta">
+              <p className="m-0 text-sm text-muted">
+                Se eliminarán tu cuenta y tu progreso guardado. Esta acción es irreversible.
+              </p>
+              <Button
+                size="compact"
+                variant="danger"
+                loading={account.busy}
+                onClick={() => void controller.deleteAccount()}
+              >
+                Eliminar definitivamente
+              </Button>
+              <Button
+                size="compact"
+                disabled={account.busy}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancelar
+              </Button>
+              {account.error && (
+                <p role="alert" className="m-0 text-danger">
+                  {account.error}
+                </p>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <>
-          <p className={`m-0 text-muted${sidebar ? ' text-xs leading-relaxed' : ''}`}>
+          <p className={`m-0 text-justify text-muted${sidebar ? ' text-xs leading-relaxed' : ''}`}>
             Tu perfil y tu progreso se guardan en este navegador. Crea una cuenta para conservarlos
             y acceder a ellos desde otros dispositivos, o inicia sesión si ya tienes una.
           </p>
@@ -305,6 +344,7 @@ function AccountForm({
 }) {
   const { account, controller } = useAccount();
   const mode = account.dialog;
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [passwordEdited, setPasswordEdited] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -320,7 +360,7 @@ function AccountForm({
         event.preventDefault();
         const operation =
           mode === 'signup'
-            ? controller.signUp(email, password, importGuest)
+            ? controller.signUp(email, password, importGuest, username)
             : mode === 'recover'
               ? controller.recover(email)
               : mode === 'password'
@@ -335,6 +375,26 @@ function AccountForm({
       }}
     >
       <fieldset disabled={account.busy} className="m-0 grid min-w-0 gap-5 border-0 p-0">
+        {mode === 'signup' && (
+          <div className="grid gap-2">
+            <label className="text-sm font-semibold" htmlFor="account-username">
+              Nombre de usuario
+            </label>
+            <Input
+              id="account-username"
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              maxLength={24}
+              aria-describedby="account-username-hint"
+              className="h-12"
+            />
+            <small id="account-username-hint" className="text-muted">
+              Hasta 24 caracteres. Debe ser único, sin distinguir mayúsculas y minúsculas.
+            </small>
+          </div>
+        )}
         {mode !== 'password' && (
           <div className="grid gap-2">
             <label className="text-sm font-semibold" htmlFor="account-email">

@@ -73,7 +73,7 @@ function ModeDialog({ initial }: { initial: boolean }) {
             </span>
             Individual Vs. Hexfortia
           </strong>
-          <small>Elige entre Fácil, Medio, Difícil, Experto y Neuronal.</small>
+          <small>Elige entre Fácil, Medio, Difícil y Experto.</small>
         </button>
         <button
           type="button"

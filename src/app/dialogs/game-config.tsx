@@ -29,7 +29,6 @@ const DIFFICULTY_OPTIONS: readonly { value: AiDifficulty; label: string }[] = [
   { value: 'tactical', label: 'Medio' },
   { value: 'commander', label: 'Difícil' },
   { value: 'expert', label: 'Experto' },
-  { value: 'neural', label: 'Neuronal' },
 ];
 
 export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }) {

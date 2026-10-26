@@ -1,4 +1,6 @@
 const paths = {
+  'private-create': 'm12 2 8.7 5v10L12 22l-8.7-5V7L12 2Zm0 5v10m-5-5h10',
+  'private-join': 'M14 3h6v18h-6M3 12h12m-5-5 5 5-5 5',
   rules: 'M12 5C9 3 5 3 2 4v15c3-1 7-1 10 1m0-15c3-2 7-2 10-1v15c-3-1-7-1-10 1V5',
   tutorial: 'm2 8 10-5 10 5-10 5L2 8Zm4 3v6c4 3 8 3 12 0v-6m4-3v9',
   achievements:
@@ -7,7 +9,6 @@ const paths = {
   ranking: 'M3 21V13h6v8m0 0V4h6v17m0 0V9h6v12',
   dilemma: 'm12 2 9 5v10l-9 5-9-5V7l9-5Zm0 5v5m0 0-5 4m5-4 5 4',
   'match-search': 'm10 3 6 3.5v7L10 17l-6-3.5v-7L10 3Zm5 12 6 6',
-  'private-room': 'm12 2 8.7 5v10L12 22l-8.7-5V7L12 2Zm-3 9V9a3 3 0 0 1 6 0v2m-7 0h8v7H8v-7Zm4 3v1',
 };
 
 export function MenuIcon({ kind }: { kind: keyof typeof paths }) {

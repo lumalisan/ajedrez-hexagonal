@@ -2573,7 +2573,7 @@ export function createGameSession(
         return;
       profile = normalized;
       const saved = saveUserProfile(profile);
-      closeDialog();
+      if (currentDialog?.kind === 'profile') closeDialog();
       showToast(
         saved ? 'Perfil guardado.' : 'Perfil actualizado. No se pudo guardar en este navegador.',
       );

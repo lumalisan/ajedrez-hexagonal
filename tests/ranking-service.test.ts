@@ -11,6 +11,51 @@ const a = '00000000-0000-0000-0000-000000000001';
 const b = '00000000-0000-0000-0000-000000000002';
 
 describe('clasificación compartida', () => {
+  it('conserva las mejores posiciones previas aunque la posición actual empeore', async () => {
+    const repository = new MemoryOnlineRepository();
+    const accounts = new AccountService(repository);
+    const first = createPlayerProgression();
+    first.ratings.machine = 980;
+    first.matches['2026-10-20T10:00:00Z'] = {
+      mode: 'machine',
+      difficulty: 0,
+      metrics: {},
+      completedAt: '2026-10-20T10:00:00Z',
+      result: 1,
+    };
+    first.matches['2026-10-24T10:00:00Z'] = {
+      mode: 'machine',
+      difficulty: 0,
+      metrics: {},
+      completedAt: '2026-10-24T10:00:00Z',
+      result: 0,
+    };
+    const second = createPlayerProgression();
+    second.ratings.machine = 1040;
+    second.matches['2026-10-23T10:00:00Z'] = {
+      mode: 'machine',
+      difficulty: 0,
+      metrics: {},
+      completedAt: '2026-10-23T10:00:00Z',
+      result: 1,
+    };
+    for (const [id, progress] of [
+      [a, first],
+      [b, second],
+    ] as const) {
+      await accounts.request(id, {
+        kind: 'save',
+        revision: 0,
+        data: { 'hexagonal:progression:v1': JSON.stringify(progress) },
+      });
+    }
+    const service = new RankingService(repository, () => now);
+    const profile = await service.ownProfile(a);
+    expect(profile.positions?.machine).toBe(2);
+    expect(profile.records.machine).toMatchObject({ monthlyPosition: 1, historicalPosition: 1 });
+    expect(profile.positions?.online).toBeNull();
+    expect(profile.records.online.monthlyPosition).toBeNull();
+  });
   it('comparte perfiles sincronizados, filtra fechas y pagina sin exponer los guardados', async () => {
     const repository = new MemoryOnlineRepository();
     const accounts = new AccountService(repository);
@@ -47,6 +92,12 @@ describe('clasificación compartida', () => {
     expect(first).toMatchObject({ total: 53, pageSize: 50 });
     expect(first.entries).toHaveLength(50);
     expect(last.entries).toHaveLength(3);
+    const lastProfile = await service.profile(last.entries[0]!.playerId!);
+    expect(lastProfile.positions?.machine).toBe(51);
+    expect(lastProfile.records.machine).toMatchObject({
+      monthlyPosition: 51,
+      historicalPosition: 51,
+    });
     expect(last.entries[0]).toMatchObject({
       position: 51,
       name: 'Jugador 50',
@@ -119,6 +170,12 @@ describe('clasificación compartida', () => {
     const publicProfile = await service.profile(entries[1].playerId!);
     expect(publicProfile.statistics.online).toMatchObject({ played: 1, wins: 0, losses: 1 });
     expect(publicProfile.progression.ratings.online).toBe(980);
+    expect(publicProfile.positions).toEqual({ online: 2, machine: null });
+    expect(publicProfile.records.online).toMatchObject({
+      monthlyPosition: 2,
+      historicalPosition: 2,
+    });
+    expect((await service.ownProfile(a)).positions).toEqual(publicProfile.positions);
     expect(JSON.stringify(publicProfile)).not.toContain('fake');
     const match = repository.matches.get(state.matchId)!;
     delete match.rankingResult;
@@ -205,6 +262,13 @@ describe('clasificación compartida', () => {
           headers: { authorization: 'Bearer ' + token },
         });
         expect(profile.statusCode).toBe(status);
+        const ownProfile = await app.inject({
+          method: 'GET',
+          url: '/api/ranking?playerId=me',
+          headers: { authorization: 'Bearer ' + token },
+        });
+        expect(ownProfile.statusCode).toBe(status);
+        if (status === 200) expect(ownProfile.json()).toEqual(profile.json());
         if (status === 200) {
           expect(profile.headers['cache-control']).toBe('no-store');
           expect(profile.json()).toMatchObject({
@@ -212,6 +276,7 @@ describe('clasificación compartida', () => {
             statistics: { machine: { played: 1, wins: 1 } },
           });
           expect(Object.keys(profile.json()).sort()).toEqual([
+            'positions',
             'profile',
             'progression',
             'records',

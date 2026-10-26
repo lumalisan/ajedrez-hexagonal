@@ -8,6 +8,7 @@ import { MenuIcon } from './components/menu-icon';
 import { ProfileAvatar } from './components/profile-avatar';
 import { useAccount } from './account-context';
 import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
 import { OnlineAccountNotice } from './components/account-access';
 
 function readMenuSummary() {
@@ -238,31 +239,7 @@ export function HomeScreen() {
           <MenuIcon kind="dilemma" />
           <span>El origen de Hexfortia</span>
         </button>
-        <button
-          type="button"
-          className="home-profile"
-          data-home-action="profile"
-          aria-label={`Editar perfil de ${snapshot.profile.name}`}
-          onClick={() => commands.openDialog({ kind: 'profile' })}
-        >
-          <ProfileAvatar profile={snapshot.profile} />
-          <span className="home-profile-copy">
-            <strong>{snapshot.profile.name}</strong>
-            <small>
-              Nivel {levelProgress(snapshot.progression.xp).level} ·{' '}
-              {levelProgress(snapshot.progression.xp).category}
-            </small>
-          </span>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            aria-hidden="true"
-          >
-            <path d="m15 4 5 5-11 11H4v-5L15 4Zm-3 3 5 5" />
-          </svg>
-        </button>
+        <HomeIdentity />
       </aside>
       <div className="home-utility-actions" aria-label="Accesos rápidos">
         <Button
@@ -278,5 +255,164 @@ export function HomeScreen() {
         <SoundButton home />
       </div>
     </main>
+  );
+}
+
+function HomeIdentity() {
+  const { snapshot, commands } = useGame();
+  const { account, controller } = useAccount();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const pencil = useRef<HTMLButtonElement>(null);
+  const mounted = useRef(true);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (editing) {
+      input.current?.focus();
+      input.current?.select();
+    } else if (wasEditing.current) pencil.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    if (editing) input.current?.form?.scrollIntoView({ block: 'nearest' });
+  }, [editing, error]);
+  const finish = () => {
+    setEditing(false);
+    setError(null);
+  };
+  const level = levelProgress(snapshot.progression.xp);
+  return (
+    <div className="home-identity">
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          className="home-profile"
+          data-home-action="profile"
+          aria-label={`Abrir perfil de ${snapshot.profile.name}`}
+          disabled={busy}
+          onClick={() => commands.openDialog({ kind: 'profile' })}
+        >
+          <ProfileAvatar profile={snapshot.profile} />
+          <span className="home-profile-copy">
+            <strong>{snapshot.profile.name}</strong>
+            <small>
+              Nivel {level.level} · {level.category}
+            </small>
+          </span>
+        </button>
+        <Button
+          ref={pencil}
+          size="icon"
+          variant="ghost"
+          aria-label="Editar nombre de usuario"
+          aria-expanded={editing}
+          aria-controls="home-username-form"
+          disabled={busy}
+          onClick={() => {
+            setName(snapshot.profile.name);
+            setError(null);
+            setEditing(true);
+          }}
+        >
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            aria-hidden="true"
+          >
+            <path d="m15 4 5 5-11 11H4v-5L15 4Zm-3 3 5 5" />
+          </svg>
+        </Button>
+      </div>
+      {editing && (
+        <form
+          id="home-username-form"
+          className="mt-3 grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (busy) return;
+            setBusy(true);
+            setError(null);
+            void (async () => {
+              try {
+                const next = await controller.username(name);
+                if (!mounted.current) return;
+                commands.updateProfile({ ...snapshot.profile, name: next });
+                finish();
+              } catch (cause) {
+                if (mounted.current)
+                  setError(
+                    cause instanceof Error ? cause.message : 'No se pudo guardar el nombre.',
+                  );
+              } finally {
+                if (mounted.current) setBusy(false);
+              }
+            })();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!busy) finish();
+            }
+          }}
+        >
+          <label htmlFor="home-username" className="text-sm">
+            Nombre de usuario
+          </label>
+          <Input
+            ref={input}
+            id="home-username"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              setError(null);
+            }}
+            maxLength={24}
+            required
+            autoComplete="username"
+            disabled={busy}
+            aria-invalid={Boolean(error)}
+            aria-describedby="home-username-hint"
+          />
+          <small id="home-username-hint" className="text-muted">
+            {account.user
+              ? 'Hasta 24 caracteres. El nombre debe ser único.'
+              : 'Nombre local de invitado. Crea una cuenta para reservarlo.'}
+          </small>
+          {error && (
+            <p role="alert" className="m-0 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              size="compact"
+              variant="primary"
+              loading={busy}
+              disabled={!name.trim()}
+            >
+              Guardar nombre
+            </Button>
+            <Button size="compact" disabled={busy} onClick={finish}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

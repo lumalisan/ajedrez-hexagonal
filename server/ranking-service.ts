@@ -35,12 +35,21 @@ export class RankingService {
     private readonly now = Date.now,
   ) {}
 
+  async ownProfile(accountId: string): Promise<PublicPlayerProfile> {
+    return this.profile(publicId(accountId));
+  }
+
   async profile(id: string): Promise<PublicPlayerProfile> {
     if (!/^[a-f0-9]{64}$/.test(id)) throw new OnlineError('Perfil no encontrado.', 404);
     const data = await this.repository.rankingData('online');
     const account = data.accounts.find((account) => publicId(account.id) === id);
     if (!account) throw new OnlineError('Perfil no encontrado.', 404);
-    const progress = parsePlayerProgression(account.progression ?? '{}');
+    const saved = await this.repository.transaction(`account:${account.id}`, (tx) =>
+      tx.account(account.id),
+    );
+    const progress = parsePlayerProgression(
+      saved?.data['hexagonal:progression:v1'] ?? account.progression ?? '{}',
+    );
     // Online statistics use server results rather than uploaded account evidence.
     for (const [key, match] of Object.entries(progress.matches)) {
       if (match.mode === 'online') delete progress.matches[key];
@@ -67,7 +76,48 @@ export class RankingService {
         opponentRating: match.rankingResult?.ratingsBefore[owner === 0 ? 1 : 0] ?? 1000,
       };
     }
+    const positions: Record<'online' | 'machine', number | null> = { online: null, machine: null };
+    const records = {
+      machine: playerRecords(progress, 'machine'),
+      online: playerRecords(progress, 'online'),
+    };
+    const now = this.now();
+    for (const mode of ['online', 'machine'] as const) {
+      const source = mode === 'online' ? data : await this.repository.rankingData(mode);
+      const times = new Set<number>([now]);
+      const addTime = (value: string | undefined) => {
+        if (!value) return;
+        const time = Date.parse(value);
+        if (time <= now) times.add(time);
+        // Monthly positions also change when results leave the rolling window.
+        const expiry = new Date(value);
+        expiry.setDate(expiry.getDate() + 30);
+        expiry.setHours(0, 0, 0, 0);
+        if (expiry.getTime() <= now) times.add(expiry.getTime());
+      };
+      if (mode === 'machine') {
+        for (const player of source.accounts)
+          for (const match of Object.values(
+            parsePlayerProgression(player.progression ?? '{}').matches,
+          ))
+            if (match.mode === mode) addTime(match.completedAt);
+      } else {
+        for (const match of source.matches)
+          addTime(match.rankingResult?.completedAt ?? match.record.updatedAt);
+      }
+      for (const time of times) {
+        for (const period of ['month', 'all'] as const) {
+          const result = this.listAt({ mode, period, page: 0 }, source, time, now, account.id);
+          const position = result.entries.find((entry) => entry.playerId === id)?.position ?? null;
+          if (time === now && period === 'all') positions[mode] = position;
+          const key = period === 'month' ? 'monthlyPosition' : 'historicalPosition';
+          if (position !== null)
+            records[mode][key] = Math.min(records[mode][key] ?? position, position);
+        }
+      }
+    }
     return {
+      positions,
       profile: readProfile(
         account.profile,
         data.players.find((player) => player.id === account.id)?.name,
@@ -84,10 +134,7 @@ export class RankingService {
         online: playerStatistics(progress, 'online'),
         total: playerStatistics(progress),
       },
-      records: {
-        machine: playerRecords(progress, 'machine'),
-        online: playerRecords(progress, 'online'),
-      },
+      records,
     };
   }
   async list(query: RankingQuery): Promise<RankingPage> {
@@ -99,9 +146,20 @@ export class RankingService {
       query.page < 0
     )
       throw new OnlineError('Consulta de clasificación no válida.');
-    const data = await this.repository.rankingData(query.mode);
+    const now = this.now();
+    return this.listAt(query, await this.repository.rankingData(query.mode), now, now);
+  }
+
+  private listAt(
+    query: RankingQuery,
+    data: Awaited<ReturnType<OnlineRepository['rankingData']>>,
+    time: number,
+    now: number,
+    targetId?: string,
+  ): RankingPage {
+    const historical = time < now;
     const registered = new Set(data.accounts.map((account) => account.id));
-    const at = new Date(this.now()).toISOString();
+    const at = new Date(time).toISOString();
     const names = new Map<string, string>();
     const profiles = new Map(
       data.accounts.map((account) => [account.id, readProfile(account.profile)]),
@@ -123,12 +181,33 @@ export class RankingService {
       }
       if (account.profile) names.set(account.id, name);
       if (query.mode === 'machine') {
-        const summary = rankingSummary(
-          parsePlayerProgression(account.progression ?? '{}'),
-          'machine',
-          query.period,
-          at,
-        );
+        const progress = parsePlayerProgression(account.progression ?? '{}');
+        if (historical) {
+          const matches = Object.entries(progress.matches)
+            .filter(
+              ([, match]) =>
+                match.mode === 'machine' &&
+                match.completedAt &&
+                Date.parse(match.completedAt) <= time,
+            )
+            .sort(([, a], [, b]) => a.completedAt!.localeCompare(b.completedAt!));
+          progress.matches = Object.fromEntries(matches);
+          progress.ratings.machine = 1000;
+          let rated = 0;
+          for (const [, match] of matches) {
+            if (match.rated === false) continue;
+            progress.ratings.machine =
+              match.battle?.ratingAfter ??
+              calculateElo(
+                progress.ratings.machine,
+                match.opponentRating ?? 1000,
+                match.result ?? 0.5,
+                rated,
+              );
+            rated++;
+          }
+        }
+        const summary = rankingSummary(progress, 'machine', query.period, at);
         if (summary.played) entries.push({ id: account.id, name, position: 0, ...summary });
       }
     }
@@ -137,9 +216,9 @@ export class RankingService {
       const ratings = new Map<string, { elo: number; played: number }>();
       const completedAt = (match: (typeof data.matches)[number]) =>
         match.rankingResult?.completedAt ?? match.record.updatedAt;
-      for (const match of data.matches.sort(
-        (a, b) => completedAt(a).localeCompare(completedAt(b)) || a.id.localeCompare(b.id),
-      )) {
+      for (const match of [...data.matches]
+        .filter((match) => !historical || Date.parse(completedAt(match)) <= time)
+        .sort((a, b) => completedAt(a).localeCompare(completedAt(b)) || a.id.localeCompare(b.id))) {
         // Old settled records are reconstructed through the same rules as replays.
         const outcome = match.rankingResult ? null : replayRecord(match.record).outcome;
         const score =
@@ -184,9 +263,9 @@ export class RankingService {
       for (const player of data.players) {
         if (!registered.has(player.id)) continue;
         const progress = histories.get(player.id) ?? createPlayerProgression();
-        progress.ratings.online = player.elo;
+        progress.ratings.online = historical ? (ratings.get(player.id)?.elo ?? 1000) : player.elo;
         const summary = rankingSummary(progress, 'online', query.period, at);
-        if (query.period === 'month' && !summary.played) continue;
+        if ((historical || query.period === 'month') && !summary.played) continue;
         entries.push({
           id: player.id,
           name: names.get(player.id) ?? player.name,
@@ -197,12 +276,15 @@ export class RankingService {
     }
     entries.sort((a, b) => b.rating - a.rating || b.wins - a.wins || a.id.localeCompare(b.id));
     const pageSize = 50;
+    const start = targetId
+      ? entries.findIndex((entry) => entry.id === targetId)
+      : query.page * pageSize;
     return {
       ...query,
       pageSize,
       total: entries.length,
       entries: entries
-        .slice(query.page * pageSize, (query.page + 1) * pageSize)
+        .slice(Math.max(0, start), targetId ? Math.max(0, start) + 1 : start + pageSize)
         .map((entry, index) => ({
           playerId: publicId(entry.id),
           xp: parsePlayerProgression(
@@ -215,7 +297,7 @@ export class RankingService {
           draws: entry.draws,
           losses: entry.losses,
           rating: entry.rating,
-          position: query.page * pageSize + index + 1,
+          position: Math.max(0, start) + index + 1,
         })),
     };
   }

@@ -3,7 +3,7 @@
 El repositorio contiene el cliente React/Vite y una API Node con Fastify. Ambos se despliegan
 en un mismo proyecto Vercel: la web como contenido estático y la API como funciones. Supabase aporta
 PostgreSQL y Auth. No se necesita una clave `service_role`: el navegador usa una clave publicable
-y Node verifica los JWT de Supabase con `getClaims`. La conexión PostgreSQL pertenece exclusivamente
+y Node verifica las sesiones de Supabase con `getUser`. La conexión PostgreSQL pertenece exclusivamente
 al servidor y utiliza un rol dedicado.
 
 ## Separación de responsabilidades

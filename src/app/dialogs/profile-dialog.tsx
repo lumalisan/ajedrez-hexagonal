@@ -1,6 +1,7 @@
 import type { PublicPlayerProfile } from '../../ranking-contracts';
 import { DialogClose } from '../components/dialog-close';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { fetchPublicProfile } from '../../ranking-client';
 import { PROFILE_COLORS, PROFILE_EMBLEMS } from '../../user-profile';
 import { useGame } from '../game-context';
 import { ProfileAvatar } from '../components/profile-avatar';
@@ -40,16 +41,41 @@ const colorLabels = {
 };
 
 function ProfileSettings() {
-  const { account } = useAccount();
+  const { account, controller } = useAccount();
   const { snapshot, commands } = useGame();
   const unlockedOptions = (levelProgress(snapshot.progression.xp).tier + 1) * 2;
   const [draft, setDraft] = useState(snapshot.profile);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   return (
     <form
       className="profile-editor"
       onSubmit={(event) => {
         event.preventDefault();
-        if (draft.name.trim()) commands.updateProfile(draft);
+        if (busy) return;
+        setBusy(true);
+        setError(null);
+        void (async () => {
+          try {
+            const name =
+              draft.name.trim() === snapshot.profile.name
+                ? draft.name
+                : await controller.username(draft.name);
+            if (mounted.current) commands.updateProfile({ ...draft, name });
+          } catch (cause) {
+            if (mounted.current)
+              setError(cause instanceof Error ? cause.message : 'No se pudo guardar el nombre.');
+          } finally {
+            if (mounted.current) setBusy(false);
+          }
+        })();
       }}
     >
       <p>Elige cómo quieres aparecer en Hexfortia.</p>
@@ -131,11 +157,21 @@ function ProfileSettings() {
           ))}
         </div>
       </fieldset>
+      {error && (
+        <p role="alert" className="text-danger">
+          {error}
+        </p>
+      )}
       <div className="dialog-actions">
         <Button type="button" onClick={commands.closeDialog}>
           Cancelar
         </Button>
-        <Button type="submit" variant="primary" disabled={!draft.name.trim()}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy || !draft.name.trim()}
+          loading={busy}
+        >
           Guardar cambios
         </Button>
       </div>
@@ -145,7 +181,7 @@ function ProfileSettings() {
 
 const SECTIONS = [
   { id: 'profile', label: 'Tu perfil' },
-  { id: 'settings', label: 'Configuración' },
+  { id: 'settings', label: 'Personalizar' },
 ] as const;
 const PROFILE_TABS = [
   { id: 'rating', label: 'Puntuación actual' },
@@ -165,7 +201,37 @@ export function ProfileDialog({
   publicProfile?: PublicPlayerProfile;
   onBack?: () => void;
 }) {
-  const { snapshot, commands } = useGame();
+  const { snapshot } = useGame();
+  const { account } = useAccount();
+  const [rankingView, setRankingView] = useState<{
+    id: string;
+    data?: PublicPlayerProfile;
+    error?: boolean;
+  } | null>(null);
+  const accountId = account.user?.id;
+  useEffect(() => {
+    if (publicProfile || !accountId) return;
+    const request = new AbortController();
+    fetchPublicProfile('me', request.signal).then(
+      (data) => {
+        if (!request.signal.aborted) setRankingView({ id: accountId, data });
+      },
+      () => {
+        if (!request.signal.aborted) setRankingView({ id: accountId, error: true });
+      },
+    );
+    return () => request.abort();
+  }, [publicProfile, accountId]);
+  const ownView = rankingView?.id === accountId ? rankingView : null;
+  const rankedProfile = publicProfile ?? (accountId ? ownView?.data : undefined);
+  const positionLabel = (position: number | null | undefined) =>
+    position != null
+      ? 'Posición ' + position
+      : !publicProfile && accountId && !ownView?.data
+        ? ownView?.error
+          ? 'Posición no disponible'
+          : 'Cargando posición…'
+        : 'Sin clasificación';
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
   const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
   const { progression, profile } = publicProfile ?? snapshot;
@@ -282,18 +348,11 @@ export function ProfileDialog({
                       <dt>{mode.label}</dt>
                       <dd>
                         <strong>{progression.ratings[mode.id]} Elo</strong>
-                        <span>Posición disponible en Clasificación</span>
+                        <span>{positionLabel(rankedProfile?.positions?.[mode.id])}</span>
                       </dd>
                     </div>
                   ))}
                 </dl>
-                <p className="profile-note">
-                  Consulta las posiciones de todos los jugadores en Clasificación. El Elo en línea
-                  se actualiza al terminar partidas públicas con el servidor conectado.
-                </p>
-                <Button size="compact" onClick={() => commands.openDialog({ kind: 'ranking' })}>
-                  Ver clasificación compartida
-                </Button>
               </div>
               <div
                 role="tabpanel"
@@ -383,15 +442,15 @@ export function ProfileDialog({
                     </thead>
                     <tbody>
                       {MODES.filter((mode) => mode.id !== 'local').map((mode) => {
-                        const records = publicProfile
-                          ? publicProfile.records[mode.id]
+                        const records = rankedProfile
+                          ? rankedProfile.records[mode.id]
                           : playerRecords(snapshot.progression, mode.id);
                         return (
                           <tr key={mode.id}>
                             <th scope="row">{mode.label}</th>
                             <td>{records.bestRating}</td>
-                            <td>Sin clasificación</td>
-                            <td>Sin clasificación</td>
+                            <td>{positionLabel(records.monthlyPosition)}</td>
+                            <td>{positionLabel(records.historicalPosition)}</td>
                             <td>{records.bestStreak}</td>
                           </tr>
                         );

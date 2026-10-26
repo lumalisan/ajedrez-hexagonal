@@ -30,6 +30,10 @@ assert(executablePath, 'No browser found. Set PLAYWRIGHT_BROWSER_PATH to Chrome 
 
 const server = await createServer({
   logLevel: 'silent',
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(''),
+    'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(''),
+  },
   cacheDir: 'node_modules/.vite-ui-smoke',
   server: { host: '127.0.0.1', port: 4174, strictPort: true, hmr: false },
 });
@@ -68,6 +72,19 @@ try {
       'The home screen must not display a demo status label.',
     );
     if (layout === '3') {
+      const originalName = await page.locator('.home-profile strong').innerText();
+      await page.getByRole('button', { name: 'Editar nombre de usuario', exact: true }).click();
+      assert(await page.locator('#game-dialog').isHidden(), 'The pencil must edit inline.');
+      await page.getByLabel('Nombre de usuario', { exact: true }).fill('Nombre descartado');
+      await page.keyboard.press('Escape');
+      assert((await page.locator('.home-profile strong').innerText()) === originalName);
+      await page.getByRole('button', { name: 'Editar nombre de usuario', exact: true }).click();
+      await page.getByLabel('Nombre de usuario', { exact: true }).fill('Nombre de portada');
+      if (process.env.UI_SCREENSHOT)
+        await page.screenshot({ path: process.env.UI_SCREENSHOT + '-inline-' + mode + '.png' });
+      await page.getByLabel('Nombre de usuario', { exact: true }).press('Enter');
+      await page.locator('#home-username-form').waitFor({ state: 'hidden' });
+      assert((await page.locator('.home-profile strong').innerText()) === 'Nombre de portada');
       await page.locator('.home-profile').click();
       await page
         .getByRole('tab', { name: 'Puntuación actual', exact: true })
@@ -128,7 +145,7 @@ try {
         await page.screenshot({
           path: process.env.UI_SCREENSHOT + '-profile-tables-' + mode + '.png',
         });
-      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await page.getByRole('button', { name: 'Personalizar', exact: true }).click();
       assert(
         (await page.locator('input[name="profile-emblem"]').count()) === 10,
         'Ten emblems must be offered.',
@@ -162,7 +179,7 @@ try {
           .getAttribute('aria-selected')) === 'true',
         'Reopening the profile must reset its section.',
       );
-      await page.getByRole('button', { name: 'Configuración', exact: true }).click();
+      await page.getByRole('button', { name: 'Personalizar', exact: true }).click();
       await page.locator('#profile-name').fill('Sin guardar');
       await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
       assert(
@@ -207,9 +224,12 @@ try {
         'Guests must see only themselves.',
       );
       await page
-        .getByText('Crea una cuenta o inicia sesión para consultar la clasificación completa.', {
-          exact: true,
-        })
+        .getByText(
+          'La clasificación solo muestra tus resultados en este navegador. Crea una cuenta o inicia sesión para consultar la clasificación completa.',
+          {
+            exact: true,
+          },
+        )
         .waitFor();
       assert(
         (await page.getByRole('navigation', { name: 'Páginas de clasificación' }).isVisible()) ===
@@ -268,9 +288,8 @@ try {
       await difficulty.waitFor({ state: 'visible' });
       assert((await difficulty.count()) === 1, 'AI must have a single difficulty selector.');
       assert(
-        (await selectOptionLabels(page, 'Nivel')).join('|') ===
-          'Fácil|Medio|Difícil|Experto|Neuronal',
-        'AI must retain the classic levels and offer the separate neural level.',
+        (await selectOptionLabels(page, 'Nivel')).join('|') === 'Fácil|Medio|Difícil|Experto',
+        'AI must offer only Fácil, Medio, Difícil and Experto.',
       );
       assert(
         (await page.locator('[data-ai-doctrine], .doctrine-grid').count()) === 0,
@@ -461,7 +480,7 @@ try {
     }
     if (mode === 'machine') {
       await chooseSelectOption(page, 'Nivel', 'Experto');
-      await chooseSelectOption(page, 'Nivel', 'Neuronal');
+      await chooseSelectOption(page, 'Nivel', 'Experto');
       assert(
         (await page.locator('#neural-description').count()) === 0,
         'Neural level must not show helper text beneath the selector.',
@@ -2233,10 +2252,7 @@ try {
   await clocked.reload({ waitUntil: 'networkidle' });
   await clocked.locator('[data-home-action="continue"]').click();
   await clocked.locator('[data-continue-match]').first().click();
-  await clocked
-    .locator('#game-dialog h2')
-    .filter({ hasText: /tiempo/i })
-    .waitFor();
+  await clocked.locator('#game-dialog').getByText('tiempo agotado', { exact: true }).waitFor();
   assert(
     await clocked.evaluate(() => {
       const active = localStorage.getItem('atlas-match-classic-v2');
@@ -2275,7 +2291,7 @@ try {
   );
   await tutorialMenu.close();
 
-  for (const difficulty of ['Experto', 'Neuronal']) {
+  for (const difficulty of ['Experto']) {
     const solo = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     watchErrors(solo, runtimeErrors);
     await solo.goto('http://127.0.0.1:4174', { waitUntil: 'networkidle' });
@@ -2285,10 +2301,7 @@ try {
         JSON.parse(localStorage.getItem('atlas-match-classic-v2')).config.participants[1]
           .difficulty,
     );
-    assert(
-      savedDifficulty === (difficulty === 'Neuronal' ? 'neural' : 'expert'),
-      'Solo mode must persist the selected AI level.',
-    );
+    assert(savedDifficulty === 'expert', 'Solo mode must persist the selected AI level.');
     await assertHistoryControlsHidden(solo, 'Machine matches');
     assert(
       await solo.locator('#blockade-button').isHidden(),
@@ -2434,7 +2447,7 @@ async function selectMode(page, mode, difficulty = 'Experto') {
     await page.locator(`[data-game-mode="${mode}"]`).click();
   }
   if (mode === 'machine') {
-    await chooseSelectOption(page, 'Nivel', 'Neuronal');
+    await chooseSelectOption(page, 'Nivel', 'Experto');
     assert(
       (await page.locator('#neural-description').count()) === 0,
       'Neural level must not show helper text beneath the selector.',

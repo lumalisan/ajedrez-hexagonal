@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { attachDatabasePool } from '@vercel/functions';
 import pg from 'pg';
 import { createOnlineApp } from './app.js';
-import { OnlineService } from './online-service.js';
+import { OnlineError, OnlineService } from './online-service.js';
 import { PostgresOnlineRepository } from './postgres-repository.js';
 import { AccountService } from './account-service.js';
 import { RankingService } from './ranking-service.js';
@@ -41,16 +41,25 @@ export async function createOnlineRuntime({ serverless = false } = {}) {
     const app = await createOnlineApp({
       service,
       accounts: new AccountService(repository),
+      async deleteAccount(id) {
+        const result = await pool.query<{ deleted: boolean }>(
+          'select hexfortia.delete_account($1::uuid) as deleted',
+          [id],
+        );
+        if (!result.rows[0]?.deleted)
+          throw new OnlineError(
+            'Termina o abandona tu partida en línea antes de eliminar la cuenta.',
+            409,
+          );
+      },
       rankings: new RankingService(repository),
       origin,
       logger: true,
       trustProxy: serverless,
       async authenticate(token) {
-        const { data, error } = await auth.auth.getClaims(token);
-        return !error &&
-          typeof data?.claims.sub === 'string' &&
-          /^[0-9a-f-]{36}$/i.test(data.claims.sub)
-          ? { id: data.claims.sub, isAnonymous: data.claims.is_anonymous !== false }
+        const { data, error } = await auth.auth.getUser(token);
+        return !error && data.user
+          ? { id: data.user.id, isAnonymous: data.user.is_anonymous !== false }
           : null;
       },
     });
