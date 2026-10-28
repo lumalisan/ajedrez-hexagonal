@@ -49,6 +49,7 @@ interface SearchContext {
   repetitionHasher?: RepetitionHasher;
   fortressDamageThreats?: WeakMap<GameState, Map<Player, boolean>>;
   rangedPlay: boolean;
+  expertCoaching: boolean;
 }
 
 interface Transposition {
@@ -160,6 +161,33 @@ const PERSONALITY_WEIGHTS: Record<AiPersonality, EvaluationWeights> = {
   },
 };
 
+/** Ordinary damage is an exchange; only a legal final hit is worth a victory. */
+const EXPERT_WEIGHTS: Record<AiPersonality, EvaluationWeights> = {
+  balanced: {
+    ...PERSONALITY_WEIGHTS.balanced,
+    ownFortress: 600,
+    enemyFortress: 600,
+    ambushPressure: 0.8,
+  },
+  aggressive: {
+    ...PERSONALITY_WEIGHTS.aggressive,
+    ownFortress: 500,
+    enemyFortress: 750,
+    ambushPressure: 1,
+  },
+  guardian: {
+    ...PERSONALITY_WEIGHTS.guardian,
+    ownFortress: 950,
+    enemyFortress: 500,
+    ambushPressure: 0.4,
+  },
+  ambush: { ...PERSONALITY_WEIGHTS.ambush, ownFortress: 600, enemyFortress: 650 },
+};
+
+function evaluationWeights(personality: AiPersonality, expertCoaching: boolean): EvaluationWeights {
+  return (expertCoaching ? EXPERT_WEIGHTS : PERSONALITY_WEIGHTS)[personality];
+}
+
 const VARIATION: Record<AiDifficulty, { window: number; temperature: number; limit: number }> = {
   recruit: { window: 110, temperature: 55, limit: 6 },
   tactical: { window: 35, temperature: 18, limit: 4 },
@@ -185,6 +213,7 @@ export function chooseMachineAction(
     personality,
     undefined,
     options.resolutionRules,
+    options.difficulty === 'expert',
   );
   const random = createSeededRandom(seedForState(options.seed, state));
   return chooseNearBest(
@@ -202,11 +231,11 @@ export interface SearchOptions {
   personality?: AiPersonality;
   difficulty?: AiDifficulty;
   resolutionRules?: Readonly<ActionResolutionRules>;
-  /** Optional learned evaluator; omitting it preserves the classic Expert baseline. */
+  /** Explicit learned evaluators retain their trained baseline, independently of Expert coaching. */
   evaluate?: NeuralEvaluator;
-  /** Candidate-only search; classic remains the unchanged tournament reference. */
+  /** Advanced algorithms remain opt-in, independently of Expert coaching. */
   searchProfile?: 'classic' | 'pvs-history' | 'pvs-threats';
-  /** Defaults on for pvs-threats; false isolates the prior candidate in tactical comparisons. */
+  /** Defaults on for Expert and pvs-threats; explicit evaluators keep their prior defaults. */
   rangedPlay?: boolean;
   /** Called after each completed iteration with a read-only search snapshot. */
   onProgress?: (metadata: Readonly<SearchMetadata>) => void;
@@ -247,6 +276,7 @@ export function searchMachineActionWithMetadata(
   }
 
   const searchProfile = options.searchProfile ?? options.evaluate?.searchProfile ?? 'classic';
+  const expertCoaching = options.difficulty === 'expert' && !options.evaluate;
   const context: SearchContext = {
     rootPlayer: state.activePlayer,
     personality: options.personality ?? 'balanced',
@@ -270,7 +300,8 @@ export function searchMachineActionWithMetadata(
     history: new Map(),
     repetitionHasher: searchProfile !== 'classic' ? new RepetitionHasher() : undefined,
     fortressDamageThreats: searchProfile === 'pvs-threats' ? new WeakMap() : undefined,
-    rangedPlay: options.rangedPlay ?? searchProfile === 'pvs-threats',
+    rangedPlay: options.rangedPlay ?? (expertCoaching || searchProfile === 'pvs-threats'),
+    expertCoaching,
   };
   context.rootMustDefend = hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
   const initial = orderActions(state, actions, context.rootPlayer, context.personality, context);
@@ -406,6 +437,7 @@ function alphaBeta(
     mustDefend ? Infinity : context.maxMoves,
     context.advanced ? context.history : undefined,
     context.rangedPlay,
+    context.expertCoaching,
   );
   let bestScore = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
   let bestActionKey: string | undefined;
@@ -482,11 +514,13 @@ function quiescence(
   }
   let value = evaluateSearchState(state, context);
 
-  // The candidate also extends threats to the first HP, including quiet
-  // approaches that allow a countercapture before a second hit can win.
-  const mustDefend = context.fortressDamageThreats
-    ? hasImmediateFortressDamage(state, otherPlayer(state.activePlayer), context)
-    : hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
+  // Expert treats nonfinal damage as an exchange. Learned evaluators retain
+  // their previous extensions; a fatal threat always requires an evasion.
+  const mustDefend =
+    context.fortressDamageThreats &&
+    (!context.expertCoaching || fortressOf(state, state.activePlayer)?.hp === 1)
+      ? hasImmediateFortressDamage(state, otherPlayer(state.activePlayer), context)
+      : hasImmediateFortressWin(state, otherPlayer(state.activePlayer), context);
   if (remaining <= 0 && !mustDefend) return value;
   if (mustDefend) {
     value = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
@@ -501,7 +535,16 @@ function quiescence(
   const tacticalActions = getAllLegalActions(state).filter(
     (action) => mustDefend || isTacticalAction(state, action),
   );
-  const tactical = selectSearchActions(state, tacticalActions, [], context.personality, Infinity);
+  const tactical = selectSearchActions(
+    state,
+    tacticalActions,
+    [],
+    context.personality,
+    Infinity,
+    undefined,
+    context.expertCoaching && context.rangedPlay,
+    context.expertCoaching,
+  );
   for (const action of tactical) {
     checkTime(context);
     const candidate = applyAction(state, action, context.resolutionRules);
@@ -590,22 +633,24 @@ function orderActions(
   personality: AiPersonality,
   context?: SearchContext,
   resolutionRules: Readonly<ActionResolutionRules> | undefined = context?.resolutionRules,
+  expertCoaching = context?.expertCoaching ?? false,
 ): OrderedAction[] {
   const maximizing = state.activePlayer === rootPlayer;
-  const weights = PERSONALITY_WEIGHTS[personality];
+  const weights = evaluationWeights(personality, expertCoaching);
   return actions
     .map((action) => {
       const result = applyAction(state, action, resolutionRules);
       if (!result.ok) return null;
       const key = actionKey(action);
-      const tacticalScore = tacticalDelta(state, result.state, state.activePlayer);
+      const tacticalScore = tacticalDelta(state, result.state, state.activePlayer, expertCoaching);
       const replyRisk =
         !result.state.outcome && result.state.activePlayer !== state.activePlayer
-          ? bestImmediateGain(result.state, resolutionRules)
+          ? bestImmediateGain(result.state, resolutionRules, expertCoaching)
           : 0;
       let score = context
         ? evaluateSearchState(result.state, context)
-        : evaluateClassicState(result.state, rootPlayer, personality);
+        : evaluateClassicState(result.state, rootPlayer, personality, expertCoaching) +
+          (expertCoaching ? evaluateRangedState(result.state, rootPlayer, true) : 0);
       score += (maximizing ? 1 : -1) * (tacticalScore - replyRisk * 12) * weights.tactics;
       score += (maximizing ? 1 : -1) * stableActionBias(action, state.ply);
       return {
@@ -630,9 +675,9 @@ function evaluateSearchState(state: GameState, context: SearchContext): number {
   if (cached !== undefined) return cached;
   let score = context.evaluate
     ? context.evaluate(state, context.rootPlayer, context.resolutionRules)
-    : evaluateClassicState(state, context.rootPlayer, context.personality);
+    : evaluateClassicState(state, context.rootPlayer, context.personality, context.expertCoaching);
   if (context.rangedPlay && !context.evaluate?.includesRangedValue)
-    score += evaluateRangedState(state, context.rootPlayer);
+    score += evaluateRangedState(state, context.rootPlayer, context.expertCoaching);
   if (!Number.isFinite(score) || Math.abs(score) >= MATE_SCORE / 2) {
     throw new Error('La evaluación de posición debe ser finita y menor que una victoria.');
   }
@@ -644,9 +689,10 @@ export function evaluateClassicState(
   state: GameState,
   player: Player,
   personality: AiPersonality = 'balanced',
+  expertCoaching = false,
 ): number {
   if (state.outcome) return terminalScore(state, player, 0);
-  const weights = PERSONALITY_WEIGHTS[personality];
+  const weights = evaluationWeights(personality, expertCoaching);
   const enemy = otherPlayer(player);
   const ownFortress = fortressOf(state, player);
   const enemyFortress = fortressOf(state, enemy);
@@ -658,11 +704,11 @@ export function evaluateClassicState(
     const sign = piece.owner === player ? 1 : -1;
     const targetFortress = piece.owner === player ? enemyFortress : ownFortress;
     const homeFortress = piece.owner === player ? ownFortress : enemyFortress;
-    score += sign * materialValue(piece) * weights.material;
+    score += sign * materialValue(piece, expertCoaching) * weights.material;
 
     if (targetFortress) {
       const advance = BOARD_RADIUS * 2 + 1 - hexDistance(piece.position, targetFortress.position);
-      score += sign * advance * positionalAdvance(piece.type) * weights.advance;
+      score += sign * advance * positionalAdvance(piece, expertCoaching) * weights.advance;
     }
     if (homeFortress) {
       const defense = Math.max(0, 4 - hexDistance(piece.position, homeFortress.position));
@@ -671,13 +717,14 @@ export function evaluateClassicState(
     const centerDistance = hexDistance(piece.position, { q: 0, r: 0 });
     score += sign * (BOARD_RADIUS - centerDistance) * 2 * weights.center;
     score += sign * supportScore(state, piece) * weights.support;
-    if (piece.type === 'airplane') score += sign * airplanePositionScore(state, piece);
+    if (piece.type === 'airplane')
+      score += sign * airplanePositionScore(state, piece, expertCoaching);
     if (weights.ambushPressure > 0)
-      score += sign * ambushPressureScore(state, piece) * weights.ambushPressure;
+      score += sign * ambushPressureScore(state, piece, expertCoaching) * weights.ambushPressure;
     if (piece.type === 'airplane' || piece.type === 'medium' || piece.type === 'long')
       score +=
         sign *
-        firingPressureScore(state, piece) *
+        firingPressureScore(state, piece, undefined, expertCoaching) *
         (piece.type === 'airplane' ? weights.airPressure : 1);
   }
   return score;
@@ -696,6 +743,7 @@ function selectSearchActions(
   maxMoves: number,
   history?: ReadonlyMap<string, number>,
   rangedPlay = false,
+  expertCoaching = false,
 ): GameAction[] {
   const forced = new Set(forcedKeys);
   const priorities = new Map<GameAction, number>();
@@ -703,7 +751,7 @@ function selectSearchActions(
   const quiet: Array<{ action: GameAction; score: number; group: string }> = [];
   const enemyFortress = fortressOf(state, otherPlayer(state.activePlayer));
   const ownFortress = fortressOf(state, state.activePlayer);
-  const weights = PERSONALITY_WEIGHTS[personality];
+  const weights = evaluationWeights(personality, expertCoaching);
 
   for (const action of actions) {
     const key = actionKey(action);
@@ -723,16 +771,19 @@ function selectSearchActions(
             : undefined;
       const gain =
         target?.type === 'fortress'
-          ? 90_000
+          ? expertCoaching && target.hp > 1
+            ? 6_000
+            : 90_000
           : target
-            ? (materialValue(target) + (rangedPlay ? rangedMaterialBonus(target) : 0)) *
+            ? (materialValue(target, expertCoaching) +
+                (rangedPlay ? rangedMaterialBonus(target) : 0)) *
               (action.kind === 'convert' ? 24 : 12)
             : 0;
       priorities.set(
         action,
         forced.has(key)
           ? 10_000_000 - forcedKeys.indexOf(key)
-          : 100_000 + gain - (actor ? materialValue(actor) : 0),
+          : 100_000 + gain - (actor ? materialValue(actor, expertCoaching) : 0),
       );
       tactical.push(action);
       continue;
@@ -749,15 +800,20 @@ function selectSearchActions(
     }
     if (action.kind === 'orient' || action.kind === 'rotate') score -= 20;
     if (action.kind === 'transform')
-      score -= actor ? Math.max(0, materialValue(actor) - PIECE_VALUE.soldier) : 45;
+      score -= actor ? Math.max(0, materialValue(actor, expertCoaching) - PIECE_VALUE.soldier) : 45;
     if (actor?.type === 'medium' && (action.kind === 'move' || action.kind === 'orient')) {
-      score += firingPressureScore(state, actor, {
-        position: action.kind === 'move' ? action.to : actor.position,
-        cannon: action.cannon,
-      });
+      score += firingPressureScore(
+        state,
+        actor,
+        {
+          position: action.kind === 'move' ? action.to : actor.position,
+          cannon: action.cannon,
+        },
+        expertCoaching,
+      );
     }
     score += (history?.get(key) ?? 0) + stableActionBias(action, state.ply);
-    if (rangedPlay) score += rangedActionPriority(state, action);
+    if (rangedPlay) score += rangedActionPriority(state, action, expertCoaching);
     priorities.set(action, score);
     const destination = 'to' in action && action.to ? hexKey(action.to) : '-';
     quiet.push({ action, score, group: `${action.pieceId}:${action.kind}:${destination}` });
@@ -810,22 +866,31 @@ function isTacticalAction(state: GameState, action: GameAction): boolean {
   );
 }
 
-function tacticalDelta(before: GameState, after: GameState, mover: Player): number {
+function tacticalDelta(
+  before: GameState,
+  after: GameState,
+  mover: Player,
+  expertCoaching = false,
+): number {
   if (after.outcome?.type === 'win')
     return after.outcome.winner === mover ? MATE_SCORE : -MATE_SCORE;
   const enemy = otherPlayer(mover);
   // A transformed vehicle keeps its id, but its material value is no longer
   // that of a vehicle. Count the actual change, including ammunition spent.
-  let score = (materialBalance(after, mover) - materialBalance(before, mover)) * 12;
+  let score =
+    (materialBalance(after, mover, expertCoaching) -
+      materialBalance(before, mover, expertCoaching)) *
+    12;
   const oldFortress = fortressOf(before, enemy);
   const newFortress = fortressOf(after, enemy);
-  score += ((oldFortress?.hp ?? 0) - (newFortress?.hp ?? 0)) * 90_000;
+  score += ((oldFortress?.hp ?? 0) - (newFortress?.hp ?? 0)) * (expertCoaching ? 6_000 : 90_000);
   return score;
 }
 
-function materialBalance(state: GameState, player: Player): number {
+function materialBalance(state: GameState, player: Player, expertCoaching = false): number {
   return state.pieces.reduce(
-    (total, piece) => total + (piece.owner === player ? 1 : -1) * materialValue(piece),
+    (total, piece) =>
+      total + (piece.owner === player ? 1 : -1) * materialValue(piece, expertCoaching),
     0,
   );
 }
@@ -838,6 +903,7 @@ function materialBalance(state: GameState, player: Player): number {
 function bestImmediateGain(
   state: GameState,
   rules: Readonly<ActionResolutionRules> | undefined,
+  expertCoaching = false,
 ): number {
   const player = state.activePlayer;
   let bestGain = 0;
@@ -859,8 +925,8 @@ function bestImmediateGain(
       if (!result.ok) continue;
       if (result.state.outcome?.type === 'win' && result.state.outcome.winner === player)
         return MATE_SCORE;
-      before ??= materialBalance(state, player);
-      bestGain = Math.max(bestGain, materialBalance(result.state, player) - before);
+      before ??= materialBalance(state, player, expertCoaching);
+      bestGain = Math.max(bestGain, materialBalance(result.state, player, expertCoaching) - before);
     }
   }
   return bestGain;
@@ -882,6 +948,7 @@ function firingPressureScore(
   state: GameState,
   piece: Extract<Piece, { type: 'airplane' | 'medium' | 'long' }>,
   preview: Parameters<typeof getFiringRangeCells>[2] = {},
+  expertCoaching = false,
 ): number {
   // Skip expensive long-range shield ray checks when there is no target at all.
   if (
@@ -903,12 +970,16 @@ function firingPressureScore(
     .reduce(
       (score, target) =>
         score +
-        (target.type === 'fortress' ? (target.hp === 1 ? 240 : 100) : materialValue(target) * 0.12),
+        (target.type === 'fortress'
+          ? target.hp === 1
+            ? 240
+            : 100
+          : materialValue(target, expertCoaching) * 0.12),
       0,
     );
 }
 
-function ambushPressureScore(state: GameState, piece: Piece): number {
+function ambushPressureScore(state: GameState, piece: Piece, expertCoaching = false): number {
   const roleFactor: Record<PieceType, number> = {
     soldier: 0.35,
     capturer: 0.8,
@@ -926,12 +997,21 @@ function ambushPressureScore(state: GameState, piece: Piece): number {
   for (const target of state.pieces) {
     if (target.owner === piece.owner || target.type === 'fortress') continue;
     const proximity = Math.max(0, 5 - hexDistance(piece.position, target.position));
-    score += proximity * factor * Math.max(1, PIECE_VALUE[target.type] / 100);
+    score +=
+      proximity *
+      factor *
+      Math.max(1, (expertCoaching ? materialValue(target, true) : PIECE_VALUE[target.type]) / 100);
   }
   return score;
 }
 
-function positionalAdvance(type: PieceType): number {
+function positionalAdvance(piece: Piece, expertCoaching: boolean): number {
+  const type = piece.type;
+  if (expertCoaching) {
+    if (type === 'capturer') return 14;
+    if (type === 'medium') return 12;
+    if (type === 'long') return (piece.missilesRemaining ?? 2) > 0 ? 10 : 1;
+  }
   if (type === 'capturer') return 8;
   if (type === 'fast' || type === 'drone' || type === 'airplane') return 5;
   if (type === 'soldier') return 4;

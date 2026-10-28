@@ -9,7 +9,11 @@ type Airplane = Extract<Piece, { type: 'airplane' }>;
  * retaining room to manoeuvre. Legal exits come from the engine; runway and
  * heading are positional estimates, never a substitute for legal actions.
  */
-export function airplanePositionScore(state: GameState, piece: Airplane): number {
+export function airplanePositionScore(
+  state: GameState,
+  piece: Airplane,
+  expertCoaching = false,
+): number {
   const directions = new Set<Direction>();
   let exits = 0;
   let bestRunway = 0;
@@ -45,8 +49,29 @@ export function airplanePositionScore(state: GameState, piece: Airplane): number
     continuationHeadings * 20 -
     (continuationHeadings < 2 ? 80 : 0) -
     confinement +
-    headingScore(state, piece)
+    headingScore(state, piece) +
+    (expertCoaching ? groundFlankSupport(state, piece) : 0)
   );
+}
+
+/** Positional support, not an additional shield or a change to legal flights. */
+function groundFlankSupport(state: GameState, piece: Airplane): number {
+  let score = 0;
+  for (const ally of state.pieces) {
+    if (
+      ally.owner !== piece.owner ||
+      !['soldier', 'capturer', 'medium', 'antiAir'].includes(ally.type)
+    )
+      continue;
+    const distance = hexDistance(piece.position, ally.position);
+    if (distance < 1 || distance > 2) continue;
+    const direction = directionBetween(piece.position, ally.position);
+    if (direction === null) continue;
+    const relative = (direction - piece.facing + 6) % 6;
+    if (relative === 1 || relative === 2 || relative === 4 || relative === 5)
+      score += distance === 1 ? 12 : 6;
+  }
+  return Math.min(40, score);
 }
 
 function safeFlights(

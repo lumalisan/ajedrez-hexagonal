@@ -47,8 +47,8 @@ Tras `pnpm build`, `pnpm test:offline` comprueba la recarga y la primera apertur
 
 El [laboratorio de IA neuronal](docs/ia-neuronal.md) permite generar posiciones, entrenar un
 evaluador pequeño en CPU, comprobarlo en el navegador y enfrentarlo a Experto con partidas
-emparejadas. «Neuronal» carga el candidato experimental; los cuatro niveles clásicos conservan
-su evaluación anterior.
+emparejadas. «Neuronal» carga el candidato experimental y conserva su evaluación entrenada.
+Experto incorpora criterios estratégicos propios; los otros niveles mantienen su evaluación anterior.
 
 El [circuito de investigación](docs/ia-investigacion.md) añade inventario de trayectorias,
 profesor clásico independiente, campañas con fuentes congeladas y particiones por familia,
@@ -106,6 +106,8 @@ Los guardados declaran versión y ruleset. Una repetición importada se reconstr
 Cada partida contra la IA y cada revancha generan una semilla nueva. Los niveles clásicos, incluido Experto, pueden elegir entre órdenes de valoración muy próxima; el margen se estrecha al subir la dificultad y se respetan las victorias forzadas y su distancia. Neuronal elige la orden mejor valorada por su búsqueda. Si una jugada es claramente superior, puede repetirse aunque cambie la semilla. Continuar o importar una partida conserva su semilla, y las repeticiones reproducen las acciones registradas.
 
 Los presupuestos máximos de cálculo por turno son: Fácil, 0,25 segundos; Medio, 2 segundos; Difícil, 5 segundos; Experto y Neuronal, 15 segundos. Buscan hasta 1, 3, 5 y 9 medias jugadas respectivamente, con extensiones para resolver intercambios y amenazas a la Fortaleza. Todos los niveles, incluido Fácil, utilizan búsqueda en un Worker y pueden responder antes si terminan el análisis. Solo se utilizan iteraciones terminadas: la profundidad efectiva depende de la posición y del dispositivo. Si el Worker no está disponible, el respaldo limita su tiempo para mantener la respuesta de la interfaz. Si los pesos neuronales no se pueden cargar, se avisa y Experto juega ese turno. Una semilla explícita permite repetir las decisiones con el mismo estado y profundidad completada; no garantiza que equipos distintos alcancen la misma profundidad dentro del límite de tiempo.
+
+Experto favorece el avance de tanques, asaltadores y lanzamisiles cargados, el apoyo lateral al caza y la presión sobre unidades valiosas. Conserva el embestidor frente a intercambios desfavorables y distingue un impacto intermedio a la Fortaleza del golpe definitivo. Son preferencias de evaluación: las victorias y la defensa ante una derrota inmediata siguen teniendo prioridad.
 
 Neuronal comparte provisionalmente las recompensas y la valoración de juego de Experto. Los resultados de sus ensayos se documentan en [las iteraciones del laboratorio](docs/ia-neuronal-iteraciones.md).
 

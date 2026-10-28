@@ -13,7 +13,9 @@ export const AI_PIECE_VALUE: Readonly<Record<PieceType, number>> = {
   fortress: 0,
 };
 
-export function materialValue(piece: Piece): number {
+/** Expert preserves the Embestidor; the default remains the trained neural baseline. */
+export function materialValue(piece: Piece, expertCoaching = false): number {
+  if (expertCoaching && piece.type === 'fast') return 1400;
   return piece.type === 'long'
     ? 180 + 110 * (piece.missilesRemaining ?? 2)
     : AI_PIECE_VALUE[piece.type];

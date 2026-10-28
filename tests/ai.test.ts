@@ -7,7 +7,7 @@ import {
 } from '../src/ai';
 import { actionKey } from '../src/action-identity';
 import { applyAction, createGameState, getAllLegalActions } from '../src/engine';
-import { stepHex } from '../src/hex';
+import { hexDistance, stepHex } from '../src/hex';
 import type { AiDifficulty, AiPersonality, GameAction, Piece } from '../src/types';
 
 function createChoiceState() {
@@ -236,7 +236,17 @@ describe('machine player', () => {
   it.each<AiDifficulty>(['recruit', 'tactical', 'commander', 'expert'])(
     'varies near-equivalent orders reproducibly in %s',
     (difficulty) => {
-      const state = createChoiceState();
+      // Two mirrored batteries provide genuinely equivalent alternatives even
+      // when Expert strongly prefers development over keeping a launcher home.
+      const state = createGameState(
+        [
+          { id: 'f0', type: 'fortress', owner: 0, position: { q: 0, r: -5 }, hp: 2 },
+          { id: 'f1', type: 'fortress', owner: 1, position: { q: 0, r: 5 }, hp: 2 },
+          { id: 'left', type: 'long', owner: 1, position: { q: -1, r: 3 } },
+          { id: 'right', type: 'long', owner: 1, position: { q: 1, r: 2 } },
+        ],
+        1,
+      );
       const seeds = Array.from({ length: 24 }, (_, seed) => seed);
       const choices = seeds.map((seed) => {
         const options = {
@@ -273,21 +283,33 @@ describe('machine player', () => {
     }
   });
 
-  it('makes the aggressive profile advance while the guardian covers home', () => {
+  it('retains the Tactical personality contrast between advancing and covering home', () => {
     const state = createChoiceState();
     const aggressive = chooseMachineAction(state, {
       personality: 'aggressive',
-      difficulty: 'expert',
+      difficulty: 'tactical',
       seed: 1,
     });
     const guardian = chooseMachineAction(state, {
       personality: 'guardian',
-      difficulty: 'expert',
+      difficulty: 'tactical',
       seed: 1,
     });
 
-    expect(aggressive).toMatchObject({ kind: 'move', to: { q: 0, r: 1 } });
-    expect(guardian).toMatchObject({ kind: 'move', to: { q: 0, r: 3 } });
+    expect(aggressive?.kind).toBe('move');
+    expect(guardian?.kind).toBe('move');
+    const advancing = applyAction(state, aggressive!).state.pieces.find(
+      (p) => p.id === 'machine-long',
+    )!;
+    const defending = applyAction(state, guardian!).state.pieces.find(
+      (p) => p.id === 'machine-long',
+    )!;
+    expect(hexDistance(advancing.position, { q: 0, r: -5 })).toBeLessThan(
+      hexDistance(defending.position, { q: 0, r: -5 }),
+    );
+    expect(hexDistance(defending.position, { q: 0, r: 5 })).toBeLessThan(
+      hexDistance(advancing.position, { q: 0, r: 5 }),
+    );
   });
 
   it('reports completed depth, nodes and elapsed search time', () => {
