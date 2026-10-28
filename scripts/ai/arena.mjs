@@ -51,7 +51,7 @@ Un presupuesto reducido es un ensayo diferente. Las truncadas se cuentan como in
 --ablation conserva el perfil y sus heurísticas tácticas, pero omite la corrección neuronal.
 --reference-model ruta sustituye Experto por otro modelo congelado, con los mismos límites.
 --reference-root carpeta usa un buscador congelado, exigiendo idénticas reglas del motor.
---openings libro.json usa posiciones medias/finales con prefijos y reglas explícitas.
+--openings libro.json usa aperturas, posiciones medias o finales con prefijos y reglas explícitas.
   Admite hex-arena-openings-v1 y hex-engine-endgames-v1; --pairs no puede superar sus familias.
   No añade órdenes aleatorias: --opening-plies solo afecta a las partidas iniciales predeterminadas.
 --resume continúa el informe existente desde su último checkpoint de cuatro órdenes.

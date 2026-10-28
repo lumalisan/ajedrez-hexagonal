@@ -31,6 +31,37 @@ const entry = (id = 'one', familyId = 'family-one') => ({
 const book = (entries) => ({ format: 'hex-arena-openings-v1', scope: 'endgame', entries });
 
 describe('arena opening books', () => {
+  it('loads a full-game opening with its original setup, legal prefix and rules', () => {
+    const initialState = engine.createInitialState();
+    const gameRules = { ...engine.DEFAULT_ACTION_RESOLUTION_RULES };
+    const move = engine.getAllLegalActions(initialState).find((action) => action.kind === 'move');
+    expect(move).toBeDefined();
+    const document = {
+      format: 'hex-arena-openings-v1',
+      scope: 'fullgame',
+      entries: [
+        {
+          id: 'initial',
+          familyId: 'initial-family',
+          seed: 17,
+          initialState,
+          actions: [move],
+          rules: gameRules,
+        },
+      ],
+    };
+    const before = JSON.stringify(document);
+    const prepared = prepareOpeningBook(engine, document, { pairs: 1, seed: 8 });
+    const opening = prepared.openings[0];
+    expect(prepared.identity.scope).toBe('fullgame');
+    expect(opening.scope).toBe('fullgame');
+    expect(opening.initialState).toEqual(initialState);
+    expect(opening.state).toEqual(engine.applyAction(initialState, move, gameRules).state);
+    expect(opening.rules).toEqual(gameRules);
+    expect(restoreBookCheckpoint(engine, opening)).toEqual(opening.state);
+    expect(JSON.stringify(document)).toBe(before);
+  });
+
   it('replays the prefix with its rules while retaining the original state, history and counters', () => {
     const original = entry();
     const snapshot = JSON.stringify(original);

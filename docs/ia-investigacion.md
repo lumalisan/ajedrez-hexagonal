@@ -159,6 +159,11 @@ real: no lo presentes como traza de poda ni contrafactual de fuerza.
 
 ## Libros y confirmación de juego
 
+El ámbito `fullgame` identifica libros de aperturas de partida completa; también se admiten
+`midgame`, `endgame` y `midgame/endgame`. Cada entrada conserva el estado inicial, su prefijo
+legal y sus reglas al intercambiar bandos o reanudar. El ámbito describe la posición de partida;
+el motor determina los desenlaces.
+
 `reserved-openings.mjs` prepara `hex-arena-openings-v1` con una posición por familia histórica,
 elegida por material/progreso, sin consultar candidatos. Su rol `reserved-development` permite
 cribado, no confirmación nueva. El libro tardío del 23 de octubre solo tiene seis familias con

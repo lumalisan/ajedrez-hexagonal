@@ -536,10 +536,7 @@ function HistoryDialog() {
       <DialogClose label="Cerrar historial" className="dialog-corner-close " />
       <span className="eyebrow">HISTORIAL LOCAL</span>
       <h2>Batallas concluidas</h2>
-      <p>
-        Selecciona una partida para ver su repetición. Los registros antiguos pueden contener solo
-        el resultado.
-      </p>
+      <p>Selecciona una partida para ver su repetición.</p>
       <div className="history-list">
         {history.length ? (
           history.map((entry) => (
@@ -559,7 +556,11 @@ function HistoryDialog() {
                   timeStyle: 'short',
                 })}
               </time>
-              <strong>{outcomeText(entry.outcome)}</strong>
+              <strong>
+                {entry.outcome.type === 'win'
+                  ? `${entry.participants[entry.outcome.winner] || 'Invitado'} vence · ${outcomeText(entry.outcome).split(' · ')[1]}`
+                  : outcomeText(entry.outcome)}
+              </strong>
               <small>
                 {entry.participants.join(' vs. ')} · {entry.plies} órdenes ·{' '}
                 {formatDuration(entry.durationSeconds)}

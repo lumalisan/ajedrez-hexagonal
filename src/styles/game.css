@@ -2596,9 +2596,16 @@ button:disabled {
 }
 
 .home-nav-button.primary:hover,
-.home-nav-button.primary:focus-visible {
+.home-nav-button.primary:focus-visible,
+.mode-navigation .home-nav-button:hover,
+.mode-navigation .home-nav-button:focus-visible {
   border-color: var(--amber);
   background: rgba(137, 88, 18, 0.55);
+}
+
+.mode-navigation .home-nav-button:hover::after,
+.mode-navigation .home-nav-button:focus-visible::after {
+  color: var(--amber);
 }
 
 .home-nav-button:disabled,

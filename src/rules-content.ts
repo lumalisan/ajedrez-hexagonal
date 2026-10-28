@@ -382,7 +382,6 @@ export const RULE_SECTIONS: RuleSection[] = [
         text: '¿Cómo se consiguen?',
         kind: 'heading',
       },
-      'Las partidas privadas no modifican el Elo. Sí cuentan para las estadísticas, los logros y los puntos de experiencia.',
       'Al comenzar, dispones de 1000 puntos de clasificación. Después de cada partida, tu puntuación puede aumentar o disminuir en función del resultado y de la clasificación de tu rival.',
       {
         text: 'Si ganas, obtendrás puntos de clasificación.',
@@ -397,6 +396,7 @@ export const RULE_SECTIONS: RuleSection[] = [
         strong: ['Si empatas'],
       },
       'La cantidad de puntos que ganas o pierdes depende de las expectativas previas al enfrentamiento. Por ejemplo, vencer a un rival con una clasificación muy superior a la tuya te permitirá ganar más puntos, mientras que perder contra él supondrá una penalización menor. Por el contrario, vencer a un rival con una clasificación inferior te dará menos puntos, y perder contra él te hará perder más.',
+      'Las partidas privadas no suman ni restan puntos de clasificación. Sí cuentan para las estadísticas, los logros y los puntos de experiencia.',
       {
         text: 'Clasificaciones independientes',
         kind: 'heading',
@@ -407,7 +407,7 @@ export const RULE_SECTIONS: RuleSection[] = [
         text: 'Clasificaciones histórica y mensual',
         kind: 'heading',
       },
-      'Tanto en las partidas en línea como en las partidas contra Hexfortia existen dos clasificaciones:',
+      'Tanto en la modalidad en línea como en la modalidad contra Hexfortia existen dos clasificaciones:',
       {
         text: 'Clasificación histórica: tiene en cuenta todas las partidas disputadas en la modalidad correspondiente.',
         strong: ['Clasificación histórica:'],

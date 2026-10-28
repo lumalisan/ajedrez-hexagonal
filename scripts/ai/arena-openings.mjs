@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+const OPENING_SCOPES = new Set(['fullgame', 'midgame', 'endgame', 'midgame/endgame']);
 
 function openingRules(rules) {
   if (!rules || typeof rules !== 'object' || Array.isArray(rules))
@@ -73,7 +74,7 @@ export function reconstructBookOpening(engine, entry) {
   if (state.outcome) throw new Error(`El prefijo ya termina la partida: ${entry.id}.`);
   if (!engine.getAllLegalActions(state).length)
     throw new Error(`La apertura no tiene órdenes legales para el bando activo: ${entry.id}.`);
-  if (entry.scope !== undefined && !['midgame', 'endgame', 'midgame/endgame'].includes(entry.scope))
+  if (entry.scope !== undefined && !OPENING_SCOPES.has(entry.scope))
     throw new Error(`Ámbito de apertura desconocido: ${entry.id}.`);
   return {
     id: entry.id,
@@ -118,8 +119,8 @@ export function prepareOpeningBook(engine, document, { pairs, seed, sha256, path
       document.samplingProtocol?.duplicateFamilies !== 'retained')
   )
     throw new Error('El libro IID necesita un protocolo explícito de confirmación sin modelo.');
-  if (!['midgame', 'endgame', 'midgame/endgame'].includes(parsed.scope))
-    throw new Error('El ámbito del libro debe ser midgame o endgame.');
+  if (!OPENING_SCOPES.has(parsed.scope))
+    throw new Error('El ámbito del libro debe ser fullgame, midgame o endgame.');
   if (!parsed.entries.length) throw new Error('El libro está vacío.');
   const ids = new Set();
   const draws = new Set();
