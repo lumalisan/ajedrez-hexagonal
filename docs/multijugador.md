@@ -99,7 +99,7 @@ No se necesita otro proveedor Node. La función de cuentas requiere su migració
 Buscar partida requiere una cuenta permanente e inicia la búsqueda directamente. La API rechaza
 las búsquedas de identidades anónimas aunque un cliente modificado intente enviarlas.
 Todas las partidas públicas nuevas usan Fortaleza
-con 1 punto de vida, turnos de 30 segundos, tiempo total sin límite y Frente clásico. Los bandos
+con 1 punto de vida, turnos de 90 segundos, tiempo total sin límite y Frente clásico. Los bandos
 opuestos se asignan al azar. El servidor aplica estas reglas incluso si un cliente antiguo envía
 preferencias o quedan filtros anteriores en la cola; las partidas ya iniciadas conservan sus reglas.
 La diferencia de Elo empieza en 200 puntos y se amplía progresivamente hasta 400 durante el primer

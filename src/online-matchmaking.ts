@@ -23,7 +23,7 @@ export function eloSearchRange(waitMs: number): number {
 /** Standard rules for every new public match, owned by the server. */
 export const PUBLIC_MATCH_SETTINGS = Object.freeze({
   fortressHp: 1,
-  turnSeconds: 30,
+  turnSeconds: 90,
   totalSeconds: '',
   layout: 3,
 } as const);

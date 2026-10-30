@@ -227,7 +227,11 @@ export function ConfigDialog({ mode }: { mode: 'local' | 'machine' | 'private' }
       </div>
       {mode === 'private' && <OnlineAvailability />}
       <div className="dialog-actions">
-        <Button data-back-menu onClick={goBack}>
+        <Button
+          data-back-menu
+          disabled={mode === 'private' && snapshot.online.busy}
+          onClick={goBack}
+        >
           Volver
         </Button>
         <Button
@@ -289,7 +293,12 @@ export function PrivateJoinDialog() {
       </form>
       <OnlineAvailability />
       <div className="dialog-actions">
-        <Button onClick={() => commands.openDialog({ kind: 'online' })}>Volver</Button>
+        <Button
+          disabled={snapshot.online.busy}
+          onClick={() => commands.openDialog({ kind: 'online' })}
+        >
+          Volver
+        </Button>
       </div>
     </section>
   );

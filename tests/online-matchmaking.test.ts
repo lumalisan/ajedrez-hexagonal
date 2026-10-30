@@ -23,7 +23,7 @@ describe('partidas públicas estándar', () => {
     expect(matchSearchTickets(ticket('a'), ticket('b'), 0, random)).toEqual({
       factions,
       fortressHp: 1,
-      turnSeconds: 30,
+      turnSeconds: 90,
       totalSeconds: '',
       layout: 3,
     });

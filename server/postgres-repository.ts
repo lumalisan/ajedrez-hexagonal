@@ -12,6 +12,14 @@ import type {
 export class PostgresOnlineRepository implements OnlineRepository {
   constructor(private readonly pool: Pool) {}
 
+  async activeMatchId(playerId: string): Promise<string | null> {
+    const result = await this.pool.query<{ id: string }>(
+      "select id from hexfortia.matches where $1 = any(player_ids) and not (data->'finishedBy' @> to_jsonb(array[$1]::text[])) order by created_at desc limit 1",
+      [playerId],
+    );
+    return result.rows[0]?.id ?? null;
+  }
+
   async rankingData(mode: import('../src/ranking-contracts.js').RankingMode) {
     const [accounts, players, matches] = await Promise.all([
       this.pool.query<{ id: string; profile: string | null; progression: string | null }>(
@@ -83,11 +91,11 @@ function transaction(client: PoolClient): OnlineTransaction {
         [id, save.revision, save.data],
       );
     },
-    async player(id) {
+    async player(id, lock = true) {
       return (
         (
           await rows<OnlinePlayer>(
-            'select id, name, elo, played from hexfortia.players where id = $1 for update',
+            `select id, name, elo, played from hexfortia.players where id = $1${lock ? ' for update' : ''}`,
             [id],
           )
         )[0] ?? null

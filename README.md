@@ -76,7 +76,7 @@ Los selectores comparten `GameSelect`, basado en React Select con `unstyled` y `
 
 El [sistema de diseño](docs/design-system.md) reúne botones, campos, validación y controles compuestos con Radix UI en `src/app/components/ui/`. Los componentes son independientes de la sesión de juego y comparten tokens, foco y preferencias de accesibilidad. Con `pnpm dev`, el [catálogo de desarrollo](http://localhost:5173/design-system.html) permite probar sus estados e interacciones; no se incluye como entrada del build de producción. `pnpm test:design-system` comprueba el catálogo en navegador.
 
-**Batalla en línea** abre Buscar partida y Partida privada. La búsqueda pública se inicia con un clic: bando aleatorio, Fortaleza de 1 vida, turnos de 30 segundos, tiempo total sin límite y Frente clásico. Las privadas permiten personalizar las reglas. Para emparejar y jugar entre dispositivos hay que activar el servidor y Supabase siguiendo la [guía](docs/multijugador.md). El formato de guardados locales se conserva.
+**Batalla en línea** abre Buscar partida y Partida privada. La búsqueda pública se inicia con un clic: bando aleatorio, Fortaleza de 1 vida, turnos de 90 segundos, tiempo total sin límite y Frente clásico. Las privadas permiten personalizar las reglas. Para emparejar y jugar entre dispositivos hay que activar el servidor y Supabase siguiendo la [guía](docs/multijugador.md). El formato de guardados locales se conserva.
 
 ## Modos y datos
 

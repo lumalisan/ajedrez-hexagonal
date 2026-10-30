@@ -16,6 +16,15 @@ export class MemoryOnlineRepository implements OnlineRepository {
   matches = new Map<string, OnlineMatch>();
   private pending: Promise<unknown> = Promise.resolve();
 
+  async activeMatchId(playerId: string): Promise<string | null> {
+    await this.pending;
+    return (
+      [...this.matches.values()].find(
+        (match) => match.players.includes(playerId) && !match.finishedBy.includes(playerId),
+      )?.id ?? null
+    );
+  }
+
   async rankingData() {
     await this.pending;
     return structuredClone({

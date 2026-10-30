@@ -32,7 +32,7 @@ import {
 } from '../achievements';
 import { participantLabel, participantColor } from '../factions';
 import { createClassicConfig } from '../game-config';
-import { createOnlineClient } from '../online-client';
+import { createOnlineClient, OnlineRequestError } from '../online-client';
 import { fetchRanking } from '../ranking-client';
 import type { RankingClient, RankingQuery } from '../ranking-contracts';
 import type { OnlineClient, OnlineRequest, OnlineState } from '../online-contracts';
@@ -149,6 +149,12 @@ export function createGameSession(
   let onlineAbort: AbortController | null = null;
   let onlineEpoch = 0;
   let onlineTask: Promise<void> = Promise.resolve();
+  let onlinePollTask: Promise<void> | null = null;
+  let onlineSubmissionTask: Promise<void> | null = null;
+  let onlineFailures = 0;
+  let onlineAuthenticationRequired = false;
+  let onlineReceivedAt = 0;
+  let onlineDisplaySecond = -1;
   let onlineCancellation: { leave: boolean } | null = null;
   const preferences = loadPreferences();
   let profile = loadUserProfile();
@@ -301,7 +307,7 @@ export function createGameSession(
       animating,
       gameMode,
       matchConfig,
-      matchRecord,
+      matchRecord: displayMatchRecord(),
       activeScenario,
       scenarioProgress,
       scenarioHintsRevealed,
@@ -458,7 +464,10 @@ export function createGameSession(
     if (
       onlineState.status === 'searching' ||
       onlineState.status === 'private-waiting' ||
-      currentDialog?.kind === 'online-search'
+      currentDialog?.kind === 'online-search' ||
+      (onlineBusy &&
+        (currentDialog?.kind === 'private-join' ||
+          (currentDialog?.kind === 'config' && currentDialog.mode === 'private')))
     ) {
       void requestOnline({ kind: 'cancel' }, true);
       return;
@@ -1506,7 +1515,17 @@ export function createGameSession(
   }
 
   function tickActiveClock(): void {
-    if (gameMode === 'online') return;
+    if (gameMode === 'online') {
+      const clock = displayMatchRecord()?.clock;
+      if (!clock || state.outcome || replayCursor !== null || document.visibilityState === 'hidden')
+        return;
+      const second = Math.ceil(activeClockRemainingMs(clock) / 1_000);
+      if (second !== onlineDisplaySecond) {
+        onlineDisplaySecond = second;
+        renderClockDisplay();
+      }
+      return;
+    }
     if (
       !matchController?.record.clock ||
       isHomeScreenActive() ||
@@ -2297,6 +2316,38 @@ export function createGameSession(
     );
   }
 
+  // Estimate the display only. The server owns deadlines, automatic turns and results.
+  function displayMatchRecord(): MatchRecord | null {
+    const clock = matchRecord?.clock;
+    if (
+      !matchRecord ||
+      gameMode !== 'online' ||
+      onlineState.status !== 'playing' ||
+      replayCursor !== null ||
+      state.outcome ||
+      !clock ||
+      clock.status !== 'running' ||
+      clock.lastTickAt === null
+    )
+      return matchRecord;
+    const elapsed = Math.min(
+      activeClockRemainingMs(clock),
+      Math.max(0, onlineState.serverNow - clock.lastTickAt + performance.now() - onlineReceivedAt),
+    );
+    const remainingMs: [number, number] = [...clock.remainingMs];
+    if (clock.initialMs !== null) remainingMs[clock.activePlayer] -= elapsed;
+    return {
+      ...matchRecord,
+      clock: {
+        ...clock,
+        remainingMs,
+        ...(clock.turnRemainingMs == null
+          ? {}
+          : { turnRemainingMs: clock.turnRemainingMs - elapsed }),
+      },
+    };
+  }
+
   function stopOnline(): void {
     onlineEpoch++;
     onlineAbort?.abort();
@@ -2307,13 +2358,24 @@ export function createGameSession(
     onlineBusy = false;
     onlineError = null;
     onlineCancellation = null;
+    onlineTask = Promise.resolve();
+    onlinePollTask = null;
+    onlineSubmissionTask = null;
+    onlineFailures = 0;
+    onlineAuthenticationRequired = false;
+    onlineDisplaySecond = -1;
   }
 
   function requestOnline(request: OnlineRequest, leave = false): Promise<void> {
+    if (disposed) return Promise.resolve();
+    if (request.kind === 'state' && onlinePollTask) return onlinePollTask;
+    if (request.kind === 'state' && onlineSubmissionTask) return onlineSubmissionTask;
     if (request.kind === 'cancel' && onlineCancellation) {
       onlineCancellation.leave ||= leave;
       return onlineTask;
     }
+    const submission = request.kind !== 'state' && request.kind !== 'cancel';
+    if (submission && onlineSubmissionTask) return onlineSubmissionTask;
     const cancellation = request.kind === 'cancel' ? { leave } : null;
     if (cancellation) onlineCancellation = cancellation;
     const epoch = onlineEpoch;
@@ -2337,12 +2399,21 @@ export function createGameSession(
       if (onlineTimer !== null) clearTimeout(onlineTimer);
       onlineTimer = null;
       onlineAbort = new AbortController();
-      onlineBusy = true;
-      onlineError = null;
+      // Background match checks keep the last confirmed position interactive.
+      // Requests still run serially; only submissions and initial connections block controls.
+      onlineBusy =
+        Boolean(onlineSubmissionTask || onlineCancellation) ||
+        request.kind !== 'state' ||
+        onlineState.status === 'idle';
       render();
+      let retryDelay = 1_000;
       try {
         const next = await onlineClient.request(request, onlineAbort.signal);
         if (disposed || epoch !== onlineEpoch) return;
+        onlineError = null;
+        onlineFailures = 0;
+        onlineAuthenticationRequired = false;
+        onlineReceivedAt = performance.now();
         await applyOnlineState(next);
         if (cancellation && !cancellation.leave && next.status === 'idle')
           currentDialog = { kind: 'online' };
@@ -2354,30 +2425,48 @@ export function createGameSession(
           }
         }
       } catch (error) {
-        if (!disposed && epoch === onlineEpoch)
+        if (!disposed && epoch === onlineEpoch) {
+          onlineFailures++;
+          onlineAuthenticationRequired =
+            error instanceof OnlineRequestError && error.statusCode === 401;
+          retryDelay =
+            error instanceof OnlineRequestError && error.statusCode === 409
+              ? 0
+              : Math.max(
+                  Math.min(15_000, 3_000 * 2 ** Math.min(onlineFailures - 1, 3)),
+                  error instanceof OnlineRequestError ? error.retryAfterMs : 0,
+                );
           onlineError =
             error instanceof Error
               ? error.message
               : 'No se ha podido conectar. Inténtalo de nuevo.';
+        }
       } finally {
         if (!disposed && epoch === onlineEpoch) {
-          onlineBusy = false;
           onlineAbort = null;
-          render();
           if (onlineState.status !== 'idle' && (onlineState.status !== 'playing' || !state.outcome))
-            onlineTimer = setTimeout(
-              () => {
-                void requestOnline({ kind: 'state' });
-              },
-              onlineError ? 3_000 : 1_000,
-            );
+            onlineTimer = setTimeout(() => {
+              void requestOnline({ kind: 'state' });
+            }, retryDelay);
         }
       }
     });
-    onlineTask = operation.finally(() => {
+    const task = operation.finally(() => {
+      if (disposed || epoch !== onlineEpoch) return;
+      if (onlinePollTask === task) onlinePollTask = null;
+      if (onlineSubmissionTask === task) onlineSubmissionTask = null;
       if (cancellation && onlineCancellation === cancellation) onlineCancellation = null;
+      onlineBusy = Boolean(onlineSubmissionTask || onlineCancellation);
+      render();
     });
-    return onlineTask;
+    onlineTask = task;
+    if (request.kind === 'state') onlinePollTask = task;
+    if (submission) onlineSubmissionTask = task;
+    if (submission || cancellation || onlineState.status === 'idle') {
+      onlineBusy = true;
+      render();
+    }
+    return task;
   }
 
   async function applyOnlineState(next: OnlineState): Promise<void> {
@@ -2385,13 +2474,30 @@ export function createGameSession(
     const previous = onlineState;
     onlineState = next;
     if (next.status !== 'playing') {
+      if (next.status === 'idle' && previous.status !== 'idle') {
+        if (gameMode === 'online') {
+          gameMode = null;
+          showHomeScreen();
+        } else if (!onlineCancellation) {
+          currentDialog = { kind: 'online' };
+          onlineError =
+            previous.status === 'private-waiting'
+              ? 'El código ha caducado. Crea otra partida privada para compartir un código nuevo.'
+              : 'La búsqueda ha terminado. Puedes volver a buscar partida.';
+        }
+      }
       render();
       return;
     }
     const entering =
       gameMode !== 'online' || previous.status !== 'playing' || previous.matchId !== next.matchId;
-    const changed =
+    const updated =
       entering || previous.status !== 'playing' || previous.revision !== next.revision;
+    const changed =
+      entering ||
+      !matchRecord ||
+      matchRecord.currentAction !== next.record.currentAction ||
+      JSON.stringify(matchRecord.conclusion) !== JSON.stringify(next.record.conclusion);
     const before = state;
     const events: GameEvent[] = [];
     if (!entering && matchRecord && next.record.actions.length > matchRecord.actions.length) {
@@ -2419,10 +2525,14 @@ export function createGameSession(
     matchRecord = next.record;
     matchConfig = next.record.config;
     if (entering) registerCurrentAchievementMatch();
-    matchController = new MatchController(next.record);
-    state = matchController.store.getState().game;
-    progression = { ...progression, ratings: { ...progression.ratings, online: next.elo } };
-    savePlayerProgression(progression);
+    if (updated) {
+      matchController = new MatchController(next.record);
+      state = matchController.store.getState().game;
+    }
+    if (progression.ratings.online !== next.elo) {
+      progression = { ...progression, ratings: { ...progression.ratings, online: next.elo } };
+      savePlayerProgression(progression);
+    }
     if (next.drawOffer != null && next.drawOffer !== next.player && !state.outcome) {
       if (previous.status !== 'playing' || previous.drawOffer !== next.drawOffer)
         currentDialog = { kind: 'blockade' };
@@ -2480,6 +2590,10 @@ export function createGameSession(
       void requestOnline({ kind: 'cancel' });
     },
     resumeOnline() {
+      if (onlineAuthenticationRequired && options.onAccountRequired) {
+        options.onAccountRequired();
+        return;
+      }
       void requestOnline({ kind: 'state' });
     },
     openDialog,
@@ -2723,13 +2837,16 @@ export function createGameSession(
     acceptBlockade,
     offerDraw() {
       if (gameMode === 'online' && onlineState.status === 'playing') {
+        if (onlineBusy || state.outcome || onlineState.drawOffer != null) return;
+        const epoch = onlineEpoch;
         currentDialog = null;
         void requestOnline({
           kind: 'offer-draw',
           matchId: onlineState.matchId,
           revision: onlineState.revision,
         }).then(() => {
-          if (!disposed && !onlineError) showToast('Propuesta de tablas enviada al rival.');
+          if (!disposed && epoch === onlineEpoch && !onlineError)
+            showToast('Propuesta de tablas enviada al rival.');
         });
       } else openDialog({ kind: 'blockade' });
     },
@@ -2837,6 +2954,10 @@ export function createGameSession(
       const options = { capture: true, signal: lifecycle.signal };
       window.addEventListener('pointerdown', activateAudio, options);
       window.addEventListener('keydown', activateAudio, options);
+      const reconnect = (): void => {
+        if (onlineState.status !== 'idle' && !state.outcome) void requestOnline({ kind: 'state' });
+      };
+      window.addEventListener('online', reconnect, options);
       window.addEventListener(
         'visibilitychange',
         () => {
@@ -2856,8 +2977,10 @@ export function createGameSession(
           } else if (achievementQueue.length && achievementTimer === null) {
             showNextAchievement();
           }
-          if (document.visibilityState !== 'hidden')
+          if (document.visibilityState !== 'hidden') {
+            reconnect();
             acceptProgression(recordActivity(progression, new Date().toISOString()));
+          }
         },
         options,
       );

@@ -22,6 +22,7 @@ import { ProfileDialog } from './profile-dialog';
 import { StoryDialog } from './story-dialog';
 import { RankingDialog } from './ranking-dialog';
 import { MatchClockNotice } from '../components/match-clock-notice';
+import { OnlineAvailability } from './online-dialogs';
 
 const CONFIRMATION_OPTIONS: readonly {
   value: GamePreferences['confirmation'];
@@ -219,13 +220,15 @@ function ConfirmationDialog({
   danger?: boolean;
   children: ReactNode;
 }) {
-  const { commands } = useGame();
+  const { commands, snapshot } = useGame();
+  const online = snapshot.gameMode === 'online';
   return (
     <>
       {icon && <div className="dialog-icon">{icon}</div>}
       <span className="eyebrow">{eyebrow}</span>
       <h2>{title}</h2>
       {children}
+      {online && <OnlineAvailability />}
       <div className="dialog-actions">
         <Button type="button" variant="secondary" data-dialog-close onClick={commands.closeDialog}>
           {cancelLabel}
@@ -235,6 +238,7 @@ function ConfirmationDialog({
           variant={danger ? 'danger' : 'primary'}
           {...{ [confirmAttribute]: true }}
           onClick={onConfirm}
+          loading={online && snapshot.online.busy}
         >
           {confirmLabel}
         </Button>

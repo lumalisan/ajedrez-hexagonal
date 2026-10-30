@@ -255,8 +255,8 @@ export function SelectionSummary() {
   const piece = selectedId ? getPiece(state, selectedId) : undefined;
   const text = state.outcome
     ? outcomeText(state.outcome)
-    : snapshot.gameMode === 'online' && snapshot.online.error
-      ? snapshot.online.error
+    : snapshot.gameMode === 'online' && snapshot.online.busy
+      ? 'Enviando solicitud al servidor…'
       : snapshot.gameMode === 'online' &&
           snapshot.online.state.status === 'playing' &&
           snapshot.online.state.player !== state.activePlayer
@@ -647,7 +647,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
     state.outcome ||
     snapshot.isMachineTurn ||
     (snapshot.online.state.status === 'playing' &&
-      (snapshot.online.state.player !== state.activePlayer || snapshot.online.busy))
+      snapshot.online.state.player !== state.activePlayer)
   )
     return (
       <div className="control-section muted-section">
@@ -753,7 +753,7 @@ function ActionControls({ piece, legalActions }: { piece?: Piece; legalActions: 
 function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: GameAction[] }) {
   const { guided, actionAllowed, step } = useTutorialControls();
   const {
-    snapshot: { state, pendingAction: action, animating },
+    snapshot: { state, pendingAction: action, animating, online },
     commands,
   } = useGame();
   const cannon =
@@ -809,7 +809,7 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
               type="button"
               className="secondary-button cancel-selection"
               id="cancel-selection"
-              disabled={animating}
+              disabled={animating || online.busy}
               onClick={commands.cancelDraft}
             >
               Cancelar
@@ -817,7 +817,8 @@ function PendingCard({ piece, legalActions }: { piece?: Piece; legalActions: Gam
             <button
               type="button"
               className="confirm-button"
-              disabled={animating || !actionAllowed(action)}
+              disabled={animating || online.busy || !actionAllowed(action)}
+              aria-busy={online.busy || undefined}
               data-tutorial-highlight={
                 (guided || ['10.3', '10.4', '10.5'].includes(step?.id ?? '')) &&
                 actionAllowed(action)
@@ -897,7 +898,14 @@ export function CommandPanel() {
       >
         <PieceCard piece={piece} />
         <div id="action-controls" className="action-controls">
-          <ActionControls piece={piece} legalActions={legalActions} />
+          <fieldset
+            disabled={snapshot.online.busy}
+            aria-label="Órdenes de la unidad"
+            aria-busy={snapshot.online.busy || undefined}
+            className="m-0 min-w-0 border-0 p-0"
+          >
+            <ActionControls piece={piece} legalActions={legalActions} />
+          </fieldset>
         </div>
         <PendingCard piece={piece} legalActions={legalActions} />
         <TutorialCommandArrow panelRef={panelRef} />

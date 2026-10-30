@@ -41,10 +41,20 @@ export async function createOnlineApp(options: {
     requestTimeout: 15_000,
     trustProxy: options.trustProxy ?? false,
   });
-  await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  await app.register(rateLimit, { global: false, max: 300, timeWindow: '1 minute' });
+  const verifiedPlayers = new WeakMap<FastifyRequest, string>();
+  const playerLimit = app.createRateLimit({
+    keyGenerator: (request) => `player:${verifiedPlayers.get(request)}`,
+  });
+  const authFailureLimit = app.createRateLimit({
+    max: 60,
+    keyGenerator: (request) => `auth:${request.ip}`,
+  });
   app.setErrorHandler((error, request, reply) => {
-    if (error instanceof OnlineError)
+    if (error instanceof OnlineError) {
+      if (error.retryAfterSeconds > 0) reply.header('Retry-After', error.retryAfterSeconds);
       return reply.code(error.statusCode).send({ error: error.message });
+    }
     if (
       error instanceof Error &&
       'statusCode' in error &&
@@ -94,8 +104,26 @@ export async function createOnlineApp(options: {
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Bearer ') || authorization.length > 8192)
       throw new OnlineError('Inicia sesión para jugar en línea.', 401);
+    const failures = await authFailureLimit(request, { increment: false });
+    if (!failures.isAllowed && failures.isExceeded)
+      throw new OnlineError(
+        'Demasiados intentos de acceso. Espera un minuto y reintenta.',
+        429,
+        failures.ttlInSeconds,
+      );
     const user = await options.authenticate(authorization.slice(7));
-    if (!user) throw new OnlineError('La sesión ha caducado. Vuelve a intentarlo.', 401);
+    if (!user) {
+      await authFailureLimit(request);
+      throw new OnlineError('La sesión ha caducado. Vuelve a intentarlo.', 401);
+    }
+    verifiedPlayers.set(request, user.id);
+    const limit = await playerLimit(request);
+    if (!limit.isAllowed && limit.isExceeded)
+      throw new OnlineError(
+        'Demasiadas solicitudes. Espera un momento y reintenta.',
+        429,
+        limit.ttlInSeconds,
+      );
     return user;
   }
   app.post('/api/online', async (request, reply) => {

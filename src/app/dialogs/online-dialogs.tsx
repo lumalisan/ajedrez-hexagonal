@@ -18,7 +18,10 @@ export function OnlineAvailability({ retrySearch = false }: { retrySearch?: bool
         <div role="alert" className="mt-4 text-sm leading-relaxed text-danger">
           <p>{snapshot.online.error}</p>
           {snapshot.online.available && (
-            <Button onClick={retrySearch ? commands.startOnlineSearch : commands.resumeOnline}>
+            <Button
+              disabled={snapshot.online.busy}
+              onClick={retrySearch ? commands.startOnlineSearch : commands.resumeOnline}
+            >
               Reintentar conexión
             </Button>
           )}

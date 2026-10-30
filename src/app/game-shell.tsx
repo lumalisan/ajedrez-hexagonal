@@ -13,6 +13,7 @@ import { ReplayDock } from './replay-dock';
 import { SettingsIcon, SoundButton, WarningIcon } from './shell-icons';
 import { AchievementsMenuIcon } from './components/achievement-icon';
 import { TutorialPanel } from './tutorial-panel';
+import { Button } from './components/ui/button';
 
 function Header() {
   const { snapshot, commands } = useGame();
@@ -72,7 +73,12 @@ function Header() {
           type="button"
           aria-label="Proponer tablas"
           title="Proponer tablas"
-          disabled={disabled || gameMode === 'machine' || snapshot.online.busy}
+          disabled={
+            disabled ||
+            gameMode === 'machine' ||
+            snapshot.online.busy ||
+            (snapshot.online.state.status === 'playing' && snapshot.online.state.drawOffer != null)
+          }
           hidden={gameMode === 'machine' || Boolean(activeScenario) || Boolean(snapshot.tutorial)}
           onClick={() => commands.openDialog({ kind: 'draw-offer' })}
         >
@@ -89,7 +95,7 @@ function Header() {
             type="button"
             aria-label="Rendirse"
             title="Rendirse"
-            disabled={!matchRecord || disabled}
+            disabled={!matchRecord || disabled || (gameMode === 'online' && snapshot.online.busy)}
             onClick={() => commands.openDialog({ kind: 'resign' })}
           >
             <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -100,6 +106,7 @@ function Header() {
             className="menu-button"
             id="new-game-button"
             type="button"
+            disabled={gameMode === 'online' && snapshot.online.busy}
             onClick={() =>
               snapshot.tutorial
                 ? commands.exitTutorial()
@@ -280,6 +287,37 @@ function BoardLegend() {
   );
 }
 
+function OnlineConnectionNotice() {
+  const { snapshot, commands } = useGame();
+  if (snapshot.gameMode !== 'online' || snapshot.state.outcome) return null;
+  const online = snapshot.online;
+  const offered =
+    online.state.status === 'playing' && online.state.drawOffer === online.state.player;
+  if (!online.error && !offered) return null;
+  return (
+    <div
+      data-online-connection
+      role="status"
+      aria-atomic="true"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-solid border-line-strong bg-panel px-4 py-3 text-sm leading-relaxed text-ink"
+    >
+      <div className="min-w-0 flex-1 basis-60">
+        <p className="m-0 break-words">
+          {online.error ?? 'Has propuesto tablas. Esperando la respuesta del rival.'}
+        </p>
+        {online.error && snapshot.matchRecord?.clock?.status === 'running' && (
+          <p className="mb-0 mt-1 text-muted">Los relojes siguen corriendo en el servidor.</p>
+        )}
+      </div>
+      {online.error && (
+        <Button size="compact" disabled={online.busy} onClick={commands.resumeOnline}>
+          Reintentar conexión
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function GameShell() {
   const { snapshot } = useGame();
   const { homeView, replayCursor } = snapshot;
@@ -292,7 +330,10 @@ export function GameShell() {
       <Header />
       <main className="game-layout" inert={homeView !== null}>
         <section className="board-stage" aria-label="Tablero de juego">
-          <BoardToolbar />
+          <div hidden={homeView !== null}>
+            <OnlineConnectionNotice />
+            <BoardToolbar />
+          </div>
           <div className="board-arena" id="board-arena">
             <TutorialPanel />
             <BoardCanvas />

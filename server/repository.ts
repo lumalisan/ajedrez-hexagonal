@@ -33,7 +33,7 @@ export interface OnlineMatch {
 export interface OnlineTransaction {
   account(id: string): Promise<Omit<CloudSave, 'elo'> | null>;
   saveAccount(id: string, save: Omit<CloudSave, 'elo'>): Promise<void>;
-  player(id: string): Promise<OnlinePlayer | null>;
+  player(id: string, lock?: boolean): Promise<OnlinePlayer | null>;
   savePlayer(player: OnlinePlayer): Promise<void>;
   queue(): Promise<QueueEntry[]>;
   saveTicket(ticket: QueueEntry): Promise<void>;
@@ -47,6 +47,7 @@ export interface OnlineTransaction {
 }
 
 export interface OnlineRepository {
+  activeMatchId(playerId: string): Promise<string | null>;
   rankingData(mode: import('../src/ranking-contracts.js').RankingMode): Promise<{
     accounts: Array<{ id: string; profile: string | null; progression: string | null }>;
     players: OnlinePlayer[];

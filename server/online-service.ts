@@ -22,6 +22,7 @@ export class OnlineError extends Error {
   constructor(
     message: string,
     readonly statusCode = 400,
+    readonly retryAfterSeconds = 0,
   ) {
     super(message);
   }
@@ -51,8 +52,21 @@ export class OnlineService {
     request: OnlineRequest,
     publicAllowed = true,
   ): Promise<OnlineState> {
+    validateRequest(request);
     if (!publicAllowed && request.kind === 'search')
       throw new OnlineError('Inicia sesión con una cuenta para buscar partida.', 403);
+    if (request.kind === 'state') {
+      const matchId = await this.repository.activeMatchId(playerId);
+      if (matchId)
+        return this.repository.transaction(`match:${matchId}`, async (tx) => {
+          const match = await tx.match(matchId);
+          // Another tab may have acknowledged the result after the lookup.
+          if (!match || !match.players.includes(playerId) || match.finishedBy.includes(playerId))
+            return { status: 'idle' };
+          await this.advance(tx, match);
+          return this.matchState(tx, match, playerId);
+        });
+    }
     if (
       request.kind === 'action' ||
       request.kind === 'resign' ||
@@ -60,12 +74,14 @@ export class OnlineService {
       request.kind === 'offer-draw' ||
       request.kind === 'respond-draw'
     ) {
-      if (typeof request.matchId !== 'string' || !/^[0-9a-f-]{36}$/i.test(request.matchId))
-        throw new OnlineError('Partida no válida.');
       return this.repository.transaction(`match:${request.matchId}`, async (tx) => {
         const match = await tx.match(request.matchId);
         if (!match || !match.players.includes(playerId))
           throw new OnlineError('No perteneces a esta partida.', 403);
+        if (match.finishedBy.includes(playerId)) {
+          if (request.kind === 'finish') return { status: 'idle' };
+          throw new OnlineError('Ya has salido de esta partida.', 409);
+        }
         await this.advance(tx, match);
         const controller = new MatchController(match.record);
         const state = controller.store.getState().game;
@@ -76,6 +92,7 @@ export class OnlineService {
           await tx.saveMatch(match);
           return { status: 'idle' };
         }
+        if (request.kind === 'resign' && state.outcome) return this.matchState(tx, match, playerId);
         if (request.kind === 'offer-draw' || request.kind === 'respond-draw') {
           if (state.outcome || request.revision !== match.revision)
             throw new OnlineError('La partida ha cambiado. Actualiza la posición.', 409);
@@ -130,13 +147,11 @@ export class OnlineService {
           player = { id: playerId, name: 'Jugador', elo: 1000, played: 0 };
           await tx.savePlayer(player);
         }
-        if ('name' in request) {
-          if (
-            typeof request.name !== 'string' ||
-            !request.name.trim() ||
-            request.name.trim().length > 40
-          )
-            throw new OnlineError('El nombre debe tener entre 1 y 40 caracteres.');
+        if (
+          request.kind === 'search' ||
+          request.kind === 'create-private' ||
+          request.kind === 'join-private'
+        ) {
           player.name = request.name.trim();
           await tx.savePlayer(player);
         }
@@ -182,7 +197,7 @@ export class OnlineService {
               'No existe una sala disponible con ese código o ha caducado.',
               404,
             );
-          const creator = await tx.player(room.creatorId);
+          const creator = await tx.player(room.creatorId, false);
           if (!creator || (await tx.activeMatch(creator.id)))
             throw new OnlineError('La sala ya no está disponible.', 409);
           const settings = room.settings;
@@ -233,7 +248,7 @@ export class OnlineService {
             await tx.removeTicket(other.playerId);
             continue;
           }
-          const opponent = await tx.player(other.playerId);
+          const opponent = await tx.player(other.playerId, false);
           if (!opponent) continue;
           const match = this.createMatch([player, opponent], settings, true);
           await tx.saveMatch(match);
@@ -309,6 +324,7 @@ export class OnlineService {
   private async advance(tx: OnlineTransaction, match: OnlineMatch): Promise<void> {
     if (match.settled) return;
     const controller = new MatchController(match.record);
+    if (!match.record.clock && !controller.store.getState().game.outcome) return;
     const now = this.now();
     // Charge missed deadlines after downtime, rather than granting fresh time on reconnect.
     while (!controller.store.getState().game.outcome) {
@@ -374,7 +390,7 @@ export class OnlineService {
       player: match.players.indexOf(id) as 0 | 1,
       revision: match.revision,
       record: match.record,
-      elo: (await tx.player(id))?.elo ?? 1000,
+      elo: (await tx.player(id, false))?.elo ?? 1000,
       serverNow: this.now(),
       drawOffer: match.drawOffer ?? null,
     };
@@ -393,4 +409,62 @@ function canonicalAction(legal: GameAction[], value: unknown): GameAction | null
   } catch {
     return null;
   }
+}
+
+/** Validate before acquiring database locks, including calls outside the HTTP adapter. */
+function validateRequest(request: OnlineRequest): void {
+  if (
+    !request ||
+    typeof request !== 'object' ||
+    Array.isArray(request) ||
+    ![
+      'state',
+      'search',
+      'create-private',
+      'join-private',
+      'cancel',
+      'action',
+      'offer-draw',
+      'respond-draw',
+      'resign',
+      'finish',
+    ].includes(request.kind)
+  )
+    throw new OnlineError('Solicitud no válida.');
+  if (
+    request.kind === 'search' ||
+    request.kind === 'create-private' ||
+    request.kind === 'join-private'
+  ) {
+    if (typeof request.name !== 'string' || !request.name.trim() || request.name.trim().length > 40)
+      throw new OnlineError('El nombre debe tener entre 1 y 40 caracteres.');
+  }
+  if (
+    'matchId' in request &&
+    (typeof request.matchId !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.matchId))
+  )
+    throw new OnlineError('Partida no válida.');
+  if (
+    ['action', 'offer-draw', 'respond-draw', 'resign', 'finish'].includes(request.kind) &&
+    !('matchId' in request)
+  )
+    throw new OnlineError('Partida no válida.');
+  if (
+    request.kind === 'action' ||
+    request.kind === 'offer-draw' ||
+    request.kind === 'respond-draw'
+  ) {
+    if (!Number.isSafeInteger(request.revision) || request.revision < 0)
+      throw new OnlineError('Revisión no válida.');
+  }
+  if (request.kind === 'respond-draw' && typeof request.accept !== 'boolean')
+    throw new OnlineError('Respuesta no válida.');
+  if (request.kind === 'create-private' && !validPrivateSettings(request.settings))
+    throw new OnlineError('Configuración privada no válida.');
+  if (
+    request.kind === 'join-private' &&
+    (typeof request.code !== 'string' || !validPrivateCode(request.code))
+  )
+    throw new OnlineError('Introduce un código de seis cifras.');
 }

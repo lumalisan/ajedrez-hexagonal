@@ -307,7 +307,7 @@ try {
       await menu(first);
       assert.equal(await first.locator('.online-account-requirement').count(), 0);
       const modeCards = first.locator('[data-online-mode]');
-      assert.equal(await modeCards.count(), 2);
+      assert.equal(await modeCards.count(), 3);
       for (const card of await modeCards.all()) {
         const positions = await card.evaluate((element) => {
           const icon = element.querySelector('svg')!.getBoundingClientRect();
@@ -394,9 +394,11 @@ try {
       }
       await first.getByRole('heading', { name: 'Batalla en línea', exact: true }).waitFor();
       await first.unroute('**/api/online');
-      await first.getByRole('button', { name: /^Partida privada/ }).click();
+      await first.locator('[data-online-mode="private-join"]').click();
       await first.getByRole('button', { name: 'Unirse a partida privada', exact: true }).click();
       await first.getByText('Introduce un código de seis cifras.', { exact: true }).waitFor();
+      await first.getByRole('button', { name: 'Volver', exact: true }).click();
+      await first.locator('[data-online-mode="private"]').click();
       await inspect(first, `${name}-private-configuration`);
       await first.getByRole('button', { name: 'Crear partida privada', exact: true }).click();
       await first.getByRole('heading', { name: 'Esperando rival…' }).waitFor();
@@ -447,13 +449,16 @@ try {
       await second.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
       await signIn(second);
       await menu(second);
-      await second.getByRole('button', { name: /^Partida privada/ }).click();
+      await second.locator('[data-online-mode="private-join"]').click();
       await second.getByRole('textbox', { name: 'Código de la partida' }).fill(code);
       await second.getByRole('button', { name: 'Unirse a partida privada', exact: true }).click();
       await Promise.all(
         [first, second].map((page) => page.locator('#home-screen').waitFor({ state: 'hidden' })),
       );
-      assert.equal(repository.matches.size, identity / 2);
+      assert.equal(
+        [...repository.matches.values()].filter((match) => !match.ranked).length,
+        identity / 2,
+      );
       for (const page of [first, second])
         await page
           .getByRole('button', { name: 'Proponer tablas', exact: true })
@@ -468,8 +473,94 @@ try {
         await canvas.press('u');
         if (await actor.locator('[data-command="rotate"]').isVisible()) break;
       }
-      await actor.locator('[data-command="rotate"]').click();
-      await actor.locator('[data-direction-order]:enabled').first().click();
+      let releaseMatchPoll!: () => void;
+      let signalMatchPoll!: () => void;
+      const matchPollGate = new Promise<void>((resolve) => {
+        releaseMatchPoll = resolve;
+      });
+      const matchPollStarted = new Promise<void>((resolve) => {
+        signalMatchPoll = resolve;
+      });
+      await actor.route('**/api/online', async (route) => {
+        if (route.request().postDataJSON()?.kind === 'state') {
+          signalMatchPoll();
+          await matchPollGate;
+        }
+        await route.continue();
+      });
+      const matchPollFinished = actor.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/online') &&
+          response.request().postDataJSON()?.kind === 'state',
+      );
+      try {
+        await matchPollStarted;
+        assert(
+          await actor.getByRole('button', { name: 'Proponer tablas', exact: true }).isEnabled(),
+          'Draw offers must remain available during match polling.',
+        );
+        assert(
+          await actor.locator('[data-command="rotate"]').isVisible(),
+          'The selected unit must keep its command panel during match polling.',
+        );
+        await actor.locator('[data-command="rotate"]').click();
+        await actor.locator('[data-direction-order]:enabled').first().click();
+        if (screenshotDir)
+          await actor.screenshot({ path: join(screenshotDir, `${name}-match-polling.png`) });
+      } finally {
+        releaseMatchPoll();
+        await matchPollFinished;
+      }
+      await actor.unroute('**/api/online');
+      assert(
+        await actor.getByRole('button', { name: 'Confirmar acción', exact: true }).isEnabled(),
+        'An unchanged polling response must preserve the prepared action.',
+      );
+      // A failed refresh must preserve the draft, and its error must stay visible during retry.
+      await actor.route(
+        '**/api/online',
+        async (route) => {
+          await route.fulfill({ status: 503, json: { error: 'Conexión de prueba interrumpida.' } });
+        },
+        { times: 1 },
+      );
+      const connection = actor.locator('[data-online-connection]');
+      await connection.getByText('Conexión de prueba interrumpida.', { exact: true }).waitFor();
+      assert(
+        await actor.getByRole('button', { name: 'Confirmar acción', exact: true }).isEnabled(),
+      );
+      let releaseRecovery!: () => void;
+      let signalRecovery!: () => void;
+      const recoveryGate = new Promise<void>((resolve) => {
+        releaseRecovery = resolve;
+      });
+      const recoveryStarted = new Promise<void>((resolve) => {
+        signalRecovery = resolve;
+      });
+      await actor.route(
+        '**/api/online',
+        async (route) => {
+          signalRecovery();
+          await recoveryGate;
+          await route.continue();
+        },
+        { times: 1 },
+      );
+      try {
+        await connection.getByRole('button', { name: 'Reintentar conexión' }).click();
+        await recoveryStarted;
+        assert(await connection.isVisible(), 'A retry must not hide its unresolved error.');
+        const arena = await actor.locator('#board-arena').boundingBox();
+        assert(arena && arena.height > 300, 'A connection notice must not collapse the board.');
+        if (screenshotDir)
+          await actor.screenshot({ path: join(screenshotDir, `${name}-match-reconnecting.png`) });
+      } finally {
+        releaseRecovery();
+      }
+      await connection.waitFor({ state: 'hidden' });
+      assert(
+        await actor.getByRole('button', { name: 'Confirmar acción', exact: true }).isEnabled(),
+      );
       const synced = observer.waitForResponse(async (response) => {
         if (!response.url().endsWith('/api/online') || response.status() !== 200) return false;
         const value = await response.json();
@@ -485,6 +576,35 @@ try {
           page.locator('[data-new-game]').waitFor({ state: 'visible' }),
         ),
       );
+      await first.locator('[data-new-game]').click();
+      await first.locator('[data-home-action="new"]').waitFor();
+      await second.locator('[data-new-game]').click();
+      await second.locator('[data-home-action="new"]').waitFor();
+
+      // Exercise a ranked match as well as a private one, including a result with no board move.
+      await menu(first);
+      await first.locator('[data-online-mode="public"]').click();
+      await menu(second);
+      await second.locator('[data-online-mode="public"]').click();
+      await Promise.all(
+        [first, second].map((page) => page.locator('#home-screen').waitFor({ state: 'hidden' })),
+      );
+      const ranked = [...repository.matches.values()].at(-1)!;
+      assert(ranked.ranked);
+      await first.locator('#blockade-button').click();
+      await first.locator('[data-confirm-draw-offer]').click();
+      await first
+        .locator('[data-online-connection]')
+        .getByText('Has propuesto tablas. Esperando la respuesta del rival.', { exact: true })
+        .waitFor();
+      assert(await first.locator('#blockade-button').isDisabled());
+      await second.locator('[data-accept-blockade]').click();
+      await Promise.all(
+        [first, second].map((page) =>
+          page.locator('[data-new-game]').waitFor({ state: 'visible' }),
+        ),
+      );
+      assert.equal(replayRecord(repository.matches.get(ranked.id)!.record).outcome?.type, 'draw');
       await first.locator('[data-new-game]').click();
       await first.locator('[data-home-action="new"]').waitFor();
       await first.locator('.home-profile').click();
@@ -516,7 +636,7 @@ try {
       await first.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
       await first.locator('.home-profile').filter({ hasText: 'Perfil en la nube' }).waitFor();
       console.log(
-        `${name}: guest restrictions, signup, login, recovery, cloud save/restore, logout isolation, public search, private multiplayer and Axe passed.`,
+        `${name}: accounts, private and ranked multiplayer, polling, interrupted connection recovery, draw agreement, cloud save/restore and Axe passed.`,
       );
     } finally {
       await Promise.all(contexts.map((context) => context.close()));

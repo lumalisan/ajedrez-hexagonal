@@ -27,6 +27,7 @@ import type { GameAction, GameState, MatchRecord } from '../src/types';
 import { installMemoryStorage } from './helpers/memory-storage';
 import { BASIC_SCENARIOS } from '../src/scenarios';
 import type { OnlineClient, OnlineState } from '../src/online-contracts';
+import { OnlineRequestError } from '../src/online-client';
 
 const collaborators = vi.hoisted(() => ({
   chooseAction: vi.fn<AiStrategy['chooseAction']>(),
@@ -88,6 +89,19 @@ function deferred<T>() {
     resolve = complete;
   });
   return { promise, resolve };
+}
+
+function onlinePosition(): Extract<OnlineState, { status: 'playing' }> {
+  const record = createMatchRecord(createClassicConfig({ mode: 'local' }));
+  return {
+    status: 'playing',
+    matchId: 'match',
+    player: record.initialState.activePlayer,
+    revision: 0,
+    record,
+    elo: 1000,
+    serverNow: Date.now(),
+  };
 }
 
 function rendererDouble() {
@@ -259,6 +273,282 @@ describe('sesión que conecta React con el juego', () => {
     expect(request).toHaveBeenCalledOnce();
   });
 
+  it.each(['ranked', 'private'] as const)(
+    'mantiene selección y órdenes disponibles durante el polling de una partida %s',
+    async (kind) => {
+      const config = createClassicConfig({ mode: 'local' });
+      config.definitionId = `online:${kind}:test`;
+      const record = createMatchRecord(config);
+      const response: OnlineState = {
+        status: 'playing',
+        matchId: 'match',
+        player: replayRecord(record).activePlayer,
+        revision: 0,
+        record,
+        elo: 1000,
+        serverNow: Date.now(),
+      };
+      const poll = deferred<OnlineState>();
+      const submission = deferred<OnlineState>();
+      const request = vi
+        .fn<OnlineClient['request']>()
+        .mockResolvedValueOnce(response)
+        .mockReturnValueOnce(poll.promise)
+        .mockReturnValueOnce(submission.promise);
+      const session = createGameSession({ onlineClient: { request } });
+      sessions.push(session);
+      session.commands.resumeOnline();
+      await vi.advanceTimersByTimeAsync(0);
+      session.commands.updatePreferences({ confirmation: 'always' });
+      const action = rotation(session.getSnapshot().state);
+      session.commands.selectPiece(action.pieceId);
+      const busyStates: boolean[] = [];
+      session.subscribe(() => busyStates.push(session.getSnapshot().online.busy));
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(request.mock.calls.at(-1)?.[0]).toEqual({ kind: 'state' });
+      expect(session.getSnapshot().online.busy).toBe(false);
+      session.commands.setMode({ kind: 'rotate' });
+      session.commands.prepareAction(action);
+      expect(session.getSnapshot()).toMatchObject({
+        selectedId: action.pieceId,
+        mode: { kind: 'rotate' },
+        pendingAction: action,
+      });
+      poll.resolve(response);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.getSnapshot()).toMatchObject({
+        selectedId: action.pieceId,
+        mode: { kind: 'rotate' },
+        pendingAction: action,
+      });
+      expect(busyStates.length).toBeGreaterThan(0);
+      expect(busyStates.every((busy) => !busy)).toBe(true);
+
+      const committed = session.commands.commitPending();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.getSnapshot().online.busy).toBe(true);
+      expect(request.mock.calls.at(-1)?.[0]).toEqual({
+        kind: 'action',
+        matchId: 'match',
+        revision: 0,
+        action,
+      });
+      submission.resolve({
+        ...response,
+        revision: 1,
+        record: appendAction(record, action),
+      });
+      await committed;
+      expect(session.getSnapshot().online.busy).toBe(false);
+      expect(session.getSnapshot().matchRecord?.currentAction).toBe(1);
+      expect(session.getSnapshot().selectedId).toBeNull();
+    },
+  );
+
+  it('agrupa consultas y bloquea envíos duplicados desde que se encolan detrás del polling', async () => {
+    const position = onlinePosition();
+    const poll = deferred<OnlineState>();
+    const submission = deferred<OnlineState>();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockResolvedValueOnce(position)
+      .mockReturnValueOnce(poll.promise)
+      .mockReturnValueOnce(submission.promise);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(1_000);
+    for (let i = 0; i < 10; i++) session.commands.resumeOnline();
+    const action = rotation(session.getSnapshot().state);
+    session.commands.updatePreferences({ confirmation: 'always' });
+    session.commands.selectPiece(action.pieceId);
+    session.commands.prepareAction(action);
+    const commits = Array.from({ length: 10 }, () => session.commands.commitPending());
+    expect(session.getSnapshot().online.busy).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+    poll.resolve(position);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(request.mock.calls[2][0].kind).toBe('action');
+    submission.resolve({ ...position, revision: 1, record: appendAction(position.record, action) });
+    await Promise.all(commits);
+    expect(session.getSnapshot().matchRecord?.currentAction).toBe(1);
+    expect(session.getSnapshot().online.busy).toBe(false);
+  });
+
+  it('conserva el borrador al cambiar solo la propuesta de tablas', async () => {
+    const position = onlinePosition();
+    const request = vi.fn<OnlineClient['request']>().mockResolvedValue(position);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    const action = rotation(session.getSnapshot().state);
+    session.commands.updatePreferences({ confirmation: 'always' });
+    session.commands.selectPiece(action.pieceId);
+    session.commands.setMode({ kind: 'rotate' });
+    session.commands.prepareAction(action);
+    request.mockResolvedValue({ ...position, revision: 1, drawOffer: position.player });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(session.getSnapshot()).toMatchObject({
+      selectedId: action.pieceId,
+      pendingAction: action,
+      mode: { kind: 'rotate' },
+    });
+  });
+
+  it('mantiene el error visible durante la reconexión y no repite una orden rechazada', async () => {
+    const position = onlinePosition();
+    const recovery = deferred<OnlineState>();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockResolvedValueOnce(position)
+      .mockRejectedValueOnce(new OnlineRequestError('La partida ha cambiado.', 409))
+      .mockReturnValueOnce(recovery.promise);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    session.commands.offerDraw();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual([
+      'state',
+      'offer-draw',
+      'state',
+    ]);
+    expect(session.getSnapshot().online).toMatchObject({
+      busy: false,
+      error: 'La partida ha cambiado.',
+    });
+    recovery.resolve(position);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().online.error).toBeNull();
+  });
+
+  it('no deja que una solicitud de una sesión anterior bloquee ni sobrescriba otra partida', async () => {
+    const old = deferred<OnlineState>();
+    const position = onlinePosition();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValue(position);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[0][1].aborted).toBe(true);
+    old.resolve({ ...position, matchId: 'old' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.getSnapshot().online.state).toMatchObject({ matchId: 'match' });
+  });
+
+  it('ofrece iniciar sesión al reintentar después de un 401 sin borrar la partida', async () => {
+    const position = onlinePosition();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockResolvedValueOnce(position)
+      .mockRejectedValue(new OnlineRequestError('La sesión ha caducado.', 401));
+    const onAccountRequired = vi.fn();
+    const session = createGameSession({ onlineClient: { request }, onAccountRequired });
+    sessions.push(session);
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onAccountRequired).not.toHaveBeenCalled();
+    session.commands.resumeOnline();
+    expect(onAccountRequired).toHaveBeenCalledOnce();
+    expect(session.getSnapshot().gameMode).toBe('online');
+    expect(session.getSnapshot().online.state).toMatchObject({ matchId: 'match' });
+  });
+
+  it('cancela una sala privada si se cierra su configuración antes de recibir el código', async () => {
+    const response = deferred<OnlineState>();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockReturnValueOnce(response.promise)
+      .mockResolvedValue({ status: 'idle' });
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.commands.openDialog({ kind: 'config', mode: 'private' });
+    session.commands.createPrivateMatch({
+      faction: 'expansionist',
+      fortressHp: 1,
+      turnSeconds: '',
+      totalSeconds: '',
+      layout: 3,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    session.commands.closeDialog();
+    response.resolve({
+      status: 'private-waiting',
+      code: '123456',
+      expiresAt: Date.now() + 600_000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request.mock.calls.map(([operation]) => operation.kind)).toEqual([
+      'create-private',
+      'cancel',
+    ]);
+    expect(session.getSnapshot().dialog).toBeNull();
+    expect(session.getSnapshot().online.state.status).toBe('idle');
+    expect(session.getSnapshot().online.error).toBeNull();
+  });
+
+  it.each(['searching', 'private-waiting'] as const)(
+    'explica el fin de la espera %s',
+    async (status) => {
+      const waiting: OnlineState =
+        status === 'searching'
+          ? { status, joinedAt: Date.now(), elo: 1000 }
+          : { status, code: '123456', expiresAt: Date.now() + 1_000 };
+      const request = vi
+        .fn<OnlineClient['request']>()
+        .mockResolvedValueOnce(waiting)
+        .mockResolvedValue({ status: 'idle' });
+      const session = createGameSession({ onlineClient: { request } });
+      sessions.push(session);
+      session.commands.startOnlineSearch();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(session.getSnapshot().dialog).toEqual({ kind: 'online' });
+      expect(session.getSnapshot().online.error).toMatch(
+        status === 'searching' ? /búsqueda ha terminado/ : /código ha caducado/,
+      );
+      expect(session.getSnapshot().online.busy).toBe(false);
+    },
+  );
+
+  it('muestra el reloj entre consultas sin resolver vencimientos ni depender de la hora local', async () => {
+    const serverNow = Date.now() - 3_600_000;
+    const controller = new MatchController(
+      createMatchRecord(createClassicConfig({ mode: 'local', turnClockSeconds: 30 })),
+    );
+    controller.resumeClock(serverNow);
+    const position = { ...onlinePosition(), record: controller.record, serverNow };
+    const poll = deferred<OnlineState>();
+    const request = vi
+      .fn<OnlineClient['request']>()
+      .mockResolvedValueOnce(position)
+      .mockReturnValue(poll.promise);
+    const session = createGameSession({ onlineClient: { request } });
+    sessions.push(session);
+    session.start();
+    session.commands.resumeOnline();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(session.getSnapshot().matchRecord?.clock?.turnRemainingMs).toBe(25_000);
+    vi.setSystemTime(Date.now() + 3_600_000);
+    session.commands.focusHex({ q: 0, r: 0 });
+    expect(session.getSnapshot().matchRecord?.clock?.turnRemainingMs).toBe(25_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(session.getSnapshot().matchRecord?.clock?.turnRemainingMs).toBe(0);
+    expect(session.getSnapshot().state.outcome).toBeNull();
+    expect(session.getSnapshot().matchRecord?.currentAction).toBe(0);
+    expect(controller.record.clock?.turnRemainingMs).toBe(30_000);
+  });
+
   it.each([0, 1] as const)(
     'registra estadísticas, logros y XP de una privada para el jugador %s sin alterar Elo',
     async (player) => {
@@ -374,7 +664,7 @@ describe('sesión que conecta React con el juego', () => {
       sessions.push(session);
       session.commands.resumeOnline();
       await vi.advanceTimersByTimeAsync(1_000);
-      expect(session.getSnapshot().online.busy).toBe(true);
+      expect(session.getSnapshot().online.busy).toBe(false);
       session.commands.cancelOnlineWaiting();
       session.commands.cancelOnlineWaiting();
       expect(request).toHaveBeenCalledTimes(2);

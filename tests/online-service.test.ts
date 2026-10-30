@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createOnlineApp } from '../server/app';
 import { OnlineService } from '../server/online-service';
 import { getAllLegalActions } from '../src/engine';
@@ -26,6 +26,62 @@ function privateWaiting(state: OnlineState) {
 }
 
 describe('servicio multijugador con almacenamiento transaccional', () => {
+  it('consulta partidas activas sin bloquear el vestíbulo ni reservar jugadores de lectura', async () => {
+    const repository = new MemoryOnlineRepository();
+    const service = new OnlineService(repository, () => 1000);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    const transaction = vi.spyOn(repository, 'transaction');
+    const results = await Promise.all([a, b].map((id) => service.request(id, { kind: 'state' })));
+    expect(results.map((state) => playing(state).matchId)).toEqual([match.matchId, match.matchId]);
+    expect(transaction.mock.calls.map(([lock]) => lock)).toEqual([
+      `match:${match.matchId}`,
+      `match:${match.matchId}`,
+    ]);
+  });
+
+  it('confirma una sola orden ante dos envíos simultáneos de la misma revisión', async () => {
+    const repository = new MemoryOnlineRepository();
+    const service = new OnlineService(repository, () => 1000);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    const state = replayRecord(match.record);
+    const actor = repository.matches.get(match.matchId)!.players[state.activePlayer];
+    const request = {
+      kind: 'action' as const,
+      matchId: match.matchId,
+      revision: match.revision,
+      action: getAllLegalActions(state)[0],
+    };
+    const results = await Promise.allSettled([
+      service.request(actor, request),
+      service.request(actor, request),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(repository.matches.get(match.matchId)?.record.currentAction).toBe(1);
+  });
+
+  it('no modifica nombres desde consultas y mantiene idempotentes la rendición y la salida', async () => {
+    const repository = new MemoryOnlineRepository();
+    const service = new OnlineService(repository, () => 1000);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const stray = { kind: 'state' as const, name: 'nombre inyectado' };
+    await service.request(a, stray);
+    expect(repository.players.get(a)?.name).toBe('a');
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    const ended = playing(await service.request(a, { kind: 'resign', matchId: match.matchId }));
+    const repeated = playing(await service.request(a, { kind: 'resign', matchId: match.matchId }));
+    expect(repeated.revision).toBe(ended.revision);
+    await service.request(a, { kind: 'finish', matchId: match.matchId });
+    expect(await service.request(a, { kind: 'finish', matchId: match.matchId })).toEqual({
+      status: 'idle',
+    });
+    await expect(service.request(a, { kind: 'resign', matchId: match.matchId })).rejects.toThrow(
+      'Ya has salido',
+    );
+    expect(await service.request(a, { kind: 'state' })).toEqual({ status: 'idle' });
+  });
+
   it.each([true, false])('negocia tablas con el rival (aceptar: %s)', async (accept) => {
     const repository = new MemoryOnlineRepository();
     const service = new OnlineService(repository, () => 1000);
@@ -136,8 +192,8 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
       preferences: legacyTicket.preferences,
     };
     const match = playing(await service.request(b, legacyRequest));
-    expect(match.record.config.options).toMatchObject({ clockSeconds: null, turnClockSeconds: 30 });
-    expect(match.record.clock).toMatchObject({ initialMs: null, turnInitialMs: 30_000 });
+    expect(match.record.config.options).toMatchObject({ clockSeconds: null, turnClockSeconds: 90 });
+    expect(match.record.clock).toMatchObject({ initialMs: null, turnInitialMs: 90_000 });
     expect(
       match.record.initialState.pieces.filter((p) => p.type === 'fortress').map((p) => p.hp),
     ).toEqual([1, 1]);
@@ -290,13 +346,16 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
         name: 'b',
       }),
     );
-    now = 30_001;
+    now = 89_999;
+    await service.tick();
+    expect(repository.matches.get(match.matchId)?.record.currentAction).toBe(0);
+    now = 90_001;
     await service.tick();
     const advanced = playing(await service.request(a, { kind: 'state' }));
     expect(advanced.record.currentAction).toBe(1);
     expect(advanced.record.clock?.turnTimeouts?.reduce((sum, count) => sum + count, 0)).toBe(1);
     expect(advanced.matchId).toBe(match.matchId);
-    now = 300_001;
+    now = 900_001;
     await service.tick();
     const ended = playing(await service.request(a, { kind: 'state' }));
     expect(ended.record.currentAction).toBeGreaterThanOrEqual(1);
@@ -309,14 +368,14 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     const service = new OnlineService(repository, () => now);
     await service.request(a, { kind: 'search', name: 'a' });
     const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
-    now = 30_001;
+    now = 90_001;
     const resumed = playing(
       await new OnlineService(repository, () => now).request(a, { kind: 'state' }),
     );
     expect(resumed.matchId).toBe(match.matchId);
     expect(resumed.record.currentAction).toBe(1);
-    expect(resumed.record.clock?.turnRemainingMs).toBe(29_999);
-    now = 300_001;
+    expect(resumed.record.clock?.turnRemainingMs).toBe(89_999);
+    now = 900_001;
     const ended = playing(
       await new OnlineService(repository, () => now).request(b, { kind: 'state' }),
     );
@@ -358,6 +417,44 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
       expect((await call({ kind: 'state' }, { authorization: 'Bearer valid' })).json()).toEqual({
         status: 'idle',
       });
+      for (const payload of [
+        { kind: 'resign' },
+        { kind: 'finish', matchId: '-'.repeat(36) },
+        { kind: 'action', matchId: a, revision: -1 },
+        { kind: 'offer-draw', matchId: a, revision: '0' },
+        { kind: 'respond-draw', matchId: a, revision: 0, accept: 'true' },
+        { kind: 'create-private', name: 'a', settings: {} },
+        { kind: 'join-private', name: 'a', code: 123456 },
+      ]) {
+        const response = await call(payload, { authorization: 'Bearer valid' });
+        expect(response.statusCode, JSON.stringify(payload)).toBe(400);
+        expect(response.headers['cache-control']).toBe('no-store');
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('limita por identidad verificada sin bloquear a otro jugador que comparte la IP', async () => {
+    const service = new OnlineService(new MemoryOnlineRepository());
+    const app = await createOnlineApp({
+      service,
+      origin: 'http://localhost:5173',
+      authenticate: async (token) => ({ id: token === 'a' ? a : b, isAnonymous: false }),
+    });
+    try {
+      const call = (token: string) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/online',
+          payload: { kind: 'state' },
+          headers: { authorization: `Bearer ${token}` },
+        });
+      for (let i = 0; i < 300; i++) expect((await call('a')).statusCode).toBe(200);
+      const exceeded = await call('a');
+      expect(exceeded.statusCode).toBe(429);
+      expect(Number(exceeded.headers['retry-after'])).toBeGreaterThan(0);
+      expect((await call('b')).statusCode).toBe(200);
     } finally {
       await app.close();
     }
