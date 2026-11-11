@@ -110,6 +110,7 @@ function validateState(value: unknown): OnlineState {
         break;
       return candidate;
     case 'playing': {
+      const change = candidate.ratingChange;
       if (
         typeof candidate.matchId !== 'string' ||
         !candidate.matchId ||
@@ -118,7 +119,22 @@ function validateState(value: unknown): OnlineState {
         candidate.revision < 0 ||
         !Number.isFinite(candidate.elo) ||
         !Number.isFinite(candidate.serverNow) ||
-        (candidate.drawOffer != null && ![0, 1].includes(candidate.drawOffer))
+        (change !== undefined &&
+          (!change ||
+            ![change.ratingBefore, change.ratingAfter].every(
+              (rating) => Number.isSafeInteger(rating) && rating >= 0,
+            ))) ||
+        (candidate.opening !== undefined &&
+          (!candidate.opening ||
+            !Number.isFinite(candidate.opening.revealsAt) ||
+            !Array.isArray(candidate.opening.ready) ||
+            candidate.opening.ready.length !== 2 ||
+            candidate.opening.ready.some((ready) => typeof ready !== 'boolean'))) ||
+        (candidate.drawOffer != null && ![0, 1].includes(candidate.drawOffer)) ||
+        (candidate.drawOfferExpiresAt !== undefined &&
+          !Number.isFinite(candidate.drawOfferExpiresAt)) ||
+        (candidate.drawOfferedThisTurn !== undefined &&
+          typeof candidate.drawOfferedThisTurn !== 'boolean')
       )
         break;
       const record = parseRecord(JSON.stringify(candidate.record));

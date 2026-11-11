@@ -18,6 +18,7 @@ const REQUEST_KINDS = [
   'create-private',
   'join-private',
   'cancel',
+  'ready',
   'action',
   'offer-draw',
   'respond-draw',

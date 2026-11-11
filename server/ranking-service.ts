@@ -108,7 +108,8 @@ export class RankingService {
       for (const time of times) {
         for (const period of ['month', 'all'] as const) {
           const result = this.listAt({ mode, period, page: 0 }, source, time, now, account.id);
-          const position = result.entries.find((entry) => entry.playerId === id)?.position ?? null;
+          const position =
+            result.entries.find((entry) => entry.id === account.id)?.position ?? null;
           if (time === now && period === 'all') positions[mode] = position;
           const key = period === 'month' ? 'monthlyPosition' : 'historicalPosition';
           if (position !== null)
@@ -147,7 +148,28 @@ export class RankingService {
     )
       throw new OnlineError('Consulta de clasificación no válida.');
     const now = this.now();
-    return this.listAt(query, await this.repository.rankingData(query.mode), now, now);
+    const data = await this.repository.rankingData(query.mode);
+    const page = this.listAt(query, data, now, now);
+    if (!page.entries.length) return { ...page, entries: [] };
+    const accounts = new Map(data.accounts.map((account) => [account.id, account]));
+    // Online standings use match results. Load saved progression only for the visible avatars.
+    const onlineProgressions =
+      query.mode === 'online'
+        ? await this.repository.rankingProgressions(page.entries.map(({ id }) => id))
+        : null;
+    return {
+      ...page,
+      entries: page.entries.map(({ id, ...entry }) => {
+        const account = accounts.get(id)!;
+        const progression = onlineProgressions ? onlineProgressions.get(id) : account.progression;
+        return {
+          ...entry,
+          playerId: publicId(id),
+          xp: parsePlayerProgression(progression ?? '{}').xp,
+          profile: { ...readProfile(account.profile), name: entry.name },
+        };
+      }),
+    };
   }
 
   private listAt(
@@ -156,15 +178,12 @@ export class RankingService {
     time: number,
     now: number,
     targetId?: string,
-  ): RankingPage {
+  ) {
     const historical = time < now;
     const registered = new Set(data.accounts.map((account) => account.id));
     const at = new Date(time).toISOString();
     const names = new Map<string, string>();
-    const profiles = new Map(
-      data.accounts.map((account) => [account.id, readProfile(account.profile)]),
-    );
-    const entries: Array<RankingEntry & { id: string }> = [];
+    const entries: Array<Omit<RankingEntry, 'playerId' | 'xp' | 'profile'> & { id: string }> = [];
     for (const account of data.accounts) {
       let name = 'Jugador';
       try {
@@ -286,17 +305,7 @@ export class RankingService {
       entries: entries
         .slice(Math.max(0, start), targetId ? Math.max(0, start) + 1 : start + pageSize)
         .map((entry, index) => ({
-          playerId: publicId(entry.id),
-          xp: parsePlayerProgression(
-            data.accounts.find((account) => account.id === entry.id)?.progression ?? '{}',
-          ).xp,
-          profile: { ...profiles.get(entry.id)!, name: entry.name },
-          name: entry.name,
-          played: entry.played,
-          wins: entry.wins,
-          draws: entry.draws,
-          losses: entry.losses,
-          rating: entry.rating,
+          ...entry,
           position: Math.max(0, start) + index + 1,
         })),
     };

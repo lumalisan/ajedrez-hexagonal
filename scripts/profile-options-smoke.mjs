@@ -94,6 +94,7 @@ try {
             revision: 1,
             elo: 1000,
             data: {
+              'hexagonal:progression:v1': JSON.stringify({ version: 1, xp: 4500 }),
               'hexagonal:user-profile:v1': JSON.stringify({
                 name: 'Cuenta de prueba',
                 emblem: 'hex',
@@ -112,6 +113,12 @@ try {
       if (registered) {
         await page.locator('.profile-ratings').getByText('Posición 7', { exact: true }).waitFor();
         await page.locator('.profile-ratings').getByText('Posición 12', { exact: true }).waitFor();
+        for (const name of ['Cerrar sesión', 'Eliminar cuenta']) {
+          const button = page.getByRole('button', { name, exact: true });
+          assert.equal(await button.isVisible(), true);
+          assert.equal(await button.getAttribute('data-variant'), 'secondary');
+          assert.equal(await button.evaluate((el) => getComputedStyle(el).borderTopStyle), 'solid');
+        }
       } else {
         assert.equal(
           await page
@@ -153,6 +160,25 @@ try {
           path: process.env.UI_SCREENSHOT + '-own-records-' + label + '-' + registered + '.png',
         });
       await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
+      if (registered) {
+        await page.locator('[data-home-action="achievements"]').click();
+        await page.getByRole('button', { name: 'Nivel Experto', exact: true }).click();
+        const collection = page.locator('[data-achievement-id="p3-07"]');
+        await collection
+          .getByText('Captura dos unidades enemigas con un capturador en una misma partida.', {
+            exact: true,
+          })
+          .waitFor();
+        assert.equal(await collection.getByRole('progressbar').count(), 0);
+        for (const [id, target] of [
+          ['p3-02', '10'],
+          ['p3-14', '20'],
+        ]) {
+          const bar = page.locator(`[data-achievement-id="${id}"]`).getByRole('progressbar');
+          assert.equal(await bar.getAttribute('max'), target);
+        }
+        await page.getByRole('button', { name: 'Cerrar logros', exact: true }).click();
+      }
       const rankingRequests = requests.length;
       await page.locator('[data-home-action="ranking"]').click();
       await page.locator('.ranking-table tbody tr').first().waitFor();
@@ -171,7 +197,8 @@ try {
           requests[rankingRequests].headers().authorization,
           'Bearer ranking-access-test',
         );
-        await page.getByRole('button', { name: 'Participante 1', exact: true }).click();
+        const player = page.getByRole('button', { name: 'Participante 1', exact: true });
+        await player.click();
         await page.locator('.profile-browser').waitFor();
         assert.equal(
           await page.getByRole('button', { name: 'Personalizar', exact: true }).count(),
@@ -186,7 +213,12 @@ try {
           [],
         );
         await page.screenshot({ path: 'node_modules/.cache/profile-' + label + '.png' });
-        await page.getByRole('button', { name: 'Volver a clasificación', exact: true }).click();
+        assert.equal(
+          await page.getByRole('button', { name: 'Volver a clasificación', exact: true }).count(),
+          0,
+        );
+        await page.getByRole('button', { name: 'Cerrar perfil', exact: true }).click();
+        assert.equal(await player.evaluate((el) => el === document.activeElement), true);
         await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
         await page.getByRole('rowheader', { name: 'Participante 51', exact: true }).waitFor();
       } else {

@@ -45,6 +45,16 @@ export class PostgresOnlineRepository implements OnlineRepository {
     };
   }
 
+  async rankingProgressions(ids: string[]): Promise<Map<string, string>> {
+    const result = await this.pool.query<{ id: string; progression: string }>(
+      `select user_id as id, data->>'hexagonal:progression:v1' as progression
+       from hexfortia.accounts
+       where user_id = any($1::uuid[]) and data->>'hexagonal:progression:v1' is not null`,
+      [ids],
+    );
+    return new Map(result.rows.map(({ id, progression }) => [id, progression]));
+  }
+
   async transaction<T>(lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {

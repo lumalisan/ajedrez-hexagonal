@@ -85,7 +85,10 @@ export function BattleProgressionPanel({
   const previousCategory = levelProgress(before);
   const nextCategory = levelProgress(after);
   const gainedLevels = levelProgress(after).level - levelProgress(before).level;
-  const delta = battle ? battle.ratingAfter - battle.ratingBefore : 0;
+  const online = snapshot.online.state;
+  const rating =
+    mode === 'machine' ? battle : online.status === 'playing' ? online.ratingChange : undefined;
+  const delta = rating ? rating.ratingAfter - rating.ratingBefore : 0;
   return (
     <section
       className="battle-progression"
@@ -169,11 +172,13 @@ export function BattleProgressionPanel({
       {mode !== 'local' && (
         <div className="battle-rating">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <strong>Elo · {mode === 'machine' ? 'Hexfortia' : 'En línea'}</strong>
-            <span>
-              {battle ? (
+            <strong>
+              Puntos de clasificación · {mode === 'machine' ? 'Hexfortia' : 'En línea'}
+            </strong>
+            <span className="whitespace-nowrap">
+              {rating ? (
                 <>
-                  {battle.ratingBefore} → <strong>{battle.ratingAfter}</strong> (
+                  {rating.ratingBefore} → <strong>{rating.ratingAfter}</strong> (
                   {delta > 0 ? '+' : ''}
                   {delta})
                 </>

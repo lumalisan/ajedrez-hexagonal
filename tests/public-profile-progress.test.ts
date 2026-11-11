@@ -25,14 +25,8 @@ describe('progreso del perfil público', () => {
         'hexagonal:progression:v1': JSON.stringify(progression),
       },
     });
-    const rankingData = repository.rankingData.bind(repository);
     const ranking = new RankingService(repository);
-    const original = await rankingData();
     const entries = await ranking.list({ mode: 'machine', period: 'all', page: 0 });
-    repository.rankingData = async () => ({
-      ...original,
-      accounts: original.accounts.map((account) => ({ ...account, progression: null })),
-    });
     const profile = await ranking.profile(entries.entries[0]!.playerId!);
     expect(profile.profile.name).toBe('Ariadna');
     expect(profile.progression.xp).toBe(650);

@@ -9,6 +9,14 @@ export interface PrivateMatchSettings {
   layout: 3 | 5;
 }
 
+export const OPENING_DRAW_MS = 1_600;
+export const ONLINE_RESPONSE_MS = 30_000;
+
+export interface OnlineOpening {
+  revealsAt: number;
+  ready: [boolean, boolean];
+}
+
 export type OnlineState =
   | { status: 'idle' }
   | { status: 'searching'; joinedAt: number; elo: number }
@@ -20,8 +28,12 @@ export type OnlineState =
       revision: number;
       record: MatchRecord;
       elo: number;
+      ratingChange?: { ratingBefore: number; ratingAfter: number };
       serverNow: number;
+      opening?: OnlineOpening;
       drawOffer?: Player | null;
+      drawOfferExpiresAt?: number;
+      drawOfferedThisTurn?: boolean;
     };
 
 export type OnlineRequest =
@@ -30,6 +42,7 @@ export type OnlineRequest =
   | { kind: 'create-private'; settings: PrivateMatchSettings; name: string }
   | { kind: 'join-private'; code: string; name: string }
   | { kind: 'cancel' }
+  | { kind: 'ready'; matchId: string }
   | { kind: 'action'; matchId: string; revision: number; action: GameAction }
   | { kind: 'offer-draw'; matchId: string; revision: number }
   | { kind: 'respond-draw'; matchId: string; revision: number; accept: boolean }

@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
-import { FACTIONS, participantColor, participantLabel } from '../factions';
+import { FACTIONS, participantColor, participantLabel, participantName } from '../factions';
 import { sameAction } from '../action-identity';
 import {
   PIECE_NAMES,
@@ -190,7 +190,7 @@ export function MatchStatus() {
   const { snapshot } = useGame();
   const { state, activeScenario, scenarioProgress } = snapshot;
   const clock = snapshot.matchRecord?.clock;
-  const commander = `${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])} en mando`;
+  const turnName = participantName(snapshot.matchConfig?.participants[state.activePlayer]);
   return (
     <div className="match-status" aria-live="polite">
       <FortressStatus player={0} />
@@ -209,10 +209,8 @@ export function MatchStatus() {
             <span>PARTIDA FINALIZADA</span>
             <strong>
               {state.outcome.type === 'win'
-                ? participantLabel(
-                    snapshot.matchConfig?.participants[state.outcome.winner],
-                    PLAYER_NAMES[state.outcome.winner],
-                  ) + ' gana'
+                ? participantName(snapshot.matchConfig?.participants[state.outcome.winner]) +
+                  ' gana'
                 : outcomeText(state.outcome)}
             </strong>
           </>
@@ -224,7 +222,7 @@ export function MatchStatus() {
                 : `TURNO ${Math.floor((state.ply + (state.passedTurnCount ?? 0)) / 2) + 1}`}
             </span>
             <strong>
-              {snapshot.tutorial ? `Práctica con ${snapshot.profile.name}` : commander}
+              {snapshot.tutorial ? `Práctica con ${snapshot.profile.name}` : `Turno de ${turnName}`}
             </strong>
             {activeScenario && (
               <small>
@@ -239,7 +237,7 @@ export function MatchStatus() {
           <ClockTime
             id="turn-clock"
             remainingMs={clock.turnRemainingMs}
-            label={`Turno de ${participantLabel(snapshot.matchConfig?.participants[clock.activePlayer], PLAYER_NAMES[clock.activePlayer])}`}
+            label={`Turno de ${participantName(snapshot.matchConfig?.participants[clock.activePlayer])}`}
             active={clock.status === 'running'}
           />
         )}
@@ -254,7 +252,12 @@ export function SelectionSummary() {
   const { state, pendingAction, mode, selectedId, isMachineTurn } = snapshot;
   const piece = selectedId ? getPiece(state, selectedId) : undefined;
   const text = state.outcome
-    ? outcomeText(state.outcome)
+    ? outcomeText(
+        state.outcome,
+        state.outcome.type === 'win'
+          ? participantName(snapshot.matchConfig?.participants[state.outcome.winner])
+          : undefined,
+      )
     : snapshot.gameMode === 'online' && snapshot.online.busy
       ? 'Enviando solicitud al servidor…'
       : snapshot.gameMode === 'online' &&
@@ -275,7 +278,7 @@ export function SelectionSummary() {
                     ? piece.owner === state.activePlayer
                       ? selectedUnitInstruction(piece)
                       : `${PIECE_NAMES[piece.type]} de ${PLAYER_NAMES[piece.owner]}. Selecciona una unidad propia para jugar.`
-                    : `Turno de ${participantLabel(snapshot.matchConfig?.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])}. Selecciona una unidad propia.`;
+                    : `Turno de ${participantName(snapshot.matchConfig?.participants[state.activePlayer])}. Selecciona una unidad propia.`;
   return (
     <div id="selection-summary" className="selection-summary">
       {snapshot.tutorial ? TUTORIAL_STEPS[snapshot.tutorial.stepIndex]?.instruction : text}

@@ -6,6 +6,7 @@ import type {
   PrivateRoom,
   QueueEntry,
 } from '../../server/repository';
+import type { RankingMode } from '../../src/ranking-contracts';
 
 /** Transactional double: serialization and rollback let application tests exercise races. */
 export class MemoryOnlineRepository implements OnlineRepository {
@@ -25,17 +26,31 @@ export class MemoryOnlineRepository implements OnlineRepository {
     );
   }
 
-  async rankingData() {
+  async rankingData(mode: RankingMode) {
     await this.pending;
     return structuredClone({
       accounts: [...this.accounts].map(([id, { data }]) => ({
         id,
         profile: data['hexagonal:user-profile:v1'] ?? null,
-        progression: data['hexagonal:progression:v1'] ?? null,
+        progression: mode === 'machine' ? (data['hexagonal:progression:v1'] ?? null) : null,
       })),
-      players: [...this.players.values()].filter((player) => player.played > 0),
-      matches: [...this.matches.values()].filter((match) => match.settled && match.ranked),
+      players:
+        mode === 'online' ? [...this.players.values()].filter((player) => player.played > 0) : [],
+      matches:
+        mode === 'online'
+          ? [...this.matches.values()].filter((match) => match.settled && match.ranked)
+          : [],
     });
+  }
+
+  async rankingProgressions(ids: string[]): Promise<Map<string, string>> {
+    await this.pending;
+    const progressions = new Map<string, string>();
+    for (const id of ids) {
+      const progression = this.accounts.get(id)?.data['hexagonal:progression:v1'];
+      if (progression !== undefined) progressions.set(id, progression);
+    }
+    return progressions;
   }
 
   transaction<T>(_lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T> {

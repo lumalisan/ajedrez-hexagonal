@@ -80,12 +80,18 @@ try {
       await page.locator('.ranking-table tbody tr').first().waitFor();
       const notice = page.getByText(
         'Crea una cuenta o inicia sesión para consultar la clasificación completa.',
-        { exact: true },
       );
+      const expertStars = page
+        .getByRole('rowheader', { name: 'Participante 1', exact: true })
+        .getByLabel('Emblema Experto, 3 estrellas')
+        .locator('.profile-stars');
       if (registered) {
         assert.equal(await page.locator('.ranking-table tbody tr').count(), 50);
         assert.equal(await notice.count(), 0);
         assert.equal(requests[0].headers().authorization, 'Bearer ranking-access-test');
+        assert.equal(await expertStars.textContent(), '★★★');
+        if (process.env.UI_SCREENSHOT)
+          await page.screenshot({ path: `${process.env.UI_SCREENSHOT}-${label}-online.png` });
         await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
         await page.getByRole('rowheader', { name: 'Participante 51', exact: true }).waitFor();
       } else {
@@ -100,6 +106,7 @@ try {
       await page.getByRole('button', { name: 'Vs. Hexfortia', exact: true }).click();
       await page.getByRole('tab', { name: 'Histórica', exact: true }).click();
       await page.locator('.ranking-table tbody tr').first().waitFor();
+      if (registered) assert.equal(await expertStars.textContent(), '★★★');
       const result = await new AxeBuilder({ page }).analyze();
       assert.deepEqual(
         result.violations.filter((v) => ['serious', 'critical'].includes(v.impact)),

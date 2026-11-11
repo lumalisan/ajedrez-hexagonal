@@ -3,6 +3,10 @@ export const FACTIONS = {
   expansionist: { name: 'Expansionista', color: '#36b9ff' },
   conservationist: { name: 'Conservacionista', color: '#00A86B' },
 } as const;
+export function participantName(participant: Participant | undefined): string {
+  return participant?.name.trim() || 'Invitado';
+}
+
 export function participantLabel(participant: Participant | undefined, fallback: string): string {
   if (!participant) return fallback;
   return participant.faction && participant.kind === 'human'

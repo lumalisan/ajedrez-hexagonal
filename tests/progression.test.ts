@@ -34,6 +34,7 @@ describe('barras de progreso de logros', () => {
     'p2-05',
     'p2-11',
     'p2-17',
+    'p3-07',
     'p3-09',
     'p3-18',
     'p4-18',
@@ -43,7 +44,7 @@ describe('barras de progreso de logros', () => {
     expect(achievementShowsProgress(definition(id))).toBe(false),
   );
 
-  it.each(['p3-07', 'p1-14', 'p1-15', 'p2-01', 'p2-06', 'p2-10', 'p3-04', 'p3-11'])(
+  it.each(['p1-14', 'p1-15', 'p2-01', 'p2-06', 'p2-10', 'p3-02', 'p3-04', 'p3-11', 'p3-14'])(
     '%s permite seguir un contador, una racha o una puntuación',
     (id) => expect(achievementShowsProgress(definition(id))).toBe(true),
   );
@@ -731,8 +732,8 @@ it.each(['p2-10', 'p3-11', 'p4-13', 'p5-12'])(
   },
 );
 
-describe('capturas acumuladas y supervivencia', () => {
-  it('acumula una captura de cada partida, incluso tras guardar y cargar', () => {
+describe('capturas y supervivencia', () => {
+  it('no suma capturas de distintas partidas, incluso tras guardar y cargar', () => {
     let progress = createPlayerProgression();
     for (let index = 0; index < 2; index++) {
       let record = fixture(
@@ -746,11 +747,36 @@ describe('capturas acumuladas y supervivencia', () => {
       record.createdAt = '2026-10-07T12:0' + index + ':00.000Z';
       record = appendAction(record, { kind: 'convert', pieceId: 'capturer', targetId: 'enemy' });
       progress = evaluate(record, progress).progress;
-      expect(progressionValue(progress, definition('p3-07'))).toBe(index + 1);
+      expect(progressionValue(progress, definition('p3-07'))).toBe(1);
       progress = parsePlayerProgression(JSON.stringify(progress));
     }
-    expect(achievementShowsProgress(definition('p3-07'))).toBe(true);
+    expect(progressionValue(progress, definition('p2-08'))).toBe(2);
   });
+  it.each(['capturer', 'other'])(
+    'evalúa dos conversiones en una partida con %s en la segunda',
+    (id) => {
+      let record = fixture(
+        [
+          { id: 'capturer', type: 'capturer', owner: 0, position: { q: 0, r: 0 } },
+          { id: 'other', type: 'capturer', owner: 0, position: { q: 2, r: 0 } },
+          { id: 'enemy1', type: 'antiAir', owner: 1, position: { q: 0, r: -1 } },
+          { id: 'enemy2', type: 'antiAir', owner: 1, position: { q: 1, r: 0 } },
+          { id: 'soldier', type: 'soldier', owner: 1, facing: 0, position: { q: 3, r: -3 } },
+        ],
+        0,
+        'machine',
+      );
+      const progress = createPlayerProgression();
+      progress.xp = xpForLevel(15);
+      record = appendAction(record, { kind: 'convert', pieceId: 'capturer', targetId: 'enemy1' });
+      const first = evaluate(record, progress);
+      expect(first.unlocked).not.toContain('p3-07');
+      record = appendAction(record, { kind: 'rotate', pieceId: 'soldier', facing: 1 });
+      record = appendAction(record, { kind: 'convert', pieceId: id, targetId: 'enemy2' });
+      const second = evaluate(record, first.progress);
+      expect(second.unlocked.includes('p3-07')).toBe(id === 'capturer');
+    },
+  );
   it.each([0, 1, 2])(
     'cuenta la victoria con %i unidades tras sacrificar al atacante',
     (remaining) => {
@@ -780,4 +806,36 @@ describe('capturas acumuladas y supervivencia', () => {
       expect(progressionValue(result, definition('p5-10'))).toBe(remaining <= 1 ? 1 : 0);
     },
   );
+});
+
+it.each([
+  ['p3-02', 'local', 0, 'longWins', 10],
+  ['p3-14', 'machine', 2, 'matches', 20],
+] as const)('%s respeta el nuevo umbral', (id, mode, difficulty, metric, target) => {
+  const progress = createPlayerProgression();
+  progress.xp = xpForLevel(15);
+  for (let index = 0; index < target - 1; index++) {
+    progress.matches[new Date(Date.parse(AT) + index).toISOString()] = {
+      mode,
+      difficulty,
+      metrics: { [metric]: 1 },
+    };
+  }
+  expect(recordLearning(progress, 'tutorial', AT).unlocked).not.toContain(id);
+  progress.matches['2026-10-08T12:00:00.000Z'] = { mode, difficulty, metrics: { [metric]: 1 } };
+  expect(recordLearning(progress, 'tutorial', AT).unlocked).toContain(id);
+});
+
+it('revalida los logros pendientes al cargar el catálogo anterior y conserva los concedidos', () => {
+  const progress = createPlayerProgression();
+  progress.achievedAt['p3-07'] = AT;
+  progress.achievedAt['p3-14'] = AT;
+  progress.matches[AT] = { mode: 'machine', difficulty: 2, metrics: { conversionsMatch: 2 } };
+  const raw = { ...progress, catalogRevision: 2 };
+  const pending = parsePlayerProgression(JSON.stringify(raw));
+  expect(pending.achievedAt).toEqual({});
+  expect(progressionValue(pending, definition('p3-07'))).toBe(0);
+
+  raw.unlockedAt = { 'p3-07': AT, 'p3-14': AT };
+  expect(parsePlayerProgression(JSON.stringify(raw)).unlockedAt).toEqual(raw.unlockedAt);
 });

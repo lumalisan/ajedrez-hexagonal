@@ -641,7 +641,7 @@ try {
     'Home quick settings and sound controls are missing.',
   );
   await desktop.waitForFunction(
-    () => document.querySelector('#turn-chip')?.textContent?.includes('Ámbar en mando'),
+    () => document.querySelector('#turn-chip strong')?.textContent?.startsWith('Turno de '),
     undefined,
     { timeout: 5_000 },
   );
@@ -1031,7 +1031,7 @@ try {
   await doubleClickHex(desktop, 0, -1);
   await desktop
     .locator('#turn-chip')
-    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .getByText(/^Turno de (?:Invitado|Comando Ámbar)$/)
     .waitFor();
   assert(
     (await desktop.locator('#game-canvas').getAttribute('data-viewpoint')) === 'blue',
@@ -1270,7 +1270,7 @@ try {
   await logPage.locator('#pending-card .confirm-button').click();
   await logPage
     .locator('#turn-chip')
-    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .getByText(/^Turno de (?:Invitado|Comando Ámbar)$/)
     .waitFor();
   assert(
     (await logPage.locator('#battle-log-panel').isVisible()) &&
@@ -1872,7 +1872,7 @@ try {
   await mobile.keyboard.press('Enter');
   await mobile
     .locator('#turn-chip')
-    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .getByText(/^Turno de (?:Invitado|Comando Ámbar)$/)
     .waitFor();
   assert(
     (await mobile.locator('#battle-log li').count()) >= 1 &&
@@ -2073,7 +2073,7 @@ try {
   await compactLandscape.locator('#pending-card .confirm-button').click();
   await compactLandscape
     .locator('#turn-chip')
-    .getByText(/(?:Ámbar|Invitado · Conservacionista|Comando Ámbar) en mando/)
+    .getByText(/^Turno de (?:Invitado|Comando Ámbar)$/)
     .waitFor();
   await compactLandscape.locator('[data-open-replay]').click();
   await compactLandscape.locator('.replay-dock').waitFor();
@@ -2310,7 +2310,10 @@ try {
     await clickHex(solo, 0, -2);
     await doubleClickHex(solo, 0, -1);
     await solo.locator('#battle-log li').nth(1).waitFor({ state: 'attached', timeout: 25_000 });
-    await solo.locator('#turn-chip strong').filter({ hasText: 'en mando' }).waitFor();
+    await solo
+      .locator('#turn-chip strong')
+      .filter({ hasText: /^Turno de / })
+      .waitFor();
     assert(
       (await solo.locator('#battle-log li').count()) >= 2,
       'The machine must answer the human move with a legal move.',
@@ -2559,8 +2562,8 @@ async function assertTopActionsDoNotOverlap(page) {
       }),
   );
   assert(
-    boxes.length === 6,
-    'Mobile header must expose sound, achievements, settings, help, resign and draw controls.',
+    boxes.length === 5,
+    'Mobile header must expose sound, settings, help, resign and draw controls.',
   );
   for (let index = 0; index < boxes.length; index += 1) {
     for (const other of boxes.slice(index + 1)) {

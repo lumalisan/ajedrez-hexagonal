@@ -455,13 +455,13 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p3-02',
     title: 'Suma y sigue',
-    description: 'Gana 15 partidas locales de al menos 50 turnos.',
+    description: 'Gana 10 partidas locales de al menos 50 turnos.',
     tier: 2,
     hidden: false,
     modes: ['local'],
     minDifficulty: 0,
     metric: 'longWins',
-    target: 15,
+    target: 10,
   },
   {
     id: 'p3-03',
@@ -511,12 +511,12 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p3-07',
     title: 'Otro para mi colección',
-    description: 'Captura dos unidades enemigas con un capturador.',
+    description: 'Captura dos unidades enemigas con un capturador en una misma partida.',
     tier: 2,
     hidden: false,
     modes: ['machine', 'online'],
     minDifficulty: 2,
-    metric: 'conversions',
+    metric: 'conversionsByCapturer',
     target: 2,
   },
   {
@@ -589,13 +589,13 @@ export const PROGRESSION_ACHIEVEMENTS = [
   {
     id: 'p3-14',
     title: '¿Otra vez tú?',
-    description: 'Juega 15 partidas contra Hexfortia.',
+    description: 'Juega 20 partidas contra Hexfortia.',
     tier: 2,
     hidden: false,
     modes: ['machine'],
     minDifficulty: 2,
     metric: 'matches',
-    target: 15,
+    target: 20,
   },
   {
     id: 'p3-15',

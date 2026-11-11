@@ -4,6 +4,7 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Field, FieldControl, FieldLabel } from '../components/ui/field';
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { outcomeText, PLAYER_NAMES } from '../../engine';
+import { participantName } from '../../factions';
 import { BattleProgressionPanel } from '../components/battle-progression';
 import { calculateStatistics, matchDurationSeconds } from '../../match-record';
 import {
@@ -44,6 +45,9 @@ const CONFIRMATION_HELP: Record<GamePreferences['confirmation'], string> = {
 export function UtilityDialogs() {
   const { snapshot, commands } = useGame();
   const dialog = snapshot.dialog;
+  const activeName = participantName(
+    snapshot.matchConfig?.participants[snapshot.state.activePlayer],
+  );
   switch (dialog?.kind) {
     case 'story':
       return <StoryDialog />;
@@ -67,7 +71,7 @@ export function UtilityDialogs() {
           eyebrow="ABANDONAR PARTIDA"
           title={
             snapshot.gameMode === 'online'
-              ? '¿Rendirse en esta partida en línea?'
+              ? `¿Confirma la rendición de ${activeName}?`
               : '¿Volver al inicio?'
           }
           confirmLabel={
@@ -112,11 +116,7 @@ export function UtilityDialogs() {
       return (
         <ConfirmationDialog
           eyebrow="CONFIRMAR RENDICIÓN"
-          title={
-            snapshot.gameMode === 'online'
-              ? `${snapshot.profile.name} abandona la batalla`
-              : `${PLAYER_NAMES[snapshot.state.activePlayer]} abandona la batalla`
-          }
+          title={`¿Confirma la rendición de ${activeName}?`}
           confirmLabel="Rendirse"
           confirmAttribute="data-confirm-resign"
           onConfirm={commands.resign}
@@ -125,41 +125,56 @@ export function UtilityDialogs() {
           <p>La victoria del rival quedará registrada y podrá revisarse en la repetición.</p>
         </ConfirmationDialog>
       );
-    case 'draw-offer':
+    case 'draw-offer': {
+      const rivalName = participantName(
+        snapshot.matchConfig?.participants[snapshot.state.activePlayer === 0 ? 1 : 0],
+      );
       return (
         <ConfirmationDialog
           eyebrow="PROPONER TABLAS"
-          title="¿Proponer tablas al rival?"
+          title={`¿Proponer tablas a ${rivalName}?`}
           confirmLabel="Proponer tablas"
           confirmAttribute="data-confirm-draw-offer"
           onConfirm={commands.offerDraw}
         >
-          <p>La partida terminará en tablas únicamente si el rival acepta la propuesta.</p>
+          <p>
+            {snapshot.gameMode === 'online'
+              ? 'La partida se pausará y el rival tendrá 30 segundos para responder.'
+              : 'La partida terminará en tablas si el rival acepta la propuesta.'}
+          </p>
         </ConfirmationDialog>
       );
-    case 'blockade':
+    }
+    case 'blockade': {
+      const online = snapshot.online.state.status === 'playing' ? snapshot.online.state : null;
+      const proposer = online?.drawOffer ?? snapshot.state.activePlayer;
+      const responder = online?.player ?? (proposer === 0 ? 1 : 0);
       return (
         <ConfirmationDialog
           eyebrow="PROPUESTA DE TABLAS"
-          title={`${PLAYER_NAMES[snapshot.online.state.status === 'playing' ? (snapshot.online.state.drawOffer ?? snapshot.state.activePlayer) : snapshot.state.activePlayer]} propone tablas`}
+          title={`${participantName(snapshot.matchConfig?.participants[proposer])} propone tablas`}
           icon="≋"
           cancelLabel="Rechazar"
-          confirmLabel={`Aceptar como ${PLAYER_NAMES[snapshot.online.state.status === 'playing' ? snapshot.online.state.player : snapshot.state.activePlayer === 0 ? 1 : 0]}`}
+          confirmLabel={`Aceptar como ${participantName(snapshot.matchConfig?.participants[responder])}`}
           confirmAttribute="data-accept-blockade"
-          onConfirm={() => {
-            if (snapshot.gameMode !== 'online') commands.closeDialog();
-            void commands.acceptBlockade();
-          }}
+          onConfirm={() => void commands.acceptBlockade()}
+          disabled={online != null && snapshot.online.secondsRemaining === 0}
         >
-          <p>
-            El rival debe aceptar. Según integridad actual, el resultado será:{' '}
-            <strong>tablas</strong>.
-          </p>
-          <p className="dialog-warning">
-            Aceptar no consume turno y finaliza inmediatamente la partida.
-          </p>
+          <p>Aceptar la propuesta termina la partida en tablas.</p>
+          {online && snapshot.online.secondsRemaining != null && (
+            <>
+              <p>
+                La partida está en pausa y se reanudará si rechazas la propuesta o se agota el
+                tiempo.
+              </p>
+              <p role="timer" aria-live="off" className="tabular-nums">
+                Tiempo restante · {snapshot.online.secondsRemaining} s
+              </p>
+            </>
+          )}
         </ConfirmationDialog>
       );
+    }
     case 'outcome':
       return <OutcomeDialog />;
     case 'scenario-briefing':
@@ -207,6 +222,7 @@ function ConfirmationDialog({
   confirmLabel,
   confirmAttribute,
   onConfirm,
+  disabled = false,
   danger = false,
   children,
 }: {
@@ -217,6 +233,7 @@ function ConfirmationDialog({
   confirmLabel: string;
   confirmAttribute: string;
   onConfirm: () => void;
+  disabled?: boolean;
   danger?: boolean;
   children: ReactNode;
 }) {
@@ -230,7 +247,13 @@ function ConfirmationDialog({
       {children}
       {online && <OnlineAvailability />}
       <div className="dialog-actions">
-        <Button type="button" variant="secondary" data-dialog-close onClick={commands.closeDialog}>
+        <Button
+          type="button"
+          variant="secondary"
+          data-dialog-close
+          disabled={disabled || (online && snapshot.online.busy)}
+          onClick={commands.closeDialog}
+        >
           {cancelLabel}
         </Button>
         <Button
@@ -238,6 +261,7 @@ function ConfirmationDialog({
           variant={danger ? 'danger' : 'primary'}
           {...{ [confirmAttribute]: true }}
           onClick={onConfirm}
+          disabled={disabled}
           loading={online && snapshot.online.busy}
         >
           {confirmLabel}

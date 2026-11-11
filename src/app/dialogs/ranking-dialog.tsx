@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchPublicProfile } from '../../ranking-client';
 import type { PublicPlayerProfile } from '../../ranking-contracts';
 import { ProfileDialog } from './profile-dialog';
@@ -17,6 +17,7 @@ export function RankingDialog() {
   const { query, data, busy, error, shared } = snapshot.ranking;
   const { mode, period, page } = query;
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const returnFocusId = useRef<string | null>(null);
   const [view, setView] = useState<{ data?: PublicPlayerProfile; error?: string }>({});
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -34,12 +35,15 @@ export function RankingDialog() {
     return () => request.abort();
   }, [playerId, attempt]);
   if (playerId) {
-    if (view.data)
-      return <ProfileDialog publicProfile={view.data} onBack={() => setPlayerId(null)} />;
+    const closeProfile = () => {
+      returnFocusId.current = playerId;
+      setPlayerId(null);
+    };
+    if (view.data) return <ProfileDialog publicProfile={view.data} onClose={closeProfile} />;
     return (
       <section aria-label="Perfil de usuario">
-        <DialogClose label="Cerrar perfil" className="dialog-corner-close" />
-        <h2>Perfil del jugador</h2>
+        <DialogClose label="Cerrar perfil" className="dialog-corner-close" onClose={closeProfile} />
+        <h2 id="active-dialog-title">Perfil del jugador</h2>
         {view.error ? (
           <>
             <p role="alert">{view.error}</p>
@@ -55,7 +59,6 @@ export function RankingDialog() {
         ) : (
           <p role="status">Cargando perfil…</p>
         )}
-        <Button onClick={() => setPlayerId(null)}>Volver a clasificación</Button>
       </section>
     );
   }
@@ -66,7 +69,7 @@ export function RankingDialog() {
     >
       <aside className="achievements-sidebar">
         <header className="achievements-heading">
-          <h2>Clasificación</h2>
+          <h2 id="active-dialog-title">Clasificación</h2>
         </header>
         <nav className="achievement-levels" aria-label="Modalidad de clasificación">
           {(
@@ -174,6 +177,16 @@ export function RankingDialog() {
                             <button
                               type="button"
                               className="profile-link inline-flex items-center gap-3"
+                              ref={(button) => {
+                                if (
+                                  button &&
+                                  returnFocusId.current &&
+                                  entry.playerId === returnFocusId.current
+                                ) {
+                                  returnFocusId.current = null;
+                                  button.focus();
+                                }
+                              }}
                               onClick={() => {
                                 if (shared && entry.playerId) {
                                   setView({});

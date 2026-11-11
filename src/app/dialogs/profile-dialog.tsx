@@ -196,10 +196,10 @@ const MODES = [
 
 export function ProfileDialog({
   publicProfile,
-  onBack,
+  onClose,
 }: {
   publicProfile?: PublicPlayerProfile;
-  onBack?: () => void;
+  onClose?: () => void;
 }) {
   const { snapshot } = useGame();
   const { account } = useAccount();
@@ -245,7 +245,7 @@ export function ProfileDialog({
     >
       <aside className="achievements-sidebar">
         <header className="achievements-heading">
-          <h2>Perfil</h2>
+          <h2 id="active-dialog-title">Perfil</h2>
         </header>
         <nav className="achievement-levels" aria-label="Secciones del perfil">
           {SECTIONS.filter((item) => !publicProfile || item.id === 'profile').map((item) => (
@@ -263,11 +263,6 @@ export function ProfileDialog({
         </nav>
         <MatchClockNotice />
         {!publicProfile && <AccountStatus sidebar />}
-        {onBack && (
-          <Button variant="ghost" onClick={onBack}>
-            Volver a clasificación
-          </Button>
-        )}
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
@@ -280,7 +275,7 @@ export function ProfileDialog({
             <strong>{profile.name}</strong>
           </button>
           <ProgressionSummary showActivity={false} progression={progression} />
-          <DialogClose label="Cerrar perfil" />
+          <DialogClose label="Cerrar perfil" onClose={onClose} />
         </header>
         <div id="profile-content" className="profile-content">
           {section === 'profile' && (

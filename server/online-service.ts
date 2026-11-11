@@ -9,6 +9,7 @@ import { activeClockRemainingMs } from '../src/match-clock.js';
 import { calculateElo } from '../src/progression.js';
 import { matchSearchTickets, validPrivateCode } from '../src/online-matchmaking.js';
 import type { MatchedSettings } from '../src/online-matchmaking.js';
+import { ONLINE_RESPONSE_MS, OPENING_DRAW_MS } from '../src/online-contracts.js';
 import type { OnlineRequest, OnlineState, PrivateMatchSettings } from '../src/online-contracts.js';
 import type { GameAction } from '../src/types.js';
 import type {
@@ -69,6 +70,7 @@ export class OnlineService {
     }
     if (
       request.kind === 'action' ||
+      request.kind === 'ready' ||
       request.kind === 'resign' ||
       request.kind === 'finish' ||
       request.kind === 'offer-draw' ||
@@ -82,7 +84,8 @@ export class OnlineService {
           if (request.kind === 'finish') return { status: 'idle' };
           throw new OnlineError('Ya has salido de esta partida.', 409);
         }
-        await this.advance(tx, match);
+        const now = this.now();
+        await this.advance(tx, match, now);
         const controller = new MatchController(match.record);
         const state = controller.store.getState().game;
         const player = match.players.indexOf(playerId) as 0 | 1;
@@ -92,41 +95,61 @@ export class OnlineService {
           await tx.saveMatch(match);
           return { status: 'idle' };
         }
-        if (request.kind === 'resign' && state.outcome) return this.matchState(tx, match, playerId);
-        if (request.kind === 'offer-draw' || request.kind === 'respond-draw') {
-          if (state.outcome || request.revision !== match.revision)
-            throw new OnlineError('La partida ha cambiado. Actualiza la posición.', 409);
-          if (request.kind === 'offer-draw') {
-            if (match.drawOffer != null)
-              throw new OnlineError('Ya hay una propuesta pendiente.', 409);
-            match.drawOffer = player;
-          } else {
-            if (typeof request.accept !== 'boolean') throw new OnlineError('Respuesta no válida.');
-            if (match.drawOffer == null || match.drawOffer === player)
-              throw new OnlineError('No hay una propuesta del rival.', 409);
-            if (request.accept) {
-              const result = declareBlockade(state);
-              if (!result.ok || !result.state.outcome)
-                throw new OnlineError('No se pueden acordar tablas.');
-              controller.pauseClock(this.now());
-              controller.conclude(result.state.outcome);
-            }
-            match.drawOffer = null;
+        if (request.kind === 'ready') {
+          const opening = match.opening;
+          if (!opening || opening.ready[player]) return this.matchState(tx, match, playerId);
+          if (now < opening.revealsAt) throw new OnlineError('El sorteo sigue en curso.', 409);
+          opening.ready[player] = true;
+          if (opening.ready.every(Boolean)) {
+            delete match.opening;
+            controller.resumeClock(now);
           }
-        } else if (!state.outcome && request.kind === 'resign') {
-          controller.resign(player);
-        } else if (request.kind === 'action') {
-          if (state.outcome || request.revision !== match.revision)
-            throw new OnlineError('La partida ha cambiado. Actualiza la posición.', 409);
-          if (player !== state.activePlayer) throw new OnlineError('Es el turno del rival.', 409);
+          match.record = controller.record;
+          match.revision++;
+          await tx.saveMatch(match);
+          return this.matchState(tx, match, playerId);
+        }
+        if (request.kind === 'resign' && state.outcome) return this.matchState(tx, match, playerId);
+        if (match.opening) throw new OnlineError('La partida aún no ha comenzado.', 409);
+        if (request.kind !== 'resign' && (state.outcome || request.revision !== match.revision))
+          throw new OnlineError('La partida ha cambiado. Actualiza la posición.', 409);
+        if (request.kind === 'respond-draw') {
+          if (match.drawOffer == null || match.drawOffer === player)
+            throw new OnlineError('No hay una propuesta del rival.', 409);
+          if (request.accept) {
+            const result = declareBlockade(state);
+            if (!result.ok || !result.state.outcome)
+              throw new OnlineError('No se pueden acordar tablas.');
+            controller.conclude(result.state.outcome);
+          } else {
+            controller.resumeClock(now);
+          }
           match.drawOffer = null;
-          const action = canonicalAction(getAllLegalActions(state), request.action);
-          if (!action || !controller.commit(action).ok)
-            throw new OnlineError('La orden no es legal.');
-          if (controller.store.getState().game.outcome) controller.pauseClock(this.now());
-          else {
-            controller.switchClock(controller.store.getState().game.activePlayer, this.now(), true);
-            controller.resumeClock(this.now());
+          delete match.drawOfferExpiresAt;
+        } else {
+          if (player !== state.activePlayer) throw new OnlineError('Es el turno del rival.', 409);
+          if (match.drawOffer != null)
+            throw new OnlineError('Hay una propuesta de tablas pendiente.', 409);
+          if (request.kind === 'offer-draw') {
+            if (match.drawOfferedThisTurn)
+              throw new OnlineError('Ya has propuesto tablas durante este turno.', 409);
+            controller.pauseClock(now);
+            match.drawOffer = player;
+            match.drawOfferExpiresAt = now + ONLINE_RESPONSE_MS;
+            match.drawOfferedThisTurn = true;
+          } else if (request.kind === 'resign') {
+            controller.pauseClock(now);
+            controller.resign(player);
+          } else {
+            const action = canonicalAction(getAllLegalActions(state), request.action);
+            if (!action || !controller.commit(action).ok)
+              throw new OnlineError('La orden no es legal.');
+            delete match.drawOfferedThisTurn;
+            if (controller.store.getState().game.outcome) controller.pauseClock(now);
+            else {
+              controller.switchClock(controller.store.getState().game.activePlayer, now, true);
+              controller.resumeClock(now);
+            }
           }
         }
         match.record = controller.record;
@@ -152,7 +175,7 @@ export class OnlineService {
           request.kind === 'create-private' ||
           request.kind === 'join-private'
         ) {
-          player.name = request.name.trim();
+          player.name = publicAllowed ? request.name.trim() : 'Invitado';
           await tx.savePlayer(player);
         }
         const active = await tx.activeMatch(playerId);
@@ -296,6 +319,7 @@ export class OnlineService {
       turnClockSeconds: settings.turnSeconds || null,
       fixedBoard: true,
       handoffScreen: false,
+      openingDraw: true,
     });
     const id = randomUUID();
     config.definitionId = `online:${ranked ? 'ranked' : 'private'}:${id}`;
@@ -309,23 +333,47 @@ export class OnlineService {
         ),
       ),
     );
-    controller.resumeClock(this.now());
     return {
       id,
       players: [players[0].id, players[1].id],
       record: controller.record,
       revision: 0,
       ranked,
+      opening: { revealsAt: this.now() + OPENING_DRAW_MS, ready: [false, false] },
       settled: false,
       finishedBy: [],
     };
   }
 
-  private async advance(tx: OnlineTransaction, match: OnlineMatch): Promise<void> {
+  private async advance(
+    tx: OnlineTransaction,
+    match: OnlineMatch,
+    now = this.now(),
+  ): Promise<void> {
     if (match.settled) return;
     const controller = new MatchController(match.record);
-    if (!match.record.clock && !controller.store.getState().game.outcome) return;
-    const now = this.now();
+    const previousRevision = match.revision;
+    const hadOutcome = Boolean(controller.store.getState().game.outcome);
+    if (match.opening) {
+      const deadline = match.opening.revealsAt + ONLINE_RESPONSE_MS;
+      if (now < deadline) return;
+      delete match.opening;
+      controller.resumeClock(deadline);
+      match.revision++;
+    }
+    if (match.drawOffer != null) {
+      const deadline = match.drawOfferExpiresAt;
+      if (deadline != null && now < deadline) return;
+      // Offers from older matches had no deadline and their clocks never paused.
+      if (deadline != null) controller.resumeClock(deadline);
+      else
+        match.drawOfferedThisTurn =
+          match.drawOffer === controller.store.getState().game.activePlayer;
+      match.drawOffer = null;
+      delete match.drawOfferExpiresAt;
+      match.revision++;
+    }
+    if (!match.record.clock && !hadOutcome && match.revision === previousRevision) return;
     // Charge missed deadlines after downtime, rather than granting fresh time on reconnect.
     while (!controller.store.getState().game.outcome) {
       const before = controller.record.clock;
@@ -341,12 +389,12 @@ export class OnlineService {
           controller.switchClock(controller.store.getState().game.activePlayer, deadline, true);
           controller.resumeClock(deadline);
         }
-        match.drawOffer = null;
+        delete match.drawOfferedThisTurn;
         match.revision++;
       } else break;
     }
     const state = controller.store.getState().game;
-    if (state.outcome && !replayRecord(match.record).outcome) match.revision++;
+    if (state.outcome && !hadOutcome) match.revision++;
     match.record = controller.record;
     await this.settle(tx, match);
     await tx.saveMatch(match);
@@ -357,6 +405,8 @@ export class OnlineService {
     if (!outcome || match.settled) return;
     match.settled = true;
     match.drawOffer = null;
+    delete match.drawOfferExpiresAt;
+    delete match.drawOfferedThisTurn;
     if (!match.ranked) return;
     // Stable row order prevents deadlocks when several matches finish together.
     const players = new Map<string, OnlinePlayer>();
@@ -368,13 +418,14 @@ export class OnlineService {
     const second = players.get(match.players[1]);
     if (!first || !second) throw new Error('Faltan participantes de una partida.');
     const score = outcome.type === 'draw' ? 0.5 : outcome.winner === 0 ? 1 : 0;
+    const a = calculateElo(first.elo, second.elo, score, first.played);
+    const b = calculateElo(second.elo, first.elo, 1 - score, second.played);
     match.rankingResult = {
       completedAt: new Date(this.now()).toISOString(),
       score,
       ratingsBefore: [first.elo, second.elo],
+      ratingsAfter: [a, b],
     };
-    const a = calculateElo(first.elo, second.elo, score, first.played);
-    const b = calculateElo(second.elo, first.elo, 1 - score, second.played);
     await tx.savePlayer({ ...first, elo: a, played: first.played + 1 });
     await tx.savePlayer({ ...second, elo: b, played: second.played + 1 });
   }
@@ -384,15 +435,29 @@ export class OnlineService {
     match: OnlineMatch,
     id: string,
   ): Promise<OnlineState> {
+    const player = match.players.indexOf(id) as 0 | 1;
+    const elo = (await tx.player(id, false))?.elo ?? 1000;
+    const ranking = match.ranked ? match.rankingResult : undefined;
     return {
       status: 'playing',
       matchId: match.id,
-      player: match.players.indexOf(id) as 0 | 1,
+      player,
       revision: match.revision,
       record: match.record,
-      elo: (await tx.player(id, false))?.elo ?? 1000,
+      elo,
+      ...(ranking && {
+        ratingChange: {
+          ratingBefore: ranking.ratingsBefore[player],
+          // Older results only stored the prior rating. The player can only start
+          // another ranked match after acknowledging this result.
+          ratingAfter: ranking.ratingsAfter?.[player] ?? elo,
+        },
+      }),
       serverNow: this.now(),
+      opening: match.opening,
       drawOffer: match.drawOffer ?? null,
+      drawOfferExpiresAt: match.drawOfferExpiresAt,
+      drawOfferedThisTurn: match.drawOfferedThisTurn,
     };
   }
 
@@ -423,6 +488,7 @@ function validateRequest(request: OnlineRequest): void {
       'create-private',
       'join-private',
       'cancel',
+      'ready',
       'action',
       'offer-draw',
       'respond-draw',
@@ -446,7 +512,7 @@ function validateRequest(request: OnlineRequest): void {
   )
     throw new OnlineError('Partida no válida.');
   if (
-    ['action', 'offer-draw', 'respond-draw', 'resign', 'finish'].includes(request.kind) &&
+    ['action', 'offer-draw', 'respond-draw', 'ready', 'resign', 'finish'].includes(request.kind) &&
     !('matchId' in request)
   )
     throw new OnlineError('Partida no válida.');

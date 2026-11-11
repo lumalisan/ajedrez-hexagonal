@@ -14,7 +14,7 @@ export async function installRankingFixture(page) {
         position,
         playerId: String(position).padStart(64, '0'),
         profile: { name: `Participante ${position}`, emblem: 'shield', color: 'amber' },
-        xp: 1200,
+        xp: position === 1 ? 4500 : 1200,
         name: `Participante ${position}`,
         played: 10,
         wins: 6,

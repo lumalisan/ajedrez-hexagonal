@@ -1477,7 +1477,7 @@ function failure(state: GameState, error: string): ActionResult {
   return { ok: false, state, events: [], error };
 }
 
-export function outcomeText(outcome: Outcome): string {
+export function outcomeText(outcome: Outcome, winnerName?: string): string {
   if (outcome.type === 'draw') {
     if (outcome.reason === 'repetition') return 'Tablas por triple repetición';
     if (outcome.reason === 'no-progress') return 'Tablas por falta de progreso';
@@ -1491,7 +1491,7 @@ export function outcomeText(outcome: Outcome): string {
         : outcome.reason === 'resignation'
           ? 'rendición rival'
           : 'Fortaleza destruida';
-  return `${PLAYER_NAMES[outcome.winner]} vence · ${reason}`;
+  return `${winnerName ?? PLAYER_NAMES[outcome.winner]} vence · ${reason}`;
 }
 
 export function battleLogEntry(state: GameState, indexFromEnd = 0): BattleLogEntry | undefined {

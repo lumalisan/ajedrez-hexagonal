@@ -3,7 +3,8 @@ import { RankingService } from '../server/ranking-service';
 import { OnlineService } from '../server/online-service';
 import { AccountService } from '../server/account-service';
 import { createOnlineApp } from '../server/app';
-import { createPlayerProgression } from '../src/progression';
+import { replayRecord } from '../src/match-record';
+import { createPlayerProgression, levelProgress, xpForLevel } from '../src/progression';
 import { MemoryOnlineRepository } from './helpers/online-repository';
 
 const now = Date.parse('2026-10-25T12:00:00Z');
@@ -133,7 +134,29 @@ describe('clasificación compartida', () => {
     await online.request(a, { kind: 'search', name: 'Cian' });
     const state = await online.request(b, { kind: 'search', name: 'Ámbar' });
     if (state.status !== 'playing') throw new Error('Debe haber partida');
-    await online.request(a, { kind: 'resign', matchId: state.matchId });
+    const players = repository.matches.get(state.matchId)!.players;
+    const startingPlayer = replayRecord(state.record).activePlayer;
+    const loser = players[startingPlayer];
+    const winner = players[1 - startingPlayer]!;
+    const loserName = loser === a ? 'Cian' : 'Ámbar';
+    const winnerName = winner === b ? 'Ámbar' : 'Cian';
+    // Let any opening countdown expire while the first turn is still active.
+    clock += 60_000;
+    await online.request(loser, { kind: 'resign', matchId: state.matchId });
+    const progress = createPlayerProgression();
+    progress.xp = xpForLevel(15);
+    progress.matches['2026-10-25T10:00:00Z'] = {
+      mode: 'machine',
+      difficulty: 1,
+      metrics: {},
+      completedAt: '2026-10-25T10:00:00Z',
+      result: 1,
+    };
+    await new AccountService(repository).request(winner, {
+      kind: 'save',
+      revision: 1,
+      data: { 'hexagonal:progression:v1': JSON.stringify(progress) },
+    });
     repository.players.set('unregistered', {
       id: 'unregistered',
       name: 'Invitado',
@@ -146,11 +169,19 @@ describe('clasificación compartida', () => {
     const query = { mode: 'online', period: 'all', page: 0 } as const;
     const result = await service.list(query);
     expect(result.entries).toMatchObject([
-      { name: 'Ámbar', position: 1, played: 1, wins: 1, rating: 1020 },
-      { name: 'Cian', position: 2, played: 1, losses: 1, rating: 980 },
+      { name: winnerName, position: 1, played: 1, wins: 1, rating: 1020, xp: progress.xp },
+      { name: loserName, position: 2, played: 1, losses: 1, rating: 980, xp: 0 },
     ]);
+    expect(result.entries[0]).not.toHaveProperty('id');
+    for (const period of ['all', 'month'] as const) {
+      const onlineRanking = await service.list({ ...query, period });
+      const machineRanking = await service.list({ ...query, mode: 'machine', period });
+      const { playerId, xp } = onlineRanking.entries[0]!;
+      expect(machineRanking.entries[0]).toMatchObject({ playerId, xp });
+      expect(levelProgress(xp!).tier + 1).toBe(3);
+    }
     // Duplicate polls and a forged cloud rating cannot add victories or alter Elo.
-    await online.request(b, { kind: 'state' });
+    await online.request(winner, { kind: 'state' });
     const forged = createPlayerProgression();
     forged.ratings.online = 99999;
     forged.matches.fake = {
@@ -160,7 +191,7 @@ describe('clasificación compartida', () => {
       completedAt: new Date(clock).toISOString(),
       result: 1,
     };
-    await new AccountService(repository).request(a, {
+    await new AccountService(repository).request(loser, {
       kind: 'save',
       revision: 1,
       data: { 'hexagonal:progression:v1': JSON.stringify(forged) },
@@ -175,7 +206,7 @@ describe('clasificación compartida', () => {
       monthlyPosition: 2,
       historicalPosition: 2,
     });
-    expect((await service.ownProfile(a)).positions).toEqual(publicProfile.positions);
+    expect((await service.ownProfile(loser)).positions).toEqual(publicProfile.positions);
     expect(JSON.stringify(publicProfile)).not.toContain('fake');
     const match = repository.matches.get(state.matchId)!;
     delete match.rankingResult;

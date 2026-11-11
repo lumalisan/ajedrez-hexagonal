@@ -86,6 +86,25 @@ async function signIn(page: Page) {
   await page.locator('[data-home-action="new"]').waitFor();
 }
 
+async function confirmOpening(first: Page, second: Page, screenshotName?: string) {
+  const readyButtons = [first, second].map((page) =>
+    page.getByRole('button', { name: 'Comenzar partida', exact: true }),
+  );
+  await Promise.all(readyButtons.map((button) => button.waitFor({ state: 'visible' })));
+  if (screenshotName) {
+    await first.locator('#game-dialog').getByRole('timer').waitFor();
+    await inspect(first, screenshotName);
+  }
+  await readyButtons[0].click();
+  await first.getByText('Esperando al rival.', { exact: true }).waitFor();
+  assert(await readyButtons[0].isDisabled());
+  assert(await first.locator('#game-dialog').isVisible());
+  await readyButtons[1].click();
+  await Promise.all(
+    [first, second].map((page) => page.locator('#game-dialog').waitFor({ state: 'hidden' })),
+  );
+}
+
 try {
   let identity = 0;
   for (const [name, viewport] of [
@@ -459,6 +478,7 @@ try {
         [...repository.matches.values()].filter((match) => !match.ranked).length,
         identity / 2,
       );
+      await confirmOpening(first, second, `${name}-opening-draw`);
       for (const page of [first, second])
         await page
           .getByRole('button', { name: 'Proponer tablas', exact: true })
@@ -467,6 +487,14 @@ try {
       const active = replayRecord(match.record).activePlayer;
       const actor = active === 0 ? first : second;
       const observer = active === 0 ? second : first;
+      assert(await observer.locator('#blockade-button').isDisabled());
+      assert(await observer.locator('#resign-button').isDisabled());
+      assert.equal(await actor.locator('#settings-button').getAttribute('title'), 'Ajustes');
+      assert.equal(await actor.locator('#achievements-button').count(), 0);
+      assert.equal(
+        await actor.locator('#turn-chip strong').textContent(),
+        `Turno de ${match.record.config.participants[active].name}`,
+      );
       const canvas = actor.locator('#game-canvas');
       await canvas.focus();
       for (let attempt = 0; attempt < 30; attempt++) {
@@ -568,20 +596,31 @@ try {
       });
       await actor.getByRole('button', { name: 'Confirmar acción', exact: true }).click();
       await synced;
-      assert.equal(repository.matches.get(match.id)?.record.currentAction, 1);
-      await first.locator('#resign-button').click();
-      await first.locator('[data-confirm-resign]').click();
+      const moved = repository.matches.get(match.id)!;
+      assert.equal(moved.record.currentAction, 1);
+      const nextPlayer = replayRecord(moved.record).activePlayer;
+      const resigning = nextPlayer === 0 ? first : second;
+      await resigning.locator('#resign-button').click();
+      await resigning
+        .getByRole('heading', {
+          name: `¿Confirma la rendición de ${moved.record.config.participants[nextPlayer].name}?`,
+        })
+        .waitFor();
+      await resigning.locator('[data-confirm-resign]').click();
       await Promise.all(
         [first, second].map((page) =>
           page.locator('[data-new-game]').waitFor({ state: 'visible' }),
         ),
       );
+      for (const page of [first, second])
+        assert(await page.locator('.battle-rating').getByText('1000', { exact: true }).isVisible());
       await first.locator('[data-new-game]').click();
       await first.locator('[data-home-action="new"]').waitFor();
       await second.locator('[data-new-game]').click();
       await second.locator('[data-home-action="new"]').waitFor();
 
       // Exercise a ranked match as well as a private one, including a result with no board move.
+      repository.players.get(match.players[0])!.elo = 1100;
       await menu(first);
       await first.locator('[data-online-mode="public"]').click();
       await menu(second);
@@ -591,20 +630,39 @@ try {
       );
       const ranked = [...repository.matches.values()].at(-1)!;
       assert(ranked.ranked);
-      await first.locator('#blockade-button').click();
-      await first.locator('[data-confirm-draw-offer]').click();
-      await first
-        .locator('[data-online-connection]')
-        .getByText('Has propuesto tablas. Esperando la respuesta del rival.', { exact: true })
+      await confirmOpening(first, second);
+      const proposerIndex = replayRecord(ranked.record).activePlayer;
+      const [proposer, responder] =
+        ranked.players[proposerIndex] === match.players[0] ? [first, second] : [second, first];
+      await proposer.locator('#blockade-button').click();
+      await proposer.locator('[data-confirm-draw-offer]').click();
+      await proposer.locator('[data-online-connection]').getByRole('timer').waitFor();
+      assert(await proposer.locator('#blockade-button').isDisabled());
+      await responder
+        .getByRole('heading', {
+          name: `${ranked.record.config.participants[proposerIndex].name} propone tablas`,
+        })
         .waitFor();
-      assert(await first.locator('#blockade-button').isDisabled());
-      await second.locator('[data-accept-blockade]').click();
+      await responder.locator('#game-dialog').getByRole('timer').waitFor();
+      await inspect(responder, `${name}-draw-offer`);
+      await responder.locator('[data-accept-blockade]').click();
       await Promise.all(
         [first, second].map((page) =>
           page.locator('[data-new-game]').waitFor({ state: 'visible' }),
         ),
       );
       assert.equal(replayRecord(repository.matches.get(ranked.id)!.record).outcome?.type, 'draw');
+      for (const [page, expected] of [
+        [first, '1100 → 1094 (-6)'],
+        [second, '1000 → 1006 (+6)'],
+      ] as const) {
+        const rating = page.locator('.battle-rating');
+        assert(
+          await rating.getByText('Puntos de clasificación · En línea', { exact: true }).isVisible(),
+        );
+        assert(await rating.getByText(expected, { exact: true }).isVisible());
+      }
+      await inspect(first, `${name}-ranked-result`);
       await first.locator('[data-new-game]').click();
       await first.locator('[data-home-action="new"]').waitFor();
       await first.locator('.home-profile').click();

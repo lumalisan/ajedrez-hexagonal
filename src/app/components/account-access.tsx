@@ -96,22 +96,11 @@ export function AccountStatus({
             </>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="compact"
-              variant="ghost"
-              loading={account.busy}
-              onClick={() => void controller.signOut()}
-            >
+            <Button size="compact" loading={account.busy} onClick={() => void controller.signOut()}>
               Cerrar sesión
             </Button>
-            <Button
-              size="compact"
-              variant="ghost"
-              className="text-danger"
-              disabled={account.busy}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Eliminar cuenta
+            <Button size="compact" disabled={account.busy} onClick={() => setConfirmDelete(true)}>
+              <span className="text-danger">Eliminar cuenta</span>
             </Button>
           </div>
           {confirmDelete && (

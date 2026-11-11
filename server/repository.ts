@@ -1,4 +1,4 @@
-import type { PrivateMatchSettings } from '../src/online-contracts.js';
+import type { OnlineOpening, PrivateMatchSettings } from '../src/online-contracts.js';
 import type { SearchTicket } from '../src/online-matchmaking.js';
 import type { MatchRecord } from '../src/types.js';
 import type { CloudSave } from '../src/cloud-contracts.js';
@@ -24,10 +24,18 @@ export interface OnlineMatch {
   record: MatchRecord;
   revision: number;
   ranked: boolean;
+  opening?: OnlineOpening;
   drawOffer?: 0 | 1 | null;
+  drawOfferExpiresAt?: number;
+  drawOfferedThisTurn?: boolean;
   settled: boolean;
   finishedBy: string[];
-  rankingResult?: { completedAt: string; score: 0 | 0.5 | 1; ratingsBefore: [number, number] };
+  rankingResult?: {
+    completedAt: string;
+    score: 0 | 0.5 | 1;
+    ratingsBefore: [number, number];
+    ratingsAfter?: [number, number];
+  };
 }
 
 export interface OnlineTransaction {
@@ -53,6 +61,7 @@ export interface OnlineRepository {
     players: OnlinePlayer[];
     matches: OnlineMatch[];
   }>;
+  rankingProgressions(ids: string[]): Promise<Map<string, string>>;
   transaction<T>(lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T>;
   activeMatches(): Promise<string[]>;
 }

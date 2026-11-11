@@ -58,6 +58,8 @@ export interface GameSnapshot {
     busy: boolean;
     state: OnlineState;
     error: string | null;
+    openingRevealed: boolean;
+    secondsRemaining: number | null;
   };
   state: GameState;
   preferences: GamePreferences;
@@ -83,6 +85,8 @@ export interface GameSnapshot {
   isMachineTurn: boolean;
   viewPlayer: 0 | 1;
   isLocalMatch: boolean;
+  canOfferDraw: boolean;
+  canResign: boolean;
   canUndo: boolean;
   canRedo: boolean;
   logOpen: boolean;

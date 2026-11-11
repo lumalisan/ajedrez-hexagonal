@@ -68,6 +68,16 @@ describe('transporte de partidas en línea', () => {
       serverNow: 1,
       record: { version: 2 },
     },
+    {
+      status: 'playing',
+      matchId: 'match',
+      player: 0,
+      revision: 1,
+      elo: 1000,
+      serverNow: 1,
+      record: createMatchRecord(createClassicConfig({ mode: 'local' })),
+      ratingChange: { ratingBefore: '980', ratingAfter: 1000 },
+    },
   ])('rechaza una respuesta incompleta o dañada (%#)', async (value) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(value)));
     await expect(client().request({ kind: 'state' }, new AbortController().signal)).rejects.toThrow(

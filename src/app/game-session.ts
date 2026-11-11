@@ -30,9 +30,10 @@ import {
   type AchievementId,
   type AchievementProgress,
 } from '../achievements';
-import { participantLabel, participantColor } from '../factions';
+import { participantLabel, participantColor, participantName } from '../factions';
 import { createClassicConfig } from '../game-config';
 import { createOnlineClient, OnlineRequestError } from '../online-client';
+import { ONLINE_RESPONSE_MS } from '../online-contracts';
 import { fetchRanking } from '../ranking-client';
 import type { RankingClient, RankingQuery } from '../ranking-contracts';
 import type { OnlineClient, OnlineRequest, OnlineState } from '../online-contracts';
@@ -155,6 +156,7 @@ export function createGameSession(
   let onlineAuthenticationRequired = false;
   let onlineReceivedAt = 0;
   let onlineDisplaySecond = -1;
+  let onlineResponseSecond: number | null = null;
   let onlineCancellation: { leave: boolean } | null = null;
   const preferences = loadPreferences();
   let profile = loadUserProfile();
@@ -179,6 +181,7 @@ export function createGameSession(
   let gameMode: GameMode | null = null;
   let matchConfig: MatchConfig | null = null;
   let matchRecord: MatchRecord | null = null;
+  let localDrawOfferedTurn: { match: string; turn: number } | null = null;
   let matchController: MatchController | null = null;
   let activeScenario: ScenarioDefinition | null = null;
   let tutorial: GameSnapshot['tutorial'] = null;
@@ -292,6 +295,11 @@ export function createGameSession(
         busy: onlineBusy,
         state: onlineState,
         error: onlineError,
+        openingRevealed:
+          onlineState.status === 'playing' &&
+          onlineState.opening != null &&
+          onlineServerTime() >= onlineState.opening.revealsAt,
+        secondsRemaining: onlineSecondsRemaining(),
       },
       state,
       preferences: { ...preferences },
@@ -317,6 +325,8 @@ export function createGameSession(
       isMachineTurn: isMachineTurn(),
       viewPlayer: viewPlayer(),
       isLocalMatch: isLocalMatch(),
+      canOfferDraw: canOfferDraw(),
+      canResign: canResign(),
       canUndo: Boolean(matchController?.canUndo()),
       canRedo: Boolean(matchController?.canRedo()),
       logOpen,
@@ -378,6 +388,8 @@ export function createGameSession(
   function openDialog(dialog: DialogState): void {
     reconcileExpiredMatches();
     if (currentDialog?.kind === 'first-turn') return;
+    if (dialog.kind === 'resign' && !canResign()) return;
+    if (dialog.kind === 'draw-offer' && !canOfferDraw()) return;
     if (dialog?.kind === 'online' && options.publicOnlineAllowed?.() === false) {
       options.onAccountRequired?.();
       return;
@@ -446,19 +458,9 @@ export function createGameSession(
 
   function closeDialog(): void {
     rankingAbort?.abort();
-    if (
-      currentDialog?.kind === 'blockade' &&
-      gameMode === 'online' &&
-      onlineState.status === 'playing' &&
-      onlineState.drawOffer != null &&
-      onlineState.drawOffer !== onlineState.player
-    ) {
-      void requestOnline({
-        kind: 'respond-draw',
-        matchId: onlineState.matchId,
-        revision: onlineState.revision,
-        accept: false,
-      });
+    if (currentDialog?.kind === 'blockade' && gameMode === 'online') {
+      void respondToDraw(false);
+      return;
     }
 
     if (
@@ -610,7 +612,7 @@ export function createGameSession(
   function showHomeScreen(view: 'main' | 'new' = 'main'): void {
     if (gameMode === 'online' && onlineState.status === 'playing') {
       if (!state.outcome) {
-        void requestOnline({ kind: 'resign', matchId: onlineState.matchId });
+        if (canResign()) void requestOnline({ kind: 'resign', matchId: onlineState.matchId });
         return;
       }
       void requestOnline({ kind: 'finish', matchId: onlineState.matchId }, true);
@@ -1080,8 +1082,7 @@ export function createGameSession(
     if (
       !state.outcome &&
       !isMachineTurn() &&
-      !isRemoteTurn() &&
-      !(gameMode === 'online' && onlineBusy) &&
+      !isOnlineTurnUnavailable() &&
       selected?.owner === state.activePlayer
     ) {
       const candidates = actionsAtHex(state, visibleActions, hex);
@@ -1167,7 +1168,7 @@ export function createGameSession(
   }
 
   function setPending(action: GameAction): void {
-    if (isRemoteTurn() || (gameMode === 'online' && onlineBusy)) return;
+    if (isOnlineTurnUnavailable()) return;
     if (animating || state.outcome || isMachineTurn() || replayCursor !== null) return;
     if (
       tutorial &&
@@ -1214,7 +1215,14 @@ export function createGameSession(
   }
 
   async function commitPending(): Promise<void> {
-    if (!pendingAction || animating || isMachineTurn() || replayCursor !== null) return;
+    if (
+      !pendingAction ||
+      animating ||
+      isMachineTurn() ||
+      isOnlineTurnUnavailable() ||
+      replayCursor !== null
+    )
+      return;
     if (wouldLoseByOrientation(pendingAction)) {
       if (currentDialog?.kind !== 'orientation-loss') {
         openDialog({ kind: 'orientation-loss' });
@@ -1240,7 +1248,7 @@ export function createGameSession(
     if (currentDialog?.kind === 'first-turn') return;
     if (disposed || animating || state.outcome || isHomeScreenActive()) return;
     if (gameMode === 'online') {
-      if (onlineState.status === 'playing' && !onlineBusy && !isRemoteTurn())
+      if (onlineState.status === 'playing' && !isOnlineTurnUnavailable())
         await requestOnline({
           kind: 'action',
           matchId: onlineState.matchId,
@@ -1280,6 +1288,8 @@ export function createGameSession(
       return;
     }
 
+    if (currentDialog?.kind === 'blockade' || currentDialog?.kind === 'draw-offer')
+      currentDialog = null;
     state = result.state;
     scenarioProgress = activeScenario
       ? evaluateScenarioProgress(activeScenario, before, state, action)
@@ -1516,12 +1526,13 @@ export function createGameSession(
 
   function tickActiveClock(): void {
     if (gameMode === 'online') {
+      if (state.outcome || replayCursor !== null || document.visibilityState === 'hidden') return;
       const clock = displayMatchRecord()?.clock;
-      if (!clock || state.outcome || replayCursor !== null || document.visibilityState === 'hidden')
-        return;
-      const second = Math.ceil(activeClockRemainingMs(clock) / 1_000);
-      if (second !== onlineDisplaySecond) {
+      const second = clock ? Math.ceil(activeClockRemainingMs(clock) / 1_000) : -1;
+      const responseSecond = onlineSecondsRemaining();
+      if (second !== onlineDisplaySecond || responseSecond !== onlineResponseSecond) {
         onlineDisplaySecond = second;
+        onlineResponseSecond = responseSecond;
         renderClockDisplay();
       }
       return;
@@ -1615,7 +1626,14 @@ export function createGameSession(
     if (!preferences.reducedMotion) {
       navigator.vibrate?.([60, 40, 120]);
     }
-    announce(outcomeText(state.outcome));
+    announce(
+      outcomeText(
+        state.outcome,
+        state.outcome.type === 'win'
+          ? participantName(matchConfig?.participants[state.outcome.winner])
+          : undefined,
+      ),
+    );
     showOutcomeDialog();
   }
 
@@ -1805,15 +1823,7 @@ export function createGameSession(
 
   async function acceptBlockade(): Promise<void> {
     if (gameMode === 'online') {
-      if (onlineState.status === 'playing') {
-        currentDialog = null;
-        await requestOnline({
-          kind: 'respond-draw',
-          matchId: onlineState.matchId,
-          revision: onlineState.revision,
-          accept: true,
-        });
-      }
+      await respondToDraw(true);
       return;
     }
     if (
@@ -1829,6 +1839,7 @@ export function createGameSession(
     const before = state;
     const result = declareBlockade(state);
     if (!result.ok) return;
+    if (currentDialog?.kind === 'blockade') currentDialog = null;
     if (matchController && result.state.outcome) {
       if (matchController.record.clock) matchController.pauseClock(Date.now());
       if (!matchController.store.getState().game.outcome)
@@ -2316,6 +2327,75 @@ export function createGameSession(
     );
   }
 
+  function isOnlineTurnUnavailable(): boolean {
+    return (
+      gameMode === 'online' &&
+      (isRemoteTurn() ||
+        onlineBusy ||
+        (onlineState.status === 'playing' &&
+          (onlineState.opening != null || onlineState.drawOffer != null)))
+    );
+  }
+
+  function canResign(): boolean {
+    return Boolean(
+      matchRecord &&
+      !state.outcome &&
+      !animating &&
+      !machineThinking &&
+      !isMachineTurn() &&
+      !isOnlineTurnUnavailable() &&
+      replayCursor === null &&
+      !activeScenario &&
+      !tutorial &&
+      currentDialog?.kind !== 'first-turn',
+    );
+  }
+
+  function canOfferDraw(): boolean {
+    if (!canResign() || (gameMode !== 'local' && gameMode !== 'online')) return false;
+    if (gameMode === 'online')
+      return onlineState.status === 'playing' && !onlineState.drawOfferedThisTurn;
+    return (
+      localDrawOfferedTurn?.match !== matchRecord?.createdAt ||
+      localDrawOfferedTurn?.turn !== state.ply + (state.passedTurnCount ?? 0)
+    );
+  }
+
+  function respondToDraw(accept: boolean): Promise<void> {
+    if (
+      onlineBusy ||
+      onlineState.status !== 'playing' ||
+      onlineState.drawOffer == null ||
+      onlineState.drawOffer === onlineState.player ||
+      onlineSecondsRemaining() === 0
+    )
+      return Promise.resolve();
+    return requestOnline({
+      kind: 'respond-draw',
+      matchId: onlineState.matchId,
+      revision: onlineState.revision,
+      accept,
+    });
+  }
+
+  function onlineServerTime(): number {
+    return onlineState.status === 'playing'
+      ? onlineState.serverNow + Math.max(0, performance.now() - onlineReceivedAt)
+      : 0;
+  }
+
+  function onlineSecondsRemaining(): number | null {
+    if (onlineState.status !== 'playing') return null;
+    const now = onlineServerTime();
+    const opening = onlineState.opening;
+    if (opening && now < opening.revealsAt) return null;
+    const deadline = opening
+      ? opening.revealsAt + ONLINE_RESPONSE_MS
+      : onlineState.drawOfferExpiresAt;
+    return deadline == null ? null : Math.max(0, Math.ceil((deadline - now) / 1_000));
+  }
+
   // Estimate the display only. The server owns deadlines, automatic turns and results.
   function displayMatchRecord(): MatchRecord | null {
     const clock = matchRecord?.clock;
@@ -2332,7 +2412,7 @@ export function createGameSession(
       return matchRecord;
     const elapsed = Math.min(
       activeClockRemainingMs(clock),
-      Math.max(0, onlineState.serverNow - clock.lastTickAt + performance.now() - onlineReceivedAt),
+      Math.max(0, onlineServerTime() - clock.lastTickAt),
     );
     const remainingMs: [number, number] = [...clock.remainingMs];
     if (clock.initialMs !== null) remainingMs[clock.activePlayer] -= elapsed;
@@ -2364,6 +2444,7 @@ export function createGameSession(
     onlineFailures = 0;
     onlineAuthenticationRequired = false;
     onlineDisplaySecond = -1;
+    onlineResponseSecond = null;
   }
 
   function requestOnline(request: OnlineRequest, leave = false): Promise<void> {
@@ -2533,10 +2614,26 @@ export function createGameSession(
       progression = { ...progression, ratings: { ...progression.ratings, online: next.elo } };
       savePlayerProgression(progression);
     }
+    if (next.opening) currentDialog = { kind: 'first-turn', player: state.activePlayer };
+    else if (currentDialog?.kind === 'first-turn') currentDialog = null;
     if (next.drawOffer != null && next.drawOffer !== next.player && !state.outcome) {
-      if (previous.status !== 'playing' || previous.drawOffer !== next.drawOffer)
-        currentDialog = { kind: 'blockade' };
+      currentDialog = { kind: 'blockade' };
     } else if (currentDialog?.kind === 'blockade') currentDialog = null;
+    if (
+      !entering &&
+      previous.status === 'playing' &&
+      previous.drawOffer === next.player &&
+      next.drawOffer == null &&
+      !state.outcome
+    )
+      showToast('La propuesta de tablas ha sido rechazada.');
+    if (
+      (currentDialog?.kind === 'resign' ||
+        currentDialog?.kind === 'draw-offer' ||
+        currentDialog?.kind === 'abandon') &&
+      (state.outcome || state.activePlayer !== next.player || next.drawOffer != null)
+    )
+      currentDialog = null;
     if (changed) {
       selectedId = null;
       pendingAction = null;
@@ -2547,9 +2644,7 @@ export function createGameSession(
           `Partida en línea. Juegas como ${participantLabel(matchConfig.participants[next.player], PLAYER_NAMES[next.player])}.`,
         );
       else if (!state.outcome)
-        announce(
-          `Turno de ${participantLabel(matchConfig.participants[state.activePlayer], PLAYER_NAMES[state.activePlayer])}.`,
-        );
+        announce(`Turno de ${participantName(matchConfig.participants[state.activePlayer])}.`);
     }
     render();
     if (events.length) {
@@ -2625,6 +2720,18 @@ export function createGameSession(
     },
     finishOpeningDraw() {
       if (disposed || currentDialog?.kind !== 'first-turn') return;
+      if (gameMode === 'online') {
+        if (
+          !onlineBusy &&
+          onlineState.status === 'playing' &&
+          onlineState.opening &&
+          !onlineState.opening.ready[onlineState.player] &&
+          onlineServerTime() >= onlineState.opening.revealsAt &&
+          onlineSecondsRemaining() !== 0
+        )
+          void requestOnline({ kind: 'ready', matchId: onlineState.matchId });
+        return;
+      }
       currentDialog = null;
       if (matchController?.record.clock) {
         matchController.resumeClock(Date.now());
@@ -2753,7 +2860,7 @@ export function createGameSession(
     prepareAction: setPending,
     commitPending,
     setMode(nextMode) {
-      if (isRemoteTurn() || (gameMode === 'online' && onlineBusy)) return;
+      if (isOnlineTurnUnavailable()) return;
       if (animating || state.outcome || isMachineTurn() || replayCursor !== null) return;
       if (tutorial) {
         const step = tutorialStep();
@@ -2809,19 +2916,12 @@ export function createGameSession(
     setReplayCursor,
     closeReplay,
     resign() {
+      if (!canResign()) return;
       if (gameMode === 'online' && onlineState.status === 'playing') {
         void requestOnline({ kind: 'resign', matchId: onlineState.matchId });
         return;
       }
-      if (currentDialog?.kind === 'first-turn') return;
-      if (
-        !matchController ||
-        state.outcome ||
-        animating ||
-        machineThinking ||
-        replayCursor !== null
-      )
-        return;
+      if (!matchController) return;
       if (matchController.record.clock) matchController.pauseClock(Date.now());
       if (!matchController.store.getState().game.outcome)
         matchController.resign(state.activePlayer);
@@ -2836,8 +2936,8 @@ export function createGameSession(
     },
     acceptBlockade,
     offerDraw() {
+      if (!canOfferDraw()) return;
       if (gameMode === 'online' && onlineState.status === 'playing') {
-        if (onlineBusy || state.outcome || onlineState.drawOffer != null) return;
         const epoch = onlineEpoch;
         currentDialog = null;
         void requestOnline({
@@ -2848,7 +2948,13 @@ export function createGameSession(
           if (!disposed && epoch === onlineEpoch && !onlineError)
             showToast('Propuesta de tablas enviada al rival.');
         });
-      } else openDialog({ kind: 'blockade' });
+      } else if (matchRecord) {
+        localDrawOfferedTurn = {
+          match: matchRecord.createdAt,
+          turn: state.ply + (state.passedTurnCount ?? 0),
+        };
+        openDialog({ kind: 'blockade' });
+      }
     },
     revealHint,
     readyForTurn() {

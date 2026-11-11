@@ -3,6 +3,7 @@ import { createOnlineApp } from '../server/app';
 import { OnlineService } from '../server/online-service';
 import { getAllLegalActions } from '../src/engine';
 import { replayRecord } from '../src/match-record';
+import { ONLINE_RESPONSE_MS, OPENING_DRAW_MS } from '../src/online-contracts';
 import type { OnlineState, PrivateMatchSettings } from '../src/online-contracts';
 import { MemoryOnlineRepository } from './helpers/online-repository';
 
@@ -25,6 +26,19 @@ function privateWaiting(state: OnlineState) {
   return state;
 }
 
+async function beginMatch(
+  service: OnlineService,
+  match: ReturnType<typeof playing>,
+  setTime: (time: number) => void,
+) {
+  setTime(match.opening!.revealsAt);
+  await service.request(a, { kind: 'ready', matchId: match.matchId });
+  const started = playing(await service.request(b, { kind: 'ready', matchId: match.matchId }));
+  const [actor, rival] =
+    replayRecord(started.record).activePlayer === started.player ? [b, a] : [a, b];
+  return { started, actor, rival };
+}
+
 describe('servicio multijugador con almacenamiento transaccional', () => {
   it('consulta partidas activas sin bloquear el vestíbulo ni reservar jugadores de lectura', async () => {
     const repository = new MemoryOnlineRepository();
@@ -42,15 +56,16 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
 
   it('confirma una sola orden ante dos envíos simultáneos de la misma revisión', async () => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
     await service.request(a, { kind: 'search', name: 'a' });
     const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
-    const state = replayRecord(match.record);
-    const actor = repository.matches.get(match.matchId)!.players[state.activePlayer];
+    const { started, actor } = await beginMatch(service, match, (time) => (now = time));
+    const state = replayRecord(started.record);
     const request = {
       kind: 'action' as const,
       matchId: match.matchId,
-      revision: match.revision,
+      revision: started.revision,
       action: getAllLegalActions(state)[0],
     };
     const results = await Promise.allSettled([
@@ -63,37 +78,55 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
 
   it('no modifica nombres desde consultas y mantiene idempotentes la rendición y la salida', async () => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
     await service.request(a, { kind: 'search', name: 'a' });
     const stray = { kind: 'state' as const, name: 'nombre inyectado' };
     await service.request(a, stray);
     expect(repository.players.get(a)?.name).toBe('a');
     const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
-    const ended = playing(await service.request(a, { kind: 'resign', matchId: match.matchId }));
-    const repeated = playing(await service.request(a, { kind: 'resign', matchId: match.matchId }));
+    const { actor, rival } = await beginMatch(service, match, (time) => (now = time));
+    await expect(
+      service.request(rival, { kind: 'resign', matchId: match.matchId }),
+    ).rejects.toThrow('turno del rival');
+    const ended = playing(await service.request(actor, { kind: 'resign', matchId: match.matchId }));
+    const repeated = playing(
+      await service.request(actor, { kind: 'resign', matchId: match.matchId }),
+    );
     expect(repeated.revision).toBe(ended.revision);
-    await service.request(a, { kind: 'finish', matchId: match.matchId });
-    expect(await service.request(a, { kind: 'finish', matchId: match.matchId })).toEqual({
+    await service.request(actor, { kind: 'finish', matchId: match.matchId });
+    expect(await service.request(actor, { kind: 'finish', matchId: match.matchId })).toEqual({
       status: 'idle',
     });
-    await expect(service.request(a, { kind: 'resign', matchId: match.matchId })).rejects.toThrow(
-      'Ya has salido',
-    );
-    expect(await service.request(a, { kind: 'state' })).toEqual({ status: 'idle' });
+    await expect(
+      service.request(actor, { kind: 'resign', matchId: match.matchId }),
+    ).rejects.toThrow('Ya has salido');
+    expect(await service.request(actor, { kind: 'state' })).toEqual({ status: 'idle' });
   });
 
   it.each([true, false])('negocia tablas con el rival (aceptar: %s)', async (accept) => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
     await service.request(a, { kind: 'search', name: 'a' });
     const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
-    const offer = playing(
-      await service.request(a, { kind: 'offer-draw', matchId: match.matchId, revision: 0 }),
-    );
+    const { actor, rival, started } = await beginMatch(service, match, (time) => (now = time));
+    now += 1_000;
+    const offerRequest = {
+      kind: 'offer-draw' as const,
+      matchId: match.matchId,
+      revision: started.revision,
+    };
+    await expect(service.request(rival, offerRequest)).rejects.toThrow('turno del rival');
+    const offer = playing(await service.request(actor, offerRequest));
     expect(offer.drawOffer).toBe(offer.player);
     expect(replayRecord(offer.record).outcome).toBeNull();
-    const polled = playing(await service.request(b, { kind: 'state' }));
+    expect(offer.record.clock?.status).toBe('paused');
+    expect(offer.drawOfferExpiresAt).toBe(now + ONLINE_RESPONSE_MS);
+    now += 10_000;
+    const polled = playing(await service.request(rival, { kind: 'state' }));
     expect(polled.drawOffer).not.toBe(polled.player);
+    expect(polled.record.clock).toEqual(offer.record.clock);
     await expect(
       service.request(c, {
         kind: 'respond-draw',
@@ -103,7 +136,7 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
       }),
     ).rejects.toThrow('No perteneces');
     await expect(
-      service.request(a, {
+      service.request(actor, {
         kind: 'respond-draw',
         matchId: match.matchId,
         revision: offer.revision,
@@ -111,10 +144,15 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
       }),
     ).rejects.toThrow('No hay una propuesta del rival');
     await expect(
-      service.request(b, { kind: 'respond-draw', matchId: match.matchId, revision: 0, accept }),
+      service.request(rival, {
+        kind: 'respond-draw',
+        matchId: match.matchId,
+        revision: started.revision,
+        accept,
+      }),
     ).rejects.toThrow('ha cambiado');
     const ended = playing(
-      await service.request(b, {
+      await service.request(rival, {
         kind: 'respond-draw',
         matchId: match.matchId,
         revision: offer.revision,
@@ -127,8 +165,17 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
       accept ? { type: 'draw', reason: 'blockade' } : null,
     );
     expect(repository.players.get(a)?.played).toBe(accept ? 1 : 0);
+    if (!accept) {
+      expect(ended.record.clock?.status).toBe('running');
+      expect(ended.record.clock?.remainingMs).toEqual(offer.record.clock?.remainingMs);
+      expect(ended.record.clock?.turnRemainingMs).toBe(offer.record.clock?.turnRemainingMs);
+      expect(ended.drawOfferedThisTurn).toBe(true);
+      await expect(
+        service.request(actor, { ...offerRequest, revision: ended.revision }),
+      ).rejects.toThrow('durante este turno');
+    }
     await expect(
-      service.request(b, {
+      service.request(rival, {
         kind: 'respond-draw',
         matchId: match.matchId,
         revision: ended.revision,
@@ -137,33 +184,83 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     ).rejects.toThrow();
   });
 
-  it('retira la propuesta cuando se juega y rechaza aceptaciones antiguas', async () => {
+  it('rechaza tablas a los 30 s y reanuda el reloj desde el vencimiento', async () => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
-    await service.request(a, { kind: 'search', name: 'a' });
-    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
+    const room = privateWaiting(
+      await service.request(a, {
+        kind: 'create-private',
+        name: 'a',
+        settings: { ...settings, turnSeconds: 30, totalSeconds: 300 },
+      }),
+    );
+    const match = playing(
+      await service.request(b, { kind: 'join-private', code: room.code, name: 'b' }),
+    );
+    const { started, actor, rival } = await beginMatch(service, match, (time) => (now = time));
     const offer = playing(
-      await service.request(a, { kind: 'offer-draw', matchId: match.matchId, revision: 0 }),
+      await service.request(actor, {
+        kind: 'offer-draw',
+        matchId: match.matchId,
+        revision: started.revision,
+      }),
     );
     const state = replayRecord(offer.record);
-    const active = repository.matches.get(match.matchId)!.players[state.activePlayer];
-    const moved = playing(
-      await service.request(active, {
-        kind: 'action',
-        matchId: match.matchId,
-        revision: offer.revision,
-        action: getAllLegalActions(state)[0],
-      }),
-    );
-    expect(moved.drawOffer).toBeNull();
+    const action = {
+      kind: 'action' as const,
+      matchId: match.matchId,
+      revision: offer.revision,
+      action: getAllLegalActions(state)[0],
+    };
+    await expect(service.request(actor, action)).rejects.toThrow('propuesta de tablas pendiente');
+    now = offer.drawOfferExpiresAt!;
     await expect(
-      service.request(b, {
+      service.request(rival, {
         kind: 'respond-draw',
         matchId: match.matchId,
-        revision: moved.revision,
+        revision: offer.revision,
         accept: true,
       }),
-    ).rejects.toThrow('No hay una propuesta');
+    ).rejects.toThrow('ha cambiado');
+    now += 500;
+    const resumed = playing(await service.request(actor, { kind: 'state' }));
+    expect(resumed.drawOffer).toBeNull();
+    expect(resumed.record.clock?.status).toBe('running');
+    expect(resumed.record.clock?.turnRemainingMs).toBe(offer.record.clock!.turnRemainingMs! - 500);
+    expect(resumed.record.clock?.remainingMs[state.activePlayer]).toBe(
+      offer.record.clock!.remainingMs[state.activePlayer] - 500,
+    );
+    expect(resumed.drawOfferedThisTurn).toBe(true);
+    const moved = playing(await service.request(actor, { ...action, revision: resumed.revision }));
+    expect(moved.drawOfferedThisTurn).toBeFalsy();
+  });
+
+  it('espera al sorteo y a ambos jugadores o al plazo de inicio', async () => {
+    let now = 1000;
+    const service = new OnlineService(new MemoryOnlineRepository(), () => now);
+    await service.request(a, { kind: 'search', name: 'a' });
+    const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
+    const ready = { kind: 'ready' as const, matchId: match.matchId };
+    const reveal = now + OPENING_DRAW_MS;
+    expect(match.opening).toEqual({ revealsAt: reveal, ready: [false, false] });
+    expect(match.record.clock?.status).toBe('paused');
+    await expect(service.request(a, ready)).rejects.toThrow('sorteo sigue en curso');
+    now = reveal;
+    const waiting = playing(await service.request(a, ready));
+    expect(waiting.opening?.ready[waiting.player]).toBe(true);
+    expect(waiting.opening?.ready[1 - waiting.player]).toBe(false);
+    expect(waiting.record.clock?.status).toBe('paused');
+    expect(playing(await service.request(a, ready)).revision).toBe(waiting.revision);
+    now = reveal + ONLINE_RESPONSE_MS - 1;
+    const before = playing(await service.request(b, { kind: 'state' }));
+    expect(before.record.clock).toEqual(match.record.clock);
+    expect(before.opening).toEqual(waiting.opening);
+    now += 501;
+    const started = playing(await service.request(a, { kind: 'state' }));
+    expect(started.opening).toBeUndefined();
+    expect(started.record.clock?.status).toBe('running');
+    expect(started.record.clock?.turnRemainingMs).toBe(match.record.clock!.turnRemainingMs! - 500);
   });
   it('conserva la espera al reintentar e ignora los filtros antiguos de la cola y del cliente', async () => {
     let now = 0;
@@ -219,15 +316,24 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
   });
   it('respeta los ajustes privados, consume el código una sola vez y no cambia Elo', async () => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
     const room = privateWaiting(
       await service.request(a, { kind: 'create-private', name: 'Anfitrión', settings }),
     );
     expect(room.code).toMatch(/^[0-9]{6}$/);
     const joined = playing(
-      await service.request(b, { kind: 'join-private', name: 'Invitado', code: room.code }),
+      await service.request(
+        b,
+        { kind: 'join-private', name: 'Nombre anónimo', code: room.code },
+        false,
+      ),
     );
     expect(joined.record.clock).toBeNull();
+    expect(joined.record.config.participants.map(({ name }) => name)).toEqual([
+      'Anfitrión',
+      'Invitado',
+    ]);
     expect(joined.record.config.participants[0].faction).toBe('conservationist');
     expect(
       joined.record.initialState.pieces.filter((p) => p.type === 'fortress').map((p) => p.hp),
@@ -236,7 +342,11 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     await expect(
       service.request(c, { kind: 'join-private', name: 'Tercero', code: room.code }),
     ).rejects.toThrow('No existe una sala');
-    await service.request(a, { kind: 'resign', matchId: joined.matchId });
+    const { actor } = await beginMatch(service, joined, (time) => (now = time));
+    const ended = playing(
+      await service.request(actor, { kind: 'resign', matchId: joined.matchId }),
+    );
+    expect(ended.ratingChange).toBeUndefined();
     expect(repository.players.get(a)?.elo).toBe(1000);
     expect(repository.players.get(b)?.elo).toBe(1000);
     expect(repository.players.get(a)?.played).toBe(0);
@@ -244,7 +354,8 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
   });
   it('rechaza jugadas del rival, ilegales, repetidas y ajenas a la partida', async () => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
     await service.request(a, {
       kind: 'search',
       name: 'a',
@@ -255,11 +366,19 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
         name: 'b',
       }),
     );
-    const state = replayRecord(matched.record);
-    const activeId = [...repository.matches.values()][0].players[state.activePlayer];
-    const otherId = activeId === a ? b : a;
+    const {
+      started,
+      actor: activeId,
+      rival: otherId,
+    } = await beginMatch(service, matched, (time) => (now = time));
+    const state = replayRecord(started.record);
     const action = getAllLegalActions(state)[0];
-    const request = { kind: 'action' as const, matchId: matched.matchId, revision: 0, action };
+    const request = {
+      kind: 'action' as const,
+      matchId: matched.matchId,
+      revision: started.revision,
+      action,
+    };
     await expect(service.request(otherId, request)).rejects.toThrow('turno del rival');
     await expect(service.request(c, request)).rejects.toThrow('No perteneces');
     await expect(
@@ -270,12 +389,13 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     ).rejects.toThrow('no es legal');
     const result = playing(await service.request(activeId, request));
     expect(result.record.currentAction).toBe(1);
-    expect(result.revision).toBe(1);
+    expect(result.revision).toBe(started.revision + 1);
     await expect(service.request(activeId, request)).rejects.toThrow('ha cambiado');
   });
   it('liquida Elo una vez, no permite abandonar una partida activa sin rendirse y permite salir al acabar', async () => {
     const repository = new MemoryOnlineRepository();
-    const service = new OnlineService(repository, () => 1000);
+    let now = 1000;
+    const service = new OnlineService(repository, () => now);
     await service.request(a, {
       kind: 'search',
       name: 'a',
@@ -286,21 +406,33 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
         name: 'b',
       }),
     );
+    expect(match.ratingChange).toBeUndefined();
     expect((await service.request(a, { kind: 'cancel' })).status).toBe('playing');
     await expect(service.request(a, { kind: 'finish', matchId: match.matchId })).rejects.toThrow(
       'sigue en curso',
     );
-    const ended = playing(await service.request(a, { kind: 'resign', matchId: match.matchId }));
+    const { actor, rival } = await beginMatch(service, match, (time) => (now = time));
+    const ended = playing(await service.request(actor, { kind: 'resign', matchId: match.matchId }));
     expect(replayRecord(ended.record).outcome?.reason).toBe('resignation');
-    const elo = repository.players.get(a)?.elo;
-    expect(elo).toBeLessThan(1000);
-    await service.request(a, { kind: 'resign', matchId: match.matchId });
-    expect(repository.players.get(a)?.elo).toBe(elo);
-    expect(repository.players.get(a)?.played).toBe(1);
-    expect(await service.request(a, { kind: 'finish', matchId: match.matchId })).toEqual({
+    expect(ended.ratingChange).toEqual({ ratingBefore: 1000, ratingAfter: 980 });
+    const winner = playing(await service.request(rival, { kind: 'state' }));
+    expect(winner.ratingChange).toEqual({ ratingBefore: 1000, ratingAfter: 1020 });
+    const retried = playing(
+      await service.request(actor, { kind: 'resign', matchId: match.matchId }),
+    );
+    expect(retried.ratingChange).toEqual(ended.ratingChange);
+    expect(repository.players.get(actor)?.elo).toBe(980);
+    expect(repository.players.get(actor)?.played).toBe(1);
+    const stored = repository.matches.get(match.matchId)!;
+    expect(stored.rankingResult?.ratingsAfter?.[ended.player]).toBe(980);
+    delete stored.rankingResult?.ratingsAfter;
+    expect(playing(await service.request(rival, { kind: 'state' })).ratingChange).toEqual(
+      winner.ratingChange,
+    );
+    expect(await service.request(actor, { kind: 'finish', matchId: match.matchId })).toEqual({
       status: 'idle',
     });
-    expect(await service.request(a, { kind: 'state' })).toEqual({ status: 'idle' });
+    expect(await service.request(actor, { kind: 'state' })).toEqual({ status: 'idle' });
   });
   it('expira salas y búsquedas abandonadas, y permite cancelarlas', async () => {
     let now = 0;
@@ -346,10 +478,11 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
         name: 'b',
       }),
     );
-    now = 89_999;
+    const openingDeadline = match.opening!.revealsAt + ONLINE_RESPONSE_MS;
+    now = openingDeadline + 89_999;
     await service.tick();
     expect(repository.matches.get(match.matchId)?.record.currentAction).toBe(0);
-    now = 90_001;
+    now = openingDeadline + 90_001;
     await service.tick();
     const advanced = playing(await service.request(a, { kind: 'state' }));
     expect(advanced.record.currentAction).toBe(1);
@@ -368,7 +501,7 @@ describe('servicio multijugador con almacenamiento transaccional', () => {
     const service = new OnlineService(repository, () => now);
     await service.request(a, { kind: 'search', name: 'a' });
     const match = playing(await service.request(b, { kind: 'search', name: 'b' }));
-    now = 90_001;
+    now = match.opening!.revealsAt + ONLINE_RESPONSE_MS + 90_001;
     const resumed = playing(
       await new OnlineService(repository, () => now).request(a, { kind: 'state' }),
     );

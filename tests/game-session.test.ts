@@ -600,7 +600,7 @@ describe('sesión que conecta React con el juego', () => {
     const response: OnlineState = {
       status: 'playing',
       matchId: 'match',
-      player: 1,
+      player: 0,
       revision: 0,
       record,
       elo: 1000,
@@ -619,7 +619,7 @@ describe('sesión que conecta React con el juego', () => {
       matchId: 'match',
       revision: 0,
     });
-    request.mockResolvedValue({ ...response, revision: 1, drawOffer: 0 });
+    request.mockResolvedValue({ ...response, revision: 1, drawOffer: 1 });
     session.commands.resumeOnline();
     await vi.advanceTimersByTimeAsync(0);
     expect(session.getSnapshot().dialog?.kind).toBe('blockade');
@@ -634,7 +634,7 @@ describe('sesión que conecta React con el juego', () => {
     request.mockResolvedValue({ ...response, revision: 2, drawOffer: null });
     session.commands.resumeOnline();
     await vi.advanceTimersByTimeAsync(0);
-    request.mockResolvedValue({ ...response, revision: 3, drawOffer: 0 });
+    request.mockResolvedValue({ ...response, revision: 3, drawOffer: 1 });
     session.commands.resumeOnline();
     await vi.advanceTimersByTimeAsync(0);
     await session.commands.acceptBlockade();
@@ -825,6 +825,25 @@ describe('sesión que conecta React con el juego', () => {
       expect(collaborators.chooseAction).toHaveBeenCalledTimes(winner);
     },
   );
+
+  it('permite volver a ofrecer tablas locales solo cuando empieza otro turno', async () => {
+    const session = createSession();
+    session.commands.startMatch(createClassicConfig({ mode: 'local' }));
+    expect(session.getSnapshot().canOfferDraw).toBe(true);
+    session.commands.offerDraw();
+    expect(session.getSnapshot().dialog?.kind).toBe('blockade');
+    session.commands.closeDialog();
+    expect(session.getSnapshot().canOfferDraw).toBe(false);
+    session.commands.offerDraw();
+    expect(session.getSnapshot().dialog).toBeNull();
+
+    const action = rotation(session.getSnapshot().state);
+    session.commands.selectPiece(action.pieceId);
+    session.commands.prepareAction(action);
+    await session.commands.commitPending();
+    expect(session.getSnapshot().state.ply).toBe(1);
+    expect(session.getSnapshot().canOfferDraw).toBe(true);
+  });
 
   it.each(['local', 'machine'] as const)(
     'suma solo tiempo jugado al guardar y retomar en %s',

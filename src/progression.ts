@@ -27,6 +27,7 @@ export const AI_RATINGS: Record<AiDifficulty, number> = {
 };
 const DIFFICULTIES: AiDifficulty[] = ['recruit', 'tactical', 'commander', 'expert'];
 const STORAGE_KEY = 'hexagonal:progression:v1';
+const CATALOG_REVISION = 3;
 const COMBAT_TYPES: PieceType[] = [
   'soldier',
   'capturer',
@@ -61,7 +62,7 @@ export interface MatchEvidence {
 }
 export interface PlayerProgression {
   version: 1;
-  catalogRevision: 2;
+  catalogRevision: typeof CATALOG_REVISION;
   xp: number;
   /** First satisfaction, including achievements in tiers that are still locked. */
   achievedAt: Partial<Record<ProgressionAchievementId, string>>;
@@ -86,7 +87,7 @@ export interface ProgressionUpdate {
 export function createPlayerProgression(): PlayerProgression {
   return {
     version: 1,
-    catalogRevision: 2,
+    catalogRevision: CATALOG_REVISION,
     xp: 0,
     achievedAt: {},
     unlockedAt: {},
@@ -160,7 +161,7 @@ const MAX_METRICS = new Set([
   'airKillsMatch',
   'soldierKills',
   'tankKills',
-  'conversionsMatch',
+  'conversionsByCapturer',
   'stationaryMissileKills',
   'planeKills',
   'ramAttackDistance',
@@ -424,6 +425,7 @@ function analyzeRecord(record: MatchRecord, owner: Player): Metrics {
   const killsByUnit: Metrics = {};
   const stationary: Metrics = {};
   const missilesUsed: Metrics = {};
+  const conversionsByCapturer = new Map<string, Set<string>>();
   const used = new Set<PieceType>(),
     killedWith = new Set<PieceType>();
   const converted = new Set<string>(),
@@ -452,6 +454,10 @@ function analyzeRecord(record: MatchRecord, owner: Player): Metrics {
       if (action.kind === 'convert') {
         bump('conversions');
         converted.add(action.targetId);
+        const targets = conversionsByCapturer.get(actor.id) ?? new Set<string>();
+        targets.add(action.targetId);
+        conversionsByCapturer.set(actor.id, targets);
+        max('conversionsByCapturer', targets.size);
       }
       if (action.kind === 'move') {
         const distance = hexDistance(actor.position, action.to);
@@ -570,7 +576,6 @@ function analyzeRecord(record: MatchRecord, owner: Player): Metrics {
     }
     state = result.state;
   }
-  metrics.conversionsMatch = metrics.conversions ?? 0;
   metrics.allTypesUsed = Number(COMBAT_TYPES.every((type) => used.has(type)));
   metrics.allTypesKill = Number(COMBAT_TYPES.every((type) => killedWith.has(type)));
   return metrics;
@@ -788,11 +793,18 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
     for (const [id, at] of Object.entries(value.legacyUnlockedAt))
       if (timestamp(at)) fresh.legacyUnlockedAt[id] = at;
   // This slot now rewards a different feat. Preserve its old award and XP separately.
-  if (value.catalogRevision !== 2) {
+  const savedRevision = count(value.catalogRevision);
+  if (savedRevision < 2) {
     const oldShield = fresh.unlockedAt['p1-20'];
     if (oldShield) fresh.legacyUnlockedAt['p1-20:shieldSurvived'] = oldShield;
     delete fresh.unlockedAt['p1-20'];
     delete fresh.achievedAt['p1-20'];
+  }
+  // Recalculate pending achievements whose conditions became stricter.
+  if (savedRevision < 3) {
+    for (const id of ['p3-07', 'p3-14'] as const) {
+      if (!fresh.unlockedAt[id]) delete fresh.achievedAt[id];
+    }
   }
   for (const entry of PROGRESSION_ACHIEVEMENTS) {
     const unlocked = fresh.unlockedAt[entry.id];

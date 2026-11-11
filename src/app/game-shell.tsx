@@ -11,21 +11,12 @@ import {
 } from './panels';
 import { ReplayDock } from './replay-dock';
 import { SettingsIcon, SoundButton, WarningIcon } from './shell-icons';
-import { AchievementsMenuIcon } from './components/achievement-icon';
 import { TutorialPanel } from './tutorial-panel';
 import { Button } from './components/ui/button';
 
 function Header() {
   const { snapshot, commands } = useGame();
-  const { state, activeScenario, machineThinking, animating, replayCursor, gameMode, matchRecord } =
-    snapshot;
-  const disabled =
-    Boolean(state.outcome) ||
-    animating ||
-    machineThinking ||
-    replayCursor !== null ||
-    Boolean(activeScenario) ||
-    Boolean(snapshot.tutorial);
+  const { state, activeScenario, replayCursor, gameMode, canOfferDraw, canResign } = snapshot;
   return (
     <header className="topbar" inert={snapshot.homeView !== null}>
       <div className="brand" role="img" aria-label="Hexfortia: estrategia hexagonal">
@@ -41,8 +32,8 @@ function Header() {
           className="icon-button"
           id="settings-button"
           type="button"
-          aria-label="Abrir opciones"
-          title="Opciones"
+          aria-label="Abrir ajustes"
+          title="Ajustes"
           onClick={() => commands.openDialog({ kind: 'settings' })}
         >
           <SettingsIcon />
@@ -59,26 +50,11 @@ function Header() {
         </button>
         <button
           className="icon-button"
-          id="achievements-button"
-          type="button"
-          aria-label="Abrir logros"
-          title="Logros"
-          onClick={() => commands.openDialog({ kind: 'achievements' })}
-        >
-          <AchievementsMenuIcon />
-        </button>
-        <button
-          className="icon-button"
           id="blockade-button"
           type="button"
           aria-label="Proponer tablas"
           title="Proponer tablas"
-          disabled={
-            disabled ||
-            gameMode === 'machine' ||
-            snapshot.online.busy ||
-            (snapshot.online.state.status === 'playing' && snapshot.online.state.drawOffer != null)
-          }
+          disabled={!canOfferDraw}
           hidden={gameMode === 'machine' || Boolean(activeScenario) || Boolean(snapshot.tutorial)}
           onClick={() => commands.openDialog({ kind: 'draw-offer' })}
         >
@@ -95,7 +71,7 @@ function Header() {
             type="button"
             aria-label="Rendirse"
             title="Rendirse"
-            disabled={!matchRecord || disabled || (gameMode === 'online' && snapshot.online.busy)}
+            disabled={!canResign}
             onClick={() => commands.openDialog({ kind: 'resign' })}
           >
             <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -106,7 +82,9 @@ function Header() {
             className="menu-button"
             id="new-game-button"
             type="button"
-            disabled={gameMode === 'online' && snapshot.online.busy}
+            disabled={
+              gameMode === 'online' && (snapshot.online.busy || (!state.outcome && !canResign))
+            }
             onClick={() =>
               snapshot.tutorial
                 ? commands.exitTutorial()
@@ -303,8 +281,13 @@ function OnlineConnectionNotice() {
     >
       <div className="min-w-0 flex-1 basis-60">
         <p className="m-0 break-words">
-          {online.error ?? 'Has propuesto tablas. Esperando la respuesta del rival.'}
+          {online.error ?? 'Partida en pausa. Esperando la respuesta a tu propuesta de tablas.'}
         </p>
+        {offered && online.secondsRemaining != null && (
+          <p role="timer" aria-live="off" className="mb-0 mt-1 text-muted tabular-nums">
+            Tiempo restante · {online.secondsRemaining} s
+          </p>
+        )}
         {online.error && snapshot.matchRecord?.clock?.status === 'running' && (
           <p className="mb-0 mt-1 text-muted">Los relojes siguen corriendo en el servidor.</p>
         )}
