@@ -8,19 +8,19 @@
   "theme_color": "#07131a",
   "icons": [
     {
-      "src": "/brand/hexfortia-192.png",
+      "src": "/brand/hexfortia-vehicles-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/hexfortia-512.png",
+      "src": "/brand/hexfortia-vehicles-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/hexfortia-maskable-512.png",
+      "src": "/brand/hexfortia-vehicles-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

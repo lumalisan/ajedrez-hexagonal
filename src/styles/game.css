@@ -2418,7 +2418,7 @@ button:disabled {
   bottom: 24px;
   width: 240px;
   height: 240px;
-  background: url('/brand/hexfortia-192.png') center / contain no-repeat;
+  background: url('/brand/hexfortia-vehicles-192.png') center / contain no-repeat;
   content: '';
   opacity: 0.045;
   transform: rotate(-12deg);

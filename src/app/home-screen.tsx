@@ -55,7 +55,7 @@ export function HomeScreen() {
     >
       <aside className="home-menu-panel">
         <div className="home-brand">
-          <img src="/brand/hexfortia-192.png" alt="" width="76" height="76" />
+          <img src="/brand/hexfortia-vehicles-192.png" alt="" width="76" height="76" />
           <div>
             <span>JUEGO DE ESTRATEGIA HEXAGONAL</span>
             <h1>Hexfortia</h1>

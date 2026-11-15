@@ -107,7 +107,7 @@ export function AdminApp() {
       <main className="admin-login">
         <section className="admin-login-panel" aria-labelledby="admin-login-title">
           <div className="admin-brand">
-            <img src="/brand/hexfortia-192.png" width="36" height="36" alt="" />
+            <img src="/brand/hexfortia-vehicles-192.png" width="36" height="36" alt="" />
             <span>Hexfortia</span>
           </div>
           <h1 id="admin-login-title">Administración</h1>
@@ -156,7 +156,7 @@ export function AdminApp() {
       </a>
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <img src="/brand/hexfortia-192.png" width="36" height="36" alt="" />
+          <img src="/brand/hexfortia-vehicles-192.png" width="36" height="36" alt="" />
           <span>
             Hexfortia<small>Administración</small>
           </span>

@@ -48,7 +48,7 @@ export function OnlineWaiting({ publicSearch = false }: { publicSearch?: boolean
           <div role="status" className="grid w-full justify-items-center gap-5">
             <img
               className="online-search-indicator"
-              src="/brand/hexfortia-192.png"
+              src="/brand/hexfortia-vehicles-192.png"
               width="80"
               height="80"
               alt=""
