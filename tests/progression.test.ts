@@ -3,6 +3,7 @@ import { createGameState, getAllLegalActions } from '../src/engine';
 import { createClassicConfig } from '../src/game-config';
 import { appendAction, concludeMatch, createMatchRecord, replayRecord } from '../src/match-record';
 import { createAchievementProgress } from '../src/achievements';
+import { playerStatistics } from '../src/profile-statistics';
 import {
   createPlayerProgression,
   xpForLevel,
@@ -19,6 +20,7 @@ import {
   parsePlayerProgression,
   rankingSummary,
   migrateProgression,
+  mergePlayerProgression,
   type PlayerProgression,
 } from '../src/progression';
 import type { AiDifficulty, Piece, Player } from '../src/types';
@@ -88,6 +90,22 @@ function fixture(pieces: Piece[], owner: Player = 0, mode: 'machine' | 'local' =
 }
 
 describe('experiencia, niveles y categorías', () => {
+  it('combina XP, logros y Elo de partidas simultáneas sin duplicar premios ni partidas', () => {
+    const common = { ...createPlayerProgression(), xp: 500 };
+    const first = { ...match('machine', 'tactical', 0, 0), createdAt: '2026-10-07T09:00:00Z' };
+    const second = { ...match('machine', 'commander', 0, 1), createdAt: '2026-10-07T10:00:00Z' };
+    const morning = '2026-10-07T09:30:00Z';
+    const cloud = evaluate(first, common, 'live', morning).progress;
+    const device = evaluate(second, common, 'live', AT).progress;
+    const sequential = evaluate(second, cloud, 'live', AT).progress;
+
+    const merged = mergePlayerProgression(cloud, device, AT);
+    expect(merged.xp).toBe(sequential.xp);
+    expect(merged.ratings.machine).toBe(sequential.ratings.machine);
+    expect(merged.unlockedAt).toEqual(sequential.unlockedAt);
+    expect(Object.keys(merged.matches)).toHaveLength(2);
+    expect(mergePlayerProgression(merged, device, AT)).toEqual(merged);
+  });
   it.each([0, 1] as const)(
     'registra privadas como partidas en línea para el jugador %s sin cambiar Elo',
     (onlinePlayer) => {
@@ -103,9 +121,13 @@ describe('experiencia, niveles y categorías', () => {
         mode: 'online',
         result: 1,
       });
-      expect(rankingSummary(result.progress, 'online', 'month', AT)).toMatchObject({
+      expect(playerStatistics(result.progress, 'online')).toMatchObject({
         played: 1,
         wins: 1,
+      });
+      expect(rankingSummary(result.progress, 'online', 'month', AT)).toMatchObject({
+        played: 0,
+        wins: 0,
         rating: 1000,
       });
       const restored = parsePlayerProgression(JSON.stringify(result.progress));

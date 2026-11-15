@@ -15,9 +15,18 @@ export const PLAYER_DATA_KEYS = [
 
 export type PlayerDataKey = (typeof PLAYER_DATA_KEYS)[number];
 export type PlayerData = Partial<Record<PlayerDataKey, string>>;
+export const MATCH_DATA_KEYS = [
+  'hexagonal:progression:v1',
+  'atlas-achievements-v1',
+  'atlas-match-history-v1',
+  'atlas-pending-matches-v1',
+] as const satisfies readonly PlayerDataKey[];
 export interface CloudSave {
   revision: number;
   data: PlayerData;
   elo: number;
 }
-export type CloudRequest = { kind: 'load' } | { kind: 'save'; revision: number; data: PlayerData };
+export type CloudRequest =
+  | { kind: 'load' }
+  | { kind: 'save'; revision: number; data: PlayerData }
+  | { kind: 'merge-progress'; data: PlayerData };

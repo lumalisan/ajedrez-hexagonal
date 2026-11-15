@@ -162,6 +162,7 @@ export interface GameCommands {
 }
 
 export interface GameSession {
+  syncProgress(): void;
   getSnapshot(): GameSnapshot;
   subscribe(listener: () => void): () => void;
   commands: GameCommands;

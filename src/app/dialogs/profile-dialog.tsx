@@ -1,6 +1,6 @@
 import type { PublicPlayerProfile } from '../../ranking-contracts';
-import { DialogClose } from '../components/dialog-close';
-import { useEffect, useRef, useState } from 'react';
+import { DialogCloseButton } from '../components/dialog-close';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fetchPublicProfile } from '../../ranking-client';
 import { PROFILE_COLORS, PROFILE_EMBLEMS } from '../../user-profile';
 import { useGame } from '../game-context';
@@ -80,7 +80,7 @@ function ProfileSettings() {
     >
       <p>Elige cómo quieres aparecer en Hexfortia.</p>
       <div className="profile-preview">
-        <ProfileAvatar profile={draft} />
+        <ProfileAvatar profile={draft} xp={snapshot.progression.xp} />
         <strong>{draft.name || 'Tu nombre'}</strong>
       </div>
       <label className="profile-name-label" htmlFor="profile-name">
@@ -122,7 +122,7 @@ function ProfileSettings() {
                 checked={draft.emblem === emblem}
                 onChange={() => setDraft({ ...draft, emblem })}
               />
-              <ProfileAvatar profile={{ ...draft, emblem }} />
+              <ProfileAvatar profile={{ ...draft, emblem }} xp={snapshot.progression.xp} />
               <span>{emblemLabels[emblem]}</span>
               {index >= unlockedOptions && <small>{TIERS[Math.floor(index / 2)].name}</small>}
             </label>
@@ -201,7 +201,7 @@ export function ProfileDialog({
   publicProfile?: PublicPlayerProfile;
   onClose?: () => void;
 }) {
-  const { snapshot } = useGame();
+  const { snapshot, commands } = useGame();
   const { account } = useAccount();
   const [rankingView, setRankingView] = useState<{
     id: string;
@@ -232,9 +232,58 @@ export function ProfileDialog({
           ? 'Posición no disponible'
           : 'Cargando posición…'
         : 'Sin clasificación';
+  const { progression, profile } = publicProfile ?? snapshot;
+  return (
+    <ProfileView
+      data={{
+        progression,
+        profile,
+        positions: rankedProfile?.positions,
+        statistics: publicProfile?.statistics ?? {
+          total: playerStatistics(snapshot.progression),
+          online: playerStatistics(snapshot.progression, 'online'),
+          machine: playerStatistics(snapshot.progression, 'machine'),
+          local: playerStatistics(snapshot.progression, 'local'),
+        },
+        records: rankedProfile?.records ?? {
+          online: playerRecords(snapshot.progression, 'online'),
+          machine: playerRecords(snapshot.progression, 'machine'),
+        },
+      }}
+      positionLabel={positionLabel}
+      onClose={onClose ?? commands.closeDialog}
+      autoFocusClose={onClose !== undefined}
+      settings={!publicProfile && <ProfileSettings />}
+      sidebar={
+        <>
+          <MatchClockNotice />
+          {!publicProfile && <AccountStatus sidebar />}
+        </>
+      }
+    />
+  );
+}
+
+export function ProfileView({
+  data,
+  onClose,
+  positionLabel = (position) => (position == null ? 'Sin clasificación' : 'Posición ' + position),
+  settings,
+  sidebar,
+  actions,
+  autoFocusClose,
+}: {
+  data: PublicPlayerProfile;
+  onClose: () => void;
+  positionLabel?: (position: number | null | undefined) => string;
+  settings?: ReactNode;
+  sidebar?: ReactNode;
+  actions?: ReactNode;
+  autoFocusClose?: boolean;
+}) {
   const [section, setSection] = useState<(typeof SECTIONS)[number]['id']>('profile');
   const [tab, setTab] = useState<(typeof PROFILE_TABS)[number]['id']>('rating');
-  const { progression, profile } = publicProfile ?? snapshot;
+  const { progression, profile } = data;
   const unlocked = PROGRESSION_ACHIEVEMENTS.filter(
     (entry) => progression.unlockedAt[entry.id],
   ).length;
@@ -248,7 +297,7 @@ export function ProfileDialog({
           <h2 id="active-dialog-title">Perfil</h2>
         </header>
         <nav className="achievement-levels" aria-label="Secciones del perfil">
-          {SECTIONS.filter((item) => !publicProfile || item.id === 'profile').map((item) => (
+          {SECTIONS.filter((item) => settings || item.id === 'profile').map((item) => (
             <div className="achievement-level" key={item.id}>
               <button
                 type="button"
@@ -256,13 +305,12 @@ export function ProfileDialog({
                 aria-controls="profile-content"
                 onClick={() => setSection(item.id)}
               >
-                {publicProfile ? 'Perfil del jugador' : item.label}
+                {settings ? item.label : 'Perfil del jugador'}
               </button>
             </div>
           ))}
         </nav>
-        <MatchClockNotice />
-        {!publicProfile && <AccountStatus sidebar />}
+        {sidebar}
       </aside>
       <div className="achievements-main">
         <header className="achievements-profile">
@@ -275,7 +323,7 @@ export function ProfileDialog({
             <strong>{profile.name}</strong>
           </button>
           <ProgressionSummary showActivity={false} progression={progression} />
-          <DialogClose label="Cerrar perfil" onClose={onClose} />
+          <DialogCloseButton label="Cerrar perfil" onClose={onClose} autoFocus={autoFocusClose} />
         </header>
         <div id="profile-content" className="profile-content">
           {section === 'profile' && (
@@ -343,7 +391,7 @@ export function ProfileDialog({
                       <dt>{mode.label}</dt>
                       <dd>
                         <strong>{progression.ratings[mode.id]} Elo</strong>
-                        <span>{positionLabel(rankedProfile?.positions?.[mode.id])}</span>
+                        <span>{positionLabel(data.positions?.[mode.id])}</span>
                       </dd>
                     </div>
                   ))}
@@ -382,9 +430,7 @@ export function ProfileDialog({
                     </thead>
                     <tbody>
                       {[...MODES, { id: undefined, label: 'Total' }].map((mode) => {
-                        const stats = publicProfile
-                          ? publicProfile.statistics[mode.id ?? 'total']
-                          : playerStatistics(snapshot.progression, mode.id);
+                        const stats = data.statistics[mode.id ?? 'total'];
                         return (
                           <tr key={mode.label}>
                             <th scope="row">{mode.label}</th>
@@ -437,9 +483,7 @@ export function ProfileDialog({
                     </thead>
                     <tbody>
                       {MODES.filter((mode) => mode.id !== 'local').map((mode) => {
-                        const records = rankedProfile
-                          ? rankedProfile.records[mode.id]
-                          : playerRecords(snapshot.progression, mode.id);
+                        const records = data.records[mode.id];
                         return (
                           <tr key={mode.id}>
                             <th scope="row">{mode.label}</th>
@@ -457,9 +501,10 @@ export function ProfileDialog({
               {tab !== 'rating' && (
                 <p className="ranking-scroll-hint">Desliza la tabla para ver todas las columnas.</p>
               )}
+              {actions}
             </>
           )}
-          {!publicProfile && section === 'settings' && <ProfileSettings />}
+          {section === 'settings' && settings}
         </div>
       </div>
     </section>

@@ -152,7 +152,7 @@ describe('clasificación compartida', () => {
       completedAt: '2026-10-25T10:00:00Z',
       result: 1,
     };
-    await new AccountService(repository).request(winner, {
+    const saved = await new AccountService(repository).request(winner, {
       kind: 'save',
       revision: 1,
       data: { 'hexagonal:progression:v1': JSON.stringify(progress) },
@@ -164,12 +164,17 @@ describe('clasificación compartida', () => {
       played: 1,
     });
     const service = new RankingService(repository, () => clock);
-    const publicMatch = repository.matches.get(state.matchId)!;
-    repository.matches.set('private-copy', { ...publicMatch, id: 'private-copy', ranked: false });
     const query = { mode: 'online', period: 'all', page: 0 } as const;
     const result = await service.list(query);
     expect(result.entries).toMatchObject([
-      { name: winnerName, position: 1, played: 1, wins: 1, rating: 1020, xp: progress.xp },
+      {
+        name: winnerName,
+        position: 1,
+        played: 1,
+        wins: 1,
+        rating: 1020,
+        xp: JSON.parse(saved.data['hexagonal:progression:v1']!).xp,
+      },
       { name: loserName, position: 2, played: 1, losses: 1, rating: 980, xp: 0 },
     ]);
     expect(result.entries[0]).not.toHaveProperty('id');

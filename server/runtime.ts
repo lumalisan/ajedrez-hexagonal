@@ -6,6 +6,7 @@ import { OnlineError, OnlineService } from './online-service.js';
 import { PostgresOnlineRepository } from './postgres-repository.js';
 import { AccountService } from './account-service.js';
 import { RankingService } from './ranking-service.js';
+import { AdminService } from './admin-service.js';
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] || (fallback ? process.env[fallback] : undefined);
@@ -53,6 +54,12 @@ export async function createOnlineRuntime({ serverless = false } = {}) {
           );
       },
       rankings: new RankingService(repository),
+      admin: new AdminService(pool),
+      adminUserId: process.env.ADMIN_USER_ID?.trim().toLowerCase(),
+      deleteManagedAccount: (id) =>
+        repository.deleteManagedAccount(id, (tx, match, accountId) =>
+          service.closeMatchForAccountDeletion(tx, match, accountId),
+        ),
       origin,
       logger: true,
       trustProxy: serverless,

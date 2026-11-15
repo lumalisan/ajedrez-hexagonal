@@ -1,18 +1,19 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './app/app';
+import { AppRouter } from './app/app-router';
 import './styles.css';
 
+const admin = window.location.pathname.replace(/\/$/, '') === '/admin';
 const root = document.getElementById('root');
 if (!root) throw new Error('Falta el contenedor de la aplicación.');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <AppRouter admin={admin} />
   </StrictMode>,
 );
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+if (!admin && 'serviceWorker' in navigator && import.meta.env.PROD) {
   const register = (): void => {
     void navigator.serviceWorker.register('/sw.js');
   };

@@ -49,9 +49,12 @@ La migración y los correos reales no se verifican mediante los dobles de las pr
 - **Sin conexión:** una cuenta con caché puede continuar en modos locales. El perfil muestra
   el estado del guardado y permite reintentar; recuperar la conexión también lo reintenta.
   Sin una primera copia descargada, se pide reintentar antes de empezar una partida.
-- **Dos dispositivos:** las revisiones impiden que una subida antigua sustituya cambios de
-  otro dispositivo. Ante un conflicto se ofrecen «Conservar la nube» y «Conservar este
-  dispositivo». No se fusionan historiales automáticamente.
+- **Dos dispositivos:** si una revisión queda antigua, la cuenta combina el progreso de
+  las partidas por su identificador. La XP, los logros y la bonificación diaria se contabilizan
+  una sola vez. Si ambos dispositivos cambian otros datos, como las preferencias, se ofrece
+  elegir qué copia de esos datos conservar. La cuenta actualiza el progreso al volver a la pestaña.
+- **Partidas en línea:** la cuenta recupera del servidor las partidas terminadas, públicas
+  y privadas, para las estadísticas y el progreso. La clasificación usa las partidas públicas.
 
 ## Arquitectura y límites
 

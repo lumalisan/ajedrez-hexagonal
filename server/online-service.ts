@@ -302,6 +302,19 @@ export class OnlineService {
     }
   }
 
+  async closeMatchForAccountDeletion(tx: OnlineTransaction, match: OnlineMatch, accountId: string) {
+    const player = match.players.indexOf(accountId);
+    if (match.settled || (player !== 0 && player !== 1)) return;
+    const controller = new MatchController(match.record);
+    controller.pauseClock(this.now());
+    controller.resign(player);
+    delete match.opening;
+    match.record = controller.record;
+    match.revision++;
+    await this.settle(tx, match);
+    await tx.saveMatch(match);
+  }
+
   private createMatch(
     players: [OnlinePlayer, OnlinePlayer],
     settings: Omit<MatchedSettings, 'turnSeconds'> & {
@@ -407,7 +420,12 @@ export class OnlineService {
     match.drawOffer = null;
     delete match.drawOfferExpiresAt;
     delete match.drawOfferedThisTurn;
-    if (!match.ranked) return;
+    const score = outcome.type === 'draw' ? 0.5 : outcome.winner === 0 ? 1 : 0;
+    const completedAt = new Date(this.now()).toISOString();
+    if (!match.ranked) {
+      match.privateResult = { completedAt, score };
+      return;
+    }
     // Stable row order prevents deadlocks when several matches finish together.
     const players = new Map<string, OnlinePlayer>();
     for (const id of [...match.players].sort()) {
@@ -417,11 +435,10 @@ export class OnlineService {
     const first = players.get(match.players[0]);
     const second = players.get(match.players[1]);
     if (!first || !second) throw new Error('Faltan participantes de una partida.');
-    const score = outcome.type === 'draw' ? 0.5 : outcome.winner === 0 ? 1 : 0;
     const a = calculateElo(first.elo, second.elo, score, first.played);
     const b = calculateElo(second.elo, first.elo, 1 - score, second.played);
     match.rankingResult = {
-      completedAt: new Date(this.now()).toISOString(),
+      completedAt,
       score,
       ratingsBefore: [first.elo, second.elo],
       ratingsAfter: [a, b],

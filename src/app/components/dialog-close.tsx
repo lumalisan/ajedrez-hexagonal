@@ -12,13 +12,34 @@ export function DialogClose({
 }) {
   const { commands } = useGame();
   return (
+    <DialogCloseButton
+      label={label}
+      className={className}
+      onClose={onClose ?? commands.closeDialog}
+      autoFocus={onClose !== undefined}
+    />
+  );
+}
+
+export function DialogCloseButton({
+  label,
+  className = '',
+  onClose,
+  autoFocus,
+}: {
+  label: string;
+  className?: string;
+  onClose: () => void;
+  autoFocus?: boolean;
+}) {
+  return (
     <button
       type="button"
       className={`icon-button achievement-close ${className}`}
       aria-label={label}
-      autoFocus={onClose !== undefined}
+      autoFocus={autoFocus}
       data-dialog-close
-      onClick={onClose ?? commands.closeDialog}
+      onClick={onClose}
     >
       <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="m6 6 12 12M6 18 18 6" />

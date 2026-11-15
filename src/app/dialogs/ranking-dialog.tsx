@@ -100,10 +100,10 @@ export function RankingDialog() {
             className="achievements-player profile-link"
             onClick={() => commands.openDialog({ kind: 'profile' })}
           >
-            <ProfileAvatar profile={snapshot.profile} />
+            <ProfileAvatar profile={snapshot.profile} xp={snapshot.progression.xp} />
             <strong>{snapshot.profile.name}</strong>
           </button>
-          <ProgressionSummary showActivity={false} />
+          <ProgressionSummary showActivity={false} progression={snapshot.progression} />
           <DialogClose label="Cerrar clasificación" />
         </header>
         <Tabs

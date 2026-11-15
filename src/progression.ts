@@ -28,6 +28,7 @@ export const AI_RATINGS: Record<AiDifficulty, number> = {
 const DIFFICULTIES: AiDifficulty[] = ['recruit', 'tactical', 'commander', 'expert'];
 const STORAGE_KEY = 'hexagonal:progression:v1';
 const CATALOG_REVISION = 3;
+const DAILY_REWARD = 'Primera partida del día';
 const COMBAT_TYPES: PieceType[] = [
   'soldier',
   'capturer',
@@ -55,6 +56,7 @@ export interface MatchEvidence {
   difficulty: number;
   metrics: Metrics;
   completedAt?: string;
+  completedDay?: string;
   result?: 0 | 0.5 | 1;
   opponentRating?: number;
   rated?: boolean;
@@ -355,6 +357,7 @@ export function evaluateProgressionMatch(
     const win = final.outcome.type === 'win' && final.outcome.winner === owner;
     const result = final.outcome.type === 'draw' ? 0.5 : win ? 1 : 0;
     evidence.completedAt = options.at;
+    evidence.completedDay = day;
     evidence.result = result;
     next.registeredMatchIds = next.registeredMatchIds.filter((id) => id !== record.createdAt);
     addCompletionMetrics(evidence.metrics, record, final, owner, win, day);
@@ -385,10 +388,17 @@ export function evaluateProgressionMatch(
         xp: base,
       });
     if (duration > 0) rewards.push({ label: 'Turnos jugados', xp: duration });
-    if (progress.lastDailyMatch !== day) {
+    if (
+      progress.lastDailyMatch !== day &&
+      !(
+        progress.lastDailyMatch &&
+        progress.lastDailyMatch > day &&
+        Object.values(progress.matches).some((match) => dailyRewardDay(match) === day)
+      )
+    ) {
       next.xp += 25;
-      rewards.push({ label: 'Primera partida del día', xp: 25 });
-      next.lastDailyMatch = day;
+      rewards.push({ label: DAILY_REWARD, xp: 25 });
+      if (!next.lastDailyMatch || day > next.lastDailyMatch) next.lastDailyMatch = day;
     }
     if (mode === 'machine') {
       evidence.opponentRating = AI_RATINGS[DIFFICULTIES[difficulty]];
@@ -417,6 +427,116 @@ export function evaluateProgressionMatch(
     ratingAfter: mode === 'machine' ? next.ratings.machine : 0,
   };
   return update;
+}
+
+function dailyRewardDay(match: MatchEvidence): string | undefined {
+  if (match.completedAt && match.battle?.rewards.some(({ label }) => label === DAILY_REWARD))
+    return match.completedDay ?? localDay(match.completedAt);
+}
+
+function earnedXp(progress: PlayerProgression): number {
+  const daily = new Map<string, number>();
+  let xp = 0;
+  for (const match of Object.values(progress.matches)) {
+    const day = dailyRewardDay(match);
+    for (const reward of match.battle?.rewards ?? []) {
+      if (reward.achievementId) continue;
+      if (reward.label !== DAILY_REWARD) xp += reward.xp;
+      else if (day) daily.set(day, Math.max(daily.get(day) ?? 0, reward.xp));
+    }
+  }
+  for (const reward of daily.values()) xp += reward;
+  for (const achievement of PROGRESSION_ACHIEVEMENTS)
+    if (progress.unlockedAt[achievement.id]) xp += TIERS[achievement.tier].xp;
+  return xp;
+}
+
+function earliestDates<Id extends string>(
+  cloud: Partial<Record<Id, string>>,
+  device: Partial<Record<Id, string>>,
+): Partial<Record<Id, string>> {
+  const merged = { ...cloud };
+  for (const id of Object.keys(device) as Id[]) {
+    const date = device[id];
+    const old = merged[id];
+    if (date && (!old || Date.parse(date) < Date.parse(old))) merged[id] = date;
+  }
+  return merged;
+}
+
+/** Save branches share match and achievement IDs. Count their rewards only once. */
+export function mergePlayerProgression(
+  cloud: PlayerProgression,
+  device: PlayerProgression,
+  at: string,
+): PlayerProgression {
+  const matches = { ...cloud.matches };
+  for (const [id, local] of Object.entries(device.matches)) {
+    const saved = matches[id];
+    if (!saved || (!saved.completedAt && local.completedAt)) matches[id] = local;
+    else if (Boolean(saved.completedAt) === Boolean(local.completedAt))
+      matches[id] = {
+        ...saved,
+        ...(saved.battle || !local.battle ? {} : { battle: local.battle }),
+      };
+  }
+  const machineMatches = (progress: PlayerProgression) =>
+    Object.entries(progress.matches).filter(
+      ([, match]) => match.mode === 'machine' && match.completedAt,
+    );
+  const merged = {
+    ...cloud,
+    matches,
+    achievedAt: earliestDates(cloud.achievedAt, device.achievedAt),
+    unlockedAt: earliestDates(cloud.unlockedAt, device.unlockedAt),
+    legacyUnlockedAt: { ...device.legacyUnlockedAt, ...cloud.legacyUnlockedAt },
+    registeredMatchIds: [
+      ...new Set([...cloud.registeredMatchIds, ...device.registeredMatchIds]),
+    ].filter((id) => !matches[id]?.completedAt),
+    ratings: { ...cloud.ratings },
+    activity: {
+      ...((cloud.activity.lastDay ?? '') >= (device.activity.lastDay ?? '')
+        ? cloud.activity
+        : device.activity),
+    },
+    lastDailyMatch:
+      (cloud.lastDailyMatch ?? '') >= (device.lastDailyMatch ?? '')
+        ? cloud.lastDailyMatch
+        : device.lastDailyMatch,
+    tutorial: cloud.tutorial || device.tutorial,
+    story: cloud.story || device.story,
+    storyChapters: [...new Set([...cloud.storyChapters, ...device.storyChapters])],
+  };
+  merged.activity.best = Math.max(cloud.activity.best, device.activity.best);
+  if (cloud.activity.lastDay === device.activity.lastDay)
+    merged.activity.streak = Math.max(cloud.activity.streak, device.activity.streak);
+  const played = machineMatches(merged);
+  if (played.length > machineMatches(cloud).length) {
+    if (played.length === machineMatches(device).length)
+      merged.ratings.machine = device.ratings.machine;
+    else {
+      played.sort(
+        ([firstId, first], [secondId, second]) =>
+          Date.parse(first.completedAt!) - Date.parse(second.completedAt!) ||
+          firstId.localeCompare(secondId),
+      );
+      let rating = 1000;
+      for (const [index, [id, match]] of played.entries()) {
+        const next = calculateElo(rating, match.opponentRating ?? 1000, match.result ?? 0.5, index);
+        if (match.battle)
+          matches[id] = {
+            ...match,
+            battle: { ...match.battle, ratingBefore: rating, ratingAfter: next },
+          };
+        rating = next;
+      }
+      merged.ratings.machine = rating;
+    }
+  }
+  // Older saves can contain XP without individual reward records.
+  merged.xp =
+    earnedXp(merged) + Math.max(0, cloud.xp - earnedXp(cloud), device.xp - earnedXp(device));
+  return unlock(merged, at, merged.xp).progress;
 }
 
 function analyzeRecord(record: MatchRecord, owner: Player): Metrics {
@@ -636,6 +756,7 @@ export function rankingSummary(
     .filter(
       (m) =>
         m.mode === mode &&
+        (mode !== 'online' || m.rated !== false) &&
         m.completedAt &&
         (period === 'all' ||
           (localDay(m.completedAt) >= since && localDay(m.completedAt) <= today)),
@@ -723,6 +844,9 @@ export function parsePlayerProgression(raw: string): PlayerProgression {
         metrics,
         ...(typeof match.rated === 'boolean' ? { rated: match.rated } : {}),
         ...(timestamp(match.completedAt) ? { completedAt: match.completedAt } : {}),
+        ...(typeof match.completedDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(match.completedDay)
+          ? { completedDay: match.completedDay }
+          : {}),
         ...(match.result === 0 || match.result === 0.5 || match.result === 1
           ? { result: match.result }
           : {}),

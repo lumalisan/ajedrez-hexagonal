@@ -4,7 +4,12 @@ import {
   type AccountClient,
   type AccountUser,
 } from './account-client.js';
-import type { CloudSave, PlayerData } from './cloud-contracts.js';
+import {
+  MATCH_DATA_KEYS,
+  PLAYER_DATA_KEYS,
+  type CloudSave,
+  type PlayerData,
+} from './cloud-contracts.js';
 import { parsePlayerProgression } from './progression.js';
 import { validateUsername } from './username.js';
 import { normalizeProfile } from './user-profile.js';
@@ -92,6 +97,7 @@ export function createAccountController(client: AccountClient | null = createAcc
   };
   const listeners = new Set<() => void>();
   let beforeSwitch: (() => void) | null = null;
+  let progressChanged: (() => void) | undefined;
   let active = false;
   let lifecycle = 0;
   let epoch = 0;
@@ -101,6 +107,7 @@ export function createAccountController(client: AccountClient | null = createAcc
   let timer: ReturnType<typeof setTimeout> | null = null;
   let abort = new AbortController();
   let saving: Promise<void> | null = null;
+  let refreshing = false;
   let remote: CloudSave | null = null;
   let unsubscribeAuth: (() => void) | undefined;
   let unsubscribeStorage: (() => void) | undefined;
@@ -115,14 +122,14 @@ export function createAccountController(client: AccountClient | null = createAcc
     abort.abort();
     abort = new AbortController();
     saving = null;
+    refreshing = false;
   }
   function schedule() {
     if (timer) clearTimeout(timer);
-    if (snapshot.sync !== 'conflict')
-      timer = setTimeout(() => {
-        timer = null;
-        void flush();
-      }, 1000);
+    timer = setTimeout(() => {
+      timer = null;
+      void flush();
+    }, 1000);
   }
   function retry() {
     if (!snapshot.user) return;
@@ -131,6 +138,10 @@ export function createAccountController(client: AccountClient | null = createAcc
       return;
     }
     if (snapshot.sync === 'conflict') return;
+    if (snapshot.ready) {
+      void refresh();
+      return;
+    }
     const user = snapshot.user;
     update({ ready: false, sync: 'offline' });
     void activate(user);
@@ -147,31 +158,113 @@ export function createAccountController(client: AccountClient | null = createAcc
     if (snapshot.sync !== 'conflict') update({ sync: 'pending' });
     schedule();
   }
+  function applyData(id: string, data: PlayerData) {
+    const previous = readPlayerData(id);
+    if (PLAYER_DATA_KEYS.every((key) => previous[key] === data[key])) return;
+    replacePlayerData(id, data);
+    progressChanged?.();
+  }
+  function acceptSave(id: string, result: CloudSave, data: PlayerData, conflict = false) {
+    remote = result;
+    if (!conflict) revision = result.revision;
+    dirty = PLAYER_DATA_KEYS.some((key) => result.data[key] !== data[key]);
+    applyData(id, data);
+    writeMeta(id, { revision, dirty });
+    update({
+      ready: true,
+      sync: conflict ? 'conflict' : dirty ? 'pending' : 'saved',
+      syncError: conflict
+        ? 'Tu progreso se ha sincronizado. Hay otros cambios en este dispositivo y en la nube.'
+        : null,
+    });
+    if (dirty && !conflict) schedule();
+  }
+  async function mergePending(id: string, token: number, base: CloudSave | null) {
+    if (!client) return;
+    // Local play can advance while the network request runs. Upload the newer progress too.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const sent = readPlayerData(id);
+      const matchData: PlayerData = {};
+      for (const key of MATCH_DATA_KEYS) matchData[key] = sent[key];
+      const result = await client.cloud(
+        id,
+        { kind: 'merge-progress', data: matchData },
+        abort.signal,
+      );
+      if (!active || token !== epoch) return;
+      const local = readPlayerData(id);
+      if (MATCH_DATA_KEYS.some((key) => local[key] !== sent[key])) continue;
+      const data = { ...result.data };
+      let conflict = false;
+      for (const key of PLAYER_DATA_KEYS) {
+        if ((MATCH_DATA_KEYS as readonly string[]).includes(key) || local[key] === data[key])
+          continue;
+        // The pending list preserves battles from both devices. Keep the cloud's active pointer.
+        if (key === 'atlas-match-classic-v2') continue;
+        if (base && local[key] === base.data[key]) continue;
+        if (!base && local[key] === undefined) continue;
+        conflict ||= !base || data[key] !== base.data[key];
+        data[key] = local[key];
+      }
+      acceptSave(id, result, data, conflict);
+      return result;
+    }
+    // Every response committed a merge. Keep the newer local edits pending for the next upload.
+    update({ ready: true, sync: 'pending', syncError: null });
+    schedule();
+  }
+  async function refresh(): Promise<void> {
+    if (!client || !snapshot.user || !snapshot.ready || dirty || saving || refreshing) return;
+    const id = snapshot.user.id;
+    const token = epoch;
+    const started = changes;
+    refreshing = true;
+    try {
+      const result = await client.cloud(id, { kind: 'load' }, abort.signal);
+      if (active && token === epoch && changes === started && !dirty)
+        acceptSave(id, result, result.data);
+    } catch (error) {
+      if (active && token === epoch && changes === started)
+        update({ sync: 'offline', syncError: error instanceof Error ? error.message : null });
+    } finally {
+      if (token === epoch) refreshing = false;
+    }
+  }
   async function flush(): Promise<void> {
-    if (!client || !snapshot.user || !snapshot.ready || !dirty || snapshot.sync === 'conflict')
-      return;
+    if (!client || !snapshot.user || !snapshot.ready || !dirty) return;
     if (saving) return saving;
-    const userId = snapshot.user.id,
-      token = epoch,
-      sentChanges = changes;
-    update({ sync: 'saving', syncError: null });
+    const userId = snapshot.user.id;
+    const token = epoch;
+    const conflicting = snapshot.sync === 'conflict';
+    if (!conflicting) update({ sync: 'saving', syncError: null });
     const operation = (async () => {
       await Promise.resolve();
       try {
-        const result = await client.cloud(
-          userId,
-          { kind: 'save', revision, data: readPlayerData(userId) },
-          abort.signal,
-        );
         if (!active || token !== epoch) return;
-        revision = result.revision;
-        dirty = changes !== sentChanges;
-        writeMeta(userId, { revision, dirty });
-        update({ sync: dirty ? 'pending' : 'saved', syncError: null });
+        if (conflicting) {
+          await mergePending(userId, token, null);
+          return;
+        }
+        const sent = readPlayerData(userId);
+        try {
+          const result = await client.cloud(
+            userId,
+            { kind: 'save', revision, data: sent },
+            abort.signal,
+          );
+          if (!active || token !== epoch) return;
+          const local = readPlayerData(userId);
+          const data = { ...result.data };
+          for (const key of PLAYER_DATA_KEYS) if (sent[key] !== local[key]) data[key] = local[key];
+          acceptSave(userId, result, data);
+        } catch (error) {
+          if (!(error instanceof CloudError) || error.status !== 409) throw error;
+          if (active && token === epoch) await mergePending(userId, token, remote);
+        }
       } catch (error) {
         if (!active || token !== epoch) return;
         update({
-          sync: error instanceof CloudError && error.status === 409 ? 'conflict' : 'offline',
+          sync: conflicting ? 'conflict' : 'offline',
           syncError:
             error instanceof Error
               ? error.message
@@ -214,19 +307,14 @@ export function createAccountController(client: AccountClient | null = createAcc
     try {
       const result = await client.cloud(user.id, { kind: 'load' }, abort.signal);
       if (!active || token !== epoch) return;
-      remote = result;
-      revision = result.revision;
       if (cached?.dirty && cached.revision !== result.revision) {
         revision = cached.revision;
         dirty = true;
-        update({
-          ready: true,
-          sync: 'conflict',
-          syncError:
-            'Hay progreso pendiente en este dispositivo y cambios en la nube. Elige qué copia conservar.',
-        });
+        await mergePending(user.id, token, null);
         return;
       }
+      remote = result;
+      revision = result.revision;
       let importGuest = false;
       try {
         importGuest = localStorage.getItem('hexfortia:import-guest') === user.email.toLowerCase();
@@ -287,10 +375,14 @@ export function createAccountController(client: AccountClient | null = createAcc
         listeners.delete(listener);
       };
     },
-    bindSession(dispose: () => void) {
+    bindSession(dispose: () => void, syncProgress?: () => void) {
       beforeSwitch = dispose;
+      progressChanged = syncProgress;
       return () => {
-        if (beforeSwitch === dispose) beforeSwitch = null;
+        if (beforeSwitch === dispose) {
+          beforeSwitch = null;
+          progressChanged = undefined;
+        }
       };
     },
     start() {
@@ -299,8 +391,21 @@ export function createAccountController(client: AccountClient | null = createAcc
       unsubscribeStorage = onPlayerStorageChange(markDirty);
       const onOnline = () => {
         if (snapshot.sync === 'offline') retry();
+        else void refresh();
       };
-      if (typeof window !== 'undefined') window.addEventListener('online', onOnline);
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return;
+        if (snapshot.sync === 'offline') retry();
+        else if (snapshot.sync === 'conflict') void flush();
+        else void refresh();
+      };
+      let foregroundTimer: ReturnType<typeof setInterval> | undefined;
+      if (typeof window !== 'undefined' && client) {
+        window.addEventListener('online', onOnline);
+        window.addEventListener('focus', onVisible);
+        document.addEventListener('visibilitychange', onVisible);
+        foregroundTimer = setInterval(onVisible, 30_000);
+      }
       if (client)
         void client
           .watch((user, recovery) => {
@@ -325,7 +430,12 @@ export function createAccountController(client: AccountClient | null = createAcc
         cancelWork();
         unsubscribeAuth?.();
         unsubscribeStorage?.();
-        if (typeof window !== 'undefined') window.removeEventListener('online', onOnline);
+        if (foregroundTimer !== undefined) {
+          clearInterval(foregroundTimer);
+          window.removeEventListener('online', onOnline);
+          window.removeEventListener('focus', onVisible);
+          document.removeEventListener('visibilitychange', onVisible);
+        }
       };
     },
     open(dialog: AccountDialog = 'signin') {
@@ -415,11 +525,21 @@ export function createAccountController(client: AccountClient | null = createAcc
       const token = epoch,
         userId = snapshot.user.id;
       try {
-        remote = await client.cloud(userId, { kind: 'load' }, abort.signal);
+        await saving;
         if (!active || token !== epoch) return;
         beforeSwitch?.();
-        revision = remote.revision;
-        if (choice === 'cloud') replacePlayerData(userId, remote.data);
+        if (timer) clearTimeout(timer);
+        timer = null;
+        const result = await mergePending(userId, token, null);
+        if (!active || token !== epoch) return;
+        if (!result) {
+          update({ generation: snapshot.generation + 1 });
+          return;
+        }
+        revision = result.revision;
+        const data = choice === 'cloud' ? result.data : readPlayerData(userId);
+        for (const key of MATCH_DATA_KEYS) data[key] = result.data[key];
+        replacePlayerData(userId, data);
         dirty = choice === 'device';
         writeMeta(userId, { revision, dirty });
         update({
@@ -432,6 +552,7 @@ export function createAccountController(client: AccountClient | null = createAcc
       } catch (error) {
         if (active && token === epoch)
           update({
+            generation: snapshot.generation + 1,
             syncError: error instanceof Error ? error.message : 'No se pudo recuperar el guardado.',
           });
       }

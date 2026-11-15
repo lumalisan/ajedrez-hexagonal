@@ -3,6 +3,13 @@
   "framework": "vite",
   "buildCommand": "pnpm test:vercel && pnpm build",
   "outputDirectory": "dist",
+  "rewrites": [{ "source": "/admin", "destination": "/index.html" }],
+  "headers": [
+    {
+      "source": "/admin",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    }
+  ],
   "regions": ["dub1"],
   "functions": {
     "api/*.ts": {

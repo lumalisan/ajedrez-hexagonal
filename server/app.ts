@@ -6,6 +6,7 @@ import type { AccountService } from './account-service.js';
 import type { CloudRequest } from '../src/cloud-contracts.js';
 import type { RankingService } from './ranking-service.js';
 import type { RankingMode, RankingPeriod } from '../src/ranking-contracts.js';
+import { isUuid, type AdminService } from './admin-service.js';
 
 export interface AuthIdentity {
   id: string;
@@ -32,6 +33,9 @@ export async function createOnlineApp(options: {
   accounts?: AccountService;
   deleteAccount?: (id: string) => Promise<void>;
   rankings?: RankingService;
+  admin?: AdminService;
+  adminUserId?: string;
+  deleteManagedAccount?: (id: string) => Promise<void>;
   origin: string;
   logger?: boolean;
   trustProxy?: boolean;
@@ -160,5 +164,79 @@ export async function createOnlineApp(options: {
     await options.deleteAccount(user.id);
     return reply.code(204).send();
   });
+  async function requireAdmin(request: FastifyRequest) {
+    const user = await identity(request);
+    if (user.isAnonymous || !options.adminUserId || user.id !== options.adminUserId)
+      throw new OnlineError('Esta cuenta no tiene acceso a la administración.', 403);
+    if (!options.admin) throw new OnlineError('La administración no está disponible.', 503);
+    return options.admin;
+  }
+  app.get<{
+    Querystring: {
+      view?: string;
+      period?: string;
+      sort?: string;
+      direction?: string;
+      page?: string;
+      id?: string;
+    };
+  }>('/api/admin', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const admin = await requireAdmin(request);
+    const {
+      view,
+      period = '30d',
+      sort = 'registeredAt',
+      direction = 'desc',
+      page = '0',
+      id,
+    } = request.query;
+    switch (view) {
+      case 'session':
+        return { ok: true };
+      case 'traffic':
+        return admin.traffic(period);
+      case 'users':
+        return admin.users(sort, direction, page);
+      case 'profile':
+        if (!isUuid(id) || !options.rankings) throw new OnlineError('Perfil no disponible.', 404);
+        return options.rankings.ownProfile(id);
+      case 'history':
+        return admin.history(page);
+      case 'replay':
+        if (typeof id !== 'string' || id.length > 145)
+          throw new OnlineError('Repetición no disponible.', 404);
+        return admin.replay(id);
+      default:
+        throw new OnlineError('Consulta de administración no válida.');
+    }
+  });
+  app.delete<{ Querystring: { id?: string } }>('/api/admin', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    await requireAdmin(request);
+    if (!isUuid(request.query.id)) throw new OnlineError('Cuenta no válida.');
+    if (!options.deleteManagedAccount)
+      throw new OnlineError('La eliminación no está disponible.', 503);
+    await options.deleteManagedAccount(request.query.id);
+    return reply.code(204).send();
+  });
+  app.get('/api/visit', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { enabled: Boolean(options.admin && options.adminUserId) };
+  });
+  app.post<{ Body: { id?: unknown; visitorId?: unknown } }>(
+    '/api/visit',
+    { bodyLimit: 512, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (request.headers.origin !== options.origin)
+        throw new OnlineError('Origen no permitido.', 403);
+      if (!options.admin || !options.adminUserId) return reply.code(204).send();
+      const { id, visitorId } = request.body ?? {};
+      const user = request.headers.authorization ? await identity(request) : null;
+      await options.admin.visit(id, visitorId, user && !user.isAnonymous ? user.id : null);
+      return reply.code(204).send();
+    },
+  );
   return app;
 }

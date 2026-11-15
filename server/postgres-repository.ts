@@ -56,12 +56,38 @@ export class PostgresOnlineRepository implements OnlineRepository {
   }
 
   async transaction<T>(lock: string, work: (tx: OnlineTransaction) => Promise<T>): Promise<T> {
+    return this.lockedTransaction(lock, (client) => work(transaction(client)));
+  }
+
+  async deleteManagedAccount(
+    id: string,
+    closeMatch: (tx: OnlineTransaction, match: OnlineMatch, id: string) => Promise<void>,
+  ) {
+    return this.lockedTransaction('online:lobby', async (client) => {
+      await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        'account:' + id,
+      ]);
+      const { rows } = await client.query<{ data: OnlineMatch }>(
+        'select data from hexfortia.matches where not settled and player_ids @> array[$1::uuid] order by id for update',
+        [id],
+      );
+      const tx = transaction(client);
+      for (const { data } of rows) await closeMatch(tx, data, id);
+      const result = await client.query<{ deleted: boolean }>(
+        'select hexfortia.delete_account($1::uuid) as deleted',
+        [id],
+      );
+      if (!result.rows[0]?.deleted) throw new Error('No se pudo cerrar una partida de la cuenta.');
+    });
+  }
+
+  private async lockedTransaction<T>(lock: string, work: (client: PoolClient) => Promise<T>) {
     const client = await this.pool.connect();
     try {
       await client.query('begin');
       await client.query("select set_config('statement_timeout', '10000', true)");
       await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [lock]);
-      const result = await work(transaction(client));
+      const result = await work(client);
       await client.query('commit');
       return result;
     } catch (error) {
@@ -167,6 +193,14 @@ function transaction(client: PoolClient): OnlineTransaction {
           )
         )[0]?.data ?? null
       );
+    },
+    async settledMatches(id) {
+      return (
+        await rows<{ data: OnlineMatch }>(
+          'select data from hexfortia.matches where settled and player_ids @> array[$1::uuid]',
+          [id],
+        )
+      ).map(({ data }) => data);
     },
     async saveMatch(match) {
       await client.query(

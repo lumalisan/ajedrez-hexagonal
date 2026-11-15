@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mergeCloudProgress } from '../server/cloud-progress';
 import { createAccountController, type AccountController } from '../src/account-controller';
 import { CloudError, type AccountClient, type AccountUser } from '../src/account-client';
 import type { CloudSave } from '../src/cloud-contracts';
 import { playerStorage, setPlayerStorageScope } from '../src/player-storage';
+import { createPlayerProgression, parsePlayerProgression } from '../src/progression';
 import { installMemoryStorage } from './helpers/memory-storage';
 
 const a = { id: 'account-a', email: 'a@example.test' };
@@ -19,6 +21,7 @@ afterEach(() => {
   controllers = [];
   setPlayerStorageScope(null);
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 function setup() {
@@ -46,6 +49,12 @@ function setup() {
     cloud: vi.fn(async (id, request) => {
       const current = saves.get(id) ?? { revision: 0, data: {}, elo: 1000 };
       if (request.kind === 'load') return structuredClone(current);
+      if (request.kind === 'merge-progress') {
+        const data = mergeCloudProgress(current.data, request.data, new Date().toISOString());
+        const next = { ...current, revision: current.revision + 1, data };
+        saves.set(id, structuredClone(next));
+        return next;
+      }
       if (request.revision !== current.revision) throw new CloudError('Conflicto', 409);
       const next = { revision: current.revision + 1, data: request.data, elo: 1000 };
       saves.set(id, structuredClone(next));
@@ -63,6 +72,58 @@ async function signIn(controller: AccountController) {
 }
 
 describe('cuentas, caché por identidad y sincronización', () => {
+  it('actualiza el progreso de la cuenta al volver a la pestaña sin reiniciar la sesión', async () => {
+    const browser = new EventTarget();
+    const page = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    vi.stubGlobal('window', browser);
+    vi.stubGlobal('document', page);
+    const { controller, saves } = setup();
+    await signIn(controller);
+    const stop = vi.fn();
+    const reloadProgress = vi.fn();
+    controller.bindSession(stop, reloadProgress);
+    const generation = controller.getSnapshot().generation;
+    const progress = JSON.stringify({ ...createPlayerProgression(), xp: 750 });
+    const progressKey = 'hexagonal:progression:v1';
+    saves.set(a.id, { revision: 2, elo: 1000, data: { [progressKey]: progress } });
+    browser.dispatchEvent(new Event('focus'));
+    await tick();
+    expect(playerStorage.getItem(progressKey)).toBe(progress);
+    expect(controller.getSnapshot().generation).toBe(generation);
+    expect(reloadProgress).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
+  });
+  it.each(['subida', 'inicio de sesión'])(
+    'combina partidas de dos dispositivos al detectar una revisión antigua durante %s',
+    async (entry) => {
+      const { controller, identify, saves } = setup();
+      const reloadProgress = vi.fn();
+      controller.bindSession(vi.fn(), reloadProgress);
+      const progressKey = 'hexagonal:progression:v1';
+      const first = '2026-11-14T10:00:00.000Z';
+      const second = '2026-11-14T10:05:00.000Z';
+      function progress(id: string) {
+        const value = createPlayerProgression();
+        value.matches[id] = { mode: 'machine', difficulty: 0, metrics: {}, completedAt: id };
+        return JSON.stringify(value);
+      }
+      await signIn(controller);
+      playerStorage.setItem(progressKey, progress(first));
+      saves.set(a.id, { revision: 2, elo: 1000, data: { [progressKey]: progress(second) } });
+      if (entry === 'inicio de sesión') {
+        identify(null);
+        await tick();
+        identify(a);
+        await tick();
+      } else await vi.advanceTimersByTimeAsync(1100);
+
+      expect(controller.getSnapshot().sync).toBe('saved');
+      const local = parsePlayerProgression(playerStorage.getItem(progressKey)!);
+      expect(Object.keys(local.matches).sort()).toEqual([first, second]);
+      expect(saves.get(a.id)?.data[progressKey]).toBe(playerStorage.getItem(progressKey));
+      expect(reloadProgress).toHaveBeenCalled();
+    },
+  );
   it('conserva al invitado y aísla los datos de dos cuentas al entrar y salir', async () => {
     localStorage.setItem(key, '{"name":"Invitado"}');
     const { controller, identify } = setup();

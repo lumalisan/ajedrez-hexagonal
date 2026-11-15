@@ -27,6 +27,7 @@ import { replayRecord } from '../src/match-record.js';
 import type { RankingEntry, RankingPage, RankingQuery } from '../src/ranking-contracts.js';
 import type { OnlineRepository } from './repository.js';
 import { OnlineError } from './online-service.js';
+import { reconcileOnlineProgression } from './online-progression.js';
 
 /** Public projection only: never return account documents, email addresses or auth identifiers. */
 export class RankingService {
@@ -44,38 +45,23 @@ export class RankingService {
     const data = await this.repository.rankingData('online');
     const account = data.accounts.find((account) => publicId(account.id) === id);
     if (!account) throw new OnlineError('Perfil no encontrado.', 404);
-    const saved = await this.repository.transaction(`account:${account.id}`, (tx) =>
-      tx.account(account.id),
+    const { saved, matches } = await this.repository.transaction(
+      `account:${account.id}`,
+      async (tx) => ({
+        saved: await tx.account(account.id),
+        matches: await tx.settledMatches(account.id),
+      }),
     );
-    const progress = parsePlayerProgression(
+    let progress = parsePlayerProgression(
       saved?.data['hexagonal:progression:v1'] ?? account.progression ?? '{}',
     );
     // Online statistics use server results rather than uploaded account evidence.
-    for (const [key, match] of Object.entries(progress.matches)) {
-      if (match.mode === 'online') delete progress.matches[key];
-    }
+    const confirmedIds = new Set(matches.map(({ record }) => record.createdAt));
+    for (const [key, match] of Object.entries(progress.matches))
+      if (match.mode === 'online' && (!confirmedIds.has(key) || !match.completedAt))
+        delete progress.matches[key];
     progress.ratings.online = data.players.find((player) => player.id === account.id)?.elo ?? 1000;
-    for (const match of data.matches) {
-      const owner = match.players.indexOf(account.id);
-      if (owner < 0) continue;
-      const outcome = match.rankingResult ? null : replayRecord(match.record).outcome;
-      const score =
-        match.rankingResult?.score ??
-        (outcome?.type === 'draw'
-          ? 0.5
-          : outcome?.type === 'win'
-            ? Number(outcome.winner === 0)
-            : null);
-      if (score === null) continue;
-      progress.matches['online:' + match.id] = {
-        mode: 'online',
-        difficulty: 0,
-        metrics: {},
-        completedAt: match.rankingResult?.completedAt ?? match.record.updatedAt,
-        result: (owner === 0 ? score : 1 - score) as 0 | 0.5 | 1,
-        opponentRating: match.rankingResult?.ratingsBefore[owner === 0 ? 1 : 0] ?? 1000,
-      };
-    }
+    progress = reconcileOnlineProgression(progress, matches, account.id);
     const positions: Record<'online' | 'machine', number | null> = { online: null, machine: null };
     const records = {
       machine: playerRecords(progress, 'machine'),

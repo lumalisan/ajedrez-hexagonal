@@ -55,7 +55,10 @@ function PlayerApplication() {
       onAccountRequired: () => controller.open('signin'),
     }),
   );
-  useLayoutEffect(() => controller.bindSession(session.dispose), [controller, session]);
+  useLayoutEffect(
+    () => controller.bindSession(session.dispose, session.syncProgress),
+    [controller, session],
+  );
   useEffect(() => session.start(), [session]);
   return (
     <GameContext.Provider value={session}>

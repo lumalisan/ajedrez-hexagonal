@@ -2,12 +2,80 @@ import { describe, expect, it } from 'vitest';
 import { AccountService } from '../server/account-service';
 import { createOnlineApp } from '../server/app';
 import { OnlineService } from '../server/online-service';
-import { createPlayerProgression } from '../src/progression';
+import { RankingService } from '../server/ranking-service';
+import { replayRecord } from '../src/match-record';
+import { createPlayerProgression, parsePlayerProgression } from '../src/progression';
 import { MemoryOnlineRepository } from './helpers/online-repository';
 
 const a = '00000000-0000-4000-8000-000000000001';
 const b = '00000000-0000-4000-8000-000000000002';
 describe('cuentas y guardados privados', () => {
+  it.each([true, false])(
+    'recupera una partida privada para ambos perfiles y deja intacta la clasificación (resultado guardado: %s)',
+    async (hasPrivateResult) => {
+      const repository = new MemoryOnlineRepository();
+      const accounts = new AccountService(repository);
+      let now = Date.now();
+      const online = new OnlineService(repository, () => now);
+      const ranking = new RankingService(repository, () => now);
+      for (const id of [a, b]) await accounts.request(id, { kind: 'save', revision: 0, data: {} });
+      const room = await online.request(a, {
+        kind: 'create-private',
+        name: 'Cian',
+        settings: {
+          faction: 'expansionist',
+          fortressHp: 1,
+          turnSeconds: '',
+          totalSeconds: '',
+          layout: 3,
+        },
+      });
+      if (room.status !== 'private-waiting') throw new Error('No se creó la sala.');
+      const joined = await online.request(b, {
+        kind: 'join-private',
+        code: room.code,
+        name: 'Ámbar',
+      });
+      if (joined.status !== 'playing' || !joined.opening) throw new Error('No se creó la partida.');
+      const { matchId, record } = joined;
+      expect((await ranking.ownProfile(a)).statistics.online.played).toBe(0);
+      now = joined.opening.revealsAt;
+      for (const id of [a, b]) await online.request(id, { kind: 'ready', matchId });
+      const loser = repository.matches.get(matchId)!.players[replayRecord(record).activePlayer];
+      await online.request(loser, { kind: 'resign', matchId });
+      for (const id of [a, b]) await online.request(id, { kind: 'finish', matchId });
+      if (!hasPrivateResult) delete repository.matches.get(matchId)!.privateResult;
+
+      for (const id of [a, b]) {
+        const key = 'hexagonal:progression:v1';
+        const loaded = await accounts.request(id, { kind: 'load' });
+        const progress = parsePlayerProgression(loaded.data[key]!);
+        expect(progress.matches[record.createdAt]).toMatchObject({
+          mode: 'online',
+          rated: false,
+          result: Number(id !== loser),
+        });
+        expect(progress.xp).toBeGreaterThan(0);
+        expect(Object.keys(progress.unlockedAt).length).toBeGreaterThan(0);
+        const saved = await accounts.request(id, {
+          kind: 'save',
+          revision: loaded.revision,
+          data: loaded.data,
+        });
+        const retried = await accounts.request(id, { kind: 'merge-progress', data: loaded.data });
+        expect(retried).toEqual(saved);
+        expect(repository.players.get(id)).toMatchObject({ elo: 1000, played: 0 });
+        const profile = await ranking.ownProfile(id);
+        expect(profile.statistics.online).toMatchObject({
+          played: 1,
+          wins: Number(id !== loser),
+          losses: Number(id === loser),
+        });
+        expect(profile.progression.xp).toBe(progress.xp);
+      }
+      expect((await ranking.list({ mode: 'online', period: 'all', page: 0 })).entries).toEqual([]);
+    },
+  );
   it('aísla cuentas, conserva progreso y solo acepta una escritura de la misma revisión', async () => {
     const repository = new MemoryOnlineRepository();
     const service = new AccountService(repository);

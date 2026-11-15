@@ -27,7 +27,7 @@ export function playerRecords(progress: PlayerProgression, mode: 'machine' | 'on
   matches.forEach((match) => {
     if (match.result !== undefined && match.rated !== false) {
       rating =
-        match.battle?.ratingAfter ??
+        (mode === 'machine' ? match.battle?.ratingAfter : undefined) ??
         calculateElo(rating, match.opponentRating ?? 1000, match.result, ratedMatches);
       ratedMatches++;
       bestRating = Math.max(bestRating, rating);

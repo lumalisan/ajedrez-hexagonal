@@ -5,8 +5,8 @@ import {
   parseRecord,
   replayRecord,
   serializeRecord,
-} from './match-record';
-import type { GamePreferences, MatchRecord, Outcome } from './types';
+} from './match-record.js';
+import type { GamePreferences, MatchRecord, Outcome } from './types.js';
 
 const PREFERENCES_KEY = 'atlas-preferences-v2';
 const LEGACY_PREFERENCES_KEY = 'atlas-preferences-v1';

@@ -10,6 +10,7 @@ import { useAccount } from './account-context';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { OnlineAccountNotice } from './components/account-access';
+import { SiteVisitPreferences } from './components/site-visit-preferences';
 
 function readMenuSummary() {
   return {
@@ -240,6 +241,7 @@ export function HomeScreen() {
           <span>El origen de Hexfortia</span>
         </button>
         <HomeIdentity />
+        <SiteVisitPreferences />
       </aside>
       <div className="home-utility-actions" aria-label="Accesos rápidos">
         <Button
@@ -301,7 +303,7 @@ function HomeIdentity() {
           disabled={busy}
           onClick={() => commands.openDialog({ kind: 'profile' })}
         >
-          <ProfileAvatar profile={snapshot.profile} />
+          <ProfileAvatar profile={snapshot.profile} xp={snapshot.progression.xp} />
           <span className="home-profile-copy">
             <strong>{snapshot.profile.name}</strong>
             <small>

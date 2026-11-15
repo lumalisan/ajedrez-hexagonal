@@ -1,6 +1,5 @@
 import type { UserProfile } from '../../user-profile';
 import { levelProgress } from '../../progression';
-import { useGame } from '../game-context';
 
 const EMBLEM_PATHS: Record<UserProfile['emblem'], string> = {
   fortress: 'M15 34V16h5v5h8v-5h5v18h-7v-7h-4v7Z',
@@ -16,9 +15,8 @@ const EMBLEM_PATHS: Record<UserProfile['emblem'], string> = {
     'M22 36c-12-4-14-16-7-23m11 23c12-4 14-16 7-23M14 20l6 2m-7 5 7 1m14-8-6 2m7 5-7 1m-4-12v15',
 };
 
-export function ProfileAvatar({ profile, xp }: { profile: UserProfile; xp?: number }) {
-  const { snapshot } = useGame();
-  const { tier, category } = levelProgress(xp ?? snapshot.progression.xp);
+export function ProfileAvatar({ profile, xp }: { profile: UserProfile; xp: number }) {
+  const { tier, category } = levelProgress(xp);
   return (
     <span
       className={`profile-avatar profile-${profile.color}`}

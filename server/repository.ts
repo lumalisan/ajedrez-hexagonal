@@ -30,6 +30,7 @@ export interface OnlineMatch {
   drawOfferedThisTurn?: boolean;
   settled: boolean;
   finishedBy: string[];
+  privateResult?: { completedAt: string; score: 0 | 0.5 | 1 };
   rankingResult?: {
     completedAt: string;
     score: 0 | 0.5 | 1;
@@ -50,6 +51,7 @@ export interface OnlineTransaction {
   saveRoom(room: PrivateRoom): Promise<boolean>;
   removeRoom(code: string): Promise<void>;
   activeMatch(playerId: string): Promise<OnlineMatch | null>;
+  settledMatches(playerId: string): Promise<OnlineMatch[]>;
   match(id: string): Promise<OnlineMatch | null>;
   saveMatch(match: OnlineMatch): Promise<void>;
 }

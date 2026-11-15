@@ -95,6 +95,12 @@ export class MemoryOnlineRepository implements OnlineRepository {
             ) ?? null,
           ),
         match: async (id) => structuredClone(this.matches.get(id) ?? null),
+        settledMatches: async (id) =>
+          structuredClone(
+            [...this.matches.values()].filter(
+              (match) => match.settled && match.players.includes(id),
+            ),
+          ),
         saveMatch: async (match) => {
           this.matches.set(match.id, structuredClone(match));
         },

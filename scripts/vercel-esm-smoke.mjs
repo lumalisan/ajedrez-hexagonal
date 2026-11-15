@@ -11,9 +11,15 @@ const config = ts.readConfigFile(join(root, 'tsconfig.json'), ts.sys.readFile);
 assert(!config.error, 'Cannot read TypeScript configuration.');
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
 const program = ts.createProgram(
-  ['api/health.ts', 'api/online.ts', 'api/account.ts', 'api/ranking.ts', 'server/main.ts'].map(
-    (path) => join(root, path),
-  ),
+  [
+    'api/health.ts',
+    'api/online.ts',
+    'api/account.ts',
+    'api/ranking.ts',
+    'api/admin.ts',
+    'api/visit.ts',
+    'server/main.ts',
+  ].map((path) => join(root, path)),
   parsed.options,
 );
 const cacheRoot = join(root, 'node_modules', '.cache');
@@ -42,9 +48,13 @@ try {
     const { default: online } = await import('./api/online.js');
     const { default: account } = await import('./api/account.js');
     const { default: ranking } = await import('./api/ranking.js');
+    const { default: admin } = await import('./api/admin.js');
+    const { default: visit } = await import('./api/visit.js');
     assert.equal(typeof ranking, 'function');
     const server = createServer((request, response) => {
-      void (request.url === '/api/health' ? health : request.url === '/api/account' ? account : online)(request, response);
+      const path = new URL(request.url, 'http://localhost').pathname;
+      const handlers = { '/api/health': health, '/api/account': account, '/api/ranking': ranking, '/api/admin': admin, '/api/visit': visit };
+      void (handlers[path] ?? online)(request, response);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
@@ -59,6 +69,8 @@ try {
       assert.equal(unauthorized.status, 401);
       const protectedSave = await fetch(base + '/api/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"kind":"load"}' });
       assert.equal(protectedSave.status, 401);
+      assert.equal((await fetch(base + '/api/admin?view=users')).status, 401);
+      assert.equal((await fetch(base + '/api/visit', { method: 'POST' })).status, 403);
     } finally {
       server.closeAllConnections();
       await new Promise(resolve => server.close(resolve));

@@ -3022,6 +3022,12 @@ export function createGameSession(
   render();
   return {
     getSnapshot: () => snapshot,
+    syncProgress() {
+      if (disposed) return;
+      achievements = loadAchievementProgress();
+      progression = loadPlayerProgression(achievements);
+      render();
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => {

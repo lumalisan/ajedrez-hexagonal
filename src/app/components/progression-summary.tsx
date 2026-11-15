@@ -1,15 +1,13 @@
 import { levelProgress, type PlayerProgression } from '../../progression';
-import { useGame } from '../game-context';
 
 export function ProgressionSummary({
   showActivity = true,
   progression,
 }: {
   showActivity?: boolean;
-  progression?: Pick<PlayerProgression, 'xp' | 'activity'>;
+  progression: Pick<PlayerProgression, 'xp' | 'activity'>;
 }) {
-  const { snapshot } = useGame();
-  const data = progression ?? snapshot.progression;
+  const data = progression;
   const progress = levelProgress(data.xp);
   return (
     <div className="progression-summary">
