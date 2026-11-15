@@ -28,6 +28,10 @@ function offlinePrecache(): Plugin {
       const storyImages = (await readdir(storyDirectory))
         .filter((fileName) => fileName.endsWith('.webp'))
         .sort();
+      const brandDirectory = new URL('./public/brand/', import.meta.url);
+      const brandImages = (await readdir(brandDirectory))
+        .filter((fileName) => fileName.endsWith('.png'))
+        .sort();
       const hash = createHash('sha256').update(template);
       for (const asset of assets) {
         hash.update(asset.fileName);
@@ -45,6 +49,11 @@ function offlinePrecache(): Plugin {
         hash.update(`story/${fileName}`);
         hash.update(await readFile(new URL(fileName, storyDirectory)));
       }
+      for (const fileName of brandImages) {
+        hash.update(`brand/${fileName}`);
+        hash.update(await readFile(new URL(fileName, brandDirectory)));
+      }
+      hash.update(await readFile(new URL('./public/manifest.webmanifest', import.meta.url)));
       this.emitFile({
         type: 'asset',
         fileName: 'sw.js',
@@ -57,6 +66,7 @@ function offlinePrecache(): Plugin {
               ...achievementImages.map((fileName) => `/achievements/${fileName}`),
               ...unitImages.map((fileName) => `/units/${fileName}`),
               ...storyImages.map((fileName) => `/story/${fileName}`),
+              ...brandImages.map((fileName) => `/brand/${fileName}`),
             ]),
           ),
       });

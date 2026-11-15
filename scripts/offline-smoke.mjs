@@ -186,6 +186,20 @@ try {
   );
   await page.locator('[data-home-action="new"]').waitFor({ state: 'visible' });
   assert(await page.evaluate(() => !navigator.onLine), 'The browser must remain offline.');
+  const brandAssets = await page.evaluate(async () => {
+    const manifest = await fetch('/manifest.webmanifest').then((response) => response.json());
+    return [
+      ...manifest.icons.map(({ src }) => src),
+      ...[...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(
+        (link) => new URL(link.href).pathname,
+      ),
+    ];
+  });
+  assert(
+    brandAssets.length === 5 && brandAssets.every((path) => cachedAssets.paths.includes(path)),
+    'All five browser and app icons must be precached for offline use.',
+  );
+  await page.locator('.home-brand img').evaluate((image) => image.decode());
   const modelMagic = await page.evaluate(async (url) => {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Offline neural model unavailable');

@@ -20,7 +20,7 @@ function Header() {
   return (
     <header className="topbar" inert={snapshot.homeView !== null}>
       <div className="brand" role="img" aria-label="Hexfortia: estrategia hexagonal">
-        <img src="/atlas-mark.svg" alt="" width="38" height="38" />
+        <img src="/brand/hexfortia-192.png" alt="" width="38" height="38" />
         <div>
           <strong>Hexfortia</strong>
         </div>

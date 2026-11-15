@@ -187,7 +187,7 @@ Cada desbloqueo muestra únicamente su icono y título, acompañado de una campa
 
 La auditoría técnica y el siguiente orden de evolución están en `docs/auditoria-mejoras-2026.md`.
 
-No usa recursos gráficos o sonoros externos. Logotipo, fichas, efectos y audio se generan localmente.
+El emblema de Hexfortia y sus iconos se sirven desde `public/brand/`. Los recursos gráficos y sonoros se distribuyen con la aplicación.
 
 ## Experiencia, logros y clasificación
 
